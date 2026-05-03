@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Pocketbooks Sports 💎</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    :root {
+      --bg: #0a0a0a; --card: #141414; --card2: #1c1c1c; --border: #2a2a2a;
+      --diamond: #00c2ff; --diamond-dim: rgba(0,194,255,0.12);
+      --gold: #f5c842; --gold-dim: rgba(245,200,66,0.12);
+      --green: #00e676; --green-dim: rgba(0,230,118,0.12);
+      --red: #ff3d57; --red-dim: rgba(255,61,87,0.12);
+      --white: #ffffff; --gray: #888; --light: #ccc;
+    }
+    body { font-family: -apple-system,'SF Pro Display',Arial,sans-serif; background:var(--bg); color:var(--white); min-height:100vh; max-width:430px; margin:0 auto; overflow-x:hidden; }
+
+    /* AUTH SCREEN */
+    .auth-screen { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 24px; }
+    .auth-logo { font-size:2.2rem; font-weight:900; letter-spacing:-1px; margin-bottom:8px; }
+    .auth-logo span { color:var(--diamond); }
+    .auth-tagline { font-size:0.9rem; color:var(--gray); margin-bottom:48px; text-align:center; }
+    .auth-card { background:var(--card); border:1px solid var(--border); border-radius:20px; padding:28px 24px; width:100%; max-width:380px; }
+    .auth-title { font-size:1.2rem; font-weight:800; margin-bottom:20px; }
+    .auth-tabs { display:flex; background:var(--bg); border-radius:10px; padding:4px; margin-bottom:24px; }
+    .auth-tab { flex:1; padding:8px; text-align:center; border-radius:8px; font-size:0.85rem; font-weight:700; cursor:pointer; color:var(--gray); transition:all 0.2s; }
+    .auth-tab.active { background:var(--diamond); color:#000; }
+    .inp { width:100%; padding:14px 16px; background:var(--card2); border:1px solid var(--border); border-radius:10px; color:var(--white); font-size:0.95rem; margin-bottom:12px; outline:none; transition:border-color 0.2s; }
+    .inp:focus { border-color:var(--diamond); }
+    .inp::placeholder { color:var(--gray); }
+    .role-select { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+    .role-btn { padding:14px; background:var(--card2); border:1px solid var(--border); border-radius:10px; text-align:center; cursor:pointer; transition:all 0.2s; }
+    .role-btn.active { border-color:var(--diamond); background:var(--diamond-dim); }
+    .role-icon { font-size:1.5rem; margin-bottom:6px; }
+    .role-name { font-size:0.82rem; font-weight:700; }
+    .role-desc { font-size:0.7rem; color:var(--gray); margin-top:2px; }
+    .submit-btn { width:100%; padding:16px; background:var(--diamond); color:#000; border:none; border-radius:12px; font-size:1rem; font-weight:900; cursor:pointer; margin-top:8px; transition:opacity 0.2s; }
+    .submit-btn:hover { opacity:0.9; }
+
+    /* TOP BAR */
+    .topbar { position:sticky; top:0; z-index:100; background:var(--bg); border-bottom:1px solid var(--border); padding:14px 18px; display:flex; justify-content:space-between; align-items:center; }
+    .logo { font-size:1.2rem; font-weight:900; letter-spacing:-0.5px; }
+    .logo span { color:var(--diamond); }
+    .diamond-bal { display:flex; align-items:center; gap:6px; background:var(--diamond-dim); border:1px solid rgba(0,194,255,0.3); padding:6px 14px; border-radius:20px; cursor:pointer; }
+    .diamond-bal span { font-size:0.88rem; font-weight:800; color:var(--diamond); }
+
+    /* SPORT TABS */
+    .sport-tabs { display:flex; gap:8px; padding:14px 18px; overflow-x:auto; scrollbar-width:none; }
+    .sport-tabs::-webkit-scrollbar { display:none; }
+    .sport-tab { flex-shrink:0; padding:8px 16px; border-radius:20px; border:1px solid var(--border); background:var(--card); font-size:0.82rem; font-weight:600; color:var(--gray); cursor:pointer; transition:all 0.2s; }
+    .sport-tab.active { background:var(--diamond); color:#000; border-color:var(--diamond); font-weight:800; }
+
+    /* SECTION */
+    .section-header { display:flex; justify-content:space-between; align-items:center; padding:16px 18px 10px; }
+    .section-title { font-size:1rem; font-weight:800; }
+    .section-action { font-size:0.8rem; color:var(--diamond); font-weight:700; cursor:pointer; }
+
+    /* STATS */
+    .stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:0 18px 16px; }
+    .stat-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 12px; text-align:center; }
+    .stat-val { font-size:1.3rem; font-weight:900; margin-bottom:4px; }
+    .stat-lbl { font-size:0.65rem; color:var(--gray); text-transform:uppercase; letter-spacing:0.5px; }
+
+    /* ALERT */
+    .alert-card { margin:0 18px 14px; background:rgba(255,61,87,0.08); border:1px solid rgba(255,61,87,0.3); border-radius:14px; padding:13px 15px; display:flex; gap:10px; align-items:flex-start; cursor:pointer; }
+    .alert-title { font-size:0.85rem; font-weight:800; color:var(--red); margin-bottom:2px; }
+    .alert-body { font-size:0.75rem; color:var(--light); line-height:1.5; }
+
+    /* GAME CARD */
+    .game-card { margin:0 18px 14px; background:var(--card); border:1px solid var(--border); border-radius:16px; overflow:hidden; }
+    .game-header { background:linear-gradient(135deg,#001a2e,#002a4a); padding:10px 14px; display:flex; justify-content:space-between; align-items:center; }
+    .game-league { font-size:0.7rem; font-weight:700; color:var(--diamond); letter-spacing:1px; text-transform:uppercase; }
+    .live-badge { background:var(--red); color:white; font-size:0.62rem; font-weight:800; padding:2px 7px; border-radius:4px; }
+    .matchup { padding:14px; }
+    .team-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+    .team-info { display:flex; align-items:center; gap:10px; }
+    .team-logo { width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:900; }
+    .team-name { font-size:0.9rem; font-weight:700; }
+    .team-record { font-size:0.68rem; color:var(--gray); }
+    .team-score { font-size:1.6rem; font-weight:900; }
+    .bet-btns { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; padding:0 14px 14px; }
+    .bet-btn { background:var(--card2); border:1px solid var(--border); border-radius:10px; padding:9px 6px; text-align:center; cursor:pointer; transition:all 0.2s; }
+    .bet-btn:active, .bet-btn.sel { border-color:var(--diamond); background:var(--diamond-dim); }
+    .bet-type { font-size:0.65rem; color:var(--gray); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:3px; }
+    .bet-line { font-size:0.9rem; font-weight:800; }
+    .bet-odds { font-size:0.75rem; color:var(--diamond); font-weight:700; margin-top:1px; }
+
+    /* PLAYERS */
+    .player-list { padding:0 18px; display:flex; flex-direction:column; gap:10px; margin-bottom:14px; }
+    .player-card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:13px 15px; display:flex; align-items:center; justify-content:space-between; cursor:pointer; transition:border-color 0.2s; }
+    .player-card:active { border-color:var(--diamond); }
+    .player-left { display:flex; align-items:center; gap:11px; }
+    .player-avatar { width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.9rem; font-weight:800; }
+    .player-name { font-size:0.92rem; font-weight:700; margin-bottom:3px; }
+    .player-meta { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+    .player-bets { font-size:0.7rem; color:var(--gray); }
+    .sharp-badge { font-size:0.6rem; font-weight:800; padding:2px 6px; border-radius:5px; text-transform:uppercase; letter-spacing:0.3px; }
+    .sg { background:var(--green-dim); color:var(--green); border:1px solid rgba(0,230,118,0.3); }
+    .sy { background:var(--gold-dim); color:var(--gold); border:1px solid rgba(245,200,66,0.3); }
+    .sr { background:var(--red-dim); color:var(--red); border:1px solid rgba(255,61,87,0.3); }
+    .player-right { text-align:right; }
+    .bal-amt { font-size:1rem; font-weight:900; }
+    .bal-lbl { font-size:0.65rem; color:var(--gray); margin-top:2px; }
+
+    /* ADD BET MODAL */
+    .modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:200; align-items:flex-end; justify-content:center; padding-bottom:0; }
+    .modal-bg.open { display:flex; }
+    .modal { background:var(--card); border-radius:20px 20px 0 0; padding:24px; width:100%; max-width:430px; max-height:85vh; overflow-y:auto; }
+    .modal-title { font-size:1.1rem; font-weight:900; margin-bottom:20px; display:flex; justify-content:space-between; }
+    .modal-close { font-size:1.3rem; cursor:pointer; color:var(--gray); background:none; border:none; }
+    .inp-label { font-size:0.72rem; font-weight:700; color:var(--gray); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; display:block; }
+    .inp-group { margin-bottom:14px; }
+    .bet-type-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px; }
+    .bt-btn { padding:10px; background:var(--card2); border:1px solid var(--border); border-radius:10px; text-align:center; cursor:pointer; font-size:0.82rem; font-weight:700; transition:all 0.2s; }
+    .bt-btn.active { border-color:var(--diamond); background:var(--diamond-dim); color:var(--diamond); }
+    .result-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:14px; }
+    .r-btn { padding:10px; background:var(--card2); border:1px solid var(--border); border-radius:10px; text-align:center; cursor:pointer; font-size:0.82rem; font-weight:700; transition:all 0.2s; }
+    .r-win { border-color:var(--green); background:var(--green-dim); color:var(--green); }
+    .r-loss { border-color:var(--red); background:var(--red-dim); color:var(--red); }
+    .r-push { border-color:var(--gold); background:var(--gold-dim); color:var(--gold); }
+
+    /* DIAMOND BANNER */
+    .diamond-banner { margin:0 18px 14px; background:linear-gradient(135deg,#001833,#002d5a); border:1px solid rgba(0,194,255,0.3); border-radius:16px; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; }
+    .banner-btn { background:var(--diamond); color:#000; font-weight:900; font-size:0.8rem; padding:8px 16px; border-radius:20px; cursor:pointer; white-space:nowrap; }
+
+    /* BET SLIP */
+    .bet-slip-bar { display:none; position:fixed; bottom:70px; left:50%; transform:translateX(-50%); width:calc(100% - 36px); max-width:394px; background:var(--diamond); border-radius:14px; padding:13px 18px; justify-content:space-between; align-items:center; cursor:pointer; box-shadow:0 8px 32px rgba(0,194,255,0.4); z-index:50; }
+    .bet-slip-bar.show { display:flex; }
+    .slip-count { background:#000; color:var(--diamond); width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:900; margin-right:8px; }
+
+    /* BOTTOM NAV */
+    .bottom-nav { position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:430px; background:#111; border-top:1px solid var(--border); display:flex; padding:8px 0 22px; z-index:100; }
+    .nav-item { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; padding:5px 0; }
+    .nav-icon { font-size:1.25rem; }
+    .nav-label { font-size:0.6rem; color:var(--gray); font-weight:600; letter-spacing:0.3px; }
+    .nav-item.active .nav-label { color:var(--diamond); }
+
+    .pb { padding-bottom:160px; display:block; }
+  </style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen" class="auth-screen">
+  <div class="auth-logo">Pocket<span>books</span> 💎</div>
+  <div class="auth-tagline">The sharpest bookie management platform</div>
+  <div class="auth-card">
+    <div class="auth-tabs">
+      <div class="auth-tab active" onclick="switchAuth('login')">Sign In</div>
+      <div class="auth-tab" onclick="switchAuth('signup')">Sign Up</div>
+    </div>
+    <div id="signup-role" style="display:none">
+      <div class="inp-label">I am a...</div>
+      <div class="role-select">
+        <div class="role-btn active" onclick="selectRole(this,'bookie')">
+          <div class="role-icon">🎯</div>
+          <div class="role-name">Bookie</div>
+          <div class="role-desc">Manage players & bets</div>
+        </div>
+        <div class="role-btn" onclick="selectRole(this,'player')">
+          <div class="role-icon">👤</div>
+          <div class="role-name">Player</div>
+          <div class="role-desc">View my balance</div>
+        </div>
+      </div>
+    </div>
+    <input class="inp" id="auth-email" type="email" placeholder="Email address">
+    <input class="inp" id="auth-pass" type="password" placeholder="Password">
+    <div id="auth-name-field" style="display:none"><input class="inp" placeholder="Full name"></div>
+    <button class="submit-btn" onclick="doAuth()">Sign In →</button>
+  </div>
+</div>
+
+<!-- MAIN APP (hidden until auth) -->
+<div id="main-app" style="display:none">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="logo">Pocket<span>books</span> 💎</div>
+    <div class="diamond-bal" onclick="showDiamonds()">
+      <span id="diamond-count">💎 2,450</span>
+    </div>
+  </div>
+
+  <!-- SPORT TABS -->
+  <div class="sport-tabs">
+    <div class="sport-tab active" onclick="switchSport(this)">🏈 NFL</div>
+    <div class="sport-tab" onclick="switchSport(this)">🏀 NBA</div>
+    <div class="sport-tab" onclick="switchSport(this)">⚾ MLB</div>
+    <div class="sport-tab" onclick="switchSport(this)">⚽ Soccer</div>
+    <div class="sport-tab" onclick="switchSport(this)">🏒 NHL</div>
+    <div class="sport-tab" onclick="switchSport(this)">🥊 Boxing</div>
+  </div>
+
+  <!-- SHARP ALERT -->
+  <div class="alert-card" onclick="goToPlayer('MARCO')">
+    <div style="font-size:1.2rem">🚨</div>
+    <div>
+      <div class="alert-title">Sharp Alert — MARCO</div>
+      <div class="alert-body">Won 14 of last 20 bets (70% win rate). Consider reducing his limits.</div>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="section-header">
+    <span class="section-title">This Week</span>
+    <span class="section-action">May 1–7</span>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--green)" id="stat-handle">$14,200</div>
+      <div class="stat-lbl">Handle</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--gold)" id="stat-hold">8.4%</div>
+      <div class="stat-lbl">Hold %</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:var(--diamond)" id="stat-profit">$1,193</div>
+      <div class="stat-lbl">Profit</div>
+    </div>
+  </div>
+
+  <!-- GAME CARD -->
+  <div class="section-header">
+    <span class="section-title">Log a Bet</span>
+    <span class="section-action" onclick="openAddBet()">+ New Bet</span>
+  </div>
+  <div class="game-card">
+    <div class="game-header">
+      <span class="game-league">🏈 NFL — Week 12</span>
+      <span class="live-badge">● LIVE</span>
+    </div>
+    <div class="matchup">
+      <div class="team-row">
+        <div class="team-info">
+          <div class="team-logo" style="background:rgba(0,53,148,0.3);color:#4d90fe">DAL</div>
+          <div><div class="team-name">Dallas Cowboys</div><div class="team-record">7-3</div></div>
+        </div>
+        <div class="team-score">17</div>
+      </div>
+      <div class="team-row">
+        <div class="team-info">
+          <div class="team-logo" style="background:rgba(4,30,66,0.3);color:#c9243f">NYG</div>
+          <div><div class="team-name">NY Giants</div><div class="team-record">4-6</div></div>
+        </div>
+        <div class="team-score" style="color:var(--gray)">10</div>
+      </div>
+    </div>
+    <div class="bet-btns">
+      <div class="bet-btn sel" onclick="selectBetBtn(this)"><div class="bet-type">Spread</div><div class="bet-line">DAL -6.5</div><div class="bet-odds">-110</div></div>
+      <div class="bet-btn" onclick="selectBetBtn(this)"><div class="bet-type">Total</div><div class="bet-line">O 44.5</div><div class="bet-odds">-110</div></div>
+      <div class="bet-btn" onclick="selectBetBtn(this)"><div class="bet-type">ML</div><div class="bet-line">DAL</div><div class="bet-odds">-280</div></div>
+    </div>
+  </div>
+
+  <!-- DIAMOND BANNER -->
+  <div class="diamond-banner">
+    <div>
+      <div style="font-size:0.95rem;font-weight:900;margin-bottom:3px">💎 Sharp Picks Available</div>
+      <div style="font-size:0.75rem;color:var(--gray)">AI-powered expert picks from 50💎/week</div>
+    </div>
+    <div class="banner-btn">Upgrade</div>
+  </div>
+
+  <!-- PLAYERS -->
+  <div class="section-header">
+    <span class="section-title">Your Players</span>
+    <span class="section-action" onclick="openAddPlayer()">+ Add</span>
+  </div>
+  <div class="player-list" id="player-list">
+    <!-- Populated by JS -->
+  </div>
+
+  <span class="pb"></span>
+
+  <!-- BET SLIP -->
+  <div class="bet-slip-bar" id="bet-slip">
+    <div style="display:flex;align-items:center">
+      <div class="slip-count" id="slip-count">1</div>
+      <span style="font-size:0.9rem;font-weight:800;color:#000">Bet Slip</span>
+    </div>
+    <span style="font-size:0.9rem;font-weight:900;color:#000" id="slip-amt">$250 to win $477</span>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <div class="bottom-nav">
+    <div class="nav-item active" onclick="switchTab(this,'home')"><div class="nav-icon">🏠</div><div class="nav-label">Home</div></div>
+    <div class="nav-item" onclick="switchTab(this,'bets')"><div class="nav-icon">📋</div><div class="nav-label">Bets</div></div>
+    <div class="nav-item" onclick="switchTab(this,'players')"><div class="nav-icon">👥</div><div class="nav-label">Players</div></div>
+    <div class="nav-item" onclick="switchTab(this,'analytics')"><div class="nav-icon">📊</div><div class="nav-label">Analytics</div></div>
+    <div class="nav-item" onclick="switchTab(this,'diamonds')"><div class="nav-icon">💎</div><div class="nav-label">Diamonds</div></div>
+  </div>
+</div>
+
+<!-- ADD BET MODAL -->
+<div class="modal-bg" id="modal-add-bet">
+  <div class="modal">
+    <div class="modal-title">Log Bet <button class="modal-close" onclick="closeModal('modal-add-bet')">✕</button></div>
+    <div class="inp-group"><label class="inp-label">Player</label>
+      <select class="inp" id="bet-player"><option value="">Select player...</option></select>
+    </div>
+    <div class="inp-group"><label class="inp-label">Game / Description</label>
+      <input class="inp" id="bet-game" placeholder="e.g. DAL -6.5 vs NYG">
+    </div>
+    <div class="inp-group"><label class="inp-label">Bet Type</label>
+      <div class="bet-type-grid">
+        <div class="bt-btn active" onclick="selectBetType(this)">Spread</div>
+        <div class="bt-btn" onclick="selectBetType(this)">Total</div>
+        <div class="bt-btn" onclick="selectBetType(this)">Moneyline</div>
+        <div class="bt-btn" onclick="selectBetType(this)">Parlay</div>
+        <div class="bt-btn" onclick="selectBetType(this)">Prop</div>
+        <div class="bt-btn" onclick="selectBetType(this)">Teaser</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div class="inp-group" style="margin:0"><label class="inp-label">Risk Amount</label><input class="inp" type="number" id="bet-risk" placeholder="0" oninput="calcWin()"></div>
+      <div class="inp-group" style="margin:0"><label class="inp-label">Win Amount</label><input class="inp" type="number" id="bet-win" placeholder="0"></div>
+    </div>
+    <div class="inp-group"><label class="inp-label">Result</label>
+      <div class="result-grid">
+        <div class="r-btn" onclick="selectResult(this,'pending')">⏳ Pending</div>
+        <div class="r-btn r-win" onclick="selectResult(this,'win')">✅ Win</div>
+        <div class="r-btn r-loss" onclick="selectResult(this,'loss')">❌ Loss</div>
+      </div>
+    </div>
+    <button class="submit-btn" onclick="saveBet()">Log Bet →</button>
+  </div>
+</div>
+
+<!-- ADD PLAYER MODAL -->
+<div class="modal-bg" id="modal-add-player">
+  <div class="modal">
+    <div class="modal-title">Add Player <button class="modal-close" onclick="closeModal('modal-add-player')">✕</button></div>
+    <div class="inp-group"><label class="inp-label">Name</label><input class="inp" id="new-player-name" placeholder="Player name"></div>
+    <div class="inp-group"><label class="inp-label">Phone / Contact</label><input class="inp" id="new-player-phone" placeholder="Phone or Telegram"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div class="inp-group" style="margin:0"><label class="inp-label">Credit Limit</label><input class="inp" type="number" id="new-player-limit" placeholder="500"></div>
+      <div class="inp-group" style="margin:0"><label class="inp-label">Max Bet</label><input class="inp" type="number" id="new-player-max" placeholder="100"></div>
+    </div>
+    <button class="submit-btn" onclick="addPlayer()">Add Player →</button>
+  </div>
+</div>
+
+<script>
+// ===== STATE =====
+let G = {
+  diamonds: 2450,
+  players: [
+    { id:1, name:'MARCO',  avatar:'MA', color:'#ff3d57', winRate:70, bets:47, balance:-840,  sharp:'red',    sport:'NFL' },
+    { id:2, name:'JUNIOR', avatar:'JR', color:'#00e676', winRate:42, bets:31, balance:1240,  sharp:'green',  sport:'NBA' },
+    { id:3, name:'TONY',   avatar:'TO', color:'#f5c842', winRate:55, bets:22, balance:-200,  sharp:'yellow', sport:'NFL' },
+    { id:4, name:'DENNY',  avatar:'DE', color:'#00c2ff', winRate:38, bets:18, balance:3100,  sharp:'green',  sport:'MLB' },
+  ],
+  bets: [],
+  currentSport: 'NFL',
+  selectedBetType: 'Spread',
+  selectedResult: 'pending',
+};
+
+// ===== AUTH =====
+let authMode = 'login';
+function switchAuth(mode) {
+  authMode = mode;
+  document.querySelectorAll('.auth-tab').forEach((t,i)=>t.classList.toggle('active', (i===0&&mode==='login')||(i===1&&mode==='signup')));
+  document.getElementById('auth-name-field').style.display = mode==='signup'?'block':'none';
+  document.getElementById('signup-role').style.display = mode==='signup'?'block':'none';
+  document.querySelector('.submit-btn').textContent = mode==='login'?'Sign In →':'Create Account →';
+}
+function selectRole(el, role) {
+  document.querySelectorAll('.role-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+}
+function doAuth() {
+  document.getElementById('auth-screen').style.display='none';
+  document.getElementById('main-app').style.display='block';
+  renderPlayers();
+}
+
+// ===== RENDER PLAYERS =====
+function renderPlayers() {
+  const list = document.getElementById('player-list');
+  const sel = document.getElementById('bet-player');
+  sel.innerHTML = '<option value="">Select player...</option>';
+  G.players.forEach(p => {
+    sel.innerHTML += `<option value="${p.id}">${p.name}</option>`;
+    const badge = p.sharp==='red'?'sr sr':p.sharp==='yellow'?'sy sy':'sg sg';
+    const badgeText = p.sharp==='red'?'🚨 Sharp':p.sharp==='yellow'?'⚠️ Watch':'✅ Square';
+    const balColor = p.balance>0?'var(--green)':p.balance<0?'var(--red)':'var(--gray)';
+    const balLabel = p.balance>0?'you owe':p.balance<0?'owes you':'square';
+    list.innerHTML += `<div class="player-card" onclick="viewPlayer(${p.id})">
+      <div class="player-left">
+        <div class="player-avatar" style="background:${p.color}22;color:${p.color}">${p.avatar}</div>
+        <div>
+          <div class="player-name">${p.name}</div>
+          <div class="player-meta">
+            <span class="player-bets">${p.bets} bets · ${p.winRate}% W</span>
+            <span class="sharp-badge ${badge.split(' ')[0]}">${badgeText}</span>
+          </div>
+        </div>
+      </div>
+      <div class="player-right">
+        <div class="bal-amt" style="color:${balColor}">${p.balance>0?'+':''}$${Math.abs(p.balance).toLocaleString()}</div>
+        <div class="bal-lbl">${balLabel}</div>
+      </div>
+    </div>`;
+  });
+}
+
+// ===== SPORT TABS =====
+function switchSport(el) {
+  document.querySelectorAll('.sport-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// ===== BET BUTTONS =====
+function selectBetBtn(el) {
+  document.querySelectorAll('.bet-btn').forEach(b=>b.classList.remove('sel'));
+  el.classList.add('sel');
+  document.getElementById('bet-slip').classList.add('show');
+}
+
+// ===== MODALS =====
+function openAddBet() { document.getElementById('modal-add-bet').classList.add('open'); }
+function openAddPlayer() { document.getElementById('modal-add-player').classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')}));
+
+function selectBetType(el) {
+  document.querySelectorAll('.bt-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  G.selectedBetType = el.textContent;
+}
+function selectResult(el, result) {
+  document.querySelectorAll('.r-btn').forEach(b=>b.style.opacity='0.5');
+  el.style.opacity='1';
+  G.selectedResult = result;
+}
+function calcWin() {
+  const risk = parseFloat(document.getElementById('bet-risk').value)||0;
+  document.getElementById('bet-win').value = risk>0 ? Math.round(risk*0.909) : '';
+}
+
+function saveBet() {
+  const playerId = parseInt(document.getElementById('bet-player').value);
+  const game = document.getElementById('bet-game').value;
+  const risk = parseFloat(document.getElementById('bet-risk').value)||0;
+  const win = parseFloat(document.getElementById('bet-win').value)||0;
+  if (!playerId || !game || !risk) { alert('Fill in all fields'); return; }
+  
+  const player = G.players.find(p=>p.id===playerId);
+  G.bets.push({ id:Date.now(), playerId, playerName:player.name, game, type:G.selectedBetType, risk, win, result:G.selectedResult, time:new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) });
+  
+  // Update player balance
+  if (G.selectedResult==='win') player.balance += win;
+  else if (G.selectedResult==='loss') player.balance -= risk;
+  player.bets++;
+
+  // Recalc stats
+  updateStats();
+  closeModal('modal-add-bet');
+  document.getElementById('player-list').innerHTML='';
+  renderPlayers();
+  toast('✅ Bet logged for '+player.name);
+}
+
+function addPlayer() {
+  const name = document.getElementById('new-player-name').value.trim().toUpperCase();
+  if (!name) return;
+  const colors = ['#00c2ff','#00e676','#f5c842','#ff3d57','#e879f9','#f97316'];
+  const color = colors[G.players.length % colors.length];
+  G.players.push({ id:Date.now(), name, avatar:name.slice(0,2), color, winRate:0, bets:0, balance:0, sharp:'green' });
+  document.getElementById('player-list').innerHTML='';
+  renderPlayers();
+  closeModal('modal-add-player');
+  toast('✅ '+name+' added!');
+}
+
+function updateStats() {
+  const settled = G.bets.filter(b=>b.result!=='pending');
+  const handle = G.bets.reduce((s,b)=>s+b.risk,0);
+  const wins = settled.filter(b=>b.result==='win').reduce((s,b)=>s+b.win,0);
+  const losses = settled.filter(b=>b.result==='loss').reduce((s,b)=>s+b.risk,0);
+  const profit = losses - wins;
+  const hold = handle>0 ? ((profit/handle)*100).toFixed(1) : 8.4;
+  document.getElementById('stat-handle').textContent = '$'+(14200+handle).toLocaleString();
+  document.getElementById('stat-profit').textContent = '$'+(1193+profit).toLocaleString();
+}
+
+// ===== NAV =====
+function switchTab(el, tab) {
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function viewPlayer(id) {
+  const p = G.players.find(p=>p.id===id);
+  if (p) toast('📊 '+p.name+' — '+p.bets+' bets, '+p.winRate+'% win rate');
+}
+
+function goToPlayer(name) {
+  const p = G.players.find(p=>p.name===name);
+  if (p) toast('⚠️ Reducing '+name+'\'s limits recommended');
+}
+
+function showDiamonds() { toast('💎 '+G.diamonds+' diamonds · $'+G.diamonds+' value'); }
+
+// ===== TOAST =====
+function toast(msg) {
+  const t = document.createElement('div');
+  t.style.cssText='position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#1c1c1c;border:1px solid #333;color:#fff;padding:12px 20px;border-radius:12px;font-size:0.85rem;font-weight:600;z-index:999;white-space:nowrap;max-width:90vw;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.5)';
+  t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),2500);
+}
+</script>
+</body>
+</html>
