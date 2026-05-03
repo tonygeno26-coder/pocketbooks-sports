@@ -205,6 +205,41 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 </div>
 
 <!-- PLAYERS -->
+<!-- JOIN REQUESTS SECTION -->
+<div id="requests-section" style="display:none;padding:0 16px;margin-bottom:8px">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0 8px">
+    <span style="font-size:0.95rem;font-weight:800;color:var(--red)">⏳ Join Requests</span>
+    <span id="req-count" style="font-size:0.72rem;color:var(--gray)"></span>
+  </div>
+  <div id="requests-list"></div>
+</div>
+
+<!-- PLAYER LIMITS MODAL -->
+<div id="modal-limits" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:300;align-items:flex-end;justify-content:center">
+  <div style="background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:430px;padding:24px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <span style="font-size:1.1rem;font-weight:900">Player Limits</span>
+      <button onclick="document.getElementById('modal-limits').style.display='none'" style="background:none;border:none;color:var(--gray);font-size:1.3rem;cursor:pointer">✕</button>
+    </div>
+    <div id="limits-player-name" style="font-size:0.78rem;color:var(--cyan);margin-bottom:16px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div>
+        <div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Max Bet</div>
+        <input id="lim-maxbet" type="number" placeholder="$100" style="width:100%;padding:12px 14px;background:var(--card2);border:1.5px solid var(--border);border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
+      </div>
+      <div>
+        <div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Max Daily Risk</div>
+        <input id="lim-daily" type="number" placeholder="$500" style="width:100%;padding:12px 14px;background:var(--card2);border:1.5px solid var(--border);border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
+      </div>
+      <div>
+        <div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Max Payout</div>
+        <input id="lim-payout" type="number" placeholder="$2000" style="width:100%;padding:12px 14px;background:var(--card2);border:1.5px solid var(--border);border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
+      </div>
+    </div>
+    <button onclick="saveLimits()" style="width:100%;padding:14px;background:var(--green);color:#000;border:none;border-radius:12px;font-size:0.95rem;font-weight:900;cursor:pointer;margin-top:4px">Save Limits →</button>
+  </div>
+</div>
+
 <div class="sec-hdr">
   <span class="sec-title">Your Players</span>
   <button class="sec-action" onclick="openAddPlayer()">+ Add Player</button>
@@ -244,7 +279,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
   </div>
   <div class="bn" onclick="setBN(this,'players')">
     <div class="bn-ico"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-    <div class="bn-lbl">Players</div>
+    <div class="bn-lbl">Players <span id="req-badge" style="display:none;background:var(--red);color:#fff;font-size:0.55rem;padding:1px 5px;border-radius:8px;font-weight:800;vertical-align:middle"></span></div>
   </div>
   <div class="bn" onclick="setBN(this,'diamonds')">
     <div class="bn-ico"><svg viewBox="0 0 24 24"><polygon points="12 2 2 7 12 22 22 7 12 2"/><line x1="2" y1="7" x2="22" y2="7"/><line x1="12" y1="2" x2="12" y2="22"/></svg></div>
@@ -259,6 +294,77 @@ let TOKEN=localStorage.getItem('pb-sports-token')||'';
 async function apiCall(method,path,body){
   const r=await fetch(API+path,{method,headers:{'Content-Type':'application/json',...(TOKEN?{'Authorization':'Bearer '+TOKEN}:{})},body:body?JSON.stringify(body):undefined});
   return r.json();
+}
+
+// JOIN REQUESTS
+let pendingRequests = [];
+let editingLimitsFor = null;
+
+async function loadRequests() {
+  if (!currentClub || !TOKEN) return;
+  try {
+    const reqs = await apiCall('GET', '/api/clubs/'+currentClub.id+'/requests');
+    pendingRequests = reqs;
+    const badge = document.getElementById('req-badge');
+    const sec = document.getElementById('requests-section');
+    if (reqs.length) {
+      badge.textContent = reqs.length;
+      badge.style.display = 'inline';
+      sec.style.display = 'block';
+      document.getElementById('req-count').textContent = reqs.length + ' pending';
+      document.getElementById('requests-list').innerHTML = reqs.map(r =>
+        `<div style="background:var(--card);border:1px solid rgba(255,61,87,0.2);border-radius:14px;padding:13px 15px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:0.9rem;font-weight:800">${r.name}</div>
+            <div style="font-size:0.7rem;color:var(--gray);margin-top:2px">${r.email} · Requested ${new Date(r.joined_at).toLocaleDateString()}</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button onclick="handleRequest(${r.id},'approve')" style="padding:7px 14px;background:rgba(0,255,136,0.15);border:1px solid var(--green);color:var(--green);border-radius:8px;font-size:0.75rem;font-weight:800;cursor:pointer">Approve</button>
+            <button onclick="handleRequest(${r.id},'reject')" style="padding:7px 14px;background:rgba(255,61,87,0.1);border:1px solid var(--red);color:var(--red);border-radius:8px;font-size:0.75rem;font-weight:800;cursor:pointer">Reject</button>
+          </div>
+        </div>`
+      ).join('');
+    } else {
+      badge.style.display = 'none';
+      sec.style.display = 'none';
+    }
+  } catch(e) {}
+}
+
+async function handleRequest(memberId, action) {
+  try {
+    await apiCall('PATCH', '/api/clubs/'+currentClub.id+'/requests/'+memberId, { action });
+    showToast(action === 'approve' ? '✅ Player approved!' : '❌ Request rejected');
+    loadRequests();
+    if (action === 'approve') loadClubMembers(currentClub.id);
+  } catch(e) { showToast('❌ '+e.message); }
+}
+
+function openLimits(playerId, playerName) {
+  editingLimitsFor = playerId;
+  document.getElementById('limits-player-name').textContent = 'Editing limits for: ' + playerName;
+  if (currentClub && TOKEN) {
+    apiCall('GET', '/api/clubs/'+currentClub.id+'/limits/'+playerId).then(lim => {
+      document.getElementById('lim-maxbet').value = lim.max_bet || '';
+      document.getElementById('lim-daily').value = lim.max_daily_risk || '';
+      document.getElementById('lim-payout').value = lim.max_payout || '';
+    }).catch(()=>{});
+  }
+  document.getElementById('modal-limits').style.display = 'flex';
+}
+
+async function saveLimits() {
+  if (!editingLimitsFor || !currentClub) return;
+  const data = {
+    max_bet: parseFloat(document.getElementById('lim-maxbet').value)||100,
+    max_daily_risk: parseFloat(document.getElementById('lim-daily').value)||500,
+    max_payout: parseFloat(document.getElementById('lim-payout').value)||2000
+  };
+  try {
+    await apiCall('PUT', '/api/clubs/'+currentClub.id+'/limits/'+editingLimitsFor, data);
+    document.getElementById('modal-limits').style.display = 'none';
+    showToast('✅ Limits saved!');
+  } catch(e) { showToast('❌ '+e.message); }
 }
 
 // CLUBS
@@ -281,6 +387,7 @@ function switchClub(id) {
   if (currentClub) {
     codeEl.textContent = currentClub.code;
     loadClubMembers(id);
+    loadRequests();
   } else {
     codeEl.textContent = 'Copy Code';
     renderPlayers();
@@ -395,8 +502,9 @@ function renderPlayers(){
       <div class="pr-right">
         <div class="pr-amount" style="color:${bc}">${p.balance>0?'+':''}$${Math.abs(p.balance).toLocaleString()}</div>
         <div class="pr-dir">${dir}</div>
+        <button onclick="openLimits(${p.id},'${p.name.replace(/'/g,'')}')" style="font-size:0.62rem;background:var(--card2);border:1px solid var(--border);color:var(--light);padding:3px 8px;border-radius:6px;cursor:pointer;margin-top:3px;font-weight:600">Limits</button>
       </div>
-    </div>`;
+    </div>\`;
   }).join('');
 
   // Stats
