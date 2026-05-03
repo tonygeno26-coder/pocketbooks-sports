@@ -945,93 +945,70 @@ let betSlip = [];
 async function loadGames(sport, tabEl) {
   document.querySelectorAll('#section-games .sport-tab').forEach(t => t.classList.remove('active'));
   if (tabEl) tabEl.classList.add('active');
+  G.currentSport = sport.toUpperCase();
   const el = document.getElementById('games-list');
   el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--gray)">Loading...</div>';
   try {
     const games = await apiCall('GET', '/api/odds/' + sport);
-    if (!games.length) { el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--gray)">No games today</div>'; return; }
+    if (!games.length) { el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--gray)">No games scheduled today</div>'; return; }
+    const sportIcons = {MLB:'⚾',NBA:'🏀',NHL:'🏒',NFL:'🏈',UFL:'🏈',SOCCER:'⚽'};
+    const icon = sportIcons[sport.toUpperCase()] || '🎯';
+    function fmtOdds(o) {
+      if (o === undefined || o === null) return '<span style="color:var(--gray)">—</span>';
+      const c = o > 0 ? 'var(--green)' : 'var(--light)';
+      return '<span style="color:' + c + ';font-weight:800;font-size:0.88rem">' + (o > 0 ? '+' : '') + o + '</span>';
+    }
     el.innerHTML = games.map(g => {
-      const time = new Date(g.time).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-      const spread = g.spreads[0];
-      const total = g.totals[0];
-      const ml1 = g.moneyline[0];
-      const ml2 = g.moneyline[1];
-      return `<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;margin-bottom:12px;overflow:hidden">
-        <div style="background:linear-gradient(135deg,#001a2e,#002a4a);padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:0.7rem;font-weight:700;color:var(--diamond);text-transform:uppercase;letter-spacing:1px">${g.sport}</span>
-          <span style="font-size:0.7rem;color:var(--gray)">${time}</span>
-        </div>
-        <div style="padding:14px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-            <span style="font-weight:700">${g.away}</span>
-            <span style="color:var(--gray);font-size:0.8rem">@</span>
-            <span style="font-weight:700">${g.home}</span>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
-            ${spread ? `<div class="bet-btn" onclick="addToBetSlip('${g.id}','${g.away} vs ${g.home}','${g.sport}','Spread','${spread.team} ${spread.line > 0 ? '+' : ''}${spread.line}',${spread.odds})">
-              <div class="bet-type">Spread</div>
-              <div class="bet-line">${spread.line > 0 ? '+' : ''}${spread.line}</div>
-              <div class="bet-odds">${spread.odds > 0 ? '+' : ''}${spread.odds}</div>
-            </div>` : ''}
-            ${total ? `<div class="bet-btn" onclick="addToBetSlip('${g.id}','${g.away} vs ${g.home}','${g.sport}','Total','O/U ${total.line}',${total.odds})">
-              <div class="bet-type">Total</div>
-              <div class="bet-line">O/U ${total.line}</div>
-              <div class="bet-odds">${total.odds > 0 ? '+' : ''}${total.odds}</div>
-            </div>` : ''}
-            ${ml1 ? `<div class="bet-btn" onclick="addToBetSlip('${g.id}','${g.away} vs ${g.home}','${g.sport}','Moneyline','${ml1.team}',${ml1.odds})">
-              <div class="bet-type">ML</div>
-              <div class="bet-line" style="font-size:0.72rem">${ml1.team.split(' ').pop()}</div>
-              <div class="bet-odds">${ml1.odds > 0 ? '+' : ''}${ml1.odds}</div>
-            </div>` : ''}
-          </div>
-        </div>
-      </div>`;
+      const time = new Date(g.time).toLocaleString('en-US',{weekday:'short',hour:'2-digit',minute:'2-digit'});
+      const aw = g.away, hw = g.home;
+      const awAbbr = aw.split(' ').slice(-1)[0];
+      const hwAbbr = hw.split(' ').slice(-1)[0];
+      const awCity = aw.split(' ').slice(0,-1).join(' ');
+      const hwCity = hw.split(' ').slice(0,-1).join(' ');
+      const awSpread = g.spreads.find(s => s.team === aw);
+      const hwSpread = g.spreads.find(s => s.team === hw);
+      const over = g.totals.find(t => t.name === 'Over');
+      const under = g.totals.find(t => t.name === 'Under');
+      const awML = g.moneyline.find(m => m.team === aw);
+      const hwML = g.moneyline.find(m => m.team === hw);
+
+      function cell(gameId, betLine, betOdds, topLine, topOdds) {
+        const safeGame = (aw + ' vs ' + hw).replace(/'/g, '');
+        return '<div onclick="addToBetSlip(\''+gameId+'\',\''+safeGame+'\',\''+sport.toUpperCase()+'\',\''+betLine+'\',\''+betLine+'\','+betOdds+')" style="text-align:center;padding:8px 4px;background:var(--card2);border-radius:8px;cursor:pointer;border:1px solid transparent;transition:all 0.15s;min-height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px" onmouseover="this.style.borderColor=\'var(--diamond)\';this.style.background=\'var(--diamond-dim)\'" onmouseout="this.style.borderColor=\'transparent\';this.style.background=\'var(--card2)\'">'
+          + (topLine !== undefined && topLine !== null ? '<span style="color:var(--light);font-size:0.72rem">' + (topLine > 0 ? '+' : '') + topLine + '</span>' : '')
+          + fmtOdds(topOdds !== undefined ? topOdds : betOdds)
+          + '</div>';
+      }
+
+      function teamRow(abbr, city, spread, total, ml, suffix) {
+        return '<div style="display:grid;grid-template-columns:1fr 88px 88px 88px;gap:6px;align-items:center;margin-bottom:8px">'
+          + '<div style="display:flex;align-items:center;gap:8px">'
+          + '<div style="width:32px;height:32px;background:rgba(255,255,255,0.07);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:900;color:var(--light)">' + abbr.slice(0,3).toUpperCase() + '</div>'
+          + '<div><div style="font-size:0.78rem;color:var(--gray);line-height:1">' + city + '</div><div style="font-size:0.9rem;font-weight:800;line-height:1.3">' + abbr + '</div></div></div>'
+          + (spread ? cell(g.id+'-sp'+suffix, (spread.line > 0?'+':'')+spread.line, spread.odds, spread.line, spread.odds) : '<div style="background:var(--card2);border-radius:8px;min-height:50px"></div>')
+          + (total ? cell(g.id+'-tot'+suffix, (suffix==='-aw'?'Over ':'Under ')+total.line, total.odds, suffix==='-aw'?'O':'U', total.line) : '<div style="background:var(--card2);border-radius:8px;min-height:50px"></div>')
+          + (ml ? cell(g.id+'-ml'+suffix, abbr+' ML', ml.odds, null, ml.odds) : '<div style="background:var(--card2);border-radius:8px;min-height:50px"></div>')
+          + '</div>';
+      }
+
+      return '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;margin-bottom:10px;overflow:hidden">'
+        + '<div style="padding:12px 14px 8px">'
+        + '<div style="font-size:0.68rem;color:var(--gray);display:flex;align-items:center;gap:4px;margin-bottom:10px"><span>' + icon + '</span><span style="font-weight:700;letter-spacing:0.5px">' + sport.toUpperCase() + '</span></div>'
+        + '<div style="display:grid;grid-template-columns:1fr 88px 88px 88px;gap:6px;margin-bottom:8px">'
+        + '<div></div>'
+        + '<div style="text-align:center;font-size:0.62rem;color:var(--gray);font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Run Line</div>'
+        + '<div style="text-align:center;font-size:0.62rem;color:var(--gray);font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Total</div>'
+        + '<div style="text-align:center;font-size:0.62rem;color:var(--gray);font-weight:700;text-transform:uppercase;letter-spacing:0.5px">To Win</div>'
+        + '</div>'
+        + teamRow(awAbbr, awCity, awSpread, over, awML, '-aw')
+        + teamRow(hwAbbr, hwCity, hwSpread, under, hwML, '-hw')
+        + '</div>'
+        + '<div style="border-top:1px solid var(--border);padding:8px 14px;display:flex;justify-content:space-between">'
+        + '<span style="font-size:0.72rem;color:var(--gray)">' + time + '</span>'
+        + '<span style="font-size:0.72rem;color:var(--diamond);font-weight:700;cursor:pointer">More ›</span>'
+        + '</div></div>';
     }).join('');
   } catch(e) { el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--red)">' + e.message + '</div>'; }
-}
-
-function addToBetSlip(gameId, game, sport, type, line, odds) {
-  betSlip.push({ gameId, game, sport, type, line, odds, risk: 0 });
-  document.getElementById('slip-count').textContent = betSlip.length;
-  document.getElementById('bet-slip').classList.add('show');
-  // Show quick bet amount modal
-  const risk = prompt('Enter bet amount ($):');
-  if (risk && parseFloat(risk) > 0) {
-    betSlip[betSlip.length-1].risk = parseFloat(risk);
-    const toWin = calculateWin(parseFloat(risk), odds);
-    betSlip[betSlip.length-1].win = toWin;
-    document.getElementById('slip-amt').textContent = '$' + risk + ' to win $' + toWin;
-    if (confirm(game + '\n' + type + ': ' + line + ' (' + (odds>0?'+':'') + odds + ')\nRisk: $' + risk + ' | Win: $' + toWin + '\n\nConfirm bet?')) {
-      submitBet(betSlip[betSlip.length-1]);
-    }
-  } else {
-    betSlip.pop();
-    if (!betSlip.length) document.getElementById('bet-slip').classList.remove('show');
-  }
-}
-
-function calculateWin(risk, odds) {
-  if (odds > 0) return Math.round(risk * (odds/100) * 100) / 100;
-  else return Math.round(risk * (100/Math.abs(odds)) * 100) / 100;
-}
-
-async function submitBet(bet) {
-  try {
-    await apiCall('POST', '/api/bets', {
-      player_id: G.myPlayerId,
-      game: bet.game + ' — ' + bet.line,
-      bet_type: bet.type,
-      sport: bet.sport,
-      risk: bet.risk,
-      win: bet.win,
-      line: bet.line,
-      result: 'pending'
-    });
-    betSlip = [];
-    document.getElementById('bet-slip').classList.remove('show');
-    toast('✅ Bet submitted! Pending host approval.');
-    loadMyBets();
-  } catch(e) { toast('❌ ' + e.message); }
 }
 
 async function loadMyBets() {
