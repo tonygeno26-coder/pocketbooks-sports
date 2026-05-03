@@ -5,616 +5,531 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>Dev Preview — Pocketbooks Sports</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{--green:#00ff88;--cyan:#00c2ff;--gold:#f5c842;--red:#ff3d57;--card:#141414;--card2:#1c1c1c;--border:#252525}
-body{font-family:-apple-system,Arial,sans-serif;background:#050505;color:#fff;padding:20px}
-.dev-header{display:flex;align-items:center;gap:12px;margin-bottom:24px;padding:16px 20px;background:#111;border-radius:14px;border:1px solid #222}
-.dev-title{font-size:1.2rem;font-weight:900;color:var(--cyan)}
-.dev-sub{font-size:0.75rem;color:#555;margin-top:2px}
-.screen-wrap{margin-bottom:32px}
-.screen-label{font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:2px;color:var(--cyan);margin-bottom:8px;padding:6px 12px;background:rgba(0,194,255,0.08);border:1px solid rgba(0,194,255,0.2);border-radius:8px;display:inline-block}
-.screen{max-width:390px;border-radius:20px;overflow:hidden;border:1px solid #222;box-shadow:0 8px 40px rgba(0,0,0,0.8)}
+body{font-family:-apple-system,Arial,sans-serif;background:#050505;color:#fff}
 
-/* Reuse exact color vars */
-.bg-dark{background:#0a0a0a}
-.bg-card{background:var(--card)}
+/* DEV CHROME */
+.dev-chrome{position:fixed;top:0;left:0;right:0;z-index:1000;background:rgba(5,5,5,0.98);border-bottom:1px solid #1a1a1a;backdrop-filter:blur(10px)}
+.dev-topbar{display:flex;align-items:center;gap:8px;padding:8px 12px;flex-wrap:wrap}
+.proto-badge{background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff;font-size:0.58rem;font-weight:900;padding:3px 8px;border-radius:6px;letter-spacing:0.5px;text-transform:uppercase}
+.dev-controls{display:flex;align-items:center;gap:6px;margin-left:auto;flex-wrap:wrap}
+.ctrl-btn{padding:5px 11px;border-radius:8px;font-size:0.68rem;font-weight:800;cursor:pointer;border:1px solid #333;background:transparent;color:#555;transition:all 0.15s}
+.ctrl-btn.on{border-color:var(--cyan);background:rgba(0,194,255,0.12);color:var(--cyan)}
+.ctrl-btn.green-on{border-color:var(--green);background:rgba(0,255,136,0.1);color:var(--green)}
+.theme-row{display:flex;align-items:center;gap:5px}
+.toggle-pill{width:34px;height:18px;background:#333;border-radius:9px;position:relative;cursor:pointer;transition:background 0.2s;flex-shrink:0}
+.toggle-knob{position:absolute;top:2px;left:2px;width:14px;height:14px;background:#666;border-radius:50%;transition:all 0.2s}
+.toggle-lbl{font-size:0.62rem;color:#555}
 
-/* ---- AUTH ---- */
-.auth-s{background:linear-gradient(180deg,#05081a,#0a0f0a);padding:40px 24px 32px;text-align:center}
-.auth-logo{width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#0a2a1a,#0a3a1a);border:2px solid rgba(0,255,136,0.4);margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:1.4rem}
-.auth-name{font-size:1.3rem;font-weight:900}
-.auth-name span{color:var(--green)}
-.auth-tag{font-size:0.72rem;color:#555;margin:4px 0 20px}
-.tabs-row{display:flex;background:rgba(255,255,255,0.05);border-radius:10px;padding:3px;margin-bottom:18px}
-.atab{flex:1;padding:8px;text-align:center;border-radius:8px;font-size:0.82rem;font-weight:700;color:#555}
-.atab.a{background:rgba(0,255,136,0.12);color:var(--green);border:1px solid rgba(0,255,136,0.2)}
-.ainp{width:100%;padding:12px 14px;background:#1c1c1c;border:1.5px solid #252525;border-radius:10px;color:#fff;font-size:0.88rem;margin-bottom:8px}
-.abtn{width:100%;padding:14px;background:linear-gradient(135deg,var(--green),#00cc66);color:#000;border:none;border-radius:12px;font-size:0.95rem;font-weight:900;margin-top:6px}
-.achk{display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;text-align:left}
-.achk-box{width:16px;height:16px;border:1.5px solid #333;border-radius:4px;flex-shrink:0;margin-top:1px;background:#1c1c1c}
-.achk-lbl{font-size:0.7rem;color:#666;line-height:1.5}
+/* SCREEN TABS */
+.screen-tabs{display:flex;gap:0;overflow-x:auto;scrollbar-width:none;border-top:1px solid #1a1a1a}
+.screen-tabs::-webkit-scrollbar{display:none}
+.stab{flex-shrink:0;padding:8px 14px;font-size:0.72rem;font-weight:700;color:#444;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all 0.15s}
+.stab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
 
-/* ---- LOBBY ---- */
-.lobby-s{background:linear-gradient(180deg,#0a0f2e,#0a0f0a);padding:0}
-.lobby-topbar{display:flex;justify-content:space-between;align-items:center;padding:14px 16px}
-.lobby-av{width:44px;height:44px;border-radius:50%;border:2px solid var(--gold);background:linear-gradient(135deg,#1a2a1a,#0a1a0a);display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:900;color:var(--gold)}
-.lobby-uname{font-size:0.95rem;font-weight:900;color:var(--gold)}
-.lobby-uid{font-size:0.68rem;color:#666}
-.wallet-b{display:flex;align-items:center;gap:8px;margin:0 16px 12px;background:rgba(0,0,0,0.4);border:1px solid rgba(245,200,66,0.25);border-radius:10px;padding:7px 12px}
-.vip{background:linear-gradient(135deg,#2a1a00,#3a2800);border:1px solid var(--gold);color:var(--gold);font-size:0.6rem;font-weight:900;padding:3px 8px;border-radius:5px}
-.wchip{display:flex;align-items:center;gap:4px;font-size:0.8rem;font-weight:800;color:var(--gold)}
-.club-card{margin:0 16px 14px;background:#fff;border-radius:14px;overflow:hidden}
-.cc-top{padding:8px 12px;background:#f8f8f8;display:flex;justify-content:space-between;font-size:0.65rem;color:#666}
-.cc-body{padding:20px;text-align:center;min-height:100px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px}
-.cc-empty-icon{font-size:2rem;opacity:0.5}
-.cc-empty-txt{font-size:0.75rem;color:#666;font-weight:600}
-.cc-btns{display:flex;gap:8px}
-.cc-btn-j{padding:7px 14px;background:var(--cyan);color:#000;border:none;border-radius:16px;font-size:0.7rem;font-weight:800}
-.cc-btn-c{padding:7px 14px;background:var(--green);color:#000;border:none;border-radius:16px;font-size:0.7rem;font-weight:800}
-.cc-foot{background:linear-gradient(135deg,#1a0a2e,#2a1a4a);padding:10px 14px;display:flex;align-items:center;gap:8px}
-.cc-ava{width:30px;height:30px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-size:0.6rem;font-weight:900;color:#000}
-.cc-n{font-size:0.82rem;font-weight:800;color:#fff}
-.cc-sub{font-size:0.6rem;color:rgba(255,255,255,0.4)}
-.action-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:0 16px 14px}
-.act-card{border-radius:14px;overflow:hidden;aspect-ratio:0.75;position:relative;display:flex;flex-direction:column;justify-content:flex-end}
-.act-bg-j{background:linear-gradient(145deg,#051a10,#0a3a20)}
-.act-bg-c{background:linear-gradient(145deg,#1a1500,#2a2200);border:1px solid rgba(245,200,66,0.2)}
-.act-bg-m{background:linear-gradient(145deg,#050a1a,#0a1530)}
-.act-icon{position:absolute;top:50%;left:50%;transform:translate(-50%,-60%);font-size:2rem;opacity:0.85}
-.act-grad{position:absolute;bottom:0;left:0;right:0;height:50%;background:linear-gradient(transparent,rgba(0,0,0,0.85))}
-.act-lbl{position:relative;z-index:1;font-size:0.75rem;font-weight:800;padding:7px;text-align:center;line-height:1.2}
-.act-sub{font-size:0.55rem;color:rgba(255,255,255,0.5)}
-.sec-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:0 16px 14px}
-.sec-c{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:10px 6px;text-align:center}
-.sec-ico{font-size:1.1rem;margin-bottom:4px}
-.sec-lbl{font-size:0.6rem;color:#666;font-weight:600}
+/* PHONE FRAME */
+.phone-frame-wrap{display:flex;justify-content:center;padding:16px 16px 40px;min-height:calc(100vh - 90px)}
+.phone-frame{background:#0a0a0a;border-radius:40px;border:3px solid #222;box-shadow:0 20px 60px rgba(0,0,0,0.8),inset 0 1px 0 rgba(255,255,255,0.05);overflow:hidden;position:relative;transition:max-width 0.3s}
+.phone-notch{width:90px;height:22px;background:#111;border-radius:0 0 14px 14px;margin:0 auto;position:absolute;top:0;left:50%;transform:translateX(-50%);z-index:10}
+.phone-inner{overflow-y:auto;height:100%;padding-top:22px;scrollbar-width:none}
+.phone-inner::-webkit-scrollbar{display:none}
 
-/* ---- CREATE CLUB MODAL ---- */
-.modal-s{background:#141414;padding:24px}
-.modal-close-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
-.modal-ttl{font-size:1.2rem;font-weight:900}
-.modal-hint{font-size:0.72rem;color:#555;line-height:1.6;padding:10px 12px;background:rgba(0,255,136,0.05);border:1px solid rgba(0,255,136,0.12);border-radius:9px;margin-bottom:16px}
-.logo-up{width:70px;height:70px;border-radius:50%;background:linear-gradient(135deg,#1a2a1a,#0f1a0f);border:2px dashed rgba(0,255,136,0.3);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;flex-direction:column}
-.logo-up span{font-size:1.4rem}
-.logo-up-sub{font-size:0.5rem;color:#555;margin-top:2px}
-.fl{width:100%;padding:12px 14px;background:#1c1c1c;border:1.5px solid #252525;border-radius:10px;color:#fff;font-size:0.88rem;margin-bottom:10px}
-.create-btn{width:100%;padding:14px;background:linear-gradient(135deg,var(--green),#00cc66);color:#000;border:none;border-radius:12px;font-size:0.95rem;font-weight:900;box-shadow:0 4px 16px rgba(0,255,136,0.25)}
-.create-note{text-align:center;font-size:0.62rem;color:#444;margin-top:8px}
+/* ===== SCREENS ===== */
 
-/* ---- JOIN CLUB ---- */
-.join-s{background:#0a0a0a;padding:24px}
-.join-ttl{font-size:1.1rem;font-weight:900;margin-bottom:4px}
-.join-sub{font-size:0.75rem;color:#555;margin-bottom:16px}
-.join-row{display:flex;gap:8px;margin-bottom:14px}
-.join-inp{flex:1;padding:13px 14px;background:#1c1c1c;border:1.5px solid #252525;border-radius:10px;color:#fff;font-size:0.9rem;font-weight:800;letter-spacing:2px}
-.join-btn{padding:13px 16px;background:var(--cyan);color:#000;border:none;border-radius:10px;font-size:0.82rem;font-weight:900}
-.club-found{background:#1c1c1c;border:1px solid #2a2a2a;border-radius:12px;padding:14px;margin-top:4px}
-.cf-name{font-size:0.95rem;font-weight:800;margin-bottom:3px}
-.cf-desc{font-size:0.7rem;color:#555;margin-bottom:12px}
-.cf-btn{width:100%;padding:12px;background:var(--green);color:#000;border:none;border-radius:10px;font-size:0.88rem;font-weight:900}
+/* WELCOME / SIGN IN */
+.scr{display:none;min-height:100%}
+.scr.active{display:block}
 
-/* ---- MY CLUBS ---- */
-.myclubs-s{background:#0a0a0a;padding:16px}
-.sec-hdr{font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#555;margin-bottom:10px}
-.club-row{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
-.cr-l{display:flex;align-items:center;gap:10px}
-.cr-av{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:900}
-.cr-n{font-size:0.88rem;font-weight:800;margin-bottom:2px}
-.cr-meta{display:flex;gap:5px;align-items:center}
-.cr-id{font-size:0.62rem;color:#555}
-.rbadge{font-size:0.58rem;font-weight:800;padding:2px 6px;border-radius:5px;text-transform:uppercase}
+/* AUTH */
+.auth-bg{background:linear-gradient(180deg,#05081a 0%,#0a0f0a 100%);min-height:100%;padding:50px 24px 40px;text-align:center}
+.auth-glow{position:absolute;top:15%;left:50%;transform:translateX(-50%);width:200px;height:200px;background:radial-gradient(circle,rgba(0,255,136,0.06),transparent 70%);pointer-events:none}
+.alogo{width:64px;height:64px;border-radius:50%;border:2px solid rgba(0,255,136,0.4);margin:0 auto 12px;overflow:hidden;box-shadow:0 0 24px rgba(0,255,136,0.2)}
+.alogo img{width:100%;height:100%;object-fit:cover}
+.aname{font-size:1.3rem;font-weight:900}
+.aname span{color:var(--green)}
+.atag{font-size:0.72rem;color:#555;margin:4px 0 20px}
+.atabs{display:flex;background:rgba(255,255,255,0.05);border-radius:10px;padding:3px;margin-bottom:16px}
+.atab2{flex:1;padding:9px;text-align:center;border-radius:8px;font-size:0.8rem;font-weight:700;color:#555;cursor:pointer;transition:all 0.2s}
+.atab2.on{background:rgba(0,255,136,0.12);color:var(--green);border:1px solid rgba(0,255,136,0.2)}
+.acard{background:#141414;border:1px solid #1e1e1e;border-radius:16px;padding:18px;text-align:left}
+.ainp{width:100%;padding:12px 14px;background:#1c1c1c;border:1.5px solid #252525;border-radius:10px;color:#fff;font-size:0.88rem;margin-bottom:8px;outline:none;transition:border-color 0.2s}
+.ainp:focus{border-color:var(--green)}
+.achkrow{display:flex;align-items:flex-start;gap:8px;margin-bottom:8px}
+.abox{width:16px;height:16px;border:1.5px solid #333;border-radius:4px;flex-shrink:0;margin-top:2px;background:#1c1c1c;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center}
+.abox.checked{background:var(--green);border-color:var(--green)}
+.achklbl{font-size:0.68rem;color:#666;line-height:1.5;cursor:pointer}
+.achklbl a{color:var(--cyan)}
+.abtn{width:100%;padding:14px;background:linear-gradient(135deg,var(--green),#00cc66);color:#000;border:none;border-radius:12px;font-size:0.95rem;font-weight:900;cursor:pointer;margin-top:4px;box-shadow:0 4px 16px rgba(0,255,136,0.2)}
+.afooter{margin-top:14px;text-align:center;font-size:0.7rem;color:#444}
+.afooter span{color:var(--cyan);cursor:pointer}
+
+/* LOBBY */
+.lobby-wrap{background:linear-gradient(180deg,#0a0f2e,#0a0f0a);min-height:100%}
+.sky{height:110px;position:relative;overflow:hidden;background:linear-gradient(180deg,#0a0f2e,#0a100a)}
+.moon{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:70px;height:70px;background:radial-gradient(circle,#e8e0c8,#c8c0a0);border-radius:50%;opacity:0.75;box-shadow:0 0 30px rgba(232,224,200,0.3)}
+.lobby-top{display:flex;justify-content:space-between;align-items:center;padding:12px 14px}
+.uav{width:42px;height:42px;border-radius:50%;border:2px solid var(--gold);background:#1a2a1a;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:900;color:var(--gold)}
+.un{font-size:0.88rem;font-weight:900;color:var(--gold)}
+.uid2{font-size:0.62rem;color:#555}
+.ham{width:30px;height:24px;display:flex;flex-direction:column;gap:5px;justify-content:center;cursor:pointer}
+.ham span{display:block;height:2px;background:#fff;border-radius:2px}
+.wbar{display:flex;align-items:center;gap:7px;margin:0 14px 10px;background:rgba(0,0,0,0.4);border:1px solid rgba(245,200,66,0.2);border-radius:10px;padding:6px 10px}
+.vip2{background:linear-gradient(135deg,#2a1a00,#3a2800);border:1px solid var(--gold);color:var(--gold);font-size:0.58rem;font-weight:900;padding:3px 7px;border-radius:5px}
+.wchip2{display:flex;align-items:center;gap:4px;font-size:0.75rem;font-weight:800;color:var(--gold)}
+.wadd{width:16px;height:16px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.6rem;font-weight:900;color:#000}
+.wsep{width:1px;height:12px;background:#333}
+.cc{margin:0 14px 12px;background:#fff;border-radius:13px;overflow:hidden;cursor:pointer}
+.cc-top{padding:7px 12px;background:#f5f5f5;display:flex;justify-content:space-between;font-size:0.6rem;color:#888}
+.cc-body{padding:16px;text-align:center;min-height:90px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px}
+.cc-ei{font-size:1.8rem;opacity:0.45}
+.cc-et{font-size:0.7rem;color:#666;font-weight:600}
+.cc-brow{display:flex;gap:7px}
+.ccbj{padding:6px 12px;background:var(--cyan);color:#000;border:none;border-radius:14px;font-size:0.65rem;font-weight:900;cursor:pointer}
+.ccbc{padding:6px 12px;background:var(--green);color:#000;border:none;border-radius:14px;font-size:0.65rem;font-weight:900;cursor:pointer}
+.cc-foot{background:linear-gradient(135deg,#1a0a2e,#2a1a4a);padding:9px 12px;display:flex;align-items:center;gap:8px}
+.cc-fav{width:28px;height:28px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-size:0.58rem;font-weight:900;color:#000}
+.cc-fn{font-size:0.78rem;font-weight:800;color:#fff}
+.cc-fs{font-size:0.58rem;color:rgba(255,255,255,0.4)}
+.agrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;padding:0 14px 12px}
+.ag{border-radius:13px;overflow:hidden;aspect-ratio:0.75;position:relative;display:flex;flex-direction:column;justify-content:flex-end;cursor:pointer}
+.ag:active{opacity:0.8}
+.ag-bj{background:linear-gradient(145deg,#051a10,#0a3a20)}
+.ag-bc{background:linear-gradient(145deg,#1a1500,#2a2200);border:1px solid rgba(245,200,66,0.15)}
+.ag-bm{background:linear-gradient(145deg,#050a1a,#0a1530)}
+.ag-ico{position:absolute;top:50%;left:50%;transform:translate(-50%,-60%);font-size:2.2rem}
+.ag-grad{position:absolute;bottom:0;left:0;right:0;height:50%;background:linear-gradient(transparent,rgba(0,0,0,0.85))}
+.ag-lbl{position:relative;z-index:1;font-size:0.7rem;font-weight:800;padding:6px;text-align:center;line-height:1.2}
+.ag-sub{font-size:0.52rem;color:rgba(255,255,255,0.45)}
+.srow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;padding:0 14px 14px}
+.sc2{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:9px 5px;text-align:center;cursor:pointer}
+.sc2-i{font-size:1rem;margin-bottom:3px}
+.sc2-l{font-size:0.58rem;color:#555;font-weight:600}
+
+/* JOIN CLUB */
+.join-wrap{background:#0a0a0a;padding:20px}
+.modal-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.modal-ttl2{font-size:1.05rem;font-weight:900}
+.back-btn{background:rgba(255,255,255,0.07);border:none;color:#aaa;font-size:0.78rem;cursor:pointer;padding:5px 11px;border-radius:8px;font-weight:700}
+.modal-sub2{font-size:0.72rem;color:#555;margin-bottom:14px}
+.jrow{display:flex;gap:7px;margin-bottom:10px}
+.jinp{flex:1;padding:12px 13px;background:#1c1c1c;border:1.5px solid #252525;border-radius:10px;color:#fff;font-size:0.88rem;font-weight:800;letter-spacing:2px;outline:none}
+.jbtn{padding:12px 14px;background:var(--cyan);color:#000;border:none;border-radius:10px;font-size:0.8rem;font-weight:900;cursor:pointer}
+.found-card{background:#1c1c1c;border:1px solid #2a2a2a;border-radius:12px;padding:13px;margin-top:4px}
+.fc-name{font-size:0.92rem;font-weight:800;margin-bottom:2px}
+.fc-desc{font-size:0.68rem;color:#555;margin-bottom:11px}
+.fc-btn{width:100%;padding:11px;background:var(--green);color:#000;border:none;border-radius:10px;font-size:0.85rem;font-weight:900;cursor:pointer}
+
+/* CREATE CLUB */
+.create-wrap{background:#141414;padding:22px}
+.logo-circle{width:68px;height:68px;border-radius:50%;background:linear-gradient(135deg,#1a2a1a,#0f1a0f);border:2px dashed rgba(0,255,136,0.3);display:flex;align-items:center;justify-content:center;margin:0 auto 13px;flex-direction:column;cursor:pointer;overflow:hidden}
+.lc-ico{font-size:1.4rem}
+.lc-sub{font-size:0.5rem;color:#555;margin-top:2px}
+.hint-box{font-size:0.7rem;color:#555;line-height:1.6;padding:9px 12px;background:rgba(0,255,136,0.05);border:1px solid rgba(0,255,136,0.1);border-radius:9px;margin-bottom:14px}
+.flbl{font-size:0.6rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px}
+.finp{width:100%;padding:12px 13px;background:#1c1c1c;border:1.5px solid #252525;border-radius:10px;color:#fff;font-size:0.88rem;margin-bottom:10px;outline:none}
+.create-btn2{width:100%;padding:14px;background:linear-gradient(135deg,var(--green),#00cc66);color:#000;border:none;border-radius:12px;font-size:0.92rem;font-weight:900;cursor:pointer;box-shadow:0 4px 16px rgba(0,255,136,0.22)}
+.create-note2{text-align:center;font-size:0.6rem;color:#444;margin-top:8px}
+
+/* MY CLUBS */
+.myclubs-wrap{background:#0a0a0a;padding:14px}
+.sec-h{font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#555;margin-bottom:8px}
+.crow{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:11px 12px;margin-bottom:7px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+.crow:active{border-color:var(--cyan)}
+.cr-ll{display:flex;align-items:center;gap:9px}
+.cr-av2{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:900}
+.cr-n2{font-size:0.84rem;font-weight:800;margin-bottom:2px}
+.cr-m2{display:flex;gap:5px;align-items:center}
+.cr-id2{font-size:0.6rem;color:#555}
+.rb{font-size:0.56rem;font-weight:800;padding:2px 6px;border-radius:5px;text-transform:uppercase}
 .rh{background:rgba(245,200,66,0.12);color:var(--gold);border:1px solid rgba(245,200,66,0.25)}
 .rp{background:rgba(0,255,136,0.08);color:var(--green);border:1px solid rgba(0,255,136,0.2)}
-.rpend{background:rgba(255,61,87,0.08);color:var(--red);border:1px solid rgba(255,61,87,0.2)}
-.cr-r{text-align:right}
-.cr-bal{font-size:0.92rem;font-weight:900}
-.cr-dir{font-size:0.62rem;color:#555}
+.rpnd{background:rgba(255,61,87,0.08);color:var(--red);border:1px solid rgba(255,61,87,0.2)}
+.cr-rr{text-align:right}
+.cr-bal2{font-size:0.88rem;font-weight:900}
+.cr-dir2{font-size:0.6rem;color:#555}
 
-/* ---- PLAYER DASHBOARD ---- */
-.player-s{background:#0a0a0a}
-.player-hdr{display:flex;justify-content:space-between;align-items:center;padding:13px 16px;background:rgba(8,8,8,0.97);border-bottom:1px solid #1a1a1a}
-.p-logo{width:30px;height:30px;border-radius:50%;background:#1a2a1a;border:1.5px solid rgba(0,255,136,0.3);display:flex;align-items:center;justify-content:center;font-size:0.55rem;font-weight:900;color:var(--green)}
-.p-ttl{font-size:0.88rem;font-weight:900}
-.p-ttl span{color:var(--cyan)}
-.sport-chips{display:flex;gap:6px;padding:10px 14px;overflow-x:auto;scrollbar-width:none}
-.chip{flex-shrink:0;padding:6px 13px;border-radius:16px;font-size:0.75rem;font-weight:700;border:1px solid #2a2a2a;background:#1c1c1c;color:#555}
-.chip.a{background:var(--green);color:#000;border-color:var(--green)}
-.promo-b{margin:0 14px 12px;background:linear-gradient(135deg,#001a10,#003320);border:1px solid rgba(0,255,136,0.2);border-radius:12px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center}
-.promo-txt{font-size:0.8rem;font-weight:800;color:var(--green)}
-.promo-sub{font-size:0.65rem;color:#555;margin-top:2px}
-.promo-action{background:var(--green);color:#000;border:none;padding:7px 13px;border-radius:16px;font-size:0.7rem;font-weight:900}
-.game-card{margin:0 14px 10px;background:linear-gradient(180deg,#1e1e1e,#181818);border:1px solid #2a2a2a;border-radius:14px;overflow:hidden}
-.gc-hdr{padding:9px 13px 5px;display:flex;align-items:center;gap:5px}
-.gc-sp{font-size:0.6rem;font-weight:800;color:#555;text-transform:uppercase;letter-spacing:0.5px}
-.gc-cols{display:grid;grid-template-columns:1fr 82px 82px 82px;gap:4px;padding:0 13px 5px}
-.gc-cl{text-align:center;font-size:0.58rem;color:#444;font-weight:700;text-transform:uppercase}
-.team-row{display:grid;grid-template-columns:1fr 82px 82px 82px;gap:4px;padding:0 13px;margin-bottom:7px;align-items:center}
-.t-info{display:flex;align-items:center;gap:7px}
-.t-av{width:28px;height:28px;border-radius:50%;background:#242424;border:1px solid #333;display:flex;align-items:center;justify-content:center;font-size:0.55rem;font-weight:900;color:#aaa}
-.t-city{font-size:0.58rem;color:#444}
-.t-name{font-size:0.82rem;font-weight:800}
-.odds-b{text-align:center;padding:7px 3px;background:#242424;border-radius:8px;border:1.5px solid #2e2e2e;min-height:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
-.odds-b.sel{border-color:var(--green);background:rgba(0,255,136,0.08)}
-.odds-l{font-size:0.6rem;color:#555}
-.odds-n{font-size:0.85rem;font-weight:900}
-.odds-pos{color:#00ff88;text-shadow:0 0 8px rgba(0,255,136,0.4)}
-.odds-neg{color:#e0e0e0}
-.gc-foot{padding:8px 13px;border-top:1px solid #222;display:flex;justify-content:space-between}
-.gc-time{font-size:0.68rem;color:#444}
-.gc-more{font-size:0.68rem;color:var(--green);font-weight:700}
+/* PLAYER DASHBOARD */
+.player-wrap{background:#0a0a0a}
+.p-hdr{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #1a1a1a}
+.p-logo{width:28px;height:28px;border-radius:50%;background:#1a2a1a;border:1.5px solid rgba(0,255,136,0.3);display:flex;align-items:center;justify-content:center;font-size:0.52rem;font-weight:900;color:var(--green);overflow:hidden}
+.p-logo img{width:100%;height:100%;object-fit:cover}
+.p-ttl2{font-size:0.84rem;font-weight:900}
+.p-ttl2 span{color:var(--cyan)}
+.dpill2{display:flex;align-items:center;gap:4px;background:rgba(0,194,255,0.1);border:1px solid rgba(0,194,255,0.2);padding:5px 10px;border-radius:14px;font-size:0.72rem;font-weight:800;color:var(--cyan)}
+.schips{display:flex;gap:6px;padding:9px 12px;overflow-x:auto;scrollbar-width:none}
+.schips::-webkit-scrollbar{display:none}
+.schip{flex-shrink:0;padding:5px 12px;border-radius:14px;font-size:0.72rem;font-weight:700;border:1px solid #2a2a2a;background:#1c1c1c;color:#555}
+.schip.on{background:var(--green);color:#000;border-color:var(--green)}
+.promo-b2{margin:0 12px 10px;background:linear-gradient(135deg,#001a10,#003320);border:1px solid rgba(0,255,136,0.18);border-radius:11px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center}
+.pb-txt{font-size:0.76rem;font-weight:800;color:var(--green)}
+.pb-sub{font-size:0.6rem;color:#555;margin-top:1px}
+.pb-act{background:var(--green);color:#000;border:none;padding:6px 11px;border-radius:14px;font-size:0.65rem;font-weight:900;cursor:pointer}
+.gcard{margin:0 12px 9px;background:linear-gradient(180deg,#1e1e1e,#181818);border:1px solid #2a2a2a;border-radius:13px;overflow:hidden}
+.gc-h{padding:8px 12px 5px;display:flex;align-items:center;gap:5px;font-size:0.58rem;color:#555;font-weight:800;text-transform:uppercase;letter-spacing:0.5px}
+.gc-cols2{display:grid;grid-template-columns:1fr 78px 78px 78px;gap:3px;padding:0 12px 5px}
+.gcl{text-align:center;font-size:0.56rem;color:#444;font-weight:700;text-transform:uppercase}
+.trow{display:grid;grid-template-columns:1fr 78px 78px 78px;gap:3px;padding:0 12px;margin-bottom:6px;align-items:center}
+.ti{display:flex;align-items:center;gap:6px}
+.tav{width:26px;height:26px;border-radius:50%;background:#242424;border:1px solid #333;display:flex;align-items:center;justify-content:center;font-size:0.5rem;font-weight:900;color:#aaa}
+.tc{font-size:0.56rem;color:#444}
+.tn{font-size:0.78rem;font-weight:800}
+.ob{text-align:center;padding:6px 3px;background:#242424;border-radius:7px;border:1.5px solid #2e2e2e;min-height:42px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;cursor:pointer}
+.ob:active,.ob.sel{border-color:var(--green);background:rgba(0,255,136,0.08)}
+.ol{font-size:0.56rem;color:#555}
+.on2{font-size:0.8rem;font-weight:900}
+.op{color:#00ff88;text-shadow:0 0 6px rgba(0,255,136,0.35)}
+.oneg{color:#e0e0e0}
+.gfoot{padding:7px 12px;border-top:1px solid #222;display:flex;justify-content:space-between}
+.gt{font-size:0.64rem;color:#444}
+.gmore{font-size:0.64rem;color:var(--green);font-weight:700}
 
-/* ---- HOST DASHBOARD ---- */
-.host-s{background:#0a0a0a}
-.host-hdr{display:flex;justify-content:space-between;align-items:center;padding:13px 16px;background:rgba(5,5,5,0.97);border-bottom:1px solid #1a1a1a}
-.h-logo{width:28px;height:28px;border-radius:50%;overflow:hidden;border:1.5px solid rgba(0,255,136,0.3)}
-.h-logo img{width:100%;height:100%;object-fit:cover}
-.h-ttl{font-size:0.88rem;font-weight:900}
-.h-ttl span{color:var(--cyan)}
-.dpill{display:flex;align-items:center;gap:4px;background:rgba(0,194,255,0.1);border:1px solid rgba(0,194,255,0.2);padding:5px 11px;border-radius:16px;font-size:0.78rem;font-weight:800;color:var(--cyan)}
-.alert-c{margin:10px 14px;background:linear-gradient(135deg,#1a0a0e,#140608);border:1px solid rgba(255,61,87,0.3);border-radius:13px;padding:12px 14px;display:flex;gap:10px}
-.alert-dot{width:32px;height:32px;background:rgba(255,61,87,0.12);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.85rem}
-.alert-ttl{font-size:0.82rem;font-weight:800;color:var(--red);margin-bottom:2px}
-.alert-body{font-size:0.7rem;color:#aa4455;line-height:1.4}
-.settle-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 14px;margin-bottom:10px}
-.sc{border-radius:13px;padding:13px}
-.sc-r{background:linear-gradient(135deg,#1a0a0e,#120508);border:1px solid rgba(255,61,87,0.2)}
-.sc-g{background:linear-gradient(135deg,#061a0e,#041208);border:1px solid rgba(0,255,136,0.15)}
-.sc-lbl{font-size:0.58rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#555;margin-bottom:5px}
-.sc-amt{font-size:1.4rem;font-weight:900;line-height:1}
-.sc-sub{font-size:0.62rem;color:#555;margin-top:3px}
-.stats-r{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:0 14px;margin-bottom:10px}
-.stat-c{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:11px 8px;text-align:center}
-.stat-v{font-size:1.1rem;font-weight:900;margin-bottom:3px}
-.stat-l{font-size:0.58rem;color:#555;text-transform:uppercase;letter-spacing:0.4px;font-weight:700}
-.player-list{padding:0 14px}
-.pr{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:11px 13px;margin-bottom:7px;display:flex;align-items:center;justify-content:space-between}
-.pr-l{display:flex;align-items:center;gap:9px}
-.pr-av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:900}
-.pr-n{font-size:0.86rem;font-weight:800;margin-bottom:2px}
-.pr-meta{display:flex;align-items:center;gap:5px}
-.pr-bets{font-size:0.62rem;color:#555}
-.badge{font-size:0.56rem;font-weight:800;padding:2px 6px;border-radius:5px;text-transform:uppercase}
-.bs{background:rgba(255,61,87,0.12);color:var(--red);border:1px solid rgba(255,61,87,0.25)}
-.bw{background:rgba(245,200,66,0.1);color:var(--gold);border:1px solid rgba(245,200,66,0.25)}
-.bq{background:rgba(0,255,136,0.08);color:var(--green);border:1px solid rgba(0,255,136,0.2)}
-.pr-r{text-align:right}
-.pr-amt{font-size:0.92rem;font-weight:900}
-.pr-dir{font-size:0.6rem;color:#555;margin-top:1px}
+/* HOST DASHBOARD */
+.host-wrap{background:#0a0a0a}
+.h-hdr2{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #1a1a1a}
+.alert-c2{margin:9px 12px;background:linear-gradient(135deg,#1a0a0e,#140608);border:1px solid rgba(255,61,87,0.28);border-radius:12px;padding:11px 13px;display:flex;gap:9px;cursor:pointer}
+.adot{width:30px;height:30px;background:rgba(255,61,87,0.1);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.82rem}
+.attl{font-size:0.78rem;font-weight:800;color:var(--red);margin-bottom:2px}
+.abdy{font-size:0.66rem;color:#aa4455;line-height:1.4}
+.sgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:0 12px;margin-bottom:9px}
+.sc3{border-radius:12px;padding:12px}
+.scr3{background:linear-gradient(135deg,#1a0a0e,#120508);border:1px solid rgba(255,61,87,0.18)}
+.scg3{background:linear-gradient(135deg,#061a0e,#041208);border:1px solid rgba(0,255,136,0.14)}
+.sc3-l{font-size:0.56rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#555;margin-bottom:4px}
+.sc3-v{font-size:1.3rem;font-weight:900;line-height:1}
+.sc3-s{font-size:0.58rem;color:#555;margin-top:3px}
+.strow{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:0 12px;margin-bottom:9px}
+.stc{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 7px;text-align:center}
+.stv{font-size:1.05rem;font-weight:900;margin-bottom:2px}
+.stl{font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px;font-weight:700}
+.plist{padding:0 12px}
+.pr2{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+.pr2-l{display:flex;align-items:center;gap:8px}
+.pr2-av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:900}
+.pr2-n{font-size:0.82rem;font-weight:800;margin-bottom:2px}
+.pr2-m{display:flex;align-items:center;gap:5px}
+.pr2-b{font-size:0.6rem;color:#555}
+.bdg{font-size:0.54rem;font-weight:800;padding:2px 5px;border-radius:4px;text-transform:uppercase}
+.bs2{background:rgba(255,61,87,0.1);color:var(--red);border:1px solid rgba(255,61,87,0.2)}
+.bw2{background:rgba(245,200,66,0.08);color:var(--gold);border:1px solid rgba(245,200,66,0.2)}
+.bq2{background:rgba(0,255,136,0.07);color:var(--green);border:1px solid rgba(0,255,136,0.18)}
+.pr2-r{text-align:right}
+.pr2-a{font-size:0.88rem;font-weight:900}
+.pr2-d{font-size:0.58rem;color:#555}
 
-/* ---- PENDING ---- */
-.pending-s{background:#0a0a0a;padding:40px 24px;text-align:center}
-.pend-icon{font-size:3rem;margin-bottom:14px}
-.pend-ttl{font-size:1.1rem;font-weight:900;margin-bottom:8px}
-.pend-sub{font-size:0.78rem;color:#555;line-height:1.6;margin-bottom:18px}
-.pend-code{display:inline-block;font-size:1.6rem;font-weight:900;letter-spacing:6px;color:var(--cyan);background:rgba(0,194,255,0.08);border:1px solid rgba(0,194,255,0.2);padding:10px 20px;border-radius:10px;margin-bottom:12px}
-.pend-note{font-size:0.68rem;color:#444}
+/* PENDING */
+.pend-wrap{background:#0a0a0a;padding:40px 22px;text-align:center}
+.pi{font-size:3rem;margin-bottom:12px}
+.pt{font-size:1.05rem;font-weight:900;margin-bottom:7px}
+.ps{font-size:0.74rem;color:#555;line-height:1.6;margin-bottom:16px}
+.pc{display:inline-block;font-size:1.5rem;font-weight:900;letter-spacing:5px;color:var(--cyan);background:rgba(0,194,255,0.08);border:1px solid rgba(0,194,255,0.2);padding:9px 18px;border-radius:9px;margin-bottom:10px}
+.pn{font-size:0.64rem;color:#444}
+.pback{margin-top:18px;width:100%;padding:12px;background:transparent;color:#555;border:1px solid #222;border-radius:11px;font-size:0.82rem;font-weight:700;cursor:pointer}
 
-/* ---- PLAYER PROFILE ---- */
-.profile-s{background:#0a0a0a;padding:24px}
-.prof-top{text-align:center;margin-bottom:20px}
-.prof-av{width:70px;height:70px;border-radius:50%;background:linear-gradient(135deg,#1a2a1a,#0a1a0a);border:2px solid var(--green);margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:900;color:var(--green)}
-.prof-name{font-size:1rem;font-weight:900;margin-bottom:2px}
-.prof-id{font-size:0.7rem;color:#555}
-.prof-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
-.ps-c{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:12px 8px;text-align:center}
-.ps-v{font-size:1.1rem;font-weight:900;margin-bottom:3px}
-.ps-l{font-size:0.6rem;color:#555;text-transform:uppercase;font-weight:700}
-.club-membership{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:8px}
-.cm-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.cm-name{font-size:0.88rem;font-weight:800}
-.cm-role{font-size:0.6rem;font-weight:800;padding:2px 8px;border-radius:6px}
-.bet-hist{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px}
-.bh-top{display:flex;justify-content:space-between;margin-bottom:5px}
-.bh-tag{font-size:0.62rem;color:#555}
-.bh-status{font-size:0.65rem;font-weight:800;padding:2px 7px;border-radius:5px}
-.bh-win{background:rgba(0,255,136,0.12);color:var(--green)}
-.bh-loss{background:rgba(255,61,87,0.1);color:var(--red)}
-.bh-pend{background:rgba(245,200,66,0.1);color:var(--gold)}
-.bh-desc{font-size:0.82rem;font-weight:700;margin-bottom:5px}
-.bh-amts{display:flex;gap:14px;font-size:0.72rem;color:#555}
-
-/* ---- HOST CLUB MGMT ---- */
-.mgmt-s{background:#0a0a0a;padding:16px}
-.mgmt-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
-.mgmt-ttl{font-size:1rem;font-weight:900}
-.mgmt-edit{font-size:0.72rem;color:var(--cyan);font-weight:700}
-.club-info-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px}
-.ci-top{display:flex;align-items:center;gap:12px;margin-bottom:12px}
-.ci-logo{width:44px;height:44px;border-radius:11px;background:linear-gradient(135deg,#1a2a1a,#0a1a0a);border:1px solid rgba(0,255,136,0.2);display:flex;align-items:center;justify-content:center;font-size:1rem}
-.ci-name{font-size:0.95rem;font-weight:900;margin-bottom:2px}
-.ci-code{font-size:0.68rem;color:var(--cyan);font-weight:700}
-.ci-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-.cis{background:var(--card2);border-radius:8px;padding:8px 6px;text-align:center}
-.cis-v{font-size:0.95rem;font-weight:900;margin-bottom:2px}
-.cis-l{font-size:0.55rem;color:#555;text-transform:uppercase;font-weight:700}
-.req-card{background:rgba(255,61,87,0.06);border:1px solid rgba(255,61,87,0.18);border-radius:12px;padding:12px 13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
-.req-info{flex:1}
-.req-n{font-size:0.86rem;font-weight:800;margin-bottom:2px}
-.req-meta{font-size:0.65rem;color:#555}
-.req-btns{display:flex;gap:6px}
-.req-app{padding:6px 12px;background:rgba(0,255,136,0.12);border:1px solid var(--green);color:var(--green);border-radius:7px;font-size:0.68rem;font-weight:800}
-.req-rej{padding:6px 12px;background:rgba(255,61,87,0.08);border:1px solid var(--red);color:var(--red);border-radius:7px;font-size:0.68rem;font-weight:800}
-.player-limit-row{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:7px;display:flex;align-items:center;justify-content:space-between}
-.pl-l{display:flex;align-items:center;gap:9px}
-.pl-av{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.6rem;font-weight:900}
-.pl-n{font-size:0.82rem;font-weight:800;margin-bottom:1px}
-.pl-limits{font-size:0.62rem;color:#555}
-.pl-edit{font-size:0.65rem;color:var(--cyan);font-weight:700;background:var(--card2);border:1px solid #2a2a2a;padding:4px 10px;border-radius:6px}
+/* PROFILE */
+.prof-wrap{background:#0a0a0a;padding:22px}
+.prof-top2{text-align:center;margin-bottom:18px}
+.pav2{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#1a2a1a,#0a1a0a);border:2px solid var(--green);margin:0 auto 9px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;font-weight:900;color:var(--green)}
+.pname{font-size:0.95rem;font-weight:900;margin-bottom:2px}
+.pid2{font-size:0.66rem;color:#555}
+.pstats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px}
+.psc{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 7px;text-align:center}
+.psv{font-size:1rem;font-weight:900;margin-bottom:2px}
+.psl{font-size:0.56rem;color:#555;text-transform:uppercase;font-weight:700}
+.cmrow{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:11px;margin-bottom:7px}
+.cm-top2{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.cm-n2{font-size:0.84rem;font-weight:800}
+.brow{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:11px;margin-bottom:7px}
+.brtop{display:flex;justify-content:space-between;margin-bottom:4px}
+.brtag{font-size:0.6rem;color:#555}
+.brs{font-size:0.62rem;font-weight:800;padding:2px 6px;border-radius:5px}
+.brw{background:rgba(0,255,136,0.1);color:var(--green)}
+.brl{background:rgba(255,61,87,0.08);color:var(--red)}
+.brp{background:rgba(245,200,66,0.08);color:var(--gold)}
+.brdesc{font-size:0.78rem;font-weight:700;margin-bottom:4px}
+.bramts{display:flex;gap:12px;font-size:0.68rem;color:#555}
 
 /* BOTTOM NAV MOCK */
-.bnav-mock{display:flex;background:rgba(5,5,5,0.97);border-top:1px solid #1a1a1a;padding:9px 0 20px}
-.bn-m{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
-.bn-ic{font-size:1.1rem}
-.bn-lb{font-size:0.55rem;color:#444;font-weight:600}
-.bn-m.a .bn-lb{color:var(--cyan)}
+.bnavmk{display:flex;background:rgba(5,5,5,0.97);border-top:1px solid #1a1a1a;padding:8px 0 20px}
+.bnm{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:3px 0}
+.bni{font-size:1.05rem}
+.bnl{font-size:0.54rem;color:#444;font-weight:600}
+.bnm.a .bnl{color:var(--cyan)}
+
+/* BACK OVERLAY */
+.back-chip{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:6px;padding:8px 14px;background:rgba(10,10,10,0.9);backdrop-filter:blur(8px);border-bottom:1px solid #1a1a1a;font-size:0.72rem;font-weight:700;color:var(--cyan);cursor:pointer}
 </style>
 </head>
 <body>
 
-<div id="dev-controls" style="position:sticky;top:0;z-index:100;background:#050505;border-bottom:1px solid #1a1a1a;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-  <span style="font-size:0.7rem;font-weight:800;color:#555;text-transform:uppercase;letter-spacing:1px">Preview</span>
-  <div style="display:flex;gap:6px;margin-left:4px">
-    <button onclick="setWidth('mobile')" id="btn-mobile" style="padding:5px 12px;border-radius:8px;font-size:0.72rem;font-weight:800;cursor:pointer;border:1px solid var(--cyan);background:rgba(0,194,255,0.15);color:var(--cyan)">📱 Mobile</button>
-    <button onclick="setWidth('tablet')" id="btn-tablet" style="padding:5px 12px;border-radius:8px;font-size:0.72rem;font-weight:800;cursor:pointer;border:1px solid #333;background:transparent;color:#555">📟 Tablet</button>
-  </div>
-  <div style="display:flex;align-items:center;gap:6px;margin-left:4px">
-    <span style="font-size:0.65rem;color:#555">Light</span>
-    <div onclick="toggleTheme()" id="theme-toggle" style="width:36px;height:20px;background:#333;border-radius:10px;position:relative;cursor:pointer;transition:background 0.2s">
-      <div id="theme-knob" style="position:absolute;top:3px;left:3px;width:14px;height:14px;background:#666;border-radius:50%;transition:all 0.2s"></div>
-    </div>
-    <span style="font-size:0.65rem;color:#555">Dark</span>
-  </div>
-  <button onclick="toggleLabels()" id="btn-labels" style="padding:5px 12px;border-radius:8px;font-size:0.72rem;font-weight:800;cursor:pointer;border:1px solid #333;background:rgba(0,255,136,0.1);color:var(--green)">🏷 Labels On</button>
-  <a href="lobby.html" style="margin-left:auto;padding:5px 13px;background:rgba(0,194,255,0.12);border:1px solid var(--cyan);color:var(--cyan);border-radius:16px;font-size:0.7rem;font-weight:800;text-decoration:none">Open App →</a>
-</div>
-
-<div class="dev-header">
-  <div style="font-size:1.5rem">🔍</div>
-  <div>
-    <div class="dev-title">Dev Preview — Pocketbooks Sports</div>
-    <div class="dev-sub">All screens · Visual reference only · No real actions</div>
-  </div>
-  <a href="lobby.html" style="margin-left:auto;padding:8px 16px;background:rgba(0,194,255,0.15);border:1px solid var(--cyan);color:var(--cyan);border-radius:20px;font-size:0.75rem;font-weight:800;text-decoration:none">Open App →</a>
-</div>
-
-<!-- 1. SIGN UP -->
-<div class="screen-wrap">
-  <div class="screen-label">1 · Sign Up Screen</div>
-  <div class="screen">
-    <div class="auth-s">
-      <div class="auth-logo">🏆</div>
-      <div class="auth-name">Pocket Books <span>Sports</span></div>
-      <div class="auth-tag">Your private betting club platform</div>
-      <div class="tabs-row"><div class="atab">Sign In</div><div class="atab a">Create Account</div></div>
-      <div class="auth-card" style="background:#111;border:1px solid #1e1e1e;border-radius:16px;padding:18px;text-align:left">
-        <input class="ainp" placeholder="Display name" disabled>
-        <input class="ainp" placeholder="Email address" disabled>
-        <input class="ainp" placeholder="Password" disabled>
-        <input class="ainp" placeholder="Confirm password" disabled>
-        <div class="achk"><div class="achk-box"></div><div class="achk-lbl">I confirm I am 21 years of age or older</div></div>
-        <div class="achk"><div class="achk-box"></div><div class="achk-lbl">I agree to the Terms of Service and Privacy Policy</div></div>
-        <button class="abtn" disabled>Create My Account →</button>
+<!-- DEV CHROME -->
+<div class="dev-chrome">
+  <div class="dev-topbar">
+    <div class="proto-badge">Prototype Mode</div>
+    <div style="font-size:0.7rem;font-weight:800;color:#444">Pocketbooks Sports</div>
+    <div class="dev-controls">
+      <button class="ctrl-btn on" id="btn-mobile" onclick="setW('mobile')">📱 Mobile</button>
+      <button class="ctrl-btn" id="btn-tablet" onclick="setW('tablet')">📟 Tablet</button>
+      <div class="theme-row">
+        <span class="toggle-lbl">Light</span>
+        <div class="toggle-pill" onclick="toggleTheme()"><div class="toggle-knob" id="tknob"></div></div>
+        <span class="toggle-lbl">Dark</span>
       </div>
+      <a href="lobby.html" style="padding:5px 11px;background:rgba(0,194,255,0.12);border:1px solid var(--cyan);color:var(--cyan);border-radius:8px;font-size:0.68rem;font-weight:800;text-decoration:none">Live App →</a>
     </div>
   </div>
-</div>
-
-<!-- 2. SIGN IN -->
-<div class="screen-wrap">
-  <div class="screen-label">2 · Sign In Screen</div>
-  <div class="screen">
-    <div class="auth-s">
-      <div class="auth-logo">🏆</div>
-      <div class="auth-name">Pocket Books <span>Sports</span></div>
-      <div class="auth-tag">Your private betting club platform</div>
-      <div class="tabs-row"><div class="atab a">Sign In</div><div class="atab">Create Account</div></div>
-      <div class="auth-card" style="background:#111;border:1px solid #1e1e1e;border-radius:16px;padding:18px;text-align:left">
-        <input class="ainp" placeholder="Email address" disabled>
-        <input class="ainp" placeholder="Password" disabled>
-        <button class="abtn" disabled>Sign In →</button>
-      </div>
-    </div>
+  <div class="screen-tabs" id="screen-tabs">
+    <div class="stab active" onclick="go('welcome')">Welcome</div>
+    <div class="stab" onclick="go('signup')">Sign Up</div>
+    <div class="stab" onclick="go('lobby')">Home Lobby</div>
+    <div class="stab" onclick="go('join')">Join Club</div>
+    <div class="stab" onclick="go('create')">Create Club</div>
+    <div class="stab" onclick="go('myclubs')">My Clubs</div>
+    <div class="stab" onclick="go('player')">Player Dashboard</div>
+    <div class="stab" onclick="go('host')">Host Dashboard</div>
+    <div class="stab" onclick="go('pending')">Pending</div>
+    <div class="stab" onclick="go('profile')">Profile</div>
   </div>
 </div>
 
-<!-- 3. HOME LOBBY -->
-<div class="screen-wrap">
-  <div class="screen-label">3 · Home Lobby</div>
-  <div class="screen">
-    <div class="lobby-s">
-      <div style="height:120px;background:linear-gradient(180deg,#0a0f2e,#0a100a);position:relative;overflow:hidden">
-        <div style="position:absolute;top:20px;left:50%;transform:translateX(-50%);width:80px;height:80px;background:radial-gradient(circle,#e8e0c8,#c8c0a0);border-radius:50%;opacity:0.7;box-shadow:0 0 40px rgba(232,224,200,0.3)"></div>
-      </div>
-      <div style="background:#0a0f0a;padding-top:0">
-        <div class="lobby-topbar">
-          <div style="display:flex;align-items:center;gap:9px">
-            <div class="lobby-av">TG</div>
-            <div><div class="lobby-uname">TonyG26</div><div class="lobby-uid">ID: 1042</div></div>
-          </div>
-          <div style="background:rgba(255,255,255,0.08);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:3px">
-            <div style="width:14px;height:2px;background:#fff;border-radius:2px"></div>
-            <div style="width:14px;height:2px;background:#fff;border-radius:2px"></div>
-            <div style="width:14px;height:2px;background:#fff;border-radius:2px"></div>
+<!-- PHONE FRAME -->
+<div class="phone-frame-wrap" style="padding-top:92px">
+  <div class="phone-frame" id="phone" style="max-width:390px;width:100%">
+    <div class="phone-notch"></div>
+    <div class="phone-inner" style="height:780px" id="phone-inner">
+
+      <!-- WELCOME / SIGN IN -->
+      <div class="scr active" id="scr-welcome">
+        <div class="auth-bg" style="position:relative">
+          <div class="auth-glow"></div>
+          <div class="alogo"><img src="logo.jpg" alt="PBS"></div>
+          <div class="aname">Pocket Books <span>Sports</span></div>
+          <div class="atag">Your private betting club platform</div>
+          <div class="atabs"><div class="atab2 on" id="atab-signin">Sign In</div><div class="atab2" id="atab-signup2" onclick="go('signup')">Create Account</div></div>
+          <div class="acard">
+            <input class="ainp" placeholder="Email address" value="tony@example.com">
+            <input class="ainp" placeholder="Password" type="password" value="••••••••">
+            <button class="abtn" onclick="go('lobby')">Sign In →</button>
+            <div class="afooter">Don't have an account? <span onclick="go('signup')">Create one free</span></div>
           </div>
         </div>
-        <div class="wallet-b">
-          <div class="vip">VIP</div>
-          <div style="width:1px;height:14px;background:#333"></div>
-          <div class="wchip">💎 2,450 <div style="width:18px;height:18px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:900;color:#000;margin-left:4px">+</div></div>
-          <div style="width:1px;height:14px;background:#333"></div>
-          <div class="wchip">🟣 59</div>
-        </div>
-        <div class="club-card">
-          <div class="cc-top"><span>No club selected — tap to join</span><span>TAP TO ENTER ›</span></div>
-          <div class="cc-body">
-            <div class="cc-empty-icon">🃏</div>
-            <div class="cc-empty-txt">Join or create a club to start betting</div>
-            <div class="cc-btns"><button class="cc-btn-j" disabled>Join Club</button><button class="cc-btn-c" disabled>Create Club</button></div>
+      </div>
+
+      <!-- SIGN UP -->
+      <div class="scr" id="scr-signup">
+        <div class="auth-bg" style="position:relative">
+          <div class="auth-glow"></div>
+          <div class="alogo"><img src="logo.jpg" alt="PBS"></div>
+          <div class="aname">Pocket Books <span>Sports</span></div>
+          <div class="atag">Your private betting club platform</div>
+          <div class="atabs"><div class="atab2" onclick="go('welcome')">Sign In</div><div class="atab2 on">Create Account</div></div>
+          <div class="acard">
+            <input class="ainp" placeholder="Display name" value="TonyG26">
+            <input class="ainp" placeholder="Email address" value="tony@example.com">
+            <input class="ainp" placeholder="Password" type="password" value="••••••••">
+            <input class="ainp" placeholder="Confirm password" type="password" value="••••••••">
+            <div class="achkrow"><div class="abox checked" onclick="this.classList.toggle('checked')"></div><div class="achklbl">I confirm I am 21 years of age or older</div></div>
+            <div class="achkrow"><div class="abox checked" onclick="this.classList.toggle('checked')"></div><div class="achklbl">I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a></div></div>
+            <button class="abtn" onclick="go('lobby')">Create My Account →</button>
+            <div class="afooter">Already have an account? <span onclick="go('welcome')">Sign in</span></div>
           </div>
-          <div class="cc-foot"><div class="cc-ava">PB</div><div><div class="cc-n">Pocket Books Sports</div><div class="cc-sub">Select a club to get started</div></div></div>
-        </div>
-        <div class="action-grid">
-          <div class="act-card"><div class="act-bg-j"><div class="act-icon">🔍</div></div><div class="act-grad"></div><div class="act-lbl">Join Club<br><span class="act-sub">Enter code</span></div></div>
-          <div class="act-card"><div class="act-bg-c"><div class="act-icon">🏆</div></div><div class="act-grad"></div><div class="act-lbl">Create Club<br><span class="act-sub">Be the host</span></div></div>
-          <div class="act-card"><div class="act-bg-m"><div class="act-icon">🃏</div></div><div class="act-grad"></div><div class="act-lbl">My Clubs<br><span class="act-sub">2 clubs</span></div></div>
-        </div>
-        <div class="sec-row">
-          <div class="sec-c"><div class="sec-ico">⏳</div><div class="sec-lbl">Requests</div><div class="sec-badge" style="background:var(--red);color:#fff;font-size:0.5rem;padding:1px 5px;border-radius:6px;font-weight:900;display:inline-block;margin-top:3px">1</div></div>
-          <div class="sec-c"><div class="sec-ico">💬</div><div class="sec-lbl">Messages</div></div>
-          <div class="sec-c"><div class="sec-ico">⚙️</div><div class="sec-lbl">Settings</div></div>
         </div>
       </div>
-    </div>
-  </div>
-</div>
 
-<!-- 4. CREATE CLUB MODAL -->
-<div class="screen-wrap">
-  <div class="screen-label">4 · Create Club Modal</div>
-  <div class="screen">
-    <div class="modal-s">
-      <div class="modal-close-row"><div class="modal-ttl">Create a Club</div><div style="background:rgba(255,255,255,0.08);width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.85rem;color:#aaa">✕</div></div>
-      <div class="modal-hint">Create your private betting club. Invite players, approve requests, then set individual player limits.</div>
-      <div class="logo-up"><span>🏆</span><div class="logo-up-sub">Add Logo</div></div>
-      <div style="text-align:center;font-size:0.62rem;color:#444;margin-bottom:14px">Tap to upload club logo</div>
-      <div style="font-size:0.62rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Club Name *</div>
-      <input class="fl" placeholder="e.g. Vegas Crew" disabled>
-      <div style="font-size:0.62rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;margin-top:4px">Description <span style="color:#333;text-transform:none">(optional)</span></div>
-      <input class="fl" placeholder="What's this club about?" disabled>
-      <button class="create-btn" disabled>Create My Club →</button>
-      <div class="create-note">You can adjust betting limits after approving each player.</div>
-    </div>
-  </div>
-</div>
-
-<!-- 5. JOIN CLUB -->
-<div class="screen-wrap">
-  <div class="screen-label">5 · Join Club Screen</div>
-  <div class="screen">
-    <div class="join-s">
-      <div class="join-ttl">Join a Club</div>
-      <div class="join-sub">Enter the club ID to find and request access</div>
-      <div class="join-row">
-        <input class="join-inp" value="PB-7K92Q" disabled>
-        <button class="join-btn" disabled>Search</button>
-      </div>
-      <div class="club-found">
-        <div class="cf-name">Vegas Crew</div>
-        <div class="cf-desc">Private betting club · Las Vegas, NV</div>
-        <button class="cf-btn" disabled>Request to Join →</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- 6. MY CLUBS -->
-<div class="screen-wrap">
-  <div class="screen-label">6 · My Clubs Screen</div>
-  <div class="screen">
-    <div class="myclubs-s">
-      <div class="sec-hdr">My Clubs</div>
-      <div class="club-row"><div class="cr-l"><div class="cr-av" style="background:rgba(245,200,66,0.15);color:var(--gold)">VC</div><div><div class="cr-n">Vegas Crew</div><div class="cr-meta"><span class="cr-id">PB-7K92Q</span><span class="rbadge rh">Host</span></div></div></div><div class="cr-r"><div class="cr-bal" style="color:var(--cyan)">$0</div><div class="cr-dir">managing</div></div></div>
-      <div class="club-row"><div class="cr-l"><div class="cr-av" style="background:rgba(0,255,136,0.1);color:var(--green)">NL</div><div><div class="cr-n">Night Life</div><div class="cr-meta"><span class="cr-id">PB-3M8KQ</span><span class="rbadge rp">Player</span></div></div></div><div class="cr-r"><div class="cr-bal" style="color:var(--green)">+$340</div><div class="cr-dir">you owe</div></div></div>
-      <div class="club-row"><div class="cr-l"><div class="cr-av" style="background:rgba(255,61,87,0.1);color:var(--red)">HC</div><div><div class="cr-n">High Rollers</div><div class="cr-meta"><span class="cr-id">PB-9Z4WR</span><span class="rbadge rpend">Pending</span></div></div></div><div class="cr-r"><div class="cr-bal" style="color:#555">$0</div><div class="cr-dir">awaiting approval</div></div></div>
-    </div>
-  </div>
-</div>
-
-<!-- 7. PLAYER DASHBOARD -->
-<div class="screen-wrap">
-  <div class="screen-label">7 · Player Dashboard</div>
-  <div class="screen">
-    <div class="player-s">
-      <div class="player-hdr">
-        <div style="display:flex;align-items:center;gap:8px"><div class="p-logo">PB</div><div class="p-ttl">Pocket Books <span>Sports</span></div></div>
-        <div style="display:flex;align-items:center;gap:8px"><div class="dpill">💎 2,450</div></div>
-      </div>
-      <div class="sport-chips"><div class="chip a">⚾ MLB</div><div class="chip">🏀 NBA</div><div class="chip">🏒 NHL</div><div class="chip">🏈 UFL</div><div class="chip">⚽ Soccer</div></div>
-      <div class="promo-b"><div><div class="promo-txt">🔥 Get 500 Diamonds Free</div><div class="promo-sub">Refer a friend · Earn rewards</div></div><button class="promo-action" disabled>Details</button></div>
-      <div class="game-card">
-        <div class="gc-hdr"><span style="font-size:0.85rem">⚾</span><span class="gc-sp">MLB</span></div>
-        <div class="gc-cols"><div></div><div class="gc-cl">Run Line</div><div class="gc-cl">Total</div><div class="gc-cl">To Win</div></div>
-        <div class="team-row">
-          <div class="t-info"><div class="t-av">NYY</div><div><div class="t-city">New York</div><div class="t-name">Yankees</div></div></div>
-          <div class="odds-b sel"><div class="odds-l">-1.5</div><div class="odds-n odds-pos">+155</div></div>
-          <div class="odds-b"><div class="odds-l">O 8.5</div><div class="odds-n odds-neg">-115</div></div>
-          <div class="odds-b"><div class="odds-n odds-neg">-232</div></div>
-        </div>
-        <div style="height:1px;background:linear-gradient(90deg,transparent,#2a2a2a,transparent);margin:0 13px"></div>
-        <div class="team-row">
-          <div class="t-info"><div class="t-av">BAL</div><div><div class="t-city">Baltimore</div><div class="t-name">Orioles</div></div></div>
-          <div class="odds-b"><div class="odds-l">+1.5</div><div class="odds-n odds-pos">-182</div></div>
-          <div class="odds-b"><div class="odds-l">U 8.5</div><div class="odds-n odds-neg">-105</div></div>
-          <div class="odds-b"><div class="odds-n odds-pos">+189</div></div>
-        </div>
-        <div class="gc-foot"><span class="gc-time">Sun, 5:36 PM</span><span class="gc-more">More ›</span></div>
-      </div>
-      <div class="bnav-mock">
-        <div class="bn-m a"><div class="bn-ic" style="color:var(--cyan)">📈</div><div class="bn-lb" style="color:var(--cyan)">Sportsbook</div></div>
-        <div class="bn-m"><div class="bn-ic">📋</div><div class="bn-lb">My Bets</div></div>
-        <div class="bn-m"><div class="bn-ic">🔮</div><div class="bn-lb">Predictions</div></div>
-        <div class="bn-m"><div class="bn-ic">🎁</div><div class="bn-lb">Rewards</div></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- 8. HOST DASHBOARD -->
-<div class="screen-wrap">
-  <div class="screen-label">8 · Host Dashboard</div>
-  <div class="screen">
-    <div class="host-s">
-      <div class="host-hdr">
-        <div style="display:flex;align-items:center;gap:8px"><div class="h-logo"><img src="logo.jpg" alt="PBS"></div><div class="h-ttl">Host <span>Dashboard</span></div></div>
-        <div style="display:flex;align-items:center;gap:8px"><div class="dpill">💎 2,450</div></div>
-      </div>
-      <div class="alert-c"><div class="alert-dot">⚡</div><div><div class="alert-ttl">Sharp Alert — MARCO</div><div class="alert-body">Won 70% of bets (47 bets). Consider reducing limits.</div></div></div>
-      <div class="settle-grid">
-        <div class="sc sc-r"><div class="sc-lbl">Players Owe You</div><div class="sc-amt" style="color:var(--red)">$1,040</div><div class="sc-sub">Pending</div></div>
-        <div class="sc sc-g"><div class="sc-lbl">You Owe Players</div><div class="sc-amt" style="color:var(--green)">$4,340</div><div class="sc-sub">Pending</div></div>
-      </div>
-      <div class="stats-r">
-        <div class="stat-c"><div class="stat-v" style="color:var(--cyan)">$14,200</div><div class="stat-l">Handle</div></div>
-        <div class="stat-c"><div class="stat-v" style="color:var(--gold)">8.4%</div><div class="stat-l">Hold %</div></div>
-        <div class="stat-c"><div class="stat-v" style="color:var(--green)">$1,193</div><div class="stat-l">Profit</div></div>
-      </div>
-      <div style="padding:0 14px;margin-bottom:8px;font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#555">Your Players</div>
-      <div class="player-list">
-        <div class="pr"><div class="pr-l"><div class="pr-av" style="background:rgba(255,61,87,0.12);color:var(--red);border:1.5px solid rgba(255,61,87,0.25)">MA</div><div><div class="pr-n">MARCO</div><div class="pr-meta"><span class="pr-bets">47 bets · 70%</span><span class="badge bs">⚡ Sharp</span></div></div></div><div class="pr-r"><div class="pr-amt" style="color:var(--red)">-$840</div><div class="pr-dir">owes you</div></div></div>
-        <div class="pr"><div class="pr-l"><div class="pr-av" style="background:rgba(0,255,136,0.08);color:var(--green);border:1.5px solid rgba(0,255,136,0.2)">JR</div><div><div class="pr-n">JUNIOR</div><div class="pr-meta"><span class="pr-bets">31 bets · 42%</span><span class="badge bq">✓ Square</span></div></div></div><div class="pr-r"><div class="pr-amt" style="color:var(--green)">+$1,240</div><div class="pr-dir">you owe</div></div></div>
-        <div class="pr"><div class="pr-l"><div class="pr-av" style="background:rgba(245,200,66,0.1);color:var(--gold);border:1.5px solid rgba(245,200,66,0.25)">TO</div><div><div class="pr-n">TONY</div><div class="pr-meta"><span class="pr-bets">22 bets · 55%</span><span class="badge bw">◉ Watch</span></div></div></div><div class="pr-r"><div class="pr-amt" style="color:var(--red)">-$200</div><div class="pr-dir">owes you</div></div></div>
-      </div>
-      <div class="bnav-mock" style="margin-top:10px">
-        <div class="bn-m a"><div class="bn-ic" style="color:var(--cyan)">🏠</div><div class="bn-lb" style="color:var(--cyan)">Home</div></div>
-        <div class="bn-m"><div class="bn-ic">📈</div><div class="bn-lb">Lines</div></div>
-        <div class="bn-m"><div class="bn-ic">📋</div><div class="bn-lb">Bets</div></div>
-        <div class="bn-m"><div class="bn-ic">👥</div><div class="bn-lb">Players</div></div>
-        <div class="bn-m"><div class="bn-ic">💎</div><div class="bn-lb">Diamonds</div></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- 9. PENDING APPROVAL -->
-<div class="screen-wrap">
-  <div class="screen-label">9 · Pending Approval Screen</div>
-  <div class="screen">
-    <div class="pending-s">
-      <div class="pend-icon">⏳</div>
-      <div class="pend-ttl">Request Sent!</div>
-      <div class="pend-sub">Your request to join <strong>Vegas Crew</strong> has been sent.<br>You'll be notified once the host approves you.</div>
-      <div class="pend-code">PB-7K92Q</div>
-      <div class="pend-note">You cannot place bets until approved</div>
-      <button style="margin-top:20px;width:100%;padding:13px;background:transparent;color:#555;border:1px solid #222;border-radius:12px;font-size:0.85rem;font-weight:700" disabled>Back to Lobby</button>
-    </div>
-  </div>
-</div>
-
-<!-- 10. PLAYER PROFILE -->
-<div class="screen-wrap">
-  <div class="screen-label">10 · Player Profile</div>
-  <div class="screen">
-    <div class="profile-s">
-      <div class="prof-top">
-        <div class="prof-av">TG</div>
-        <div class="prof-name">TonyG26</div>
-        <div class="prof-id">ID: 1042 · Member since May 2026</div>
-      </div>
-      <div class="prof-stats">
-        <div class="ps-c"><div class="ps-v" style="color:var(--cyan)">47</div><div class="ps-l">Total Bets</div></div>
-        <div class="ps-c"><div class="ps-v" style="color:var(--green)">62%</div><div class="ps-l">Win Rate</div></div>
-        <div class="ps-c"><div class="ps-v" style="color:var(--gold)">💎 2,450</div><div class="ps-l">Diamonds</div></div>
-      </div>
-      <div style="font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#555;margin-bottom:8px">Club Memberships</div>
-      <div class="club-membership">
-        <div class="cm-top"><div class="cm-name">Vegas Crew</div><div class="cm-role rh rbadge">Host</div></div>
-        <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:#555"><span>Balance</span><span style="color:var(--cyan);font-weight:700">$0</span></div>
-      </div>
-      <div class="club-membership">
-        <div class="cm-top"><div class="cm-name">Night Life</div><div class="cm-role rp rbadge">Player</div></div>
-        <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:#555"><span>Balance</span><span style="color:var(--green);font-weight:700">+$340</span></div>
-      </div>
-      <div style="font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#555;margin:12px 0 8px">Recent Bets</div>
-      <div class="bet-hist"><div class="bh-top"><div class="bh-tag">MLB · Straight</div><div class="bh-status bh-win">✅ WIN</div></div><div class="bh-desc">Yankees ML vs Orioles</div><div class="bh-amts">Risk: <span style="color:#fff;font-weight:700">$100</span>&nbsp;&nbsp;Won: <span style="color:var(--green);font-weight:700">$146</span></div></div>
-      <div class="bet-hist"><div class="bh-top"><div class="bh-tag">MLB · Parlay</div><div class="bh-status bh-pend">⏳ PENDING</div></div><div class="bh-desc">3-Team Parlay: NYY -1.5 + BOS ML + O 8.5</div><div class="bh-amts">Risk: <span style="color:#fff;font-weight:700">$50</span>&nbsp;&nbsp;To Win: <span style="color:var(--green);font-weight:700">$347</span></div></div>
-      <div class="bet-hist"><div class="bh-top"><div class="bh-tag">NBA · Spread</div><div class="bh-status bh-loss">❌ LOSS</div></div><div class="bh-desc">Lakers -6.5 vs Suns</div><div class="bh-amts">Risk: <span style="color:#fff;font-weight:700">$200</span>&nbsp;&nbsp;Lost: <span style="color:var(--red);font-weight:700">-$200</span></div></div>
-    </div>
-  </div>
-</div>
-
-<!-- 11. HOST CLUB MANAGEMENT -->
-<div class="screen-wrap">
-  <div class="screen-label">11 · Host / Club Management</div>
-  <div class="screen">
-    <div class="mgmt-s">
-      <div class="mgmt-hdr"><div class="mgmt-ttl">Vegas Crew</div><div class="mgmt-edit">Edit Club</div></div>
-      <div class="club-info-card">
-        <div class="ci-top">
-          <div class="ci-logo">🏆</div>
-          <div><div class="ci-name">Vegas Crew</div><div class="ci-code">PB-7K92Q · Tap to copy invite link</div></div>
-        </div>
-        <div class="ci-stats">
-          <div class="cis"><div class="cis-v" style="color:var(--cyan)">4</div><div class="cis-l">Members</div></div>
-          <div class="cis"><div class="cis-v" style="color:var(--green)">$14.2k</div><div class="cis-l">Handle</div></div>
-          <div class="cis"><div class="cis-v" style="color:var(--gold)">8.4%</div><div class="cis-l">Hold</div></div>
+      <!-- HOME LOBBY -->
+      <div class="scr" id="scr-lobby">
+        <div class="lobby-wrap">
+          <div class="sky"><div class="moon"></div></div>
+          <div class="lobby-top">
+            <div style="display:flex;align-items:center;gap:9px"><div class="uav">TG</div><div><div class="un">TonyG26</div><div class="uid2">ID: 1042</div></div></div>
+            <div class="ham"><span></span><span></span><span></span></div>
+          </div>
+          <div class="wbar"><div class="vip2">VIP</div><div class="wsep"></div><div class="wchip2">💎 2,450 <div class="wadd">+</div></div><div class="wsep"></div><div class="wchip2">🟣 59</div></div>
+          <div class="cc" onclick="go('player')">
+            <div class="cc-top"><span>Vegas Crew · PB-7K92Q</span><span>TAP TO ENTER ›</span></div>
+            <div class="cc-body"><div style="font-size:1.8rem">🏆</div></div>
+            <div class="cc-foot"><div class="cc-fav">VC</div><div><div class="cc-fn">Vegas Crew</div><div class="cc-fs">✅ Active Player · Balance: +$340</div></div></div>
+          </div>
+          <div class="agrid">
+            <div class="ag ag-bj" onclick="go('join')"><div class="ag-ico">🔍</div><div class="ag-grad"></div><div class="ag-lbl">Join Club<br><span class="ag-sub">Enter code</span></div></div>
+            <div class="ag ag-bc" onclick="go('create')"><div class="ag-ico">🏆</div><div class="ag-grad"></div><div class="ag-lbl">Create Club<br><span class="ag-sub">Be the host</span></div></div>
+            <div class="ag ag-bm" onclick="go('myclubs')"><div class="ag-ico">🃏</div><div class="ag-grad"></div><div class="ag-lbl">My Clubs<br><span class="ag-sub">2 clubs</span></div></div>
+          </div>
+          <div class="srow">
+            <div class="sc2"><div class="sc2-i">⏳</div><div class="sc2-l">Requests</div><div style="background:var(--red);color:#fff;font-size:0.48rem;padding:1px 5px;border-radius:5px;font-weight:900;display:inline-block;margin-top:2px">1</div></div>
+            <div class="sc2"><div class="sc2-i">💬</div><div class="sc2-l">Messages</div></div>
+            <div class="sc2"><div class="sc2-i">⚙️</div><div class="sc2-l">Settings</div></div>
+          </div>
         </div>
       </div>
-      <div style="font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--red);margin-bottom:8px">Join Requests (2)</div>
-      <div class="req-card"><div class="req-info"><div class="req-n">ALEX T.</div><div class="req-meta">alex@email.com · Requested 2h ago</div></div><div class="req-btns"><div class="req-app">Approve</div><div class="req-rej">Reject</div></div></div>
-      <div class="req-card"><div class="req-info"><div class="req-n">SARAH M.</div><div class="req-meta">sarah@email.com · Requested 5h ago</div></div><div class="req-btns"><div class="req-app">Approve</div><div class="req-rej">Reject</div></div></div>
-      <div style="font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#555;margin:12px 0 8px">Player Limits</div>
-      <div class="player-limit-row"><div class="pl-l"><div class="pl-av" style="background:rgba(255,61,87,0.12);color:var(--red)">MA</div><div><div class="pl-n">MARCO</div><div class="pl-limits">Max bet: $50 · Daily: $200 · Payout: $500</div></div></div><div class="pl-edit">Edit</div></div>
-      <div class="player-limit-row"><div class="pl-l"><div class="pl-av" style="background:rgba(0,255,136,0.08);color:var(--green)">JR</div><div><div class="pl-n">JUNIOR</div><div class="pl-limits">Max bet: $200 · Daily: $1k · Payout: $3k</div></div></div><div class="pl-edit">Edit</div></div>
-      <div class="player-limit-row"><div class="pl-l"><div class="pl-av" style="background:rgba(245,200,66,0.1);color:var(--gold)">TO</div><div><div class="pl-n">TONY</div><div class="pl-limits">Max bet: $100 · Daily: $500 · Payout: $2k</div></div></div><div class="pl-edit">Edit</div></div>
-    </div>
-  </div>
-</div>
 
-<div style="text-align:center;padding:30px;color:#333;font-size:0.78rem">End of Dev Preview · <a href="lobby.html" style="color:var(--cyan)">Open Lobby →</a></div>
+      <!-- JOIN CLUB -->
+      <div class="scr" id="scr-join">
+        <div class="join-wrap">
+          <div class="back-chip" onclick="go('lobby')">← Back</div>
+          <div style="height:14px"></div>
+          <div class="modal-ttl2">Join a Club</div>
+          <div class="modal-sub2" style="margin-top:4px;margin-bottom:14px">Enter the club ID to find and request access</div>
+          <div class="jrow"><input class="jinp" value="PB-7K92Q"><button class="jbtn">Search</button></div>
+          <div class="found-card">
+            <div class="fc-name">Vegas Crew</div>
+            <div class="fc-desc">Private betting club · Las Vegas, NV · 4 members</div>
+            <button class="fc-btn" onclick="go('pending')">Request to Join →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- CREATE CLUB -->
+      <div class="scr" id="scr-create">
+        <div class="create-wrap">
+          <div class="back-chip" onclick="go('lobby')">← Back</div>
+          <div style="height:14px"></div>
+          <div style="font-size:1.1rem;font-weight:900;margin-bottom:4px">Create a Club</div>
+          <div style="font-size:0.7rem;color:#555;margin-bottom:14px">You'll become the host and manage all players</div>
+          <div class="logo-circle"><div class="lc-ico">VC</div><div class="lc-sub">Add Logo</div></div>
+          <div style="text-align:center;font-size:0.58rem;color:#444;margin-bottom:12px">Tap to upload</div>
+          <div class="hint-box">Create your private betting club. Invite players, approve requests, then set individual player limits.</div>
+          <div class="flbl">Club Name *</div>
+          <input class="finp" value="Vegas Crew">
+          <div class="flbl">Description</div>
+          <input class="finp" placeholder="What's this club about?" style="margin-bottom:16px">
+          <button class="create-btn2" onclick="go('host')">Create My Club →</button>
+          <div class="create-note2">You can adjust betting limits after approving each player.</div>
+        </div>
+      </div>
+
+      <!-- MY CLUBS -->
+      <div class="scr" id="scr-myclubs">
+        <div class="myclubs-wrap">
+          <div class="back-chip" onclick="go('lobby')">← Back</div>
+          <div style="height:12px"></div>
+          <div class="sec-h">My Clubs</div>
+          <div class="crow" onclick="go('host')"><div class="cr-ll"><div class="cr-av2" style="background:rgba(245,200,66,0.12);color:var(--gold)">VC</div><div><div class="cr-n2">Vegas Crew</div><div class="cr-m2"><span class="cr-id2">PB-7K92Q</span><span class="rb rh">Host</span></div></div></div><div class="cr-rr"><div class="cr-bal2" style="color:var(--cyan)">$0</div><div class="cr-dir2">managing</div></div></div>
+          <div class="crow" onclick="go('player')"><div class="cr-ll"><div class="cr-av2" style="background:rgba(0,255,136,0.08);color:var(--green)">NL</div><div><div class="cr-n2">Night Life</div><div class="cr-m2"><span class="cr-id2">PB-3M8KQ</span><span class="rb rp">Player</span></div></div></div><div class="cr-rr"><div class="cr-bal2" style="color:var(--green)">+$340</div><div class="cr-dir2">you owe</div></div></div>
+          <div class="crow" onclick="go('pending')"><div class="cr-ll"><div class="cr-av2" style="background:rgba(255,61,87,0.08);color:var(--red)">HC</div><div><div class="cr-n2">High Rollers</div><div class="cr-m2"><span class="cr-id2">PB-9Z4WR</span><span class="rb rpnd">Pending</span></div></div></div><div class="cr-rr"><div class="cr-bal2" style="color:#555">$0</div><div class="cr-dir2">awaiting approval</div></div></div>
+        </div>
+      </div>
+
+      <!-- PLAYER DASHBOARD -->
+      <div class="scr" id="scr-player">
+        <div class="player-wrap">
+          <div class="p-hdr"><div style="display:flex;align-items:center;gap:7px"><div class="p-logo"><img src="logo.jpg" alt="PBS"></div><div class="p-ttl2">Pocket Books <span>Sports</span></div></div><div class="dpill2">💎 2,450</div></div>
+          <div class="schips"><div class="schip on">⚾ MLB</div><div class="schip">🏀 NBA</div><div class="schip">🏒 NHL</div><div class="schip">🏈 UFL</div></div>
+          <div class="promo-b2"><div><div class="pb-txt">🔥 Get 500 Diamonds Free</div><div class="pb-sub">Refer a friend · Earn rewards</div></div><button class="pb-act">Details</button></div>
+          <div class="gcard">
+            <div class="gc-h"><span>⚾</span><span>MLB</span></div>
+            <div class="gc-cols2"><div></div><div class="gcl">Run Line</div><div class="gcl">Total</div><div class="gcl">To Win</div></div>
+            <div class="trow"><div class="ti"><div class="tav">NYY</div><div><div class="tc">New York</div><div class="tn">Yankees</div></div></div><div class="ob sel"><div class="ol">-1.5</div><div class="on2 op">+155</div></div><div class="ob"><div class="ol">O 8.5</div><div class="on2 oneg">-115</div></div><div class="ob"><div class="on2 oneg">-232</div></div></div>
+            <div style="height:1px;background:linear-gradient(90deg,transparent,#2a2a2a,transparent);margin:0 12px"></div>
+            <div class="trow"><div class="ti"><div class="tav">BAL</div><div><div class="tc">Baltimore</div><div class="tn">Orioles</div></div></div><div class="ob"><div class="ol">+1.5</div><div class="on2 oneg">-182</div></div><div class="ob"><div class="ol">U 8.5</div><div class="on2 oneg">-105</div></div><div class="ob"><div class="on2 op">+189</div></div></div>
+            <div class="gfoot"><span class="gt">Sun, 5:36 PM</span><span class="gmore">More ›</span></div>
+          </div>
+          <div class="bnavmk">
+            <div class="bnm a"><div class="bni">📈</div><div class="bnl" style="color:var(--cyan)">Sportsbook</div></div>
+            <div class="bnm" onclick="go('profile')"><div class="bni">📋</div><div class="bnl">My Bets</div></div>
+            <div class="bnm"><div class="bni">🔮</div><div class="bnl">Predictions</div></div>
+            <div class="bnm" onclick="go('lobby')"><div class="bni">🏠</div><div class="bnl">Lobby</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HOST DASHBOARD -->
+      <div class="scr" id="scr-host">
+        <div class="host-wrap">
+          <div class="h-hdr2"><div style="display:flex;align-items:center;gap:7px"><div style="width:26px;height:26px;border-radius:50%;overflow:hidden;border:1.5px solid rgba(0,255,136,0.3)"><img src="logo.jpg" style="width:100%;height:100%;object-fit:cover"></div><div style="font-size:0.84rem;font-weight:900">Host <span style="color:var(--cyan)">Dashboard</span></div></div><div class="dpill2">💎 2,450</div></div>
+          <div class="alert-c2"><div class="adot">⚡</div><div><div class="attl">Sharp Alert — MARCO</div><div class="abdy">Won 70% of bets (47 bets). Consider reducing limits.</div></div></div>
+          <div class="sgrid"><div class="sc3 scr3"><div class="sc3-l">Players Owe You</div><div class="sc3-v" style="color:var(--red)">$1,040</div><div class="sc3-s">Pending</div></div><div class="sc3 scg3"><div class="sc3-l">You Owe Players</div><div class="sc3-v" style="color:var(--green)">$4,340</div><div class="sc3-s">Pending</div></div></div>
+          <div class="strow"><div class="stc"><div class="stv" style="color:var(--cyan)">$14.2k</div><div class="stl">Handle</div></div><div class="stc"><div class="stv" style="color:var(--gold)">8.4%</div><div class="stl">Hold %</div></div><div class="stc"><div class="stv" style="color:var(--green)">$1,193</div><div class="stl">Profit</div></div></div>
+          <div style="padding:0 12px;margin-bottom:7px;font-size:0.58rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#555">Your Players</div>
+          <div class="plist">
+            <div class="pr2" onclick="go('profile')"><div class="pr2-l"><div class="pr2-av" style="background:rgba(255,61,87,0.1);color:var(--red);border:1.5px solid rgba(255,61,87,0.2)">MA</div><div><div class="pr2-n">MARCO</div><div class="pr2-m"><span class="pr2-b">47 bets · 70%</span><span class="bdg bs2">⚡ Sharp</span></div></div></div><div class="pr2-r"><div class="pr2-a" style="color:var(--red)">-$840</div><div class="pr2-d">owes you</div></div></div>
+            <div class="pr2"><div class="pr2-l"><div class="pr2-av" style="background:rgba(0,255,136,0.07);color:var(--green);border:1.5px solid rgba(0,255,136,0.18)">JR</div><div><div class="pr2-n">JUNIOR</div><div class="pr2-m"><span class="pr2-b">31 bets · 42%</span><span class="bdg bq2">✓ Square</span></div></div></div><div class="pr2-r"><div class="pr2-a" style="color:var(--green)">+$1,240</div><div class="pr2-d">you owe</div></div></div>
+            <div class="pr2"><div class="pr2-l"><div class="pr2-av" style="background:rgba(245,200,66,0.08);color:var(--gold);border:1.5px solid rgba(245,200,66,0.2)">TO</div><div><div class="pr2-n">TONY</div><div class="pr2-m"><span class="pr2-b">22 bets · 55%</span><span class="bdg bw2">◉ Watch</span></div></div></div><div class="pr2-r"><div class="pr2-a" style="color:var(--red)">-$200</div><div class="pr2-d">owes you</div></div></div>
+          </div>
+          <div class="bnavmk" style="margin-top:10px">
+            <div class="bnm a"><div class="bni">🏠</div><div class="bnl" style="color:var(--cyan)">Home</div></div>
+            <div class="bnm"><div class="bni">📈</div><div class="bnl">Lines</div></div>
+            <div class="bnm"><div class="bni">📋</div><div class="bnl">Bets</div></div>
+            <div class="bnm" onclick="go('myclubs')"><div class="bni">👥</div><div class="bnl">Players</div></div>
+            <div class="bnm" onclick="go('lobby')"><div class="bni">🏠</div><div class="bnl">Lobby</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PENDING APPROVAL -->
+      <div class="scr" id="scr-pending">
+        <div class="pend-wrap">
+          <div class="pi">⏳</div>
+          <div class="pt">Request Sent!</div>
+          <div class="ps">Your request to join <strong>Vegas Crew</strong> has been sent.<br>You'll be notified once the host approves you.</div>
+          <div class="pc">PB-7K92Q</div>
+          <div class="pn">You cannot place bets until approved</div>
+          <button class="pback" onclick="go('lobby')">Back to Lobby</button>
+        </div>
+      </div>
+
+      <!-- PROFILE -->
+      <div class="scr" id="scr-profile">
+        <div class="prof-wrap">
+          <div class="back-chip" onclick="go('player')">← Back</div>
+          <div style="height:12px"></div>
+          <div class="prof-top2">
+            <div class="pav2">TG</div>
+            <div class="pname">TonyG26</div>
+            <div class="pid2">ID: 1042 · Member since May 2026</div>
+          </div>
+          <div class="pstats">
+            <div class="psc"><div class="psv" style="color:var(--cyan)">47</div><div class="psl">Total Bets</div></div>
+            <div class="psc"><div class="psv" style="color:var(--green)">62%</div><div class="psl">Win Rate</div></div>
+            <div class="psc"><div class="psv" style="color:var(--gold)">💎 2,450</div><div class="psl">Diamonds</div></div>
+          </div>
+          <div class="sec-h">Club Memberships</div>
+          <div class="cmrow"><div class="cm-top2"><div class="cm-n2">Vegas Crew</div><span class="rb rh">Host</span></div><div style="display:flex;justify-content:space-between;font-size:0.68rem;color:#555"><span>Balance</span><span style="color:var(--cyan);font-weight:700">$0</span></div></div>
+          <div class="cmrow"><div class="cm-top2"><div class="cm-n2">Night Life</div><span class="rb rp">Player</span></div><div style="display:flex;justify-content:space-between;font-size:0.68rem;color:#555"><span>Balance</span><span style="color:var(--green);font-weight:700">+$340</span></div></div>
+          <div class="sec-h" style="margin-top:12px">Recent Bets</div>
+          <div class="brow"><div class="brtop"><div class="brtag">MLB · Straight</div><div class="brs brw">✅ WIN</div></div><div class="brdesc">Yankees ML vs Orioles</div><div class="bramts">Risk: <span style="color:#fff;font-weight:700">$100</span>&nbsp;&nbsp;Won: <span style="color:var(--green);font-weight:700">$146</span></div></div>
+          <div class="brow"><div class="brtop"><div class="brtag">MLB · Parlay</div><div class="brs brp">⏳ PENDING</div></div><div class="brdesc">3-Team Parlay: NYY -1.5 + BOS ML</div><div class="bramts">Risk: <span style="color:#fff;font-weight:700">$50</span>&nbsp;&nbsp;To Win: <span style="color:var(--green);font-weight:700">$347</span></div></div>
+          <div class="brow"><div class="brtop"><div class="brtag">NBA · Spread</div><div class="brs brl">❌ LOSS</div></div><div class="brdesc">Lakers -6.5 vs Suns</div><div class="bramts">Risk: <span style="color:#fff;font-weight:700">$200</span>&nbsp;&nbsp;Lost: <span style="color:var(--red);font-weight:700">-$200</span></div></div>
+        </div>
+      </div>
+
+    </div><!-- phone-inner -->
+  </div><!-- phone-frame -->
+</div>
 
 <script>
-let labelsOn = true;
-let currentTheme = 'dark';
+let curTheme = 'dark';
 
-function setWidth(mode) {
-  const screens = document.querySelectorAll('.screen');
-  const w = mode === 'tablet' ? '600px' : '390px';
-  screens.forEach(s => s.style.maxWidth = w);
-  document.getElementById('btn-mobile').style.background = mode==='mobile'?'rgba(0,194,255,0.15)':'transparent';
-  document.getElementById('btn-mobile').style.color = mode==='mobile'?'var(--cyan)':'#555';
-  document.getElementById('btn-mobile').style.borderColor = mode==='mobile'?'var(--cyan)':'#333';
-  document.getElementById('btn-tablet').style.background = mode==='tablet'?'rgba(0,194,255,0.15)':'transparent';
-  document.getElementById('btn-tablet').style.color = mode==='tablet'?'var(--cyan)':'#555';
-  document.getElementById('btn-tablet').style.borderColor = mode==='tablet'?'var(--cyan)':'#333';
+function go(screen) {
+  document.querySelectorAll('.scr').forEach(s=>s.classList.remove('active'));
+  document.getElementById('scr-'+screen).classList.add('active');
+  document.querySelectorAll('.stab').forEach(t=>t.classList.remove('active'));
+  const tabMap={welcome:0,signup:1,lobby:2,join:3,create:4,myclubs:5,player:6,host:7,pending:8,profile:9};
+  const tabs=document.querySelectorAll('.stab');
+  if(tabMap[screen]!==undefined) tabs[tabMap[screen]]?.classList.add('active');
+  document.getElementById('phone-inner').scrollTop=0;
 }
 
-function toggleTheme() {
-  currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
-  const knob = document.getElementById('theme-knob');
-  const toggle = document.getElementById('theme-toggle');
-  if (currentTheme === 'light') {
-    document.body.style.background = '#f0f0f0';
-    document.body.style.color = '#111';
-    document.querySelectorAll('.screen-label').forEach(el => el.style.background = 'rgba(0,150,200,0.12)');
-    toggle.style.background = '#ccc';
-    knob.style.left = '19px';
-    knob.style.background = '#fff';
-  } else {
-    document.body.style.background = '#050505';
-    document.body.style.color = '#fff';
-    document.querySelectorAll('.screen-label').forEach(el => el.style.background = 'rgba(0,194,255,0.08)');
-    toggle.style.background = '#333';
-    knob.style.left = '3px';
-    knob.style.background = '#666';
+function setW(mode){
+  const f=document.getElementById('phone');
+  f.style.maxWidth=mode==='tablet'?'600px':'390px';
+  document.getElementById('btn-mobile').classList.toggle('on',mode==='mobile');
+  document.getElementById('btn-tablet').classList.toggle('on',mode==='tablet');
+}
+
+function toggleTheme(){
+  curTheme=curTheme==='dark'?'light':'dark';
+  const k=document.getElementById('tknob');
+  const f=document.getElementById('phone');
+  if(curTheme==='light'){
+    f.style.filter='invert(1) hue-rotate(180deg)';
+    k.style.left='18px';k.style.background='#fff';
+    document.querySelector('.toggle-pill').style.background='#aaa';
+  }else{
+    f.style.filter='none';
+    k.style.left='2px';k.style.background='#666';
+    document.querySelector('.toggle-pill').style.background='#333';
   }
-}
-
-function toggleLabels() {
-  labelsOn = !labelsOn;
-  document.querySelectorAll('.screen-label').forEach(el => el.style.display = labelsOn ? 'inline-block' : 'none');
-  document.getElementById('btn-labels').textContent = labelsOn ? '🏷 Labels On' : '🏷 Labels Off';
-  document.getElementById('btn-labels').style.background = labelsOn ? 'rgba(0,255,136,0.1)' : 'transparent';
-  document.getElementById('btn-labels').style.color = labelsOn ? 'var(--green)' : '#555';
 }
 </script>
 </body>
