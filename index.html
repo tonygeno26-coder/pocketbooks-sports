@@ -344,6 +344,41 @@
 </div>
 
 <script>
+// ===== API =====
+const API = 'https://pocketbooks-sports-backend-production.up.railway.app';
+let TOKEN = localStorage.getItem('pb-sports-token') || '';
+
+async function apiCall(method, endpoint, body) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(TOKEN ? { 'Authorization': 'Bearer ' + TOKEN } : {}) }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(API + endpoint, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+// ===== AUTO LOGIN =====
+window.addEventListener('load', async () => {
+  const savedToken = localStorage.getItem('pb-sports-token');
+  const savedUser = localStorage.getItem('pb-sports-user');
+  if (savedToken && savedUser) {
+    TOKEN = savedToken;
+    try {
+      const user = await apiCall('GET', '/api/auth/me');
+      document.getElementById('auth-screen').style.display='none';
+      document.getElementById('main-app').style.display='block';
+      document.getElementById('diamond-count').textContent = '💎 ' + (user.diamonds || 500);
+      await loadPlayers();
+    } catch(e) {
+      localStorage.removeItem('pb-sports-token');
+      localStorage.removeItem('pb-sports-user');
+    }
+  }
+});
+
 // ===== STATE =====
 let G = {
   diamonds: 2450,
@@ -372,10 +407,64 @@ function selectRole(el, role) {
   document.querySelectorAll('.role-btn').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
 }
-function doAuth() {
-  document.getElementById('auth-screen').style.display='none';
-  document.getElementById('main-app').style.display='block';
-  renderPlayers();
+async function doAuth() {
+  const email = document.getElementById('auth-email').value.trim();
+  const pass = document.getElementById('auth-password') ? document.getElementById('auth-password').value : document.getElementById('auth-pass').value;
+  if (!email || !pass) { toast('Enter email and password'); return; }
+
+  const btn = document.querySelector('.submit-btn');
+  btn.textContent = 'Loading...';
+  btn.disabled = true;
+
+  try {
+    let data;
+    if (authMode === 'login') {
+      data = await apiCall('POST', '/api/auth/login', { email, password: pass });
+    } else {
+      const name = document.querySelector('#auth-name-field input')?.value || email.split('@')[0];
+      const role = document.querySelector('.role-btn.active')?.querySelector('.role-name')?.textContent?.toLowerCase() || 'host';
+      data = await apiCall('POST', '/api/auth/signup', { email, password: pass, name, role });
+    }
+    TOKEN = data.token;
+    localStorage.setItem('pb-sports-token', TOKEN);
+    localStorage.setItem('pb-sports-user', JSON.stringify(data.user));
+    
+    document.getElementById('auth-screen').style.display='none';
+    document.getElementById('main-app').style.display='block';
+    document.getElementById('diamond-count').textContent = '💎 ' + (data.user.diamonds || 500);
+    await loadPlayers();
+  } catch(e) {
+    toast('❌ ' + e.message);
+    btn.textContent = authMode === 'login' ? 'Sign In →' : 'Create Account →';
+    btn.disabled = false;
+  }
+}
+
+async function loadPlayers() {
+  try {
+    const players = await apiCall('GET', '/api/players');
+    G.players = players.map(p => ({
+      id: p.id, name: p.name, avatar: p.name.slice(0,2),
+      color: ['#00c2ff','#00e676','#f5c842','#ff3d57','#e879f9','#f97316'][p.id % 6],
+      winRate: parseFloat(p.win_rate) || 0, bets: p.total_bets || 0,
+      balance: parseFloat(p.balance) || 0,
+      sharp: parseFloat(p.win_rate) >= 60 ? 'red' : parseFloat(p.win_rate) >= 52 ? 'yellow' : 'green'
+    }));
+    document.getElementById('player-list').innerHTML = '';
+    renderPlayers();
+    await loadStats();
+  } catch(e) { console.error('Load players error:', e); }
+}
+
+async function loadStats() {
+  try {
+    const stats = await apiCall('GET', '/api/stats/weekly');
+    const handle = parseFloat(stats.handle) || 0;
+    const profit = parseFloat(stats.profit) || 0;
+    document.getElementById('stat-handle').textContent = '$' + handle.toLocaleString();
+    document.getElementById('stat-profit').textContent = '$' + profit.toLocaleString();
+    document.getElementById('stat-hold').textContent = (stats.hold_pct || 0) + '%';
+  } catch(e) { console.error('Load stats error:', e); }
 }
 
 // ===== RENDER PLAYERS =====
@@ -442,39 +531,43 @@ function calcWin() {
   document.getElementById('bet-win').value = risk>0 ? Math.round(risk*0.909) : '';
 }
 
-function saveBet() {
+async function saveBet() {
   const playerId = parseInt(document.getElementById('bet-player').value);
   const game = document.getElementById('bet-game').value;
   const risk = parseFloat(document.getElementById('bet-risk').value)||0;
   const win = parseFloat(document.getElementById('bet-win').value)||0;
-  if (!playerId || !game || !risk) { alert('Fill in all fields'); return; }
-  
-  const player = G.players.find(p=>p.id===playerId);
-  G.bets.push({ id:Date.now(), playerId, playerName:player.name, game, type:G.selectedBetType, risk, win, result:G.selectedResult, time:new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) });
-  
-  // Update player balance
-  if (G.selectedResult==='win') player.balance += win;
-  else if (G.selectedResult==='loss') player.balance -= risk;
-  player.bets++;
-
-  // Recalc stats
-  updateStats();
-  closeModal('modal-add-bet');
-  document.getElementById('player-list').innerHTML='';
-  renderPlayers();
-  toast('✅ Bet logged for '+player.name);
+  if (!playerId || !game || !risk) { toast('Fill in all fields'); return; }
+  try {
+    await apiCall('POST', '/api/bets', {
+      player_id: playerId, game, bet_type: G.selectedBetType,
+      sport: G.currentSport, risk, win: win || Math.round(risk*0.909),
+      result: G.selectedResult
+    });
+    closeModal('modal-add-bet');
+    document.getElementById('bet-game').value='';
+    document.getElementById('bet-risk').value='';
+    document.getElementById('bet-win').value='';
+    await loadPlayers();
+    toast('\u2705 Bet logged!');
+  } catch(e) { toast('\u274c ' + e.message); }
 }
 
-function addPlayer() {
-  const name = document.getElementById('new-player-name').value.trim().toUpperCase();
+async function addPlayer() {
+  const name = document.getElementById('new-player-name').value.trim();
+  const phone = document.getElementById('new-player-phone').value.trim();
+  const credit_limit = parseFloat(document.getElementById('new-player-limit').value) || 500;
+  const max_bet = parseFloat(document.getElementById('new-player-max').value) || 100;
   if (!name) return;
-  const colors = ['#00c2ff','#00e676','#f5c842','#ff3d57','#e879f9','#f97316'];
-  const color = colors[G.players.length % colors.length];
-  G.players.push({ id:Date.now(), name, avatar:name.slice(0,2), color, winRate:0, bets:0, balance:0, sharp:'green' });
-  document.getElementById('player-list').innerHTML='';
-  renderPlayers();
-  closeModal('modal-add-player');
-  toast('✅ '+name+' added!');
+  try {
+    const player = await apiCall('POST', '/api/players', { name, phone, credit_limit, max_bet });
+    const colors = ['#00c2ff','#00e676','#f5c842','#ff3d57','#e879f9','#f97316'];
+    G.players.unshift({ id: player.id, name: player.name, avatar: player.name.slice(0,2), color: colors[G.players.length % 6], winRate:0, bets:0, balance:0, sharp:'green' });
+    document.getElementById('player-list').innerHTML='';
+    renderPlayers();
+    closeModal('modal-add-player');
+    document.getElementById('new-player-name').value = '';
+    toast('✅ ' + player.name + ' added!');
+  } catch(e) { toast('❌ ' + e.message); }
 }
 
 function updateStats() {
