@@ -137,6 +137,12 @@
     .nav-item.active .nav-label { color:var(--diamond); }
 
     .pb { padding-bottom:160px; display:block; }
+    .slip-type-btn { flex:1; padding:8px 4px; background:var(--card2); border:1px solid var(--border); border-radius:10px; color:var(--gray); font-size:0.72rem; font-weight:700; cursor:pointer; transition:all 0.2s; }
+    .slip-type-btn.active { background:var(--diamond); color:#000; border-color:var(--diamond); }
+    .teaser-pt-btn { padding:7px 14px; background:var(--card2); border:1px solid var(--border); border-radius:8px; color:var(--gray); font-size:0.82rem; font-weight:700; cursor:pointer; transition:all 0.2s; }
+    .teaser-pt-btn.active { background:var(--diamond); color:#000; border-color:var(--diamond); }
+    .leg-card { background:var(--card2); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:8px; }
+    .leg-remove { background:none; border:none; color:var(--red); cursor:pointer; font-size:1rem; padding:0; }
   </style>
 </head>
 <body>
@@ -245,12 +251,12 @@
   <span class="pb"></span>
 
   <!-- BET SLIP -->
-  <div class="bet-slip-bar" id="bet-slip">
+  <div class="bet-slip-bar" id="bet-slip" onclick="openBetSlip()">
     <div style="display:flex;align-items:center">
-      <div class="slip-count" id="slip-count">1</div>
+      <div class="slip-count" id="slip-count">0</div>
       <span style="font-size:0.9rem;font-weight:800;color:#000">Bet Slip</span>
     </div>
-    <span style="font-size:0.9rem;font-weight:900;color:#000" id="slip-amt">$250 to win $477</span>
+    <span style="font-size:0.9rem;font-weight:900;color:#000">View Slip →</span>
   </div>
 
   <!-- BOTTOM NAV -->
@@ -261,6 +267,100 @@
     <div class="nav-item" onclick="switchTab(this,'players')"><div class="nav-icon">👥</div><div class="nav-label">Players</div></div>
     <div class="nav-item" onclick="switchTab(this,'analytics')"><div class="nav-icon">📊</div><div class="nav-label">Analytics</div></div>
     <div class="nav-item" onclick="switchTab(this,'diamonds')"><div class="nav-icon">💎</div><div class="nav-label">Diamonds</div></div>
+  </div>
+</div>
+
+<!-- BET SLIP MODAL -->
+<div class="modal-bg" id="modal-bet-slip">
+  <div class="modal" style="max-width:430px;padding:0;border-radius:20px 20px 0 0;max-height:90vh;overflow-y:auto">
+
+    <!-- Header -->
+    <div style="padding:18px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card);z-index:10">
+      <div style="font-size:1.1rem;font-weight:900">Bet Slip <span style="background:var(--diamond);color:#000;font-size:0.75rem;padding:2px 8px;border-radius:10px;margin-left:6px" id="slip-legs-count">0</span></div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button onclick="clearSlip()" style="font-size:0.78rem;color:var(--red);background:none;border:none;cursor:pointer">Clear</button>
+        <button class="modal-close" onclick="closeModal('modal-bet-slip')">✕</button>
+      </div>
+    </div>
+
+    <!-- Bet Type Tabs -->
+    <div style="display:flex;gap:0;padding:12px 16px;gap:8px">
+      <button class="slip-type-btn active" id="stype-straight" onclick="selectSlipType('straight')">Straight</button>
+      <button class="slip-type-btn" id="stype-parlay" onclick="selectSlipType('parlay')">Parlay</button>
+      <button class="slip-type-btn" id="stype-teaser" onclick="selectSlipType('teaser')">Teaser</button>
+      <button class="slip-type-btn" id="stype-rr" onclick="selectSlipType('rr')">Round Robin</button>
+    </div>
+
+    <!-- Teaser Points (hidden unless teaser) -->
+    <div id="teaser-options" style="display:none;padding:0 16px 12px">
+      <div style="font-size:0.72rem;color:var(--gray);margin-bottom:6px">TEASER POINTS</div>
+      <div style="display:flex;gap:8px">
+        <button class="teaser-pt-btn active" onclick="selectTeaserPts(this,6)">+6</button>
+        <button class="teaser-pt-btn" onclick="selectTeaserPts(this,6.5)">+6.5</button>
+        <button class="teaser-pt-btn" onclick="selectTeaserPts(this,7)">+7</button>
+      </div>
+    </div>
+
+    <!-- Round Robin Options (hidden unless rr) -->
+    <div id="rr-options" style="display:none;padding:0 16px 12px">
+      <div style="font-size:0.72rem;color:var(--gray);margin-bottom:6px">PARLAY SIZE</div>
+      <div style="display:flex;gap:8px">
+        <button class="teaser-pt-btn active" id="rr-2" onclick="selectRRSize(this,2)">2-team</button>
+        <button class="teaser-pt-btn" id="rr-3" onclick="selectRRSize(this,3)">3-team</button>
+      </div>
+    </div>
+
+    <!-- Legs -->
+    <div id="slip-legs" style="padding:0 16px"></div>
+
+    <!-- Payout Info -->
+    <div id="slip-payout-box" style="margin:12px 16px;background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:14px;display:none">
+      <div style="display:flex;justify-content:space-between;font-size:0.82rem;padding:4px 0;border-bottom:1px solid var(--border)">
+        <span style="color:var(--gray)">Bet Type</span>
+        <span id="payout-type" style="font-weight:700">—</span>
+      </div>
+      <div id="rr-combos-info" style="display:none;font-size:0.78rem;color:var(--diamond);padding:6px 0;border-bottom:1px solid var(--border)"></div>
+      <div style="display:flex;justify-content:space-between;font-size:0.82rem;padding:4px 0;border-bottom:1px solid var(--border)">
+        <span style="color:var(--gray)">Combined Odds</span>
+        <span id="payout-odds" style="font-weight:700;color:var(--diamond)">—</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:0.82rem;padding:4px 0;border-bottom:1px solid var(--border)">
+        <span style="color:var(--gray)">Risk</span>
+        <span id="payout-risk" style="font-weight:700">$0.00</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:1rem;padding:8px 0 0;font-weight:900">
+        <span>To Win</span>
+        <span id="payout-win" style="color:var(--green)">$0.00</span>
+      </div>
+    </div>
+
+    <!-- Risk Input -->
+    <div style="padding:0 16px 12px">
+      <label style="font-size:0.72rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px">Risk Amount</label>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input type="number" id="slip-risk-input" class="inp" placeholder="$0.00" oninput="updateSlipPayout()" style="flex:1;font-size:1rem;font-weight:700">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <div style="display:flex;gap:4px">
+            <button onclick="quickAmt(25)" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--white);font-size:0.78rem;font-weight:700;cursor:pointer">$25</button>
+            <button onclick="quickAmt(50)" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--white);font-size:0.78rem;font-weight:700;cursor:pointer">$50</button>
+            <button onclick="quickAmt(100)" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--white);font-size:0.78rem;font-weight:700;cursor:pointer">$100</button>
+          </div>
+          <div style="display:flex;gap:4px">
+            <button onclick="quickAmt(200)" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--white);font-size:0.78rem;font-weight:700;cursor:pointer">$200</button>
+            <button onclick="quickAmt(500)" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--white);font-size:0.78rem;font-weight:700;cursor:pointer">$500</button>
+            <button onclick="quickAmt(1000)" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--white);font-size:0.78rem;font-weight:700;cursor:pointer">$1k</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Submit -->
+    <div style="padding:0 16px 32px">
+      <button onclick="submitSlip()" class="submit-btn" id="slip-submit-btn" disabled style="opacity:0.5">
+        Place Bet →
+      </button>
+      <div style="text-align:center;font-size:0.72rem;color:var(--gray);margin-top:8px">Bets are subject to host approval</div>
+    </div>
   </div>
 </div>
 
@@ -602,6 +702,242 @@ function goToPlayer(name) {
 }
 
 function showDiamonds() { toast('💎 '+G.diamonds+' diamonds · $'+G.diamonds+' value'); }
+
+// ===== BET SLIP ENGINE =====
+let betSlip = [];
+let slipType = 'straight';
+let teaserPts = 6;
+let rrSize = 2;
+
+
+
+function openBetSlip() {
+  document.getElementById('modal-bet-slip').classList.add('open');
+  renderSlipLegs();
+  updateSlipPayout();
+}
+
+function clearSlip() {
+  betSlip = [];
+  updateSlipBar();
+  renderSlipLegs();
+  updateSlipPayout();
+  document.getElementById('slip-risk-input').value = '';
+}
+
+function updateSlipBar() {
+  const bar = document.getElementById('bet-slip');
+  const count = document.getElementById('slip-count');
+  if (betSlip.length > 0) {
+    bar.classList.add('show');
+    count.textContent = betSlip.length;
+  } else {
+    bar.classList.remove('show');
+  }
+  document.getElementById('slip-legs-count').textContent = betSlip.length;
+}
+
+function removeLeg(idx) {
+  betSlip.splice(idx, 1);
+  updateSlipBar();
+  renderSlipLegs();
+  updateSlipPayout();
+}
+
+function renderSlipLegs() {
+  const el = document.getElementById('slip-legs');
+  if (!betSlip.length) { el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--gray);font-size:0.85rem">Add games to your slip</div>'; return; }
+  el.innerHTML = betSlip.map((b, i) =>
+    '<div class="leg-card">' +
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
+    '<div style="flex:1">' +
+    '<div style="font-size:0.68rem;color:var(--diamond);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">' + b.sport + ' · ' + b.type + '</div>' +
+    '<div style="font-size:0.9rem;font-weight:700;margin-bottom:2px">' + b.line + '</div>' +
+    '<div style="font-size:0.75rem;color:var(--gray)">' + b.game + '</div>' +
+    '</div>' +
+    '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">' +
+    '<button class="leg-remove" onclick="removeLeg(' + i + ')">✕</button>' +
+    '<span style="font-size:0.85rem;font-weight:800;color:var(--diamond)">' + (b.odds > 0 ? '+' : '') + b.odds + '</span>' +
+    '</div></div></div>'
+  ).join('');
+}
+
+function selectSlipType(type) {
+  slipType = type;
+  document.querySelectorAll('.slip-type-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('stype-' + type).classList.add('active');
+  document.getElementById('teaser-options').style.display = type === 'teaser' ? 'block' : 'none';
+  document.getElementById('rr-options').style.display = type === 'rr' ? 'block' : 'none';
+  updateSlipPayout();
+}
+
+function selectTeaserPts(el, pts) {
+  teaserPts = pts;
+  document.querySelectorAll('.teaser-pt-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  updateSlipPayout();
+}
+
+function selectRRSize(el, size) {
+  rrSize = size;
+  document.querySelectorAll('[id^="rr-"]').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  updateSlipPayout();
+}
+
+function quickAmt(amt) {
+  document.getElementById('slip-risk-input').value = amt;
+  updateSlipPayout();
+}
+
+function americanToDecimal(odds) {
+  if (odds > 0) return (odds / 100) + 1;
+  return (100 / Math.abs(odds)) + 1;
+}
+
+function combinedOdds(legs) {
+  const decimal = legs.reduce((prod, b) => prod * americanToDecimal(b.odds), 1);
+  const american = decimal >= 2 ? Math.round((decimal - 1) * 100) : Math.round(-100 / (decimal - 1));
+  return { decimal, american };
+}
+
+function nCr(n, r) {
+  if (r > n) return 0;
+  let result = 1;
+  for (let i = 0; i < r; i++) { result = result * (n - i) / (i + 1); }
+  return Math.round(result);
+}
+
+function getCombinations(arr, size) {
+  if (size === 1) return arr.map(x => [x]);
+  const result = [];
+  arr.forEach((item, idx) => {
+    const rest = arr.slice(idx + 1);
+    getCombinations(rest, size - 1).forEach(combo => result.push([item, ...combo]));
+  });
+  return result;
+}
+
+function updateSlipPayout() {
+  const risk = parseFloat(document.getElementById('slip-risk-input').value) || 0;
+  const payoutBox = document.getElementById('slip-payout-box');
+  const submitBtn = document.getElementById('slip-submit-btn');
+
+  if (!betSlip.length || risk <= 0) {
+    payoutBox.style.display = 'none';
+    submitBtn.disabled = true;
+    submitBtn.style.opacity = '0.5';
+    return;
+  }
+
+  payoutBox.style.display = 'block';
+  submitBtn.disabled = false;
+  submitBtn.style.opacity = '1';
+
+  let typeLabel, oddsDisplay, toWin;
+  const rrInfo = document.getElementById('rr-combos-info');
+  rrInfo.style.display = 'none';
+
+  if (slipType === 'straight') {
+    // Each leg is separate — show total risk
+    typeLabel = betSlip.length + ' Straight Bet' + (betSlip.length > 1 ? 's' : '');
+    const totalRisk = risk * betSlip.length;
+    const totalWin = betSlip.reduce((s, b) => {
+      const d = americanToDecimal(b.odds);
+      return s + Math.round(risk * (d - 1) * 100) / 100;
+    }, 0);
+    oddsDisplay = 'x' + betSlip.length + ' bets';
+    toWin = totalWin;
+    document.getElementById('payout-risk').textContent = '$' + totalRisk.toFixed(2);
+  } else if (slipType === 'parlay') {
+    typeLabel = betSlip.length + '-Team Parlay';
+    const combo = combinedOdds(betSlip);
+    oddsDisplay = (combo.american > 0 ? '+' : '') + combo.american;
+    toWin = Math.round(risk * (combo.decimal - 1) * 100) / 100;
+    document.getElementById('payout-risk').textContent = '$' + risk.toFixed(2);
+  } else if (slipType === 'teaser') {
+    typeLabel = betSlip.length + '-Team Teaser (+' + teaserPts + ' pts)';
+    // Teaser pays fixed odds based on legs and points
+    const teaserOdds = betSlip.length === 2 ? -120 : betSlip.length === 3 ? 180 : betSlip.length === 4 ? 300 : 450;
+    const d = americanToDecimal(teaserOdds);
+    oddsDisplay = (teaserOdds > 0 ? '+' : '') + teaserOdds;
+    toWin = Math.round(risk * (d - 1) * 100) / 100;
+    document.getElementById('payout-risk').textContent = '$' + risk.toFixed(2);
+  } else if (slipType === 'rr') {
+    const combos = getCombinations(betSlip, rrSize);
+    typeLabel = betSlip.length + '-team RR (' + rrSize + '-team parlays)';
+    const totalRisk = risk * combos.length;
+    const totalWin = combos.reduce((s, combo) => {
+      const d = combinedOdds(combo).decimal;
+      return s + Math.round(risk * (d - 1) * 100) / 100;
+    }, 0);
+    oddsDisplay = combos.length + ' combos';
+    toWin = totalWin;
+    rrInfo.style.display = 'block';
+    rrInfo.textContent = '💎 ' + combos.length + ' x ' + rrSize + '-team parlays · $' + risk + '/combo = $' + totalRisk.toFixed(2) + ' total risk';
+    document.getElementById('payout-risk').textContent = '$' + totalRisk.toFixed(2);
+  }
+
+  document.getElementById('payout-type').textContent = typeLabel;
+  document.getElementById('payout-odds').textContent = oddsDisplay;
+  document.getElementById('payout-win').textContent = '$' + toWin.toFixed(2);
+}
+
+async function submitSlip() {
+  const risk = parseFloat(document.getElementById('slip-risk-input').value) || 0;
+  if (!risk || !betSlip.length) return;
+
+  const btn = document.getElementById('slip-submit-btn');
+  btn.textContent = 'Submitting...';
+  btn.disabled = true;
+
+  try {
+    if (slipType === 'straight') {
+      for (const b of betSlip) {
+        const d = americanToDecimal(b.odds);
+        await apiCall('POST', '/api/bets', {
+          player_id: G.myPlayerId, game: b.game + ' — ' + b.line,
+          bet_type: 'Straight', sport: b.sport, risk, win: Math.round(risk*(d-1)*100)/100, result: 'pending'
+        });
+      }
+    } else if (slipType === 'parlay') {
+      const combo = combinedOdds(betSlip);
+      const toWin = Math.round(risk*(combo.decimal-1)*100)/100;
+      const desc = betSlip.map(b => b.line).join(' + ');
+      await apiCall('POST', '/api/bets', {
+        player_id: G.myPlayerId, game: betSlip.length + '-Team Parlay: ' + desc,
+        bet_type: 'Parlay', sport: betSlip[0].sport, risk, win: toWin, result: 'pending'
+      });
+    } else if (slipType === 'teaser') {
+      const teaserOdds = betSlip.length === 2 ? -120 : betSlip.length === 3 ? 180 : 300;
+      const d = americanToDecimal(teaserOdds);
+      const desc = betSlip.map(b => b.line).join(' + ');
+      await apiCall('POST', '/api/bets', {
+        player_id: G.myPlayerId, game: betSlip.length + '-Team Teaser (+' + teaserPts + 'pts): ' + desc,
+        bet_type: 'Teaser', sport: betSlip[0].sport, risk, win: Math.round(risk*(d-1)*100)/100, result: 'pending'
+      });
+    } else if (slipType === 'rr') {
+      const combos = getCombinations(betSlip, rrSize);
+      for (const combo of combos) {
+        const d = combinedOdds(combo).decimal;
+        const desc = combo.map(b => b.line).join(' + ');
+        await apiCall('POST', '/api/bets', {
+          player_id: G.myPlayerId, game: 'RR ' + rrSize + '-team: ' + desc,
+          bet_type: 'Round Robin', sport: combo[0].sport, risk, win: Math.round(risk*(d-1)*100)/100, result: 'pending'
+        });
+      }
+    }
+
+    closeModal('modal-bet-slip');
+    clearSlip();
+    toast('✅ Bet submitted! Pending host approval.');
+    loadMyBets();
+  } catch(e) {
+    toast('❌ ' + e.message);
+    btn.textContent = 'Place Bet →';
+    btn.disabled = false;
+  }
+}
 
 // ===== GAMES & BETTING =====
 let betSlip = [];
