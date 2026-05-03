@@ -219,6 +219,21 @@
 
   <!-- PROPS/PREDICTIONS SECTION -->
   <div id="section-props" style="display:none;padding:0 18px">
+    <!-- Props Paywall -->
+    <div id="props-paywall" style="text-align:center;padding:40px 20px">
+      <div style="font-size:3rem;margin-bottom:16px">🔮</div>
+      <div style="font-size:1.2rem;font-weight:900;margin-bottom:8px">Prediction Markets</div>
+      <div style="font-size:0.85rem;color:var(--gray);margin-bottom:24px;line-height:1.6">Bet Yes/No on crypto, politics, sports & pop culture events using live Polymarket odds.</div>
+      <div style="background:var(--diamond-dim);border:1px solid rgba(0,194,255,0.3);border-radius:14px;padding:20px;margin-bottom:20px">
+        <div style="font-size:0.72rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Premium Feature</div>
+        <div style="font-size:2rem;font-weight:900;color:var(--diamond)">💎 50</div>
+        <div style="font-size:0.8rem;color:var(--gray);margin-top:4px">diamonds per week</div>
+      </div>
+      <button onclick="unlockProps()" style="width:100%;padding:16px;background:var(--diamond);color:#000;border:none;border-radius:12px;font-size:1rem;font-weight:900;cursor:pointer">Unlock with 💎 50</button>
+      <div style="font-size:0.72rem;color:var(--gray);margin-top:10px">Your balance: <span id="props-bal" style="color:var(--diamond);font-weight:700">💎 2,450</span></div>
+    </div>
+
+    <div id="props-content" style="display:none">
     <div style="padding:14px 0 6px;display:flex;justify-content:space-between;align-items:center">
       <span style="font-size:1rem;font-weight:800">🔮 Prediction Markets</span>
       <span style="font-size:0.72rem;color:var(--gray)">Powered by Polymarket</span>
@@ -231,6 +246,7 @@
       <button class="sport-tab" onclick="loadProps('pop',this)">🎬 Pop Culture</button>
     </div>
     <div id="props-list"><div style="text-align:center;padding:40px;color:var(--gray)">Loading predictions...</div></div>
+    </div> <!-- end props-content -->
   </div>
 
   <span class="pb"></span>
@@ -248,7 +264,7 @@
   <div class="bottom-nav">
     <div class="nav-item active" onclick="switchTab(this,'home')"><div class="nav-icon">🏠</div><div class="nav-label">Home</div></div>
     <div class="nav-item" onclick="switchTab(this,'games')"><div class="nav-icon">🎮</div><div class="nav-label">Games</div></div>
-    <div class="nav-item" onclick="switchTab(this,'props')"><div class="nav-icon">🔮</div><div class="nav-label">Props</div></div>
+    <div class="nav-item" onclick="switchTab(this,'props')"><div class="nav-icon">🔮</div><div class="nav-label">Props 💎</div></div>
     <div class="nav-item" onclick="switchTab(this,'bets')"><div class="nav-icon">📋</div><div class="nav-label">My Bets</div></div>
     <div class="nav-item" onclick="switchTab(this,'players')"><div class="nav-icon">👥</div><div class="nav-label">Players</div></div>
     <div class="nav-item" onclick="switchTab(this,'analytics')"><div class="nav-icon">📊</div><div class="nav-label">Analytics</div></div>
@@ -692,7 +708,7 @@ function switchTab(el, tab) {
   });
   if (tab === 'games') loadGames('mlb', document.querySelector('#section-games .sport-tab'));
   if (tab === 'bets') loadMyBets();
-  if (tab === 'props') loadProps('hot', document.querySelector('#section-props .sport-tab'));
+  if (tab === 'props') { if (!checkPropsAccess()) {} else loadProps('hot', document.querySelector('#section-props .sport-tab')); document.getElementById('props-bal').textContent = '💎 ' + G.diamonds; }
 }
 
 function viewPlayer(id) {
@@ -1037,6 +1053,33 @@ async function loadMyBets() {
       </div>`;
     }).join('');
   } catch(e) { console.error(e); }
+}
+
+// ===== PROPS PAYWALL =====
+const PROPS_COST = 50;
+
+function unlockProps() {
+  if (G.diamonds < PROPS_COST) {
+    toast('❌ Not enough diamonds. Need 💎 ' + PROPS_COST);
+    return;
+  }
+  G.diamonds -= PROPS_COST;
+  document.getElementById('diamond-count').textContent = '💎 ' + G.diamonds;
+  document.getElementById('props-paywall').style.display = 'none';
+  document.getElementById('props-content').style.display = 'block';
+  localStorage.setItem('props-unlocked', Date.now() + (7*24*60*60*1000)); // 7 days
+  loadProps('hot', document.querySelector('#section-props .sport-tab'));
+  toast('✅ Props unlocked for 7 days!');
+}
+
+function checkPropsAccess() {
+  const expiry = localStorage.getItem('props-unlocked');
+  if (expiry && Date.now() < parseInt(expiry)) {
+    document.getElementById('props-paywall').style.display = 'none';
+    document.getElementById('props-content').style.display = 'block';
+    return true;
+  }
+  return false;
 }
 
 // ===== POLYMARKET PROPS =====
