@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Pocketbooks Sports</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--green:#00ff88;--cyan:#00c2ff;--gold:#f5c842;--red:#ff3d57;--white:#fff;--gray:#666}
+body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:#0a0f1a;color:var(--white);max-width:430px;margin:0 auto;min-height:100vh;overflow-x:hidden;padding-bottom:80px;position:relative}
+
+/* BG */
+.bg-scene{position:fixed;inset:0;z-index:0;overflow:hidden;background:linear-gradient(180deg,#0a0f2e 0%,#0d1a1a 40%,#0a0f0a 100%)}
+.moon{position:absolute;top:18%;left:50%;transform:translateX(-50%);width:120px;height:120px;background:radial-gradient(circle,#e8e0c8,#c8c0a0);border-radius:50%;box-shadow:0 0 60px rgba(232,224,200,0.4),0 0 120px rgba(232,224,200,0.15)}
+.skyline{position:absolute;bottom:35%;left:0;right:0;height:160px;background:linear-gradient(180deg,transparent 0%,#0a1a0a 100%)}
+.stars{position:absolute;inset:0}
+.star{position:absolute;background:#fff;border-radius:50%;animation:twinkle 3s infinite}
+@keyframes twinkle{0%,100%{opacity:0.3}50%{opacity:1}}
+.trees{position:absolute;bottom:32%;left:0;right:0;height:80px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 430 80'%3E%3Cpolygon points='0,80 30,20 60,80' fill='%23051005'/%3E%3Cpolygon points='40,80 70,15 100,80' fill='%23040e04'/%3E%3Cpolygon points='90,80 115,25 140,80' fill='%23051005'/%3E%3Cpolygon points='130,80 160,10 190,80' fill='%23040e04'/%3E%3Cpolygon points='180,80 210,20 240,80' fill='%23051005'/%3E%3Cpolygon points='230,80 255,30 280,80' fill='%23040e04'/%3E%3Cpolygon points='270,80 300,15 330,80' fill='%23051005'/%3E%3Cpolygon points='320,80 350,22 380,80' fill='%23040e04'/%3E%3Cpolygon points='370,80 400,18 430,80' fill='%23051005'/%3E%3C/svg%3E") repeat-x bottom}
+
+/* CONTENT */
+.content{position:relative;z-index:1}
+
+/* TOP BAR */
+.topbar{display:flex;justify-content:space-between;align-items:flex-start;padding:14px 16px 8px}
+.user-left{display:flex;align-items:center;gap:10px}
+.avatar-wrap{position:relative}
+.avatar{width:52px;height:52px;border-radius:50%;border:2px solid var(--gold);overflow:hidden;background:linear-gradient(135deg,#1a3a2a,#0a2a1a)}
+.avatar img{width:100%;height:100%;object-fit:cover}
+.new-badge{position:absolute;top:-4px;left:-4px;background:var(--red);color:#fff;font-size:0.5rem;font-weight:900;padding:2px 5px;border-radius:6px;text-transform:uppercase}
+.user-info{}
+.user-name{font-size:1rem;font-weight:900;color:var(--gold);text-shadow:0 0 10px rgba(245,200,66,0.4)}
+.user-id{font-size:0.72rem;color:#888;margin-top:1px}
+.top-right{display:flex;align-items:center;gap:8px}
+.menu-btn{width:36px;height:36px;background:rgba(255,255,255,0.1);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;border:1px solid rgba(255,255,255,0.15)}
+.menu-btn span{display:block;width:16px;height:2px;background:#fff;border-radius:2px}
+
+/* WALLET BAR */
+.wallet-bar{margin:0 16px 12px;background:rgba(0,0,0,0.5);border:1px solid rgba(245,200,66,0.3);border-radius:12px;padding:8px 14px;display:flex;align-items:center;gap:10px}
+.vip-badge{background:linear-gradient(135deg,#2a1a00,#4a3000);border:1px solid var(--gold);color:var(--gold);font-size:0.65rem;font-weight:900;padding:4px 10px;border-radius:6px;letter-spacing:1px}
+.wallet-item{display:flex;align-items:center;gap:5px;background:rgba(0,0,0,0.4);border:1px solid rgba(245,200,66,0.2);border-radius:20px;padding:5px 10px}
+.wallet-icon{font-size:0.9rem}
+.wallet-val{font-size:0.82rem;font-weight:800;color:var(--gold)}
+.wallet-add{width:20px;height:20px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:900;color:#000;cursor:pointer;flex-shrink:0}
+.wallet-sep{height:16px;width:1px;background:rgba(255,255,255,0.1)}
+
+/* ACTIVE CLUB CARD */
+.active-club-wrap{margin:0 16px 16px;cursor:pointer}
+.active-club-card{background:rgba(255,255,255,0.95);border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.5)}
+.ac-top{padding:8px 14px;background:#fff;display:flex;justify-content:space-between;align-items:center}
+.ac-id{font-size:0.72rem;font-weight:700;color:#333;letter-spacing:0.5px}
+.ac-body{padding:20px;text-align:center;background:#fff;min-height:120px;display:flex;align-items:center;justify-content:center}
+.ac-logo{max-width:200px;max-height:90px;object-fit:contain}
+.ac-name-placeholder{font-size:1.4rem;font-weight:900;color:#111;letter-spacing:-0.5px}
+.ac-footer{background:linear-gradient(135deg,#1a0a2e,#2a1a4a);padding:12px 14px;display:flex;align-items:center;gap:10px}
+.ac-owner-avatar{width:36px;height:36px;border-radius:50%;background:var(--gold);border:2px solid rgba(255,255,255,0.3);display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:900;color:#000}
+.ac-owner-name{font-size:0.9rem;font-weight:800;color:#fff;text-transform:uppercase}
+.ac-owner-sub{font-size:0.65rem;color:rgba(255,255,255,0.5);margin-top:1px}
+.ac-stats{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:0.72rem;color:rgba(255,255,255,0.6)}
+
+/* ACTION GRID */
+.action-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:0 16px 14px}
+.action-card{border-radius:16px;overflow:hidden;cursor:pointer;position:relative;aspect-ratio:0.75;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:0 4px 20px rgba(0,0,0,0.5);transition:transform 0.15s}
+.action-card:active{transform:scale(0.96)}
+.ac-bg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.ac-bg-join{background:linear-gradient(135deg,#0a2a1a,#0a3a2a)}
+.ac-bg-create{background:linear-gradient(135deg,#1a1a0a,#2a2a0a)}
+.ac-bg-clubs{background:linear-gradient(135deg,#0a1a2a,#0a2a3a)}
+.ac-icon{font-size:2.2rem;opacity:0.85}
+.ac-gradient{position:absolute;bottom:0;left:0;right:0;height:50%;background:linear-gradient(transparent,rgba(0,0,0,0.8))}
+.ac-label{position:relative;z-index:1;font-size:0.82rem;font-weight:800;text-shadow:0 1px 4px rgba(0,0,0,0.8);padding:8px 8px;text-align:center;line-height:1.2}
+.ac-sublabel{font-size:0.6rem;color:rgba(255,255,255,0.6);font-weight:600}
+
+/* SECONDARY ROW */
+.secondary-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:0 16px 16px}
+.sec-card{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer;transition:all 0.15s}
+.sec-card:active{background:rgba(255,255,255,0.12)}
+.sec-icon{font-size:1.3rem;margin-bottom:5px}
+.sec-label{font-size:0.65rem;color:#888;font-weight:600}
+.sec-badge{display:inline-block;background:var(--red);color:#fff;font-size:0.5rem;padding:1px 5px;border-radius:6px;font-weight:900;margin-top:3px}
+
+/* MY CLUBS LIST */
+.clubs-list{padding:0 16px}
+.club-row{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:13px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:all 0.15s}
+.club-row:active{background:rgba(0,194,255,0.1);border-color:var(--cyan)}
+.cr-left{display:flex;align-items:center;gap:10px}
+.cr-avatar{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:900;background:linear-gradient(135deg,#1a2a3a,#0a1a2a);border:1px solid rgba(0,194,255,0.2);color:var(--cyan)}
+.cr-name{font-size:0.9rem;font-weight:800}
+.cr-meta{display:flex;align-items:center;gap:6px;margin-top:2px}
+.cr-id{font-size:0.65rem;color:#555}
+.role-badge{font-size:0.6rem;font-weight:800;padding:2px 7px;border-radius:6px;text-transform:uppercase}
+.role-host{background:rgba(245,200,66,0.15);color:var(--gold);border:1px solid rgba(245,200,66,0.3)}
+.role-player{background:rgba(0,255,136,0.1);color:var(--green);border:1px solid rgba(0,255,136,0.25)}
+.role-pending{background:rgba(255,61,87,0.1);color:var(--red);border:1px solid rgba(255,61,87,0.25)}
+.cr-right{text-align:right}
+.cr-balance{font-size:0.95rem;font-weight:900}
+.cr-dir{font-size:0.62rem;color:#555;margin-top:1px}
+
+/* BOTTOM NAV */
+.bnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:rgba(5,8,20,0.97);border-top:1px solid rgba(255,255,255,0.08);display:flex;padding:10px 0 22px;z-index:100;backdrop-filter:blur(16px)}
+.bn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:4px 0}
+.bn-ico{width:24px;height:24px;display:flex;align-items:center;justify-content:center}
+.bn-ico svg{width:22px;height:22px;stroke:#444;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:all 0.2s}
+.bn-lbl{font-size:0.57rem;color:#444;font-weight:600;transition:color 0.2s}
+.bn.active .bn-lbl{color:var(--cyan)}
+.bn.active .bn-ico svg{stroke:var(--cyan);filter:drop-shadow(0 0 5px rgba(0,194,255,0.6))}
+
+/* MODALS */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:200;align-items:flex-end;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:#141414;border-radius:20px 20px 0 0;width:100%;max-width:430px;padding:24px;max-height:85vh;overflow-y:auto}
+.modal-title{font-size:1.1rem;font-weight:900;margin-bottom:4px}
+.modal-sub{font-size:0.78rem;color:#555;margin-bottom:18px}
+.inp{width:100%;padding:14px 16px;background:#1c1c1c;border:1.5px solid #252525;border-radius:12px;color:#fff;font-size:0.95rem;outline:none;margin-bottom:10px;transition:border-color 0.2s}
+.inp:focus{border-color:var(--cyan)}
+.inp::placeholder{color:#444}
+.btn-primary{width:100%;padding:15px;background:var(--green);color:#000;border:none;border-radius:12px;font-size:1rem;font-weight:900;cursor:pointer;margin-top:4px}
+.btn-secondary{width:100%;padding:13px;background:transparent;color:#666;border:1px solid #252525;border-radius:12px;font-size:0.88rem;font-weight:700;cursor:pointer;margin-top:8px}
+.pending-screen{text-align:center;padding:30px 20px}
+.pending-icon{font-size:3.5rem;margin-bottom:14px}
+.pending-title{font-size:1.2rem;font-weight:900;margin-bottom:8px}
+.pending-sub{font-size:0.82rem;color:#555;line-height:1.6;margin-bottom:20px}
+.pending-code{display:inline-block;font-size:1.4rem;font-weight:900;letter-spacing:4px;color:var(--cyan);background:rgba(0,194,255,0.1);border:1px solid rgba(0,194,255,0.25);padding:10px 20px;border-radius:12px}
+.search-result{margin-top:10px}
+.club-found-card{background:#1c1c1c;border:1px solid #2a2a2a;border-radius:14px;padding:16px;margin-top:10px}
+.cf-name{font-size:1rem;font-weight:800;margin-bottom:3px}
+.cf-desc{font-size:0.72rem;color:#555;margin-bottom:14px}
+.section-hdr{font-size:0.78rem;font-weight:800;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;padding:0 16px}
+</style>
+</head>
+<body>
+
+<!-- BACKGROUND SCENE -->
+<div class="bg-scene">
+  <div class="moon"></div>
+  <div class="stars" id="stars-el"></div>
+  <div class="trees"></div>
+</div>
+
+<!-- CONTENT -->
+<div class="content">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="user-left">
+      <div class="avatar-wrap">
+        <div class="avatar"><img src="./logo.jpg" alt="PBS" onerror="this.style.display='none';this.parentNode.textContent='PB'"></div>
+        <div class="new-badge">New</div>
+      </div>
+      <div class="user-info">
+        <div class="user-name" id="u-name">TonyG26</div>
+        <div class="user-id" id="u-id">ID: loading...</div>
+      </div>
+    </div>
+    <div class="top-right">
+      <div class="menu-btn" onclick="showSection('settings')">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- WALLET BAR -->
+  <div class="wallet-bar">
+    <div class="vip-badge">VIP</div>
+    <div class="wallet-sep"></div>
+    <div class="wallet-item">
+      <span class="wallet-icon">💎</span>
+      <span class="wallet-val" id="w-diamonds">2,450</span>
+      <div class="wallet-add" onclick="showSection('buy-diamonds')">+</div>
+    </div>
+    <div class="wallet-sep"></div>
+    <div class="wallet-item">
+      <span class="wallet-icon">🟣</span>
+      <span class="wallet-val" id="w-credits">59</span>
+      <div class="wallet-add" onclick="showSection('buy-credits')">+</div>
+    </div>
+  </div>
+
+  <!-- ACTIVE CLUB CARD -->
+  <div class="active-club-wrap" id="active-club-wrap" onclick="enterActiveClub()">
+    <div class="active-club-card">
+      <div class="ac-top">
+        <span class="ac-id" id="ac-id-display">No club selected — tap to join</span>
+        <span style="font-size:0.65rem;color:#999">TAP TO ENTER ›</span>
+      </div>
+      <div class="ac-body">
+        <img src="./logo.jpg" class="ac-logo" id="ac-logo" alt="Club">
+      </div>
+      <div class="ac-footer">
+        <div class="ac-owner-avatar" id="ac-owner-av">PB</div>
+        <div>
+          <div class="ac-owner-name" id="ac-club-name">Pocket Books Sports</div>
+          <div class="ac-owner-sub" id="ac-role-display">Select a club to get started</div>
+        </div>
+        <div class="ac-stats">
+          <span>💎</span>
+          <span id="ac-balance">0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTION GRID -->
+  <div class="action-grid">
+    <div class="action-card" onclick="openModal('modal-join')">
+      <div class="ac-bg ac-bg-join"><div class="ac-icon">🔍</div></div>
+      <div class="ac-gradient"></div>
+      <div class="ac-label">Join Club<br><span class="ac-sublabel">Enter code</span></div>
+    </div>
+    <div class="action-card" onclick="openModal('modal-create')">
+      <div class="ac-bg ac-bg-create"><div class="ac-icon">🏆</div></div>
+      <div class="ac-gradient"></div>
+      <div class="ac-label">Create Club<br><span class="ac-sublabel">Be the host</span></div>
+    </div>
+    <div class="action-card" onclick="showSection('my-clubs')">
+      <div class="ac-bg ac-bg-clubs"><div class="ac-icon">🃏</div></div>
+      <div class="ac-gradient"></div>
+      <div class="ac-label">My Clubs<br><span class="ac-sublabel" id="club-count-lbl">0 clubs</span></div>
+    </div>
+  </div>
+
+  <!-- SECONDARY ROW -->
+  <div class="secondary-row">
+    <div class="sec-card" onclick="showSection('pending')">
+      <div class="sec-icon">⏳</div>
+      <div class="sec-label">Requests</div>
+      <div class="sec-badge" id="pending-badge" style="display:none">0</div>
+    </div>
+    <div class="sec-card" onclick="showSection('messages')">
+      <div class="sec-icon">💬</div>
+      <div class="sec-label">Messages</div>
+    </div>
+    <div class="sec-card" onclick="showSection('settings')">
+      <div class="sec-icon">⚙️</div>
+      <div class="sec-label">Settings</div>
+    </div>
+  </div>
+
+  <!-- MY CLUBS SECTION (hidden by default) -->
+  <div id="section-my-clubs" style="display:none">
+    <div class="section-hdr">My Clubs</div>
+    <div class="clubs-list" id="clubs-list-el"></div>
+  </div>
+
+</div><!-- end content -->
+
+<!-- BOTTOM NAV -->
+<div class="bnav">
+  <div class="bn active" onclick="setBN(this,'home')">
+    <div class="bn-ico"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>
+    <div class="bn-lbl">Home</div>
+  </div>
+  <div class="bn" onclick="setBN(this,'clubs');showSection('my-clubs')">
+    <div class="bn-ico"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></div>
+    <div class="bn-lbl">Clubs</div>
+  </div>
+  <div class="bn" onclick="setBN(this,'bets')">
+    <div class="bn-ico"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+    <div class="bn-lbl">Bets</div>
+  </div>
+  <div class="bn" onclick="setBN(this,'messages')">
+    <div class="bn-ico"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+    <div class="bn-lbl">Messages</div>
+  </div>
+  <div class="bn" onclick="setBN(this,'profile')">
+    <div class="bn-ico"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+    <div class="bn-lbl">Profile</div>
+  </div>
+</div>
+
+<!-- JOIN CLUB MODAL -->
+<div class="modal-bg" id="modal-join">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div class="modal-title">Join a Club</div>
+      <button onclick="closeModal('modal-join')" style="background:none;border:none;color:#555;font-size:1.3rem;cursor:pointer">✕</button>
+    </div>
+    <div class="modal-sub">Enter the club ID to find and request access</div>
+    <div style="display:flex;gap:8px;margin-bottom:4px">
+      <input id="join-code" class="inp" placeholder="e.g. PB-7K92Q" style="margin:0;flex:1;text-transform:uppercase;letter-spacing:2px;font-weight:800" oninput="this.value=this.value.toUpperCase()">
+      <button onclick="searchClub()" style="padding:14px 18px;background:var(--cyan);color:#000;border:none;border-radius:12px;font-size:0.85rem;font-weight:900;cursor:pointer;white-space:nowrap">Search</button>
+    </div>
+    <div id="join-result"></div>
+  </div>
+</div>
+
+<!-- CREATE CLUB MODAL -->
+<div class="modal-bg" id="modal-create">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div class="modal-title">Create a Club</div>
+      <button onclick="closeModal('modal-create')" style="background:none;border:none;color:#555;font-size:1.3rem;cursor:pointer">✕</button>
+    </div>
+    <div class="modal-sub">You'll become the host and manage all players</div>
+    <input id="cc-name" class="inp" placeholder="Club name (e.g. Vegas Crew)">
+    <input id="cc-desc" class="inp" placeholder="Description (optional)">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <input id="cc-maxbet" type="number" class="inp" placeholder="Max bet $" style="margin:0">
+      <input id="cc-maxparlay" type="number" class="inp" placeholder="Max parlay $" style="margin:0">
+    </div>
+    <button onclick="createClub()" class="btn-primary">Create Club →</button>
+  </div>
+</div>
+
+<!-- PENDING APPROVAL MODAL -->
+<div class="modal-bg" id="modal-pending">
+  <div class="modal">
+    <div class="pending-screen">
+      <div class="pending-icon">⏳</div>
+      <div class="pending-title">Request Sent!</div>
+      <div class="pending-sub">Your request to join <strong id="pending-club-name"></strong> has been sent.<br>You'll be notified once the host approves you.</div>
+      <div class="pending-code" id="pending-club-code"></div>
+      <div style="font-size:0.72rem;color:#555;margin-top:12px">You cannot place bets until approved</div>
+    </div>
+    <button onclick="closeModal('modal-pending')" class="btn-secondary">Back to Lobby</button>
+  </div>
+</div>
+
+<script>
+const API = 'https://pocketbooks-sports-backend-production.up.railway.app';
+let TOKEN = localStorage.getItem('pb-sports-token') || '';
+let userClubs = JSON.parse(localStorage.getItem('pb-clubs') || '[]');
+let activeClub = JSON.parse(localStorage.getItem('pb-active-club') || 'null');
+
+// Stars
+const starsEl = document.getElementById('stars-el');
+for (let i=0;i<80;i++){
+  const s=document.createElement('div');
+  s.className='star';
+  s.style.cssText=`left:${Math.random()*100}%;top:${Math.random()*50}%;width:${1+Math.random()*2}px;height:${1+Math.random()*2}px;animation-delay:${Math.random()*3}s;animation-duration:${2+Math.random()*3}s`;
+  starsEl.appendChild(s);
+}
+
+// Load user
+async function loadUser() {
+  if (!TOKEN) { document.getElementById('u-id').textContent = 'ID: Guest'; return; }
+  try {
+    const u = await apiCall('GET', '/api/auth/me');
+    document.getElementById('u-name').textContent = u.name || 'User';
+    document.getElementById('u-id').textContent = 'ID: ' + u.id;
+    document.getElementById('w-diamonds').textContent = (u.diamonds||0).toLocaleString();
+    loadMyClubs();
+  } catch(e) {}
+}
+
+async function loadMyClubs() {
+  if (!TOKEN) return;
+  try {
+    const [hosted, joined] = await Promise.all([
+      apiCall('GET', '/api/clubs'),
+      apiCall('GET', '/api/my-clubs').catch(()=>[])
+    ]);
+    userClubs = [
+      ...hosted.map(c => ({...c, role:'host', status:'approved', balance:0})),
+      ...joined.filter(c => !hosted.find(h=>h.id===c.id))
+    ];
+    localStorage.setItem('pb-clubs', JSON.stringify(userClubs));
+    renderClubsList();
+    document.getElementById('club-count-lbl').textContent = userClubs.length + ' clubs';
+    const pending = userClubs.filter(c=>c.status==='pending').length;
+    if (pending) {
+      document.getElementById('pending-badge').textContent = pending;
+      document.getElementById('pending-badge').style.display = 'inline-block';
+    }
+    if (userClubs.length && !activeClub) setActiveClub(userClubs[0]);
+  } catch(e) { renderClubsList(); }
+}
+
+function renderClubsList() {
+  const el = document.getElementById('clubs-list-el');
+  if (!userClubs.length) { el.innerHTML = '<div style="text-align:center;padding:30px;color:#444;font-size:0.85rem">No clubs yet — join or create one</div>'; return; }
+  el.innerHTML = userClubs.map(c => {
+    const isHost = c.role === 'host';
+    const isPending = c.status === 'pending';
+    const bal = parseFloat(c.balance)||0;
+    const balCol = bal>0?'#00ff88':bal<0?'#ff3d57':'#555';
+    const roleClass = isHost?'role-host':isPending?'role-pending':'role-player';
+    const roleLabel = isHost?'Host':isPending?'Pending':'Player';
+    return `<div class="club-row" onclick="selectClub(${c.id})">
+      <div class="cr-left">
+        <div class="cr-avatar">${(c.name||'').slice(0,2).toUpperCase()}</div>
+        <div>
+          <div class="cr-name">${c.name}</div>
+          <div class="cr-meta">
+            <span class="cr-id">PB-${c.code||c.id}</span>
+            <span class="role-badge ${roleClass}">${roleLabel}</span>
+          </div>
+        </div>
+      </div>
+      <div class="cr-right">
+        <div class="cr-balance" style="color:${balCol}">${bal>0?'+':''}$${Math.abs(bal).toLocaleString()}</div>
+        <div class="cr-dir">${isHost?'managing':isPending?'awaiting approval':bal>0?'you owe':bal<0?'owes you':'even'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function setActiveClub(club) {
+  activeClub = club;
+  localStorage.setItem('pb-active-club', JSON.stringify(club));
+  document.getElementById('ac-id-display').textContent = 'ID: PB-' + (club.code||club.id);
+  document.getElementById('ac-club-name').textContent = club.name;
+  document.getElementById('ac-owner-av').textContent = (club.name||'').slice(0,2).toUpperCase();
+  document.getElementById('ac-role-display').textContent = club.role==='host' ? '👑 You are the Host' : club.status==='pending' ? '⏳ Pending Approval' : '✅ Active Player';
+  document.getElementById('ac-balance').textContent = (Math.abs(parseFloat(club.balance)||0)).toLocaleString();
+}
+
+function selectClub(id) {
+  const club = userClubs.find(c=>c.id==id);
+  if (!club) return;
+  setActiveClub(club);
+  closeAllModals();
+  enterActiveClub();
+}
+
+function enterActiveClub() {
+  if (!activeClub) { openModal('modal-join'); return; }
+  if (activeClub.status === 'pending') {
+    document.getElementById('pending-club-name').textContent = activeClub.name;
+    document.getElementById('pending-club-code').textContent = 'PB-' + (activeClub.code||activeClub.id);
+    openModal('modal-pending');
+    return;
+  }
+  if (activeClub.role === 'host') {
+    window.location.href = 'index.html';
+  } else {
+    window.location.href = 'player.html';
+  }
+}
+
+// Search & Join
+async function searchClub() {
+  const code = document.getElementById('join-code').value.trim();
+  if (!code) return;
+  const el = document.getElementById('join-result');
+  el.innerHTML = '<div style="color:#555;font-size:0.85rem;padding:10px 0">Searching...</div>';
+  try {
+    const club = await fetch(API + '/api/clubs/search/' + code.toUpperCase()).then(r=>r.json());
+    if (club.error) { el.innerHTML = '<div style="color:var(--red);font-size:0.85rem;padding:8px 0">Club not found</div>'; return; }
+    el.innerHTML = `<div class="club-found-card">
+      <div class="cf-name">${club.name}</div>
+      <div class="cf-desc">${club.description||'Private betting club'}</div>
+      <button onclick="requestJoin(${club.id},'${club.code}','${club.name.replace(/'/g,'')}')" class="btn-primary" style="margin:0">Request to Join →</button>
+    </div>`;
+  } catch(e) { el.innerHTML = '<div style="color:var(--red);font-size:0.85rem;padding:8px 0">Error — try again</div>'; }
+}
+
+async function requestJoin(clubId, code, name) {
+  if (!TOKEN) { showToast('Sign in to join clubs'); return; }
+  try {
+    const r = await apiCall('POST', '/api/clubs/request', {code});
+    if (r.error && !r.status) { showToast('❌ ' + r.error); return; }
+    const newClub = {id:clubId, code, name, role:'player', status:'pending', balance:0};
+    userClubs.unshift(newClub);
+    localStorage.setItem('pb-clubs', JSON.stringify(userClubs));
+    renderClubsList();
+    closeModal('modal-join');
+    document.getElementById('pending-club-name').textContent = name;
+    document.getElementById('pending-club-code').textContent = 'PB-' + code;
+    openModal('modal-pending');
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+// Create Club
+async function createClub() {
+  const name = document.getElementById('cc-name').value.trim();
+  if (!name) { showToast('Enter a club name'); return; }
+  const max_bet = parseFloat(document.getElementById('cc-maxbet').value)||500;
+  const max_parlay = parseFloat(document.getElementById('cc-maxparlay').value)||1000;
+  const description = document.getElementById('cc-desc').value.trim();
+  try {
+    const club = await apiCall('POST', '/api/clubs', {name, description, max_bet, max_parlay});
+    const newClub = {...club, role:'host', status:'approved', balance:0};
+    userClubs.unshift(newClub);
+    localStorage.setItem('pb-clubs', JSON.stringify(userClubs));
+    setActiveClub(newClub);
+    renderClubsList();
+    closeModal('modal-create');
+    showToast('✅ Club created! Code: PB-' + club.code);
+    document.getElementById('club-count-lbl').textContent = userClubs.length + ' clubs';
+    setTimeout(() => window.location.href = 'index.html', 1200);
+  } catch(e) {
+    // Demo mode
+    const code = Math.random().toString(36).substring(2,8).toUpperCase();
+    const demo = {id:Date.now(), code, name, description, role:'host', status:'approved', balance:0};
+    userClubs.unshift(demo);
+    localStorage.setItem('pb-clubs', JSON.stringify(userClubs));
+    setActiveClub(demo);
+    renderClubsList();
+    closeModal('modal-create');
+    showToast('✅ Club created! Code: PB-' + code);
+    document.getElementById('club-count-lbl').textContent = userClubs.length + ' clubs';
+  }
+}
+
+// Helpers
+function showSection(s) { showToast(s + ' coming soon!'); }
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function closeAllModals() { document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remove('open')); }
+document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')}));
+function setBN(el,tab){ document.querySelectorAll('.bn').forEach(n=>n.classList.remove('active')); el.classList.add('active'); }
+
+async function apiCall(method, path, body) {
+  const r = await fetch(API+path, {method, headers:{'Content-Type':'application/json',...(TOKEN?{'Authorization':'Bearer '+TOKEN}:{})}, body:body?JSON.stringify(body):undefined});
+  return r.json();
+}
+
+function showToast(msg){
+  const t=document.createElement('div');
+  t.style.cssText='position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#1c1c1c;border:1px solid #333;color:#fff;padding:12px 20px;border-radius:12px;font-size:0.85rem;font-weight:600;z-index:999;white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,0.5)';
+  t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2500);
+}
+
+// Auto join from URL
+const urlCode = new URLSearchParams(window.location.search).get('join');
+if (urlCode) { document.getElementById('join-code').value = urlCode.toUpperCase(); setTimeout(()=>openModal('modal-join'),500); }
+
+// Init
+loadUser();
+if (userClubs.length) { renderClubsList(); document.getElementById('club-count-lbl').textContent = userClubs.length + ' clubs'; }
+if (activeClub) setActiveClub(activeClub);
+</script>
+</body>
+</html>
