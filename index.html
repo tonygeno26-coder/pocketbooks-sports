@@ -433,8 +433,7 @@ async function apiCall(method, endpoint, body) {
 // ===== AUTO LOGIN =====
 window.addEventListener('load', async () => {
   const savedToken = localStorage.getItem('pb-sports-token');
-  const savedUser = localStorage.getItem('pb-sports-user');
-  if (savedToken && savedUser) {
+  if (savedToken) {
     TOKEN = savedToken;
     try {
       const user = await apiCall('GET', '/api/auth/me');
@@ -442,10 +441,24 @@ window.addEventListener('load', async () => {
       document.getElementById('main-app').style.display='block';
       document.getElementById('diamond-count').textContent = '💎 ' + (user.diamonds || 500);
       await loadPlayers();
+      return;
     } catch(e) {
       localStorage.removeItem('pb-sports-token');
-      localStorage.removeItem('pb-sports-user');
     }
+  }
+  // DEV MODE: auto-login with saved credentials
+  const devEmail = localStorage.getItem('pb-dev-email');
+  const devPass = localStorage.getItem('pb-dev-pass');
+  if (devEmail && devPass) {
+    try {
+      const data = await apiCall('POST', '/api/auth/login', { email: devEmail, password: devPass });
+      TOKEN = data.token;
+      localStorage.setItem('pb-sports-token', TOKEN);
+      document.getElementById('auth-screen').style.display='none';
+      document.getElementById('main-app').style.display='block';
+      document.getElementById('diamond-count').textContent = '💎 ' + (data.user.diamonds || 500);
+      await loadPlayers();
+    } catch(e) { /* show login screen */ }
   }
 });
 
@@ -497,6 +510,7 @@ async function doAuth() {
     }
     TOKEN = data.token;
     localStorage.setItem('pb-sports-token', TOKEN);
+    if (authMode === 'login') { localStorage.setItem('pb-dev-email', email); localStorage.setItem('pb-dev-pass', pass); }
     localStorage.setItem('pb-sports-user', JSON.stringify(data.user));
     
     document.getElementById('auth-screen').style.display='none';
