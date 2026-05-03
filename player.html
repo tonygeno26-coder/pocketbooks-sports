@@ -278,6 +278,80 @@ async function api(method,path,body){
   return r.json();
 }
 
+// TEAM LOGO MAP - ESPN CDN
+const TEAM_LOGOS = {
+  // MLB
+  'Yankees':'https://a.espncdn.com/i/teamlogos/mlb/500/nyy.png',
+  'Red Sox':'https://a.espncdn.com/i/teamlogos/mlb/500/bos.png',
+  'Dodgers':'https://a.espncdn.com/i/teamlogos/mlb/500/lad.png',
+  'Cubs':'https://a.espncdn.com/i/teamlogos/mlb/500/chc.png',
+  'Cardinals':'https://a.espncdn.com/i/teamlogos/mlb/500/stl.png',
+  'Giants':'https://a.espncdn.com/i/teamlogos/mlb/500/sf.png',
+  'Mets':'https://a.espncdn.com/i/teamlogos/mlb/500/nym.png',
+  'Braves':'https://a.espncdn.com/i/teamlogos/mlb/500/atl.png',
+  'Phillies':'https://a.espncdn.com/i/teamlogos/mlb/500/phi.png',
+  'Astros':'https://a.espncdn.com/i/teamlogos/mlb/500/hou.png',
+  'Rangers':'https://a.espncdn.com/i/teamlogos/mlb/500/tex.png',
+  'Angels':'https://a.espncdn.com/i/teamlogos/mlb/500/laa.png',
+  'Athletics':'https://a.espncdn.com/i/teamlogos/mlb/500/oak.png',
+  'Mariners':'https://a.espncdn.com/i/teamlogos/mlb/500/sea.png',
+  'Padres':'https://a.espncdn.com/i/teamlogos/mlb/500/sd.png',
+  'Rockies':'https://a.espncdn.com/i/teamlogos/mlb/500/col.png',
+  'Diamondbacks':'https://a.espncdn.com/i/teamlogos/mlb/500/ari.png',
+  'Guardians':'https://a.espncdn.com/i/teamlogos/mlb/500/cle.png',
+  'Tigers':'https://a.espncdn.com/i/teamlogos/mlb/500/det.png',
+  'Twins':'https://a.espncdn.com/i/teamlogos/mlb/500/min.png',
+  'White Sox':'https://a.espncdn.com/i/teamlogos/mlb/500/chw.png',
+  'Royals':'https://a.espncdn.com/i/teamlogos/mlb/500/kc.png',
+  'Orioles':'https://a.espncdn.com/i/teamlogos/mlb/500/bal.png',
+  'Blue Jays':'https://a.espncdn.com/i/teamlogos/mlb/500/tor.png',
+  'Rays':'https://a.espncdn.com/i/teamlogos/mlb/500/tb.png',
+  'Nationals':'https://a.espncdn.com/i/teamlogos/mlb/500/wsh.png',
+  'Marlins':'https://a.espncdn.com/i/teamlogos/mlb/500/mia.png',
+  'Pirates':'https://a.espncdn.com/i/teamlogos/mlb/500/pit.png',
+  'Reds':'https://a.espncdn.com/i/teamlogos/mlb/500/cin.png',
+  'Brewers':'https://a.espncdn.com/i/teamlogos/mlb/500/mil.png',
+  // NBA
+  'Lakers':'https://a.espncdn.com/i/teamlogos/nba/500/lal.png',
+  'Celtics':'https://a.espncdn.com/i/teamlogos/nba/500/bos.png',
+  'Warriors':'https://a.espncdn.com/i/teamlogos/nba/500/gs.png',
+  'Heat':'https://a.espncdn.com/i/teamlogos/nba/500/mia.png',
+  'Bucks':'https://a.espncdn.com/i/teamlogos/nba/500/mil.png',
+  'Nuggets':'https://a.espncdn.com/i/teamlogos/nba/500/den.png',
+  'Suns':'https://a.espncdn.com/i/teamlogos/nba/500/phx.png',
+  'Clippers':'https://a.espncdn.com/i/teamlogos/nba/500/lac.png',
+  'Knicks':'https://a.espncdn.com/i/teamlogos/nba/500/ny.png',
+  'Bulls':'https://a.espncdn.com/i/teamlogos/nba/500/chi.png',
+  '76ers':'https://a.espncdn.com/i/teamlogos/nba/500/phi.png',
+  'Nets':'https://a.espncdn.com/i/teamlogos/nba/500/bkn.png',
+  // NHL
+  'Rangers':'https://a.espncdn.com/i/teamlogos/nhl/500/nyr.png',
+  'Bruins':'https://a.espncdn.com/i/teamlogos/nhl/500/bos.png',
+  'Leafs':'https://a.espncdn.com/i/teamlogos/nhl/500/tor.png',
+  'Canadiens':'https://a.espncdn.com/i/teamlogos/nhl/500/mtl.png',
+  'Penguins':'https://a.espncdn.com/i/teamlogos/nhl/500/pit.png',
+  'Blackhawks':'https://a.espncdn.com/i/teamlogos/nhl/500/chi.png',
+  'Oilers':'https://a.espncdn.com/i/teamlogos/nhl/500/edm.png',
+  'Flames':'https://a.espncdn.com/i/teamlogos/nhl/500/cgy.png',
+  'Canucks':'https://a.espncdn.com/i/teamlogos/nhl/500/van.png',
+  'Lightning':'https://a.espncdn.com/i/teamlogos/nhl/500/tb.png',
+  'Panthers':'https://a.espncdn.com/i/teamlogos/nhl/500/fla.png',
+};
+
+function getTeamLogo(teamName) {
+  const name = teamName.split(' ').slice(-1)[0];
+  return TEAM_LOGOS[name] || TEAM_LOGOS[teamName] || null;
+}
+
+function teamAvatar(name) {
+  const abbr = name.split(' ').slice(-1)[0].slice(0,3).toUpperCase();
+  const logo = getTeamLogo(name);
+  if (logo) {
+    return `<div class="mc-jersey"><img src="${logo}" alt="${abbr}" onerror="this.parentNode.innerHTML='${abbr}'"></div>`;
+  }
+  return `<div class="mc-jersey">${abbr}</div>`;
+}
+
 // LOAD GAMES
 async function loadGames(sport){
   const el=document.getElementById('games-list');
@@ -309,14 +383,14 @@ async function loadGames(sport){
         <div class="mc-header"><span style="font-size:0.9rem">${icon}</span><span class="mc-sport">${sp}</span></div>
         <div class="mc-cols"><div></div><div class="mc-col-label">Run Line</div><div class="mc-col-label">Total</div><div class="mc-col-label">To Win</div></div>
         <div class="mc-team-row">
-          <div class="mc-team"><div class="mc-jersey">${awN.slice(0,3)}</div><div><div class="mc-city">${awC}</div><div class="mc-name">${awN}</div></div></div>
+          <div class="mc-team">${teamAvatar(aw)}<div><div class="mc-city">${awC}</div><div class="mc-name">${awN}</div></div></div>
           ${cell(g.id+'-sp-aw',awSp?(awSp.line>0?'+':'')+awSp.line:null,awSp?.odds)}
           ${cell(g.id+'-ov',ov?'O '+ov.line:null,ov?.odds)}
           ${cell(g.id+'-ml-aw',null,awML?.odds)}
         </div>
         <div class="mc-divider"></div>
         <div class="mc-team-row">
-          <div class="mc-team"><div class="mc-jersey">${hwN.slice(0,3)}</div><div><div class="mc-city">${hwC}</div><div class="mc-name">${hwN}</div></div></div>
+          <div class="mc-team">${teamAvatar(hw)}<div><div class="mc-city">${hwC}</div><div class="mc-name">${hwN}</div></div></div>
           ${cell(g.id+'-sp-hw',hwSp?(hwSp.line>0?'+':'')+hwSp.line:null,hwSp?.odds)}
           ${cell(g.id+'-un',un?'U '+un.line:null,un?.odds)}
           ${cell(g.id+'-ml-hw',null,hwML?.odds)}
