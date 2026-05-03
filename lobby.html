@@ -60,13 +60,13 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:#0a0
 
 /* ACTION GRID */
 .action-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:0 16px 14px}
-.action-card{border-radius:16px;overflow:hidden;cursor:pointer;position:relative;aspect-ratio:0.75;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:0 4px 20px rgba(0,0,0,0.5);transition:transform 0.15s}
-.action-card:active{transform:scale(0.96)}
+.action-card{border-radius:16px;overflow:hidden;cursor:pointer;position:relative;aspect-ratio:0.75;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:0 6px 24px rgba(0,0,0,0.6);transition:transform 0.12s,box-shadow 0.12s;border:1px solid rgba(255,255,255,0.06)}
+.action-card:active{transform:scale(0.96);box-shadow:0 2px 12px rgba(0,0,0,0.5)}
 .ac-bg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
-.ac-bg-join{background:linear-gradient(135deg,#0a2a1a,#0a3a2a)}
-.ac-bg-create{background:linear-gradient(135deg,#1a1a0a,#2a2a0a)}
-.ac-bg-clubs{background:linear-gradient(135deg,#0a1a2a,#0a2a3a)}
-.ac-icon{font-size:2.2rem;opacity:0.85}
+.ac-bg-join{background:linear-gradient(145deg,#051a10,#0a3a20,#0a2a15)}
+.ac-bg-create{background:linear-gradient(145deg,#1a1500,#2a2200,#1a1800);border:1px solid rgba(245,200,66,0.2);box-shadow:0 0 20px rgba(245,200,66,0.1) inset}
+.ac-bg-clubs{background:linear-gradient(145deg,#050a1a,#0a1530,#05101a)}
+.ac-icon{font-size:2.6rem;filter:drop-shadow(0 0 12px currentColor)}
 .ac-gradient{position:absolute;bottom:0;left:0;right:0;height:50%;background:linear-gradient(transparent,rgba(0,0,0,0.8))}
 .ac-label{position:relative;z-index:1;font-size:0.82rem;font-weight:800;text-shadow:0 1px 4px rgba(0,0,0,0.8);padding:8px 8px;text-align:center;line-height:1.2}
 .ac-sublabel{font-size:0.6rem;color:rgba(255,255,255,0.6);font-weight:600}
@@ -183,8 +183,16 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:#0a0
         <span class="ac-id" id="ac-id-display">No club selected — tap to join</span>
         <span style="font-size:0.65rem;color:#999">TAP TO ENTER ›</span>
       </div>
-      <div class="ac-body">
-        <img src="./logo.jpg" class="ac-logo" id="ac-logo" alt="Club">
+      <div class="ac-body" id="ac-body-el">
+        <div id="ac-empty-state" style="text-align:center;padding:10px">
+          <div style="font-size:2.5rem;margin-bottom:10px;opacity:0.6">🃏</div>
+          <div style="font-size:0.82rem;font-weight:700;color:#333;margin-bottom:14px">Join or create a club<br>to start betting</div>
+          <div style="display:flex;gap:8px;justify-content:center">
+            <button onclick="event.stopPropagation();openModal('modal-join')" style="padding:8px 16px;background:#00c2ff;color:#000;border:none;border-radius:20px;font-size:0.75rem;font-weight:900;cursor:pointer">Join Club</button>
+            <button onclick="event.stopPropagation();openModal('modal-create')" style="padding:8px 16px;background:#00ff88;color:#000;border:none;border-radius:20px;font-size:0.75rem;font-weight:900;cursor:pointer">Create Club</button>
+          </div>
+        </div>
+        <img src="./logo.jpg" class="ac-logo" id="ac-logo" alt="Club" style="display:none">
       </div>
       <div class="ac-footer">
         <div class="ac-owner-avatar" id="ac-owner-av">PB</div>
@@ -212,10 +220,10 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:#0a0
       <div class="ac-gradient"></div>
       <div class="ac-label">Create Club<br><span class="ac-sublabel">Be the host</span></div>
     </div>
-    <div class="action-card" onclick="showSection('my-clubs')">
+    <div class="action-card" onclick="setBN(document.querySelectorAll('.bn')[1],'clubs');showMyClubsSection()" id="my-clubs-tile">
       <div class="ac-bg ac-bg-clubs"><div class="ac-icon">🃏</div></div>
       <div class="ac-gradient"></div>
-      <div class="ac-label">My Clubs<br><span class="ac-sublabel" id="club-count-lbl">0 clubs</span></div>
+      <div class="ac-label" id="clubs-tile-content">My Clubs<br><span class="ac-sublabel" id="club-count-lbl">0 clubs</span></div>
     </div>
   </div>
 
@@ -361,8 +369,22 @@ async function loadMyClubs() {
     if (pending) {
       document.getElementById('pending-badge').textContent = pending;
       document.getElementById('pending-badge').style.display = 'inline-block';
+      // Show pending status on lobby
+      let ps = document.getElementById('pending-status-bar');
+      if (!ps) {
+        ps = document.createElement('div');
+        ps.id = 'pending-status-bar';
+        ps.style.cssText = 'margin:0 16px 10px;background:rgba(245,200,66,0.1);border:1px solid rgba(245,200,66,0.3);border-radius:10px;padding:8px 14px;display:flex;align-items:center;gap:8px;font-size:0.75rem;font-weight:700;color:#f5c842';
+        ps.innerHTML = '<span style="font-size:0.9rem">⏳</span>' + pending + ' club' + (pending>1?'s':'') + ' pending approval';
+        const grid = document.querySelector('.action-grid');
+        grid.parentNode.insertBefore(ps, grid);
+      } else {
+        ps.querySelector('span+text') ;
+        ps.innerHTML = '<span style="font-size:0.9rem">⏳</span>' + pending + ' club' + (pending>1?'s':'') + ' pending approval';
+      }
     }
     if (userClubs.length && !activeClub) setActiveClub(userClubs[0]);
+    updateClubsTilePreview();
   } catch(e) { renderClubsList(); }
 }
 
@@ -395,6 +417,24 @@ function renderClubsList() {
   }).join('');
 }
 
+function showMyClubsSection() {
+  const sec = document.getElementById('section-my-clubs');
+  const isVisible = sec.style.display !== 'none';
+  sec.style.display = isVisible ? 'none' : 'block';
+}
+
+function updateClubsTilePreview() {
+  const el = document.getElementById('clubs-tile-content');
+  if (!el) return;
+  if (!userClubs.length) {
+    el.innerHTML = 'My Clubs<br><span class="ac-sublabel">No clubs yet</span>';
+    return;
+  }
+  const top = userClubs[0];
+  const roleLabel = top.role==='host'?'👑 Host':top.status==='pending'?'⏳ Pending':'✅ Player';
+  el.innerHTML = `<span style="font-size:0.72rem;color:rgba(255,255,255,0.9);font-weight:800">${top.name.slice(0,10)}</span><br><span class="ac-sublabel">${roleLabel} · ${userClubs.length} club${userClubs.length>1?'s':''} ›</span>`;
+}
+
 function setActiveClub(club) {
   activeClub = club;
   localStorage.setItem('pb-active-club', JSON.stringify(club));
@@ -403,6 +443,8 @@ function setActiveClub(club) {
   document.getElementById('ac-owner-av').textContent = (club.name||'').slice(0,2).toUpperCase();
   document.getElementById('ac-role-display').textContent = club.role==='host' ? '👑 You are the Host' : club.status==='pending' ? '⏳ Pending Approval' : '✅ Active Player';
   document.getElementById('ac-balance').textContent = (Math.abs(parseFloat(club.balance)||0)).toLocaleString();
+  document.getElementById('ac-empty-state').style.display = 'none';
+  document.getElementById('ac-logo').style.display = 'block';
 }
 
 function selectClub(id) {
@@ -518,7 +560,7 @@ if (urlCode) { document.getElementById('join-code').value = urlCode.toUpperCase(
 
 // Init
 loadUser();
-if (userClubs.length) { renderClubsList(); document.getElementById('club-count-lbl').textContent = userClubs.length + ' clubs'; }
+if (userClubs.length) { renderClubsList(); document.getElementById('club-count-lbl').textContent = userClubs.length + ' clubs'; updateClubsTilePreview(); }
 if (activeClub) setActiveClub(activeClub);
 </script>
 </body>
