@@ -9,6 +9,31 @@
 :root{--green:#00ff88;--cyan:#00c2ff;--gold:#f5c842;--red:#ff3d57;--white:#fff;--gray:#666}
 body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:#0a0f1a;color:var(--white);max-width:430px;margin:0 auto;min-height:100vh;overflow-x:hidden;padding-bottom:80px;position:relative}
 
+/* AUTH SCREEN */
+.auth-screen{position:fixed;inset:0;z-index:500;display:flex;flex-direction:column;background:linear-gradient(180deg,#05081a 0%,#0a0f0a 100%);max-width:430px;margin:0 auto;overflow-y:auto}
+.auth-bg-glow{position:absolute;top:20%;left:50%;transform:translateX(-50%);width:300px;height:300px;background:radial-gradient(circle,rgba(0,255,136,0.08),transparent 70%);pointer-events:none}
+.auth-content{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;padding:60px 24px 40px;min-height:100vh}
+.auth-logo-wrap{margin-bottom:20px;text-align:center}
+.auth-logo{width:72px;height:72px;border-radius:50%;border:2px solid rgba(0,255,136,0.4);overflow:hidden;margin:0 auto 12px;box-shadow:0 0 30px rgba(0,255,136,0.2)}
+.auth-logo img{width:100%;height:100%;object-fit:cover}
+.auth-app-name{font-size:1.5rem;font-weight:900;letter-spacing:-0.5px}
+.auth-app-name span{color:var(--green)}
+.auth-tagline{font-size:0.78rem;color:#555;margin-top:4px}
+.auth-tabs{display:flex;background:rgba(255,255,255,0.05);border-radius:12px;padding:4px;margin-bottom:24px;width:100%}
+.auth-tab{flex:1;padding:10px;text-align:center;border-radius:10px;font-size:0.85rem;font-weight:700;cursor:pointer;color:#555;transition:all 0.2s}
+.auth-tab.active{background:rgba(0,255,136,0.15);color:var(--green);border:1px solid rgba(0,255,136,0.25)}
+.auth-card{background:#141414;border:1px solid #222;border-radius:20px;padding:24px;width:100%;max-width:380px}
+.auth-inp{width:100%;padding:14px 16px;background:#1c1c1c;border:1.5px solid #252525;border-radius:12px;color:#fff;font-size:0.95rem;outline:none;margin-bottom:10px;transition:border-color 0.2s}
+.auth-inp:focus{border-color:var(--green)}
+.auth-inp::placeholder{color:#444}
+.auth-check{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;cursor:pointer}
+.auth-check input{width:18px;height:18px;margin-top:1px;accent-color:var(--green);flex-shrink:0;cursor:pointer}
+.auth-check-label{font-size:0.75rem;color:#666;line-height:1.5}
+.auth-check-label a{color:var(--cyan);text-decoration:none}
+.auth-submit{width:100%;padding:16px;background:linear-gradient(135deg,var(--green),#00cc66);color:#000;border:none;border-radius:14px;font-size:1rem;font-weight:900;cursor:pointer;margin-top:4px;box-shadow:0 4px 20px rgba(0,255,136,0.25);letter-spacing:0.3px}
+.auth-submit:disabled{opacity:0.5;cursor:not-allowed}
+.auth-error{color:var(--red);font-size:0.78rem;margin-bottom:10px;padding:10px 14px;background:rgba(255,61,87,0.08);border:1px solid rgba(255,61,87,0.2);border-radius:10px;display:none}
+.auth-footer{margin-top:16px;text-align:center;font-size:0.72rem;color:#444}
 /* BG */
 .bg-scene{position:fixed;inset:0;z-index:0;overflow:hidden;background:linear-gradient(180deg,#0a0f2e 0%,#0d1a1a 40%,#0a0f0a 100%)}
 .moon{position:absolute;top:18%;left:50%;transform:translateX(-50%);width:120px;height:120px;background:radial-gradient(circle,#e8e0c8,#c8c0a0);border-radius:50%;box-shadow:0 0 60px rgba(232,224,200,0.4),0 0 120px rgba(232,224,200,0.15)}
@@ -276,6 +301,54 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:#0a0
   </div>
 </div>
 
+<!-- AUTH SCREEN -->
+<div id="auth-screen" class="auth-screen">
+  <div class="auth-bg-glow"></div>
+  <div class="auth-content">
+    <div class="auth-logo-wrap">
+      <div class="auth-logo"><img src="./logo.jpg" alt="PBS" onerror="this.parentNode.style.background='#1a2a1a';this.style.display='none'"></div>
+      <div class="auth-app-name">Pocket Books <span>Sports</span></div>
+      <div class="auth-tagline">Your private betting club platform</div>
+    </div>
+
+    <div class="auth-tabs" style="max-width:380px;width:100%">
+      <div class="auth-tab active" id="tab-login" onclick="setAuthTab('login')">Sign In</div>
+      <div class="auth-tab" id="tab-signup" onclick="setAuthTab('signup')">Create Account</div>
+    </div>
+
+    <div class="auth-card">
+      <div id="auth-error" class="auth-error"></div>
+
+      <!-- SIGNUP FIELDS -->
+      <div id="signup-fields">
+        <input id="a-name" class="auth-inp" placeholder="Display name" autocomplete="name">
+      </div>
+
+      <!-- SHARED FIELDS -->
+      <input id="a-email" class="auth-inp" placeholder="Email address" type="email" autocomplete="email">
+      <input id="a-pass" class="auth-inp" placeholder="Password" type="password" autocomplete="current-password">
+      <div id="confirm-pass-wrap" style="display:none">
+        <input id="a-pass2" class="auth-inp" placeholder="Confirm password" type="password">
+      </div>
+
+      <!-- SIGNUP CHECKS -->
+      <div id="signup-checks" style="display:none">
+        <label class="auth-check">
+          <input type="checkbox" id="check-age">
+          <span class="auth-check-label">I confirm I am 21 years of age or older</span>
+        </label>
+        <label class="auth-check">
+          <input type="checkbox" id="check-terms">
+          <span class="auth-check-label">I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a></span>
+        </label>
+      </div>
+
+      <button class="auth-submit" id="auth-submit-btn" onclick="submitAuth()">Sign In →</button>
+      <div class="auth-footer" id="auth-footer-text">Don't have an account? <span style="color:var(--cyan);cursor:pointer" onclick="setAuthTab('signup')">Create one free</span></div>
+    </div>
+  </div>
+</div>
+
 <!-- JOIN CLUB MODAL -->
 <div class="modal-bg" id="modal-join">
   <div class="modal">
@@ -349,6 +422,82 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:#0a0
 </div>
 
 <script>
+// AUTH
+let authMode = 'login';
+
+function setAuthTab(mode) {
+  authMode = mode;
+  document.getElementById('tab-login').classList.toggle('active', mode==='login');
+  document.getElementById('tab-signup').classList.toggle('active', mode==='signup');
+  document.getElementById('signup-fields').style.display = mode==='signup' ? 'block' : 'none';
+  document.getElementById('confirm-pass-wrap').style.display = mode==='signup' ? 'block' : 'none';
+  document.getElementById('signup-checks').style.display = mode==='signup' ? 'block' : 'none';
+  document.getElementById('auth-submit-btn').textContent = mode==='signup' ? 'Create My Account →' : 'Sign In →';
+  document.getElementById('auth-footer-text').innerHTML = mode==='login'
+    ? 'Don't have an account? <span style="color:var(--cyan);cursor:pointer" onclick="setAuthTab('signup')">Create one free</span>'
+    : 'Already have an account? <span style="color:var(--cyan);cursor:pointer" onclick="setAuthTab('login')">Sign in</span>';
+  document.getElementById('auth-error').style.display = 'none';
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+async function submitAuth() {
+  const btn = document.getElementById('auth-submit-btn');
+  const email = document.getElementById('a-email').value.trim();
+  const pass = document.getElementById('a-pass').value;
+  document.getElementById('auth-error').style.display = 'none';
+
+  if (!email || !pass) { showAuthError('Please fill in all fields'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Loading...';
+
+  try {
+    let data;
+    if (authMode === 'signup') {
+      const name = document.getElementById('a-name').value.trim();
+      const pass2 = document.getElementById('a-pass2').value;
+      const ageCheck = document.getElementById('check-age').checked;
+      const termsCheck = document.getElementById('check-terms').checked;
+      if (!name) { showAuthError('Enter your display name'); btn.disabled=false; btn.textContent='Create My Account →'; return; }
+      if (pass !== pass2) { showAuthError('Passwords do not match'); btn.disabled=false; btn.textContent='Create My Account →'; return; }
+      if (!ageCheck) { showAuthError('You must confirm you are 21+'); btn.disabled=false; btn.textContent='Create My Account →'; return; }
+      if (!termsCheck) { showAuthError('You must accept the Terms of Service'); btn.disabled=false; btn.textContent='Create My Account →'; return; }
+      data = await apiCall('POST', '/api/auth/signup', { name, email, password: pass, role: 'user' });
+    } else {
+      data = await apiCall('POST', '/api/auth/login', { email, password: pass });
+    }
+
+    if (data.error) { showAuthError(data.error); btn.disabled=false; btn.textContent=authMode==='login'?'Sign In →':'Create My Account →'; return; }
+
+    TOKEN = data.token;
+    localStorage.setItem('pb-sports-token', TOKEN);
+    localStorage.setItem('pb-dev-email', email);
+    localStorage.setItem('pb-dev-pass', pass);
+
+    // Hide auth, show lobby
+    document.getElementById('auth-screen').style.display = 'none';
+    loadUser();
+
+  } catch(e) {
+    showAuthError('Connection error — try again');
+    btn.disabled = false;
+    btn.textContent = authMode==='login' ? 'Sign In →' : 'Create My Account →';
+  }
+}
+
+function checkAuthGate() {
+  if (!TOKEN) {
+    document.getElementById('auth-screen').style.display = 'flex';
+  } else {
+    document.getElementById('auth-screen').style.display = 'none';
+  }
+}
+
 const API = 'https://pocketbooks-sports-backend-production.up.railway.app';
 let TOKEN = localStorage.getItem('pb-sports-token') || '';
 let userClubs = JSON.parse(localStorage.getItem('pb-clubs') || '[]');
@@ -604,6 +753,7 @@ const urlCode = new URLSearchParams(window.location.search).get('join');
 if (urlCode) { document.getElementById('join-code').value = urlCode.toUpperCase(); setTimeout(()=>openModal('modal-join'),500); }
 
 // Init
+checkAuthGate();
 loadUser();
 if (userClubs.length) { renderClubsList(); document.getElementById('club-count-lbl').textContent = userClubs.length + ' clubs'; updateClubsTilePreview(); }
 if (activeClub) setActiveClub(activeClub);
