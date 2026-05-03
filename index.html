@@ -148,7 +148,7 @@
 <body>
 
 <!-- AUTH SCREEN -->
-<div id="auth-screen" class="auth-screen">
+<div id="auth-screen" class="auth-screen" style="display:none">
   <div class="auth-logo">Pocket<span>books</span> 💎</div>
   <div class="auth-tagline">The sharpest sports management platform</div>
   <div class="auth-card">
@@ -179,7 +179,7 @@
 </div>
 
 <!-- MAIN APP (hidden until auth) -->
-<div id="main-app" style="display:none">
+<div id="main-app">
 
   <!-- TOP BAR -->
   <div class="topbar">
@@ -431,7 +431,18 @@ async function apiCall(method, endpoint, body) {
 }
 
 // ===== AUTO LOGIN =====
-window.addEventListener('load', () => {
+window.addEventListener('load', async () => {
+  // DEV MODE: skip auth, load demo data
+  G.players = [
+    { id:1, name:'MARCO', avatar:'MA', color:'#ff3d57', winRate:70, bets:47, balance:-840, sharp:'red' },
+    { id:2, name:'JUNIOR', avatar:'JR', color:'#00e676', winRate:42, bets:31, balance:1240, sharp:'green' },
+    { id:3, name:'TONY', avatar:'TO', color:'#f5c842', winRate:55, bets:22, balance:-200, sharp:'yellow' },
+  ];
+  renderPlayers();
+  updateMoneyTotals();
+  renderSharpAlerts();
+  return; // skip real auth for now
+  window.addEventListener('load_DISABLED', () => {
   // Non-blocking auto-login — login screen always clickable
   const savedToken = localStorage.getItem('pb-sports-token');
   if (!savedToken) return;
@@ -453,6 +464,7 @@ window.addEventListener('load', () => {
     TOKEN = '';
     localStorage.removeItem('pb-sports-token');
   });
+  }); // end disabled
 });
 
 // ===== STATE =====
