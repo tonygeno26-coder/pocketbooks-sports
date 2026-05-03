@@ -431,35 +431,28 @@ async function apiCall(method, endpoint, body) {
 }
 
 // ===== AUTO LOGIN =====
-window.addEventListener('load', async () => {
+window.addEventListener('load', () => {
+  // Non-blocking auto-login — login screen always clickable
   const savedToken = localStorage.getItem('pb-sports-token');
-  if (savedToken) {
-    TOKEN = savedToken;
-    try {
-      const user = await apiCall('GET', '/api/auth/me');
-      document.getElementById('auth-screen').style.display='none';
-      document.getElementById('main-app').style.display='block';
-      document.getElementById('diamond-count').textContent = '💎 ' + (user.diamonds || 500);
-      await loadPlayers();
-      return;
-    } catch(e) {
-      localStorage.removeItem('pb-sports-token');
-    }
-  }
-  // DEV MODE: auto-login with saved credentials
-  const devEmail = localStorage.getItem('pb-dev-email');
-  const devPass = localStorage.getItem('pb-dev-pass');
-  if (devEmail && devPass) {
-    try {
-      const data = await apiCall('POST', '/api/auth/login', { email: devEmail, password: devPass });
-      TOKEN = data.token;
-      localStorage.setItem('pb-sports-token', TOKEN);
-      document.getElementById('auth-screen').style.display='none';
-      document.getElementById('main-app').style.display='block';
-      document.getElementById('diamond-count').textContent = '💎 ' + (data.user.diamonds || 500);
-      await loadPlayers();
-    } catch(e) { /* show login screen */ }
-  }
+  if (!savedToken) return;
+  TOKEN = savedToken;
+  // Try auto-login with a short timeout
+  const timer = setTimeout(() => {
+    // If it takes too long, just show login
+    TOKEN = '';
+    localStorage.removeItem('pb-sports-token');
+  }, 3000);
+  apiCall('GET', '/api/auth/me').then(async user => {
+    clearTimeout(timer);
+    document.getElementById('auth-screen').style.display='none';
+    document.getElementById('main-app').style.display='block';
+    document.getElementById('diamond-count').textContent = '💎 ' + (user.diamonds || 500);
+    await loadPlayers();
+  }).catch(() => {
+    clearTimeout(timer);
+    TOKEN = '';
+    localStorage.removeItem('pb-sports-token');
+  });
 });
 
 // ===== STATE =====
