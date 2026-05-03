@@ -225,6 +225,23 @@
   </div>
   <div class="player-list" id="player-list"></div>
 
+  <!-- GAMES SECTION (player view) -->
+  <div id="section-games" style="display:none;padding:0 18px;">
+    <div style="display:flex;gap:8px;padding:14px 0;overflow-x:auto;scrollbar-width:none">
+      <button class="sport-tab active" onclick="loadGames('mlb',this)" style="flex-shrink:0">⚾ MLB</button>
+      <button class="sport-tab" onclick="loadGames('nba',this)" style="flex-shrink:0">🏀 NBA</button>
+      <button class="sport-tab" onclick="loadGames('nhl',this)" style="flex-shrink:0">🏒 NHL</button>
+      <button class="sport-tab" onclick="loadGames('ufl',this)" style="flex-shrink:0">🏈 UFL</button>
+    </div>
+    <div id="games-list"><div style="text-align:center;padding:40px;color:var(--gray)">Loading games...</div></div>
+  </div>
+
+  <!-- MY BETS SECTION -->
+  <div id="section-bets" style="display:none;padding:0 18px;">
+    <div class="section-header" style="padding:14px 0 10px"><span class="section-title">My Bets</span></div>
+    <div id="my-bets-list"><div style="text-align:center;padding:40px;color:var(--gray)">No bets yet</div></div>
+  </div>
+
   <span class="pb"></span>
 
   <!-- BET SLIP -->
@@ -239,7 +256,8 @@
   <!-- BOTTOM NAV -->
   <div class="bottom-nav">
     <div class="nav-item active" onclick="switchTab(this,'home')"><div class="nav-icon">🏠</div><div class="nav-label">Home</div></div>
-    <div class="nav-item" onclick="switchTab(this,'bets')"><div class="nav-icon">📋</div><div class="nav-label">Bets</div></div>
+    <div class="nav-item" onclick="switchTab(this,'games')"><div class="nav-icon">🎮</div><div class="nav-label">Games</div></div>
+    <div class="nav-item" onclick="switchTab(this,'bets')"><div class="nav-icon">📋</div><div class="nav-label">My Bets</div></div>
     <div class="nav-item" onclick="switchTab(this,'players')"><div class="nav-icon">👥</div><div class="nav-label">Players</div></div>
     <div class="nav-item" onclick="switchTab(this,'analytics')"><div class="nav-icon">📊</div><div class="nav-label">Analytics</div></div>
     <div class="nav-item" onclick="switchTab(this,'diamonds')"><div class="nav-icon">💎</div><div class="nav-label">Diamonds</div></div>
@@ -562,6 +580,15 @@ function updateStats() {
 function switchTab(el, tab) {
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   el.classList.add('active');
+  // Show/hide sections
+  ['games','bets'].forEach(s => {
+    const sec = document.getElementById('section-' + s);
+    if (sec) sec.style.display = tab === s ? 'block' : 'none';
+  });
+  if (tab === 'games' && !document.getElementById('games-list').children.length) {
+    loadGames('mlb', document.querySelector('#section-games .sport-tab'));
+  }
+  if (tab === 'bets') loadMyBets();
 }
 
 function viewPlayer(id) {
@@ -575,6 +602,125 @@ function goToPlayer(name) {
 }
 
 function showDiamonds() { toast('💎 '+G.diamonds+' diamonds · $'+G.diamonds+' value'); }
+
+// ===== GAMES & BETTING =====
+let betSlip = [];
+
+async function loadGames(sport, tabEl) {
+  document.querySelectorAll('#section-games .sport-tab').forEach(t => t.classList.remove('active'));
+  if (tabEl) tabEl.classList.add('active');
+  const el = document.getElementById('games-list');
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--gray)">Loading...</div>';
+  try {
+    const games = await apiCall('GET', '/api/odds/' + sport);
+    if (!games.length) { el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--gray)">No games today</div>'; return; }
+    el.innerHTML = games.map(g => {
+      const time = new Date(g.time).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+      const spread = g.spreads[0];
+      const total = g.totals[0];
+      const ml1 = g.moneyline[0];
+      const ml2 = g.moneyline[1];
+      return `<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;margin-bottom:12px;overflow:hidden">
+        <div style="background:linear-gradient(135deg,#001a2e,#002a4a);padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:0.7rem;font-weight:700;color:var(--diamond);text-transform:uppercase;letter-spacing:1px">${g.sport}</span>
+          <span style="font-size:0.7rem;color:var(--gray)">${time}</span>
+        </div>
+        <div style="padding:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span style="font-weight:700">${g.away}</span>
+            <span style="color:var(--gray);font-size:0.8rem">@</span>
+            <span style="font-weight:700">${g.home}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+            ${spread ? `<div class="bet-btn" onclick="addToBetSlip('${g.id}','${g.away} vs ${g.home}','${g.sport}','Spread','${spread.team} ${spread.line > 0 ? '+' : ''}${spread.line}',${spread.odds})">
+              <div class="bet-type">Spread</div>
+              <div class="bet-line">${spread.line > 0 ? '+' : ''}${spread.line}</div>
+              <div class="bet-odds">${spread.odds > 0 ? '+' : ''}${spread.odds}</div>
+            </div>` : ''}
+            ${total ? `<div class="bet-btn" onclick="addToBetSlip('${g.id}','${g.away} vs ${g.home}','${g.sport}','Total','O/U ${total.line}',${total.odds})">
+              <div class="bet-type">Total</div>
+              <div class="bet-line">O/U ${total.line}</div>
+              <div class="bet-odds">${total.odds > 0 ? '+' : ''}${total.odds}</div>
+            </div>` : ''}
+            ${ml1 ? `<div class="bet-btn" onclick="addToBetSlip('${g.id}','${g.away} vs ${g.home}','${g.sport}','Moneyline','${ml1.team}',${ml1.odds})">
+              <div class="bet-type">ML</div>
+              <div class="bet-line" style="font-size:0.72rem">${ml1.team.split(' ').pop()}</div>
+              <div class="bet-odds">${ml1.odds > 0 ? '+' : ''}${ml1.odds}</div>
+            </div>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--red)">' + e.message + '</div>'; }
+}
+
+function addToBetSlip(gameId, game, sport, type, line, odds) {
+  betSlip.push({ gameId, game, sport, type, line, odds, risk: 0 });
+  document.getElementById('slip-count').textContent = betSlip.length;
+  document.getElementById('bet-slip').classList.add('show');
+  // Show quick bet amount modal
+  const risk = prompt('Enter bet amount ($):');
+  if (risk && parseFloat(risk) > 0) {
+    betSlip[betSlip.length-1].risk = parseFloat(risk);
+    const toWin = calculateWin(parseFloat(risk), odds);
+    betSlip[betSlip.length-1].win = toWin;
+    document.getElementById('slip-amt').textContent = '$' + risk + ' to win $' + toWin;
+    if (confirm(game + '\n' + type + ': ' + line + ' (' + (odds>0?'+':'') + odds + ')\nRisk: $' + risk + ' | Win: $' + toWin + '\n\nConfirm bet?')) {
+      submitBet(betSlip[betSlip.length-1]);
+    }
+  } else {
+    betSlip.pop();
+    if (!betSlip.length) document.getElementById('bet-slip').classList.remove('show');
+  }
+}
+
+function calculateWin(risk, odds) {
+  if (odds > 0) return Math.round(risk * (odds/100) * 100) / 100;
+  else return Math.round(risk * (100/Math.abs(odds)) * 100) / 100;
+}
+
+async function submitBet(bet) {
+  try {
+    await apiCall('POST', '/api/bets', {
+      player_id: G.myPlayerId,
+      game: bet.game + ' — ' + bet.line,
+      bet_type: bet.type,
+      sport: bet.sport,
+      risk: bet.risk,
+      win: bet.win,
+      line: bet.line,
+      result: 'pending'
+    });
+    betSlip = [];
+    document.getElementById('bet-slip').classList.remove('show');
+    toast('✅ Bet submitted! Pending host approval.');
+    loadMyBets();
+  } catch(e) { toast('❌ ' + e.message); }
+}
+
+async function loadMyBets() {
+  try {
+    const bets = await apiCall('GET', '/api/bets?player_id=' + G.myPlayerId);
+    const el = document.getElementById('my-bets-list');
+    if (!el) return;
+    if (!bets.length) { el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--gray)">No bets yet</div>'; return; }
+    el.innerHTML = bets.map(b => {
+      const color = b.result==='win'?'var(--green)':b.result==='loss'?'var(--red)':b.result==='push'?'var(--gold)':'var(--gray)';
+      const icon = b.result==='win'?'✅':b.result==='loss'?'❌':b.result==='push'?'↩️':'⏳';
+      return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+          <div style="font-size:0.78rem;color:var(--gray)">${b.sport} · ${b.bet_type}</div>
+          <span style="color:${color};font-weight:800">${icon} ${b.result.toUpperCase()}</span>
+        </div>
+        <div style="font-weight:700;margin-bottom:6px">${b.game}</div>
+        <div style="display:flex;justify-content:space-between;font-size:0.82rem;color:var(--gray)">
+          <span>Risk: <strong style="color:var(--white)">$${b.risk}</strong></span>
+          <span>Win: <strong style="color:var(--green)">$${b.win}</strong></span>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { console.error(e); }
+}
 
 // ===== TOAST =====
 function toast(msg) {
