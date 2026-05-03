@@ -217,6 +217,22 @@
     <div id="my-bets-list"><div style="text-align:center;padding:40px;color:var(--gray)">No bets yet</div></div>
   </div>
 
+  <!-- PROPS/PREDICTIONS SECTION -->
+  <div id="section-props" style="display:none;padding:0 18px">
+    <div style="padding:14px 0 6px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:1rem;font-weight:800">🔮 Prediction Markets</span>
+      <span style="font-size:0.72rem;color:var(--gray)">Powered by Polymarket</span>
+    </div>
+    <div style="display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:4px 0 10px">
+      <button class="sport-tab active" onclick="loadProps('hot',this)">🔥 Hot</button>
+      <button class="sport-tab" onclick="loadProps('crypto',this)">₿ Crypto</button>
+      <button class="sport-tab" onclick="loadProps('politics',this)">🏛️ Politics</button>
+      <button class="sport-tab" onclick="loadProps('sports',this)">🏆 Sports</button>
+      <button class="sport-tab" onclick="loadProps('pop',this)">🎬 Pop Culture</button>
+    </div>
+    <div id="props-list"><div style="text-align:center;padding:40px;color:var(--gray)">Loading predictions...</div></div>
+  </div>
+
   <span class="pb"></span>
 
   <!-- BET SLIP -->
@@ -232,6 +248,7 @@
   <div class="bottom-nav">
     <div class="nav-item active" onclick="switchTab(this,'home')"><div class="nav-icon">🏠</div><div class="nav-label">Home</div></div>
     <div class="nav-item" onclick="switchTab(this,'games')"><div class="nav-icon">🎮</div><div class="nav-label">Games</div></div>
+    <div class="nav-item" onclick="switchTab(this,'props')"><div class="nav-icon">🔮</div><div class="nav-label">Props</div></div>
     <div class="nav-item" onclick="switchTab(this,'bets')"><div class="nav-icon">📋</div><div class="nav-label">My Bets</div></div>
     <div class="nav-item" onclick="switchTab(this,'players')"><div class="nav-icon">👥</div><div class="nav-label">Players</div></div>
     <div class="nav-item" onclick="switchTab(this,'analytics')"><div class="nav-icon">📊</div><div class="nav-label">Analytics</div></div>
@@ -669,14 +686,13 @@ function switchTab(el, tab) {
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   el.classList.add('active');
   // Show/hide sections
-  ['games','bets'].forEach(s => {
+  ['games','bets','props'].forEach(s => {
     const sec = document.getElementById('section-' + s);
     if (sec) sec.style.display = tab === s ? 'block' : 'none';
   });
-  if (tab === 'games' && !document.getElementById('games-list').children.length) {
-    loadGames('mlb', document.querySelector('#section-games .sport-tab'));
-  }
+  if (tab === 'games') loadGames('mlb', document.querySelector('#section-games .sport-tab'));
   if (tab === 'bets') loadMyBets();
+  if (tab === 'props') loadProps('hot', document.querySelector('#section-props .sport-tab'));
 }
 
 function viewPlayer(id) {
@@ -1021,6 +1037,70 @@ async function loadMyBets() {
       </div>`;
     }).join('');
   } catch(e) { console.error(e); }
+}
+
+// ===== POLYMARKET PROPS =====
+const PROP_KEYWORDS = {
+  hot: '',
+  crypto: 'Bitcoin crypto ethereum',
+  politics: 'Trump election president',
+  sports: 'NBA NFL MLB championship',
+  pop: 'album movie GTA celebrity'
+};
+
+async function loadProps(category, tabEl) {
+  document.querySelectorAll('#section-props .sport-tab').forEach(t => t.classList.remove('active'));
+  if (tabEl) tabEl.classList.add('active');
+  const el = document.getElementById('props-list');
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--gray)">Loading...</div>';
+  try {
+    const keyword = PROP_KEYWORDS[category] || '';
+    const url = keyword
+      ? `https://gamma-api.polymarket.com/markets?limit=20&active=true&keyword=${encodeURIComponent(keyword.split(' ')[0])}`
+      : 'https://gamma-api.polymarket.com/markets?limit=20&active=true';
+    const res = await fetch(url);
+    const markets = await res.json();
+    if (!markets.length) { el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--gray)">No markets found</div>'; return; }
+
+    el.innerHTML = markets.slice(0,15).map(m => {
+      const prices = JSON.parse(m.outcomePrices || '["0.5","0.5"]');
+      const yesPct = Math.round(parseFloat(prices[0]) * 100);
+      const noPct = 100 - yesPct;
+      const yesColor = yesPct > 60 ? 'var(--green)' : yesPct > 40 ? 'var(--gold)' : 'var(--red)';
+      const vol = m.volume ? '$' + parseFloat(m.volume).toLocaleString('en-US',{maximumFractionDigits:0}) : '';
+
+      return `<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:10px">
+        <div style="font-size:0.9rem;font-weight:700;margin-bottom:10px;line-height:1.4">${m.question}</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <div onclick="addPropToBetSlip('${m.id}','${m.question.replace(/'/g,'')}','YES',${yesPct})" 
+            style="flex:1;padding:10px;background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.3);border-radius:10px;text-align:center;cursor:pointer;transition:all 0.2s"
+            onmouseover="this.style.background='rgba(0,230,118,0.2)'" onmouseout="this.style.background='rgba(0,230,118,0.1)'">
+            <div style="font-size:0.7rem;color:var(--gray);margin-bottom:2px">YES</div>
+            <div style="font-size:1.1rem;font-weight:900;color:var(--green)">${yesPct}¢</div>
+          </div>
+          <div onclick="addPropToBetSlip('${m.id}','${m.question.replace(/'/g,'')}','NO',${noPct})"
+            style="flex:1;padding:10px;background:rgba(255,61,87,0.1);border:1px solid rgba(255,61,87,0.3);border-radius:10px;text-align:center;cursor:pointer;transition:all 0.2s"
+            onmouseover="this.style.background='rgba(255,61,87,0.2)'" onmouseout="this.style.background='rgba(255,61,87,0.1)'">
+            <div style="font-size:0.7rem;color:var(--gray);margin-bottom:2px">NO</div>
+            <div style="font-size:1.1rem;font-weight:900;color:var(--red)">${noPct}¢</div>
+          </div>
+        </div>
+        <div style="background:var(--card2);border-radius:8px;height:6px;overflow:hidden">
+          <div style="width:${yesPct}%;height:100%;background:linear-gradient(90deg,var(--green),var(--diamond));transition:width 0.5s"></div>
+        </div>
+        ${vol ? '<div style="font-size:0.68rem;color:var(--gray);margin-top:6px;text-align:right">Vol: ' + vol + '</div>' : ''}
+      </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--red)">Failed to load: ' + e.message + '</div>';
+  }
+}
+
+function addPropToBetSlip(marketId, question, outcome, pct) {
+  // Convert % to american odds: 60% yes = -150, 40% = +150
+  const decimal = 1 / (pct / 100);
+  const american = decimal >= 2 ? Math.round((decimal-1)*100) : Math.round(-100/(decimal-1));
+  addToBetSlip('prop-' + marketId + '-' + outcome, question, 'PROP', outcome + ' — ' + question.slice(0,40), outcome, american);
 }
 
 // ===== TOAST =====
