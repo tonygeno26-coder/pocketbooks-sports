@@ -251,6 +251,23 @@ body{font-family:-apple-system,Arial,sans-serif;background:#050505;color:#fff;pa
 </head>
 <body>
 
+<div id="dev-controls" style="position:sticky;top:0;z-index:100;background:#050505;border-bottom:1px solid #1a1a1a;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+  <span style="font-size:0.7rem;font-weight:800;color:#555;text-transform:uppercase;letter-spacing:1px">Preview</span>
+  <div style="display:flex;gap:6px;margin-left:4px">
+    <button onclick="setWidth('mobile')" id="btn-mobile" style="padding:5px 12px;border-radius:8px;font-size:0.72rem;font-weight:800;cursor:pointer;border:1px solid var(--cyan);background:rgba(0,194,255,0.15);color:var(--cyan)">📱 Mobile</button>
+    <button onclick="setWidth('tablet')" id="btn-tablet" style="padding:5px 12px;border-radius:8px;font-size:0.72rem;font-weight:800;cursor:pointer;border:1px solid #333;background:transparent;color:#555">📟 Tablet</button>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px;margin-left:4px">
+    <span style="font-size:0.65rem;color:#555">Light</span>
+    <div onclick="toggleTheme()" id="theme-toggle" style="width:36px;height:20px;background:#333;border-radius:10px;position:relative;cursor:pointer;transition:background 0.2s">
+      <div id="theme-knob" style="position:absolute;top:3px;left:3px;width:14px;height:14px;background:#666;border-radius:50%;transition:all 0.2s"></div>
+    </div>
+    <span style="font-size:0.65rem;color:#555">Dark</span>
+  </div>
+  <button onclick="toggleLabels()" id="btn-labels" style="padding:5px 12px;border-radius:8px;font-size:0.72rem;font-weight:800;cursor:pointer;border:1px solid #333;background:rgba(0,255,136,0.1);color:var(--green)">🏷 Labels On</button>
+  <a href="lobby.html" style="margin-left:auto;padding:5px 13px;background:rgba(0,194,255,0.12);border:1px solid var(--cyan);color:var(--cyan);border-radius:16px;font-size:0.7rem;font-weight:800;text-decoration:none">Open App →</a>
+</div>
+
 <div class="dev-header">
   <div style="font-size:1.5rem">🔍</div>
   <div>
@@ -555,5 +572,50 @@ body{font-family:-apple-system,Arial,sans-serif;background:#050505;color:#fff;pa
 
 <div style="text-align:center;padding:30px;color:#333;font-size:0.78rem">End of Dev Preview · <a href="lobby.html" style="color:var(--cyan)">Open Lobby →</a></div>
 
+<script>
+let labelsOn = true;
+let currentTheme = 'dark';
+
+function setWidth(mode) {
+  const screens = document.querySelectorAll('.screen');
+  const w = mode === 'tablet' ? '600px' : '390px';
+  screens.forEach(s => s.style.maxWidth = w);
+  document.getElementById('btn-mobile').style.background = mode==='mobile'?'rgba(0,194,255,0.15)':'transparent';
+  document.getElementById('btn-mobile').style.color = mode==='mobile'?'var(--cyan)':'#555';
+  document.getElementById('btn-mobile').style.borderColor = mode==='mobile'?'var(--cyan)':'#333';
+  document.getElementById('btn-tablet').style.background = mode==='tablet'?'rgba(0,194,255,0.15)':'transparent';
+  document.getElementById('btn-tablet').style.color = mode==='tablet'?'var(--cyan)':'#555';
+  document.getElementById('btn-tablet').style.borderColor = mode==='tablet'?'var(--cyan)':'#333';
+}
+
+function toggleTheme() {
+  currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  const knob = document.getElementById('theme-knob');
+  const toggle = document.getElementById('theme-toggle');
+  if (currentTheme === 'light') {
+    document.body.style.background = '#f0f0f0';
+    document.body.style.color = '#111';
+    document.querySelectorAll('.screen-label').forEach(el => el.style.background = 'rgba(0,150,200,0.12)');
+    toggle.style.background = '#ccc';
+    knob.style.left = '19px';
+    knob.style.background = '#fff';
+  } else {
+    document.body.style.background = '#050505';
+    document.body.style.color = '#fff';
+    document.querySelectorAll('.screen-label').forEach(el => el.style.background = 'rgba(0,194,255,0.08)');
+    toggle.style.background = '#333';
+    knob.style.left = '3px';
+    knob.style.background = '#666';
+  }
+}
+
+function toggleLabels() {
+  labelsOn = !labelsOn;
+  document.querySelectorAll('.screen-label').forEach(el => el.style.display = labelsOn ? 'inline-block' : 'none');
+  document.getElementById('btn-labels').textContent = labelsOn ? '🏷 Labels On' : '🏷 Labels Off';
+  document.getElementById('btn-labels').style.background = labelsOn ? 'rgba(0,255,136,0.1)' : 'transparent';
+  document.getElementById('btn-labels').style.color = labelsOn ? 'var(--green)' : '#555';
+}
+</script>
 </body>
 </html>
