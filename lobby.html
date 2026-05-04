@@ -873,23 +873,40 @@ if (isPreview) {
   if (userClubs.length) { setActiveClub(userClubs[0]); renderClubsList(); updateClubsTilePreview(); }
   document.getElementById('club-count-lbl').textContent = userClubs.length + ' clubs';
 
-  // Route to correct screen — only default home if screen param missing
+  // Route: hide all, show correct preview section
   function renderPreviewScreen(screen) {
-    const routes = {
-      home:    () => { /* default — lobby already visible */ },
-      join:    () => openModal('modal-join'),
-      create:  () => openModal('modal-create'),
-      myclubs: () => showMyClubsSection(),
-      pending: () => {
-        if (document.getElementById('pending-club-name')) document.getElementById('pending-club-name').textContent = 'Vegas Crew';
-        if (document.getElementById('pending-club-code')) document.getElementById('pending-club-code').textContent = 'PB-7K92Q';
-        openModal('modal-pending');
+    // For modal screens, open the modal AND scroll content behind it
+    const content = document.getElementById('main-app') || document.querySelector('.content');
+
+    const actions = {
+      home:    () => {},
+      join:    () => {
+        // Show join modal inline — force it open and visible
+        const m = document.getElementById('modal-join');
+        if (m) { m.classList.add('open'); m.style.display='flex'; m.style.zIndex='9999'; }
       },
-      signin:  () => { /* auth screen handled above */ },
-      signup:  () => { /* auth screen handled above */ },
+      create:  () => {
+        const m = document.getElementById('modal-create');
+        if (m) { m.classList.add('open'); m.style.display='flex'; m.style.zIndex='9999'; }
+      },
+      myclubs: () => {
+        const sec = document.getElementById('section-my-clubs');
+        if (sec) { sec.style.display='block'; sec.scrollIntoView({behavior:'smooth'}); }
+      },
+      pending: () => {
+        const n = document.getElementById('pending-club-name');
+        const c = document.getElementById('pending-club-code');
+        if (n) n.textContent = 'Vegas Crew';
+        if (c) c.textContent = 'PB-7K92Q';
+        const m = document.getElementById('modal-pending');
+        if (m) { m.classList.add('open'); m.style.display='flex'; m.style.zIndex='9999'; }
+      },
+      signin:  () => {},
+      signup:  () => {},
     };
-    const fn = routes[screen] || routes['home'];
-    setTimeout(fn, 350);
+    const fn = actions[screen] || actions['home'];
+    // Small delay to let DOM settle
+    setTimeout(fn, 400);
   }
   renderPreviewScreen(_screen);
 } else {
