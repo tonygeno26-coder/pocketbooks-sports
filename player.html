@@ -411,11 +411,15 @@ async function loadGames(sport){
       const sp=g.sport?.toUpperCase()||'MLB';
       const icon=icons[sp]||'🏅';
 
-      function cell(id,top,odds){
-        if(!odds)return'<div class="odds-box" style="cursor:default"><span style="color:var(--gray)">—</span></div>';
+      function cell(id,top,odds,marketType,teamPick){
+        if(!odds)return'<div class="odds-box" style="cursor:default;pointer-events:none"><span style="color:var(--gray)">—</span></div>';
         const c=odds>0?'odds-pos':'odds-neg';
         const f=(odds>0?'+':'')+odds;
-        return`<div class="odds-box" id="c-${id}" onclick="bsToggle('${id}','${top||f}','${sp}',${odds})">${top?`<span class="odds-line">${top}</span>`:''}
+        const safeGame=(aw+' vs '+hw).replace(/'/g,'');
+        const safeTime=time||'';
+        const safeMkt=(marketType||top||'Market').replace(/'/g,'');
+        const safePick=(teamPick||top||f).replace(/'/g,'');
+        return`<div class="odds-box" id="c-${id}" style="cursor:pointer;pointer-events:auto" onclick="console.log('odds clicked',${odds});bsToggle('${id}','${safeGame}','${safeTime}','${safeMkt}','${safePick}',${odds})">${top?`<span class="odds-line">${top}</span>`:''}
         <span class="odds-num ${c}">${f}</span></div>`;
       }
 
@@ -426,14 +430,14 @@ async function loadGames(sport){
           <div class="mc-team">${teamAvatar(aw)}<div><div class="mc-city">${awC}</div><div class="mc-name">${awN}</div></div></div>
           ${cell(g.id+'-sp-aw',awSp?(awSp.line>0?'+':'')+awSp.line:null,awSp?.odds)}
           ${cell(g.id+'-ov',ov?'O '+ov.line:null,ov?.odds)}
-          ${cell(g.id+'-ml-aw',null,awML?.odds)}
+          ${cell(g.id+'-ml-aw',null,awML?.odds,'To Win',awN+' ML')}
         </div>
         <div class="mc-divider"></div>
         <div class="mc-team-row">
           <div class="mc-team">${teamAvatar(hw)}<div><div class="mc-city">${hwC}</div><div class="mc-name">${hwN}</div></div></div>
           ${cell(g.id+'-sp-hw',hwSp?(hwSp.line>0?'+':'')+hwSp.line:null,hwSp?.odds)}
           ${cell(g.id+'-un',un?'U '+un.line:null,un?.odds)}
-          ${cell(g.id+'-ml-hw',null,hwML?.odds)}
+          ${cell(g.id+'-ml-hw',null,hwML?.odds,'To Win',hwN+' ML')}
         </div>
         <div class="mc-footer"><span class="mc-time">${time}</span><span class="mc-more">More ›</span></div>
       </div>`;
