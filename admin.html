@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Admin — Pocketbooks Sports</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--bg:#050505;--card:#111;--card2:#191919;--border:#222;--green:#00ff88;--cyan:#00c2ff;--gold:#f5c842;--red:#ff3d57;--purple:#7c3aed;--white:#fff;--gray:#555;--light:#999}
+body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(--bg);color:var(--white);min-height:100vh;max-width:430px;margin:0 auto;padding-bottom:80px}
+
+/* ACCESS GATE */
+.gate{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center}
+.gate-icon{font-size:3rem;margin-bottom:16px}
+.gate-title{font-size:1.2rem;font-weight:900;margin-bottom:8px;color:var(--purple)}
+.gate-sub{font-size:0.78rem;color:var(--gray);line-height:1.6;margin-bottom:24px}
+.gate-inp{width:100%;padding:14px 16px;background:var(--card2);border:1.5px solid var(--border);border-radius:12px;color:var(--white);font-size:0.95rem;outline:none;margin-bottom:10px;text-align:center;letter-spacing:1px}
+.gate-inp:focus{border-color:var(--purple)}
+.gate-btn{width:100%;padding:14px;background:var(--purple);color:var(--white);border:none;border-radius:12px;font-size:0.95rem;font-weight:900;cursor:pointer}
+.gate-err{color:var(--red);font-size:0.75rem;margin-top:8px;display:none}
+
+/* HEADER */
+.hdr{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:rgba(5,5,5,0.97);position:sticky;top:0;z-index:100;border-bottom:1px solid var(--border);backdrop-filter:blur(10px)}
+.hdr-left{display:flex;align-items:center;gap:10px}
+.admin-badge{background:linear-gradient(135deg,#4c1d95,#7c3aed);color:var(--white);font-size:0.58rem;font-weight:900;padding:3px 8px;border-radius:6px;letter-spacing:1px;text-transform:uppercase}
+.hdr-title{font-size:0.95rem;font-weight:900}
+.logout-btn{font-size:0.72rem;color:var(--gray);cursor:pointer;background:var(--card2);border:1px solid var(--border);padding:5px 11px;border-radius:8px;font-weight:700}
+
+/* NAV TABS */
+.nav-tabs{display:flex;gap:0;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border);background:rgba(5,5,5,0.95);position:sticky;top:57px;z-index:99}
+.nav-tabs::-webkit-scrollbar{display:none}
+.ntab{flex-shrink:0;padding:10px 14px;font-size:0.72rem;font-weight:700;color:var(--gray);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;white-space:nowrap}
+.ntab.active{color:var(--purple);border-bottom-color:var(--purple)}
+
+/* STAT CARDS */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:14px 14px 0}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;position:relative;overflow:hidden}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.sc-cyan::before{background:var(--cyan)}
+.sc-green::before{background:var(--green)}
+.sc-gold::before{background:var(--gold)}
+.sc-red::before{background:var(--red)}
+.sc-purple::before{background:var(--purple)}
+.sc-val{font-size:1.4rem;font-weight:900;margin-bottom:4px}
+.sc-lbl{font-size:0.6rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;font-weight:700}
+.sc-sub{font-size:0.65rem;color:var(--gray);margin-top:3px}
+
+/* SECTIONS */
+.section{display:none;padding:14px}
+.section.active{display:block}
+.sec-title{font-size:1rem;font-weight:900;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+.sec-title span{font-size:0.72rem;color:var(--cyan);cursor:pointer;font-weight:700}
+
+/* TABLE */
+.table-wrap{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.table-hdr{display:flex;padding:10px 14px;border-bottom:1px solid var(--border);gap:8px}
+.th{font-size:0.6rem;font-weight:800;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px}
+.trow2{display:flex;align-items:center;padding:11px 14px;border-bottom:1px solid var(--border);gap:8px;cursor:pointer;transition:background 0.1s}
+.trow2:last-child{border:none}
+.trow2:active{background:rgba(255,255,255,0.03)}
+.tc2{font-size:0.78rem;font-weight:600}
+.role-chip{font-size:0.56rem;font-weight:800;padding:2px 7px;border-radius:5px;text-transform:uppercase}
+.rc-admin{background:rgba(124,58,237,0.2);color:var(--purple);border:1px solid rgba(124,58,237,0.3)}
+.rc-user{background:rgba(255,255,255,0.05);color:var(--light);border:1px solid var(--border)}
+.rc-host{background:rgba(245,200,66,0.1);color:var(--gold);border:1px solid rgba(245,200,66,0.25)}
+.rc-player{background:rgba(0,255,136,0.08);color:var(--green);border:1px solid rgba(0,255,136,0.2)}
+.rc-banned{background:rgba(255,61,87,0.12);color:var(--red);border:1px solid rgba(255,61,87,0.25)}
+
+/* SEARCH */
+.search-bar{display:flex;gap:8px;margin-bottom:12px}
+.search-inp{flex:1;padding:10px 14px;background:var(--card2);border:1.5px solid var(--border);border-radius:10px;color:var(--white);font-size:0.85rem;outline:none}
+.search-inp:focus{border-color:var(--purple)}
+
+/* STATUS BADGES */
+.status-pill{font-size:0.58rem;font-weight:800;padding:3px 8px;border-radius:6px;text-transform:uppercase}
+.sp-pending{background:rgba(245,200,66,0.12);color:var(--gold);border:1px solid rgba(245,200,66,0.25)}
+.sp-paid{background:rgba(0,255,136,0.1);color:var(--green);border:1px solid rgba(0,255,136,0.2)}
+.sp-overdue{background:rgba(255,61,87,0.12);color:var(--red);border:1px solid rgba(255,61,87,0.25)}
+.sp-flagged{background:rgba(255,61,87,0.15);color:var(--red);border:1px solid rgba(255,61,87,0.3)}
+
+/* DETAIL MODAL */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:200;align-items:flex-end;justify-content:center}
+.modal-bg.open{display:flex}
+.modal2{background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:430px;max-height:80vh;overflow-y:auto;padding:22px}
+.modal2-title{font-size:1.05rem;font-weight:900;margin-bottom:16px;display:flex;justify-content:space-between}
+.modal2-close{background:none;border:none;color:var(--gray);font-size:1.2rem;cursor:pointer}
+.detail-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:0.8rem}
+.detail-row:last-child{border:none}
+.detail-lbl{color:var(--gray)}
+.detail-val{font-weight:700;text-align:right;max-width:60%}
+.action-row{display:flex;gap:8px;margin-top:14px}
+.act-btn{flex:1;padding:10px;border:none;border-radius:10px;font-size:0.8rem;font-weight:800;cursor:pointer}
+.act-warn{background:rgba(255,61,87,0.15);color:var(--red);border:1px solid rgba(255,61,87,0.3)}
+.act-ok{background:rgba(0,255,136,0.12);color:var(--green);border:1px solid rgba(0,255,136,0.25)}
+.act-edit{background:rgba(0,194,255,0.12);color:var(--cyan);border:1px solid rgba(0,194,255,0.25)}
+
+/* SHARP TABLE */
+.sharp-row{background:var(--card);border:1px solid rgba(255,61,87,0.15);border-radius:12px;padding:11px 13px;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center}
+.sr-left .sr-name{font-size:0.84rem;font-weight:800;margin-bottom:2px}
+.sr-left .sr-meta{font-size:0.65rem;color:var(--gray)}
+.sr-right{text-align:right}
+.sr-rate{font-size:1rem;font-weight:900;color:var(--red)}
+.sr-bets{font-size:0.62rem;color:var(--gray);margin-top:1px}
+
+/* LOADING */
+.loading{text-align:center;padding:30px;color:var(--gray);font-size:0.82rem}
+.error-msg{color:var(--red);font-size:0.78rem;padding:10px 14px;background:rgba(255,61,87,0.08);border:1px solid rgba(255,61,87,0.2);border-radius:10px;margin-bottom:12px;display:none}
+</style>
+</head>
+<body>
+
+<!-- ACCESS GATE -->
+<div id="gate" class="gate">
+  <div class="gate-icon">🔐</div>
+  <div class="gate-title">Admin Access</div>
+  <div class="gate-sub">This area is restricted to authorized administrators only. Unauthorized access is prohibited.</div>
+  <input id="gate-email" class="gate-inp" type="email" placeholder="Admin email">
+  <input id="gate-pass" class="gate-inp" type="password" placeholder="Admin password" style="margin-top:0">
+  <button class="gate-btn" onclick="adminLogin()">Access Admin Panel →</button>
+  <div id="gate-err" class="gate-err">Access denied — not authorized</div>
+  <div style="margin-top:16px"><a href="lobby.html" style="color:var(--gray);font-size:0.72rem;text-decoration:none">← Back to App</a></div>
+</div>
+
+<!-- ADMIN APP -->
+<div id="admin-app" style="display:none">
+
+  <!-- HEADER -->
+  <div class="hdr">
+    <div class="hdr-left">
+      <div class="admin-badge">⚡ Master Admin</div>
+      <div class="hdr-title">Control Panel</div>
+    </div>
+    <div class="logout-btn" onclick="adminLogout()">Sign Out</div>
+  </div>
+
+  <!-- NAV TABS -->
+  <div class="nav-tabs">
+    <div class="ntab active" onclick="setSection('overview')">Overview</div>
+    <div class="ntab" onclick="setSection('users')">Users</div>
+    <div class="ntab" onclick="setSection('clubs')">Clubs</div>
+    <div class="ntab" onclick="setSection('payments')">Payments</div>
+    <div class="ntab" onclick="setSection('bets')">Bets</div>
+    <div class="ntab" onclick="setSection('risk')">Risk / Flags</div>
+    <div class="ntab" onclick="setSection('settings')">Settings</div>
+  </div>
+
+  <!-- OVERVIEW -->
+  <div class="section active" id="sec-overview">
+    <div id="overview-error" class="error-msg"></div>
+    <div class="stat-grid" id="stat-grid">
+      <div class="loading" style="grid-column:1/-1">Loading stats...</div>
+    </div>
+    <div style="padding:14px 14px 0">
+      <div class="sec-title">Sharp Players <span onclick="setSection('risk')">View All →</span></div>
+      <div id="sharp-preview"><div class="loading">Loading...</div></div>
+    </div>
+  </div>
+
+  <!-- USERS -->
+  <div class="section" id="sec-users">
+    <div class="sec-title">All Users <span id="user-total"></span></div>
+    <div class="search-bar">
+      <input id="user-search" class="search-inp" placeholder="Search name or email..." oninput="searchUsers(this.value)">
+    </div>
+    <div id="users-list"><div class="loading">Loading...</div></div>
+  </div>
+
+  <!-- CLUBS -->
+  <div class="section" id="sec-clubs">
+    <div class="sec-title">All Clubs</div>
+    <div id="clubs-list"><div class="loading">Loading...</div></div>
+  </div>
+
+  <!-- PAYMENTS -->
+  <div class="section" id="sec-payments">
+    <div class="sec-title">Platform Fees</div>
+    <div style="background:rgba(0,255,136,0.05);border:1px solid rgba(0,255,136,0.15);border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:0.75rem;color:var(--light);line-height:1.6">
+      💡 Each host pays <strong style="color:var(--green)">$10/active player/week</strong>. Track manually until payment automation is live.
+    </div>
+    <div id="payments-list"><div class="loading">Loading...</div></div>
+  </div>
+
+  <!-- BETS -->
+  <div class="section" id="sec-bets">
+    <div class="sec-title">Global Bet Feed</div>
+    <div id="bets-list"><div class="loading">Loading...</div></div>
+  </div>
+
+  <!-- RISK / FLAGS -->
+  <div class="section" id="sec-risk">
+    <div class="sec-title">Sharp Players</div>
+    <div style="font-size:0.72rem;color:var(--gray);margin-bottom:12px">Players with 60%+ win rate across all clubs</div>
+    <div id="sharp-list"><div class="loading">Loading...</div></div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="section" id="sec-settings">
+    <div class="sec-title">Admin Settings</div>
+    <div class="table-wrap">
+      <div class="trow2"><div style="flex:1"><div class="tc2">Platform Fee Rate</div><div style="font-size:0.65rem;color:var(--gray);margin-top:2px">Per active player per week</div></div><div style="font-size:0.88rem;font-weight:900;color:var(--green)">$10</div></div>
+      <div class="trow2"><div style="flex:1"><div class="tc2">Diamond Exchange Rate</div><div style="font-size:0.65rem;color:var(--gray);margin-top:2px">1 diamond = $1 USD</div></div><div style="font-size:0.88rem;font-weight:900;color:var(--cyan)">$1.00</div></div>
+      <div class="trow2"><div style="flex:1"><div class="tc2">Sharp Alert Threshold</div><div style="font-size:0.65rem;color:var(--gray);margin-top:2px">Min win rate to flag</div></div><div style="font-size:0.88rem;font-weight:900;color:var(--red)">60%</div></div>
+      <div class="trow2"><div style="flex:1"><div class="tc2">Min Bets for Sharp Detection</div><div style="font-size:0.65rem;color:var(--gray);margin-top:2px">Minimum bets before flagging</div></div><div style="font-size:0.88rem;font-weight:900;color:var(--gold)">5</div></div>
+      <div class="trow2" onclick="copyAdminLink()"><div style="flex:1"><div class="tc2">Admin Panel URL</div><div style="font-size:0.65rem;color:var(--gray);margin-top:2px">Share carefully</div></div><div style="font-size:0.72rem;color:var(--cyan);font-weight:700">Copy Link</div></div>
+    </div>
+    <div style="margin-top:16px;padding:12px 14px;background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:12px;font-size:0.72rem;color:var(--light);line-height:1.6">
+      ⚠️ Admin panel is accessible at <code style="color:var(--purple)">/admin.html</code>. Protect with a strong password and do not share the URL publicly.
+    </div>
+  </div>
+
+</div>
+
+<!-- USER DETAIL MODAL -->
+<div class="modal-bg" id="modal-user">
+  <div class="modal2">
+    <div class="modal2-title">User Details <button class="modal2-close" onclick="closeModal('modal-user')">✕</button></div>
+    <div id="user-detail-content"></div>
+  </div>
+</div>
+
+<!-- CLUB DETAIL MODAL -->
+<div class="modal-bg" id="modal-club">
+  <div class="modal2">
+    <div class="modal2-title">Club Details <button class="modal2-close" onclick="closeModal('modal-club')">✕</button></div>
+    <div id="club-detail-content"></div>
+  </div>
+</div>
+
+<script>
+const API = 'https://pocketbooks-sports-backend-production.up.railway.app';
+let ADMIN_TOKEN = localStorage.getItem('pb-admin-token') || '';
+let statsCache = null;
+
+async function adminApi(method, path, body) {
+  const r = await fetch(API + path, {
+    method, headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+ADMIN_TOKEN },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'Error');
+  return data;
+}
+
+async function adminLogin() {
+  const email = document.getElementById('gate-email').value.trim();
+  const pass = document.getElementById('gate-pass').value;
+  const errEl = document.getElementById('gate-err');
+  errEl.style.display = 'none';
+  try {
+    const data = await fetch(API + '/api/auth/login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email, password: pass })
+    }).then(r=>r.json());
+    if (data.error) throw new Error(data.error);
+    if (data.user?.role !== 'master_admin') throw new Error('Not authorized');
+    ADMIN_TOKEN = data.token;
+    localStorage.setItem('pb-admin-token', ADMIN_TOKEN);
+    showAdmin();
+  } catch(e) {
+    errEl.textContent = e.message === 'Not authorized' ? 'Access denied — admin only' : 'Invalid credentials';
+    errEl.style.display = 'block';
+  }
+}
+
+function adminLogout() {
+  localStorage.removeItem('pb-admin-token');
+  ADMIN_TOKEN = '';
+  document.getElementById('gate').style.display = 'flex';
+  document.getElementById('admin-app').style.display = 'none';
+}
+
+function showAdmin() {
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('admin-app').style.display = 'block';
+  loadOverview();
+}
+
+// Check existing token
+if (ADMIN_TOKEN) {
+  adminApi('GET', '/api/auth/me').then(u => {
+    if (u.role === 'master_admin') showAdmin();
+    else { ADMIN_TOKEN = ''; localStorage.removeItem('pb-admin-token'); }
+  }).catch(() => { ADMIN_TOKEN = ''; localStorage.removeItem('pb-admin-token'); });
+}
+
+// SECTIONS
+function setSection(s) {
+  document.querySelectorAll('.section').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.ntab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('sec-'+s).classList.add('active');
+  const tabs = document.querySelectorAll('.ntab');
+  const map = {overview:0,users:1,clubs:2,payments:3,bets:4,risk:5,settings:6};
+  if(map[s]!==undefined) tabs[map[s]]?.classList.add('active');
+  if(s==='users') loadUsers();
+  if(s==='clubs') loadClubs();
+  if(s==='payments') loadPayments();
+  if(s==='bets') loadBets();
+  if(s==='risk') loadSharp();
+}
+
+// OVERVIEW
+async function loadOverview() {
+  try {
+    const stats = await adminApi('GET', '/api/admin/stats');
+    statsCache = stats;
+    const grid = document.getElementById('stat-grid');
+    grid.innerHTML = `
+      <div class="stat-card sc-cyan"><div class="sc-val" style="color:var(--cyan)">${stats.users}</div><div class="sc-lbl">Total Users</div></div>
+      <div class="stat-card sc-purple"><div class="sc-val" style="color:var(--purple)">${stats.clubs}</div><div class="sc-lbl">Total Clubs</div></div>
+      <div class="stat-card sc-gold"><div class="sc-val" style="color:var(--gold)">${stats.active_hosts}</div><div class="sc-lbl">Active Hosts</div></div>
+      <div class="stat-card sc-green"><div class="sc-val" style="color:var(--green)">${stats.active_members}</div><div class="sc-lbl">Active Players</div></div>
+      <div class="stat-card sc-cyan"><div class="sc-val" style="color:var(--cyan)">${stats.total_bets}</div><div class="sc-lbl">Total Bets</div><div class="sc-sub">All time</div></div>
+      <div class="stat-card sc-green"><div class="sc-val" style="color:var(--green)">$${parseFloat(stats.handle).toLocaleString()}</div><div class="sc-lbl">Total Handle</div></div>
+      <div class="stat-card sc-gold"><div class="sc-val" style="color:${parseFloat(stats.profit)>=0?'var(--green)':'var(--red)'}">$${parseFloat(stats.profit).toLocaleString()}</div><div class="sc-lbl">Platform Profit</div></div>
+      <div class="stat-card sc-red"><div class="sc-val" style="color:var(--red)">${stats.pending_requests}</div><div class="sc-lbl">Pending Requests</div></div>`;
+
+    const sp = document.getElementById('sharp-preview');
+    if (stats.sharp_players?.length) {
+      sp.innerHTML = stats.sharp_players.slice(0,3).map(p => `
+        <div class="sharp-row">
+          <div class="sr-left"><div class="sr-name">${p.name}</div><div class="sr-meta">${p.club_name}</div></div>
+          <div class="sr-right"><div class="sr-rate">${p.win_rate}%</div><div class="sr-bets">${p.total_bets} bets</div></div>
+        </div>`).join('');
+    } else {
+      sp.innerHTML = '<div class="loading">No sharp players detected</div>';
+    }
+  } catch(e) {
+    document.getElementById('overview-error').textContent = 'Failed to load stats: ' + e.message;
+    document.getElementById('overview-error').style.display = 'block';
+    document.getElementById('stat-grid').innerHTML = '';
+  }
+}
+
+// USERS
+let allUsers = [];
+async function loadUsers() {
+  const el = document.getElementById('users-list');
+  el.innerHTML = '<div class="loading">Loading...</div>';
+  try {
+    const data = await adminApi('GET', '/api/admin/users?limit=100');
+    allUsers = data.users;
+    document.getElementById('user-total').textContent = data.total + ' total';
+    renderUsers(allUsers);
+  } catch(e) { el.innerHTML = '<div class="loading" style="color:var(--red)">'+e.message+'</div>'; }
+}
+
+function renderUsers(users) {
+  const el = document.getElementById('users-list');
+  if (!users.length) { el.innerHTML = '<div class="loading">No users found</div>'; return; }
+  el.innerHTML = '<div class="table-wrap">' + users.map(u => `
+    <div class="trow2" onclick="showUser(${u.id})">
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:7px;margin-bottom:2px">
+          <span style="font-size:0.82rem;font-weight:700">${u.name}</span>
+          <span class="role-chip ${u.role==='master_admin'?'rc-admin':u.role==='host'?'rc-host':u.role==='banned'?'rc-banned':'rc-user'}">${u.role}</span>
+        </div>
+        <div style="font-size:0.65rem;color:var(--gray)">${u.email}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:0.72rem;color:var(--cyan);font-weight:700">💎 ${u.diamonds||0}</div>
+        <div style="font-size:0.6rem;color:var(--gray);margin-top:1px">${new Date(u.created_at).toLocaleDateString()}</div>
+      </div>
+    </div>`).join('') + '</div>';
+}
+
+function searchUsers(q) {
+  const filtered = allUsers.filter(u => u.name?.toLowerCase().includes(q.toLowerCase()) || u.email?.toLowerCase().includes(q.toLowerCase()));
+  renderUsers(filtered);
+}
+
+function showUser(id) {
+  const u = allUsers.find(u=>u.id===id);
+  if (!u) return;
+  document.getElementById('user-detail-content').innerHTML = `
+    <div class="detail-row"><div class="detail-lbl">Name</div><div class="detail-val">${u.name}</div></div>
+    <div class="detail-row"><div class="detail-lbl">Email</div><div class="detail-val">${u.email}</div></div>
+    <div class="detail-row"><div class="detail-lbl">Role</div><div class="detail-val"><span class="role-chip ${u.role==='master_admin'?'rc-admin':u.role==='banned'?'rc-banned':'rc-user'}">${u.role}</span></div></div>
+    <div class="detail-row"><div class="detail-lbl">Diamonds</div><div class="detail-val" style="color:var(--cyan)">💎 ${u.diamonds||0}</div></div>
+    <div class="detail-row"><div class="detail-lbl">Joined</div><div class="detail-val">${new Date(u.created_at).toLocaleDateString()}</div></div>
+    <div class="action-row">
+      <button class="act-btn act-edit" onclick="grantDiamonds(${u.id})">+ Diamonds</button>
+      ${u.role==='banned'
+        ? `<button class="act-btn act-ok" onclick="updateRole(${u.id},'user')">Unban</button>`
+        : `<button class="act-btn act-warn" onclick="updateRole(${u.id},'banned')">Ban User</button>`}
+    </div>`;
+  document.getElementById('modal-user').classList.add('open');
+}
+
+async function updateRole(id, role) {
+  try {
+    await adminApi('PATCH', '/api/admin/users/'+id, { role });
+    closeModal('modal-user');
+    loadUsers();
+    showToast('✅ User updated');
+  } catch(e) { showToast('❌ '+e.message); }
+}
+
+async function grantDiamonds(id) {
+  const amt = prompt('How many diamonds to grant?');
+  if (!amt || isNaN(amt)) return;
+  try {
+    const u = allUsers.find(u=>u.id===id);
+    await adminApi('PATCH', '/api/admin/users/'+id, { diamonds: (u.diamonds||0) + parseInt(amt) });
+    closeModal('modal-user');
+    loadUsers();
+    showToast('✅ 💎 '+amt+' granted');
+  } catch(e) { showToast('❌ '+e.message); }
+}
+
+// CLUBS
+async function loadClubs() {
+  const el = document.getElementById('clubs-list');
+  el.innerHTML = '<div class="loading">Loading...</div>';
+  try {
+    const clubs = await adminApi('GET', '/api/admin/clubs');
+    el.innerHTML = '<div class="table-wrap">' + clubs.map(c => `
+      <div class="trow2" onclick="showClub(${JSON.stringify(c).replace(/'/g,'')})">
+        <div style="flex:1">
+          <div style="font-size:0.84rem;font-weight:800;margin-bottom:2px">${c.name}</div>
+          <div style="font-size:0.65rem;color:var(--gray)">PB-${c.code} · Host: ${c.host_name}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:0.72rem;color:var(--green);font-weight:700">${c.member_count} members</div>
+          <div style="font-size:0.6rem;color:var(--gray);margin-top:1px">$${parseFloat(c.handle||0).toLocaleString()} handle</div>
+        </div>
+      </div>`).join('') + '</div>';
+  } catch(e) { el.innerHTML = '<div class="loading" style="color:var(--red)">'+e.message+'</div>'; }
+}
+
+function showClub(c) {
+  if (typeof c === 'number') return;
+  document.getElementById('club-detail-content').innerHTML = `
+    <div class="detail-row"><div class="detail-lbl">Club Name</div><div class="detail-val">${c.name}</div></div>
+    <div class="detail-row"><div class="detail-lbl">Club Code</div><div class="detail-val" style="color:var(--cyan)">PB-${c.code}</div></div>
+    <div class="detail-row"><div class="detail-lbl">Host</div><div class="detail-val">${c.host_name}</div></div>
+    <div class="detail-row"><div class="detail-lbl">Members</div><div class="detail-val">${c.member_count}</div></div>
+    <div class="detail-row"><div class="detail-lbl">Total Bets</div><div class="detail-val">${c.bet_count}</div></div>
+    <div class="detail-row"><div class="detail-lbl">Total Handle</div><div class="detail-val" style="color:var(--green)">$${parseFloat(c.handle||0).toLocaleString()}</div></div>
+    <div class="detail-row"><div class="detail-lbl">Created</div><div class="detail-val">${new Date(c.created_at).toLocaleDateString()}</div></div>`;
+  document.getElementById('modal-club').classList.add('open');
+}
+
+// PAYMENTS
+async function loadPayments() {
+  const el = document.getElementById('payments-list');
+  el.innerHTML = '<div class="loading">Loading...</div>';
+  try {
+    const payments = await adminApi('GET', '/api/admin/payments');
+    let total = 0;
+    el.innerHTML = '<div class="table-wrap">' + payments.map(p => {
+      const fee = parseInt(p.weekly_fee_owed)||0;
+      total += fee;
+      return `<div class="trow2">
+        <div style="flex:1">
+          <div style="font-size:0.82rem;font-weight:800;margin-bottom:2px">${p.club_name}</div>
+          <div style="font-size:0.65rem;color:var(--gray)">${p.host_name} · ${p.active_players} active players</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:0.84rem;font-weight:900;color:var(--gold)">$${fee}/wk</div>
+          <div class="status-pill sp-pending" style="display:inline-block;margin-top:3px">pending</div>
+        </div>
+      </div>`;
+    }).join('') + '</div>' +
+    `<div style="margin-top:10px;padding:12px 14px;background:rgba(245,200,66,0.08);border:1px solid rgba(245,200,66,0.2);border-radius:12px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:0.78rem;font-weight:700;color:var(--gray)">Total Weekly Fees Owed</span>
+      <span style="font-size:1rem;font-weight:900;color:var(--gold)">$${total}/wk</span>
+    </div>`;
+  } catch(e) { el.innerHTML = '<div class="loading" style="color:var(--red)">'+e.message+'</div>'; }
+}
+
+// BETS
+async function loadBets() {
+  const el = document.getElementById('bets-list');
+  el.innerHTML = '<div class="loading">Loading...</div>';
+  try {
+    const bets = await adminApi('GET', '/api/admin/bets');
+    if (!bets.length) { el.innerHTML = '<div class="loading">No bets yet</div>'; return; }
+    el.innerHTML = '<div class="table-wrap">' + bets.map(b => {
+      const sc = b.result==='win'?'sp-paid':b.result==='loss'?'sp-overdue':'sp-pending';
+      const sl = b.result==='win'?'WIN':b.result==='loss'?'LOSS':'PENDING';
+      return `<div class="trow2">
+        <div style="flex:1">
+          <div style="font-size:0.78rem;font-weight:700;margin-bottom:2px">${(b.game||'').slice(0,35)}</div>
+          <div style="font-size:0.62rem;color:var(--gray)">${b.player_name||'?'} · ${b.club_name||'?'}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:0.78rem;font-weight:800">$${b.risk}</div>
+          <div class="status-pill ${sc}" style="display:inline-block;margin-top:2px">${sl}</div>
+        </div>
+      </div>`;
+    }).join('') + '</div>';
+  } catch(e) { el.innerHTML = '<div class="loading" style="color:var(--red)">'+e.message+'</div>'; }
+}
+
+// SHARP
+async function loadSharp() {
+  const el = document.getElementById('sharp-list');
+  el.innerHTML = '<div class="loading">Loading...</div>';
+  try {
+    const stats = statsCache || await adminApi('GET', '/api/admin/stats');
+    statsCache = stats;
+    const players = stats.sharp_players || [];
+    if (!players.length) { el.innerHTML = '<div class="loading">No sharp players detected</div>'; return; }
+    el.innerHTML = players.map(p => `
+      <div class="sharp-row">
+        <div class="sr-left">
+          <div class="sr-name">${p.name}</div>
+          <div class="sr-meta">${p.email} · ${p.club_name}</div>
+        </div>
+        <div class="sr-right">
+          <div class="sr-rate">${p.win_rate}%</div>
+          <div class="sr-bets">${p.total_bets} bets · ${p.wins}W</div>
+        </div>
+      </div>`).join('');
+  } catch(e) { el.innerHTML = '<div class="loading" style="color:var(--red)">'+e.message+'</div>'; }
+}
+
+// UTILS
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')}));
+
+function copyAdminLink() {
+  navigator.clipboard?.writeText(window.location.href).catch(()=>{});
+  showToast('✅ Admin URL copied');
+}
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.style.cssText='position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#1c1c1c;border:1px solid #333;color:#fff;padding:12px 20px;border-radius:12px;font-size:0.85rem;font-weight:600;z-index:999;white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,0.5)';
+  t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2500);
+}
+</script>
+</body>
+</html>
