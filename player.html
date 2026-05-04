@@ -415,12 +415,20 @@ async function loadGames(sport){
         if(!odds)return'<div class="odds-box" style="cursor:default;pointer-events:none"><span style="color:var(--gray)">—</span></div>';
         const c=odds>0?'odds-pos':'odds-neg';
         const f=(odds>0?'+':'')+odds;
-        const safeGame=(aw+' vs '+hw).replace(/'/g,'');
-        const safeTime=time||'';
-        const safeMkt=(marketType||top||'Market').replace(/'/g,'');
-        const safePick=(teamPick||top||f).replace(/'/g,'');
-        return`<div class="odds-box" id="c-${id}" style="cursor:pointer;pointer-events:auto" onclick="console.log('odds clicked',${odds});bsToggle('${id}','${safeGame}','${safeTime}','${safeMkt}','${safePick}',${odds})">${top?`<span class="odds-line">${top}</span>`:''}
-        <span class="odds-num ${c}">${f}</span></div>`;
+        const safeGame=(aw+' vs '+hw).replace(/"/g,'').replace(/'/g,'');
+        const safeTime=(time||'').replace(/"/g,'');
+        const safeMkt=(marketType||top||'Market').replace(/"/g,'').replace(/'/g,'');
+        const safePick=(teamPick||top||f).replace(/"/g,'').replace(/'/g,'');
+        return`<div class="odds-box odds-cell" id="c-${id}"
+          data-id="${id}"
+          data-game="${safeGame}"
+          data-time="${safeTime}"
+          data-market="${safeMkt}"
+          data-pick="${safePick}"
+          data-odds="${odds}"
+          data-sport="${sp}"
+          >${top?`<span class="odds-line">${top}</span>`:''}
+          <span class="odds-num ${c}">${f}</span></div>`;
       }
 
       return`<div class="market-card" style="margin-bottom:14px">
@@ -776,6 +784,11 @@ function bsAddStake(a) {
   var inp = document.getElementById('bs-stake-inp');
   if (inp) inp.value = bsStake;
   bsRenderLegs();
+  // Sync visual selection state
+  document.querySelectorAll('.odds-cell').forEach(function(el) {
+    var isSelected = betSlip.some(function(b){ return b.cellId === el.dataset.id; });
+    el.classList.toggle('selected', isSelected);
+  });
 }
 
 function bsRemove(i) {
@@ -804,6 +817,30 @@ function closeBetSlip() {
   document.getElementById('bs-drawer').classList.remove('open');
   document.getElementById('bs-overlay').classList.remove('show');
 }
+
+// Event delegation for odds-cell clicks
+document.addEventListener('click', function(e) {
+  var cell = e.target.closest('.odds-cell');
+  if (!cell) return;
+  e.stopPropagation();
+  var id = cell.dataset.id;
+  var game = cell.dataset.game || 'Unknown';
+  var time = cell.dataset.time || '';
+  var market = cell.dataset.market || 'Market';
+  var pick = cell.dataset.pick || '';
+  var odds = parseFloat(cell.dataset.odds) || 0;
+  var sp = cell.dataset.sport || '';
+  console.log('odds clicked', {id, game, market, pick, odds});
+  bsToggle(id, game, time, market, pick, odds);
+  // Highlight: same game+market = deselect others
+  var gameKey = game + '|' + market;
+  document.querySelectorAll('.odds-cell').forEach(function(el) {
+    var elKey = (el.dataset.game||'') + '|' + (el.dataset.market||'');
+    if (elKey === gameKey && el !== cell) el.classList.remove('selected');
+  });
+  var isSelected = betSlip.some(function(b){ return b.cellId === id; });
+  cell.classList.toggle('selected', isSelected);
+});
 
 function bsNormalize(cellId, game, time, market, pick, odds) {
   // Parse odds safely — strip +, convert to integer
