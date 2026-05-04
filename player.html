@@ -1036,10 +1036,14 @@ function bsRenderLegs() {
     // Parlay: one combined entry
     '<div class="bs-section">Parlay · ' + betSlip.length + ' picks</div>' +
     betSlip.map(function(b,i){
+      var pm = b.market||'Market', pp = b.pick||'Unknown', pg = b.game||'';
+      var pteams = pg.split(' vs '); var pshort = pteams.length===2?pteams[0].split(' ').pop()+' vs '+pteams[1].split(' ').pop():pg;
       return '<div class="bs-leg" style="background:transparent;border:none;padding:6px 14px">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center">' +
-        '<div><div class="bs-market">' + b.market + '</div><div class="bs-pick" style="font-size:0.82rem">' + b.pick + '</div></div>' +
-        '<div style="display:flex;align-items:center;gap:8px"><span style="color:#00c2ff;font-weight:800;font-size:0.85rem">' + fmtOdds(b.odds) + '</span>' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
+        '<div style="flex:1"><div style="font-size:0.58rem;color:#555;margin-bottom:1px">'+pshort+'</div>' +
+        '<div class="bs-pick" style="font-size:0.84rem;line-height:1.2">'+pp+'</div>' +
+        '<div class="bs-market" style="margin-top:1px">'+pm+'</div></div>' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-left:8px"><span style="color:#00c2ff;font-weight:800;font-size:0.85rem">' + fmtOdds(b.odds) + '</span>' +
         '<button class="bs-remove" onclick="bsRemove('+i+')">✕</button></div></div></div>';
     }).join('') +
     // Combined odds display
@@ -1056,16 +1060,24 @@ function bsRenderLegs() {
     // Straight: each leg separately
     '<div class="bs-section">Straight</div>' +
     betSlip.map(function(b,i){
+      var matchup = b.game || 'Unknown Game';
+      var market = b.market || 'Market';
+      var pick = b.pick || 'Unknown Selection';
+      var teams = matchup.split(' vs ');
+      var shortMatchup = teams.length===2 ? teams[0].split(' ').pop()+' vs '+teams[1].split(' ').pop() : matchup;
+      var timeStr = b.time ? new Date(b.time).toLocaleString('en-US',{weekday:'short',hour:'2-digit',minute:'2-digit'}) : '';
       return '<div class="bs-leg">' +
         '<div class="bs-leg-top">' +
-        '<div style="flex:1"><div class="bs-market">' + b.market + '</div>' +
-        '<div class="bs-pick">' + b.pick + '</div>' +
-        '<div class="bs-game">' + b.game + '</div>' +
-        (b.time?'<div style="font-size:0.62rem;color:#444;margin-top:2px">'+b.time+'</div>':'') +
+        '<div style="flex:1">' +
+        '<div style="font-size:0.6rem;color:#555;margin-bottom:2px">'+shortMatchup+'</div>' +
+        '<div class="bs-pick" style="font-size:0.92rem;line-height:1.2">'+pick+'</div>' +
+        '<div class="bs-market" style="margin-top:2px">'+market+'</div>' +
+        (timeStr?'<div style="font-size:0.6rem;color:#444;margin-top:2px">'+timeStr+'</div>':'') +
         '</div>' +
-        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">' +
+        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">' +
         '<button class="bs-remove" onclick="bsRemove('+i+')">✕</button>' +
-        '<span class="bs-odds-val">'+fmtOdds(b.odds)+'</span></div></div></div>';
+        '<span class="bs-odds-val">'+fmtOdds(b.odds)+'</span>' +
+        '</div></div></div>';
     }).join('');
 
   legs = warningHtml + legs;
