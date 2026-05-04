@@ -743,6 +743,18 @@ function isTeaserEligible(b) {
 function getTeaserLegs() {
   return betSlip.filter(isTeaserEligible);
 }
+
+// Teaser fixed odds table (American)
+var TEASER_ODDS = {
+  2: { 6: -110, 6.5: -120, 7: -130 },
+  3: { 6: +160, 6.5: +140, 7: +120 },
+  4: { 6: +260, 6.5: +240, 7: +200 }
+};
+function getTeaserOdds(legs, pts) {
+  var table = TEASER_ODDS[Math.min(legs, 4)];
+  if (!table) return -110;
+  return table[pts] || table[6];
+}
 function adjustTeaserLine(b, pts) {
   // Extract numeric line from pick string
   var m = (b.pick||'').match(/([+-]?\d+\.?\d*)/);
@@ -849,22 +861,32 @@ function bsRenderLegs() {
   } else if (bsType === 'teaser') {
     var tLegs = getTeaserLegs();
     var ineligible = betSlip.filter(function(b){ return !isTeaserEligible(b); });
-    legs = '<div class="bs-section">Teaser · '+tPtsLabel(teaserPts)+'</div>' +
+    var tOdds = getTeaserOdds(tLegs.length, teaserPts);
+    var tOddsFmt = (tOdds > 0 ? '+' : '') + tOdds;
+    var tPayout = bsStake > 0 ? Math.round(bsStake * amToDecimal(tOdds) * 100) / 100 : 0;
+    legs = '<div class="bs-section">Teaser · '+tPtsLabel(teaserPts)+' · '+tLegs.length+' picks</div>' +
       '<div style="display:flex;gap:6px;padding:0 14px 10px">' +
-      [6,6.5,7,4,4.5,5].slice(0,3).map(function(p){
-        return '<button id="tpts-btn-'+p+'" class="teaser-pts-btn bs-tab'+(p===teaserPts?' active':'')+'" onclick="setTeaserPts('+p+')">+'+p+'</button>';
+      [6,6.5,7].map(function(p){
+        var o = getTeaserOdds(tLegs.length, p);
+        var of = (o>0?'+':'')+o;
+        return '<button id="tpts-btn-'+p+'" class="teaser-pts-btn bs-tab'+(p===teaserPts?' active':'')+'" onclick="setTeaserPts('+p+')" style="flex:1;font-size:0.65rem">+'+p+'<br><span style="font-size:0.6rem;color:#aaa">'+of+'</span></button>';
       }).join('') + '</div>' +
-      (ineligible.length ? '<div style="margin:0 14px 8px;padding:8px 12px;background:rgba(255,165,0,0.08);border:1px solid rgba(255,165,0,0.2);border-radius:8px;font-size:0.7rem;color:#ffa500">⚠️ '+ineligible.length+' moneyline pick(s) not teaser eligible</div>' : '') +
+      (ineligible.length ? '<div style="margin:0 14px 8px;padding:8px 12px;background:rgba(255,165,0,0.08);border:1px solid rgba(255,165,0,0.2);border-radius:8px;font-size:0.7rem;color:#ffa500">⚠️ '+ineligible.length+' moneyline pick(s) excluded — only spreads/totals allowed</div>' : '') +
       tLegs.map(function(b,i){
         var adj = adjustTeaserLine(b, teaserPts);
         return '<div class="bs-leg"><div class="bs-leg-top"><div style="flex:1">' +
           '<div class="bs-market">'+b.market+'</div>' +
-          '<div style="font-size:0.72rem;color:#555;text-decoration:line-through">'+b.pick+'</div>' +
-          '<div class="bs-pick" style="color:#00ff88">'+adj+' <span style="font-size:0.62rem;color:#555">(+'+teaserPts+' pts)</span></div>' +
+          '<div style="font-size:0.68rem;color:#555;text-decoration:line-through;margin-bottom:1px">'+b.pick+'</div>' +
+          '<div class="bs-pick" style="color:#00ff88">'+adj+' <span style="font-size:0.6rem;color:#555">+'+teaserPts+' pts</span></div>' +
           '<div class="bs-game">'+b.game+'</div></div>' +
           '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">' +
           '<button class="bs-remove" onclick="bsRemove('+betSlip.indexOf(b)+')">✕</button></div></div></div>';
-      }).join('');
+      }).join('') +
+      '<div style="background:#1a1a1a;border-radius:10px;margin:8px 14px 0;padding:10px 14px">' +
+      '<div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px"><span style="color:#555">Teaser Odds</span><span style="font-weight:900;color:#00c2ff">'+tOddsFmt+'</span></div>' +
+      (bsStake>0?'<div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px"><span style="color:#555">Entry</span><span style="font-weight:800">'+fmtDollar(bsStake)+'</span></div>'+
+      '<div style="display:flex;justify-content:space-between;font-size:0.82rem;border-top:1px solid #2a2a2a;padding-top:6px;margin-top:4px"><span style="color:#555">Est. Payout</span><span style="color:#00ff88;font-weight:900">'+fmtDollar(tPayout)+'</span></div>':'<div style="font-size:0.7rem;color:#555">Enter amount below</div>') +
+      '</div>';
   } else legs = bsType === 'parlay' ?
     // Parlay: one combined entry
     '<div class="bs-section">Parlay · ' + betSlip.length + ' picks</div>' +
