@@ -481,14 +481,15 @@ async function loadGames(sport){
     window.gamesCache = window.gamesCache || {};
     el.innerHTML=games.map(g=>{
       window.gamesCache[g.id]=g;
+      try {
       const aw=g.away,hw=g.home;
       const awN=aw.split(' ').slice(-1)[0],hwN=hw.split(' ').slice(-1)[0];
       const awC=aw.split(' ').slice(0,-1).join(' '),hwC=hw.split(' ').slice(0,-1).join(' ');
-      const awSp=g.spreads.find(s=>s.team===aw),hwSp=g.spreads.find(s=>s.team===hw);
-      const ov=g.totals.find(t=>t.name==='Over'),un=g.totals.find(t=>t.name==='Under');
-      const awML=g.moneyline.find(m=>m.team===aw),hwML=g.moneyline.find(m=>m.team===hw);
+      const awSp=(g.spreads||[]).find(s=>s.team===aw),hwSp=(g.spreads||[]).find(s=>s.team===hw);
+      const ov=(g.totals||[]).find(t=>t.name==='Over'),un=(g.totals||[]).find(t=>t.name==='Under');
+      const awML=(g.moneyline||[]).find(m=>m.team===aw),hwML=(g.moneyline||[]).find(m=>m.team===hw);
       const time=new Date(g.time).toLocaleString('en-US',{weekday:'short',hour:'2-digit',minute:'2-digit'});
-      const sp=g.sport?.toUpperCase()||'MLB';
+      const sp=(g.sport?g.sport.toUpperCase():null)||'MLB';
       const icon=icons[sp]||'🏅';
 
       function cell(id,top,odds,marketType,teamPick,teamName){
@@ -520,19 +521,20 @@ async function loadGames(sport){
         <div class="mc-cols"><div></div><div class="mc-col-label">Run Line</div><div class="mc-col-label">Total</div><div class="mc-col-label">To Win</div></div>
         <div class="mc-team-row">
           <div class="mc-team">${teamAvatar(aw)}<div><div class="mc-city">${awC}</div><div class="mc-name">${awN}</div></div></div>
-          ${cell(g.id+'-sp-aw',awSp?(awSp.line>0?'+':'')+awSp.line:null,awSp?.odds,'Run Line',aw+' '+(awSp?(awSp.line>0?'+':'')+awSp.line:''),aw)}
-          ${cell(g.id+'-ov',ov?'O '+ov.line:null,ov?.odds,'Total','Over '+ov?.line)}
-          ${cell(g.id+'-ml-aw',null,awML?.odds,'Moneyline',aw+' To Win')}
+          ${cell(g.id+'-sp-aw',awSp?(awSp.line>0?'+':'')+awSp.line:null,awSp?awSp.odds:null,'Run Line',aw+' '+(awSp?(awSp.line>0?'+':'')+awSp.line:''),aw)}
+          ${cell(g.id+'-ov',ov?'O '+ov.line:null,ov?ov.odds:null,'Total',ov?'Over '+ov.line:null)}
+          ${cell(g.id+'-ml-aw',null,awML?awML.odds:null,'Moneyline',aw+' To Win')}
         </div>
         <div class="mc-divider"></div>
         <div class="mc-team-row">
           <div class="mc-team">${teamAvatar(hw)}<div><div class="mc-city">${hwC}</div><div class="mc-name">${hwN}</div></div></div>
-          ${cell(g.id+'-sp-hw',hwSp?(hwSp.line>0?'+':'')+hwSp.line:null,hwSp?.odds,'Run Line',hw+' '+(hwSp?(hwSp.line>0?'+':'')+hwSp.line:''),hw)}
-          ${cell(g.id+'-un',un?'U '+un.line:null,un?.odds,'Total','Under '+un?.line)}
-          ${cell(g.id+'-ml-hw',null,hwML?.odds,'Moneyline',hw+' To Win')}
+          ${cell(g.id+'-sp-hw',hwSp?(hwSp.line>0?'+':'')+hwSp.line:null,hwSp?hwSp.odds:null,'Run Line',hw+' '+(hwSp?(hwSp.line>0?'+':'')+hwSp.line:''),hw)}
+          ${cell(g.id+'-un',un?'U '+un.line:null,un?un.odds:null,'Total',un?'Under '+un.line:null)}
+          ${cell(g.id+'-ml-hw',null,hwML?hwML.odds:null,'Moneyline',hw+' To Win')}
         </div>
         <div class="mc-footer"><span class="mc-time">${time}</span><button class="more-btn" data-game-id="${g.id}">More ›</button></div>
       </div>`;
+      } catch(cardErr) { console.error('card render error:', cardErr, g); return '<div style="padding:10px;color:#f55">Card error: '+g.away+' vs '+g.home+'</div>'; }
     }).join('');
     console.log('games rendered');
     // Re-sync highlights after DOM update
@@ -1084,6 +1086,7 @@ function bsUpdate() {
 
 function bsRenderLegs() {
   var el = document.getElementById('bs-legs-container');
+  if (!el) return;
   if (!el) return;
   if (!betSlip.length) { el.innerHTML = '<div style="text-align:center;padding:24px;color:#555;font-size:0.82rem">Tap odds to add selections</div>'; return; }
   var warnings = bsValidate();
