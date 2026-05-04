@@ -932,11 +932,28 @@ function amToDecimal(o){
   if (!n || isNaN(n)) return 1;
   return n > 0 ? n/100+1 : 100/Math.abs(n)+1;
 }
+// SGP correlation reducer: if a combo has 2+ legs from same game, apply discount
+function comboHasSGP(combo) {
+  var gc = {};
+  combo.forEach(function(b){ gc[b.game] = (gc[b.game]||0)+1; });
+  return Object.values(gc).some(function(c){ return c > 1; });
+}
+function sgpAdjust(d, combo) {
+  if (comboHasSGP(combo)) return d * 0.70; // same-game correlation reducer
+  return d;
+}
+function parlayAdjust(d, legs) {
+  var gc = {};
+  legs.forEach(function(b){ gc[b.game] = (gc[b.game]||0)+1; });
+  var hasSGP = Object.values(gc).some(function(c){ return c > 1; });
+  return hasSGP ? d * 0.75 : d; // SGPx parlay reducer
+}
+
 function calcPayout(stake, legs, type) {
   if (!stake || !legs.length) return 0;
   if (type === 'parlay') {
     var d = legs.reduce(function(p,b){ return p * amToDecimal(b.odds); }, 1);
-    return stake * d;
+    return stake * parlayAdjust(d, legs);
   }
   return legs.reduce(function(s,b){ return s + stake * amToDecimal(b.odds); }, 0);
 }
@@ -1153,7 +1170,7 @@ function bsRenderLegs() {
         var combos = getCombos(betSlip, size);
         return combos.reduce(function(s,combo){
           var d = combo.reduce(function(p,b){ return p*amToDecimal(b.odds); },1);
-          return s + perBet * d;
+          return s + perBet * sgpAdjust(d, combo);
         }, 0);
       }
 
@@ -1172,7 +1189,7 @@ function bsRenderLegs() {
         var cnt = nCr(n, sz);
         var perBet = rrStakes[sz] || 0;
         var rowEntry = perBet * cnt;
-        var rowPay = perBet > 0 ? rrPayout(sz, perBet) : 0;
+        var rowPay = perBet > 0 ? rrPayout(sz, perBet) : 0; // sgpAdjust applied inside rrPayout
         return '<div class="dkslip-card" style="margin-bottom:8px;overflow:hidden">' +
           '<div class="dkslip-card-hdr" style="'+(isActive?'background:#f0faf5':'')+'" onclick="activeRRSize=sz;var fi=document.getElementById(\'bs-stake-inp\');if(fi)fi.value=rrStakes[sz]||\'\'">' +
             '<span class="dkslip-card-title">'+(isActive?'● ':'')+sz+'-Pick Round Robin</span>' +
@@ -1291,7 +1308,8 @@ function bsRenderLegs() {
         ? (betSlip.length+' Pick '+(sgpGameCount>1?'SGPx':'SGP'))
         : (betSlip.length+' Pick Parlay');
       var oddsDisplay = hasSGP ? 'Est.' : co;
-      var parlayPayout = bsStake > 0 ? fmtDollar(bsStake * d) : null;
+      var adjD = parlayAdjust(d, validLegs);
+      var parlayPayout = bsStake > 0 ? fmtDollar(bsStake * adjD) : null;
       var sgpNote = hasSGP
         ? '<div style="padding:4px 14px 8px;font-size:0.65rem;color:#f59e0b;background:#fffbeb;border-bottom:1px solid #fde68a">⚠️ Same-game payout is estimated until SGP pricing is connected.</div>'
         : '';
@@ -1605,7 +1623,7 @@ function rrInput(el) {
     // Each combo = independent parlay: stake × (d1 × d2 × ... dn)
     var pay = combos.reduce(function(s, combo) {
       var d = combo.reduce(function(p, b) { return p * amToDecimal(b.odds); }, 1);
-      return s + amt * d;
+      return s + amt * sgpAdjust(d, combo);
     }, 0);
     var infoEl = card.querySelector('[data-rr-info="'+sz+'"]');
     var payEl  = card.querySelector('[data-rr-pay="'+sz+'"]');
@@ -1751,7 +1769,7 @@ function bsSyncPlaceBtn() {
           var sz=parseInt(k);
           getCombos(betSlip,sz).forEach(function(combo){
             var d=combo.reduce(function(p,b){return p*amToDecimal(b.odds);},1);
-            rrTotalPay+=s*d;
+            rrTotalPay+=s*sgpAdjust(d,combo);
           });
         });
         btn.textContent = 'Place Round Robin  $' + totalE.toFixed(2);
