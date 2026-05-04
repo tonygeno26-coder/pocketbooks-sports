@@ -133,6 +133,8 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .bs-hdr{display:flex;justify-content:space-between;align-items:center;padding:16px 18px 12px;border-bottom:1px solid #1e1e1e;position:sticky;top:0;background:#111;z-index:1}
 .bs-title{font-size:1rem;font-weight:900}
 .bs-clear{font-size:0.72rem;color:#ff3d57;cursor:pointer;font-weight:700;background:none;border:none}
+.bs-tab{flex:1;padding:8px 4px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;color:#555;font-size:0.7rem;font-weight:700;cursor:pointer;transition:all 0.15s}
+.bs-tab.active{background:rgba(0,255,136,0.12);color:#00ff88;border-color:rgba(0,255,136,0.3)}
 .bs-close{background:rgba(255,255,255,0.08);border:none;color:#888;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:0.85rem}
 .bs-section{font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#555;padding:12px 18px 6px}
 .bs-leg{background:#1a1a1a;border:1px solid #222;border-radius:12px;margin:0 14px 8px;padding:12px 14px}
@@ -660,15 +662,41 @@ loadGames('mlb');
 
 // ===== BET SLIP =====
 var betSlip = [];
+var bsType = 'straight'; // 'straight' or 'parlay'
+var bsStake = 0;
+
+function amToDecimal(o){ return o > 0 ? o/100+1 : 100/Math.abs(o)+1; }
+function calcPayout(stake, legs, type) {
+  if (!stake || !legs.length) return 0;
+  if (type === 'parlay') {
+    var d = legs.reduce(function(p,b){ return p * amToDecimal(b.odds); }, 1);
+    return Math.round(stake * d * 100) / 100;
+  }
+  return legs.reduce(function(s,b){ return s + Math.round(stake * amToDecimal(b.odds) * 100) / 100; }, 0);
+}
+function fmtOdds(o){ return (o>0?'+':'')+o; }
+function fmtDollar(n){ return '$'+parseFloat(n).toFixed(2); }
+
+function bsSetType(t) {
+  if (t === 'teaser' || t === 'rr') { showToast('Coming soon'); return; }
+  bsType = t;
+  document.querySelectorAll('.bs-tab').forEach(function(el){ el.classList.remove('active'); });
+  var tab = document.getElementById('bs-tab-'+t);
+  if (tab) tab.classList.add('active');
+  bsRenderLegs();
+}
 
 function bsUpdate() {
   var bar = document.getElementById('bs-bar');
   var badge = document.getElementById('bs-badge');
-  var countLabel = document.getElementById('bs-count-label');
   if (betSlip.length > 0) {
     bar.classList.add('show');
     badge.textContent = betSlip.length;
-    countLabel.textContent = betSlip.length === 1 ? '— Singles' : '— ' + betSlip.length + ' Picks';
+    // Auto-set type
+    bsType = betSlip.length === 1 ? 'straight' : 'parlay';
+    document.querySelectorAll('.bs-tab').forEach(function(el){ el.classList.remove('active'); });
+    var tab = document.getElementById('bs-tab-'+bsType);
+    if (tab) tab.classList.add('active');
   } else {
     bar.classList.remove('show');
     closeBetSlip();
@@ -678,31 +706,72 @@ function bsUpdate() {
 
 function bsRenderLegs() {
   var el = document.getElementById('bs-legs-container');
+  if (!el) return;
   if (!betSlip.length) { el.innerHTML = '<div style="text-align:center;padding:24px;color:#555;font-size:0.82rem">Tap odds to add selections</div>'; return; }
-  var sectionLabel = betSlip.length === 1 ? 'Singles' : 'Parlay';
-  el.innerHTML = '<div class="bs-section">' + sectionLabel + '</div>' +
-    betSlip.map(function(b, i) {
+
+  var legs = bsType === 'parlay' ?
+    // Parlay: one combined entry
+    '<div class="bs-section">Parlay · ' + betSlip.length + ' picks</div>' +
+    betSlip.map(function(b,i){
+      return '<div class="bs-leg" style="background:transparent;border:none;padding:6px 14px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+        '<div><div class="bs-market">' + b.market + '</div><div class="bs-pick" style="font-size:0.82rem">' + b.pick + '</div></div>' +
+        '<div style="display:flex;align-items:center;gap:8px"><span style="color:#00c2ff;font-weight:800;font-size:0.85rem">' + fmtOdds(b.odds) + '</span>' +
+        '<button class="bs-remove" onclick="bsRemove('+i+')">✕</button></div></div></div>';
+    }).join('') +
+    // Combined odds display
+    (function(){
+      var d = betSlip.reduce(function(p,b){ return p*amToDecimal(b.odds); },1);
+      var combined = Math.round((d-1)*100) > 0 ? '+'+Math.round((d-1)*100) : ''+Math.round(-100/(d-1));
+      return '<div style="margin:8px 14px 0;padding:10px 14px;background:#1a1a1a;border-radius:10px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:0.72rem;color:#555">Combined Odds</span><span style="font-weight:900;color:#00ff88;font-size:0.92rem">'+combined+'</span></div>';
+    })()
+    :
+    // Straight: each leg separately
+    '<div class="bs-section">Straight</div>' +
+    betSlip.map(function(b,i){
       return '<div class="bs-leg">' +
         '<div class="bs-leg-top">' +
-        '<div style="flex:1">' +
-        '<div class="bs-market">' + b.market + '</div>' +
+        '<div style="flex:1"><div class="bs-market">' + b.market + '</div>' +
         '<div class="bs-pick">' + b.pick + '</div>' +
         '<div class="bs-game">' + b.game + '</div>' +
-        (b.time ? '<div style="font-size:0.62rem;color:#444;margin-top:2px">' + b.time + '</div>' : '') +
+        (b.time?'<div style="font-size:0.62rem;color:#444;margin-top:2px">'+b.time+'</div>':'') +
         '</div>' +
-        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">' +
-        '<button class="bs-remove" onclick="bsRemove(' + i + ')">✕</button>' +
-        '<span class="bs-odds-val">' + (b.odds > 0 ? '+' : '') + b.odds + '</span>' +
-        '</div></div></div>';
+        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">' +
+        '<button class="bs-remove" onclick="bsRemove('+i+')">✕</button>' +
+        '<span class="bs-odds-val">'+fmtOdds(b.odds)+'</span></div></div></div>';
     }).join('');
+
+  // Stake + payout
+  var payout = calcPayout(bsStake, betSlip, bsType);
+  var stakeSection = '<div style="padding:12px 14px;border-top:1px solid #1e1e1e;margin-top:4px">' +
+    '<div style="font-size:0.62rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Entry Amount</div>' +
+    '<input id="bs-stake-inp" type="number" placeholder="0" value="' + (bsStake||'') + '" oninput="bsSetStake(this.value)" style="width:100%;padding:12px 14px;background:#1a1a1a;border:1.5px solid #2a2a2a;border-radius:10px;color:#fff;font-size:1rem;font-weight:800;outline:none;margin-bottom:8px">' +
+    '<div style="display:flex;gap:6px;margin-bottom:12px">' +
+    [25,50,100,200].map(function(a){ return '<button onclick="bsAddStake('+a+')" style="flex:1;padding:7px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;color:#aaa;font-size:0.72rem;font-weight:700;cursor:pointer">+'+a+'</button>'; }).join('') +
+    '</div>' +
+    (payout > 0 ? '<div style="display:flex;justify-content:space-between;padding:10px 14px;background:#0a1f0a;border:1px solid rgba(0,255,136,0.2);border-radius:10px;margin-bottom:8px"><span style="font-size:0.78rem;color:#555">Est. Payout</span><span style="font-weight:900;color:#00ff88;font-size:0.92rem">'+fmtDollar(payout)+'</span></div>' : '') +
+    '</div>';
+
+  el.innerHTML = legs + stakeSection;
+}
+
+function bsSetStake(v) {
+  bsStake = parseFloat(v) || 0;
+  bsRenderLegs();
+}
+function bsAddStake(a) {
+  bsStake = (bsStake||0) + a;
+  var inp = document.getElementById('bs-stake-inp');
+  if (inp) inp.value = bsStake;
+  bsRenderLegs();
 }
 
 function bsRemove(i) {
   var b = betSlip[i];
-  // Deselect the odds box
   var cellEl = document.getElementById('cell-' + b.cellId);
   if (cellEl) cellEl.classList.remove('sel');
   betSlip.splice(i, 1);
+  if (!betSlip.length) bsStake = 0;
   bsUpdate();
 }
 
@@ -711,7 +780,7 @@ function clearSlip() {
     var cellEl = document.getElementById('cell-' + b.cellId);
     if (cellEl) cellEl.classList.remove('sel');
   });
-  betSlip = [];
+  betSlip = []; bsStake = 0;
   bsUpdate();
 }
 
@@ -719,20 +788,29 @@ function openBetSlip() {
   document.getElementById('bs-drawer').classList.add('open');
   document.getElementById('bs-overlay').classList.add('show');
 }
-
 function closeBetSlip() {
   document.getElementById('bs-drawer').classList.remove('open');
   document.getElementById('bs-overlay').classList.remove('show');
 }
 
 function bsToggle(cellId, game, time, market, pick, odds) {
+  // Remove any existing selection from same game+market (replace logic)
+  var gameKey = game + '|' + market;
+  betSlip = betSlip.filter(function(b) {
+    if (b.gameKey === gameKey && b.cellId !== cellId) {
+      var old = document.getElementById('cell-' + b.cellId);
+      if (old) old.classList.remove('sel');
+      return false;
+    }
+    return true;
+  });
   var idx = betSlip.findIndex(function(b){ return b.cellId === cellId; });
   var cellEl = document.getElementById('cell-' + cellId);
   if (idx >= 0) {
     betSlip.splice(idx, 1);
     if (cellEl) cellEl.classList.remove('sel');
   } else {
-    betSlip.push({ cellId: cellId, game: game, time: time, market: market, pick: pick, odds: parseInt(odds) });
+    betSlip.push({ cellId:cellId, game:game, time:time, market:market, pick:pick, odds:parseInt(odds), gameKey:gameKey });
     if (cellEl) cellEl.classList.add('sel');
   }
   bsUpdate();
@@ -770,11 +848,17 @@ function bsToggle(cellId, game, time, market, pick, odds) {
 <!-- BET SLIP DRAWER -->
 <div class="bs-drawer" id="bs-drawer">
   <div class="bs-hdr">
-    <div class="bs-title">Bet Slip <span id="bs-count-label" style="font-size:0.72rem;color:#555;font-weight:600"></span></div>
+    <div class="bs-title">Bet Slip</div>
     <div style="display:flex;align-items:center;gap:10px">
       <button class="bs-clear" onclick="clearSlip()">Clear All</button>
       <button class="bs-close" onclick="closeBetSlip()">✕</button>
     </div>
+  </div>
+  <div style="display:flex;gap:6px;padding:10px 14px 0">
+    <button id="bs-tab-straight" class="bs-tab active" onclick="bsSetType('straight')">Straight</button>
+    <button id="bs-tab-parlay" class="bs-tab" onclick="bsSetType('parlay')">Parlay</button>
+    <button id="bs-tab-teaser" class="bs-tab" onclick="bsSetType('teaser')" style="opacity:0.4">Teaser</button>
+    <button id="bs-tab-rr" class="bs-tab" onclick="bsSetType('rr')" style="opacity:0.4">R.Robin</button>
   </div>
   <div id="bs-legs-container"></div>
   <div style="height:20px"></div>
