@@ -1050,18 +1050,49 @@ function bsTeamAbbr(pickStr, game) {
 }
 
 function bsValidate() {
-  // Returns array of conflict warnings
   var warnings = [];
-  var gameGroups = {};
+  // Only flag TRUE contradictions: same game + same market category + opposite side
+  // e.g. Over 8.5 + Under 8.5, Phillies -1.5 + Marlins +1.5, Phillies ML + Marlins ML
+  var byGame = {};
   betSlip.forEach(function(b) {
-    if (!gameGroups[b.game]) gameGroups[b.game] = [];
-    gameGroups[b.game].push(b.market);
+    if (!byGame[b.game]) byGame[b.game] = [];
+    byGame[b.game].push(b);
   });
-  Object.keys(gameGroups).forEach(function(game) {
-    var markets = gameGroups[game];
-    if (markets.length > 1) {
-      warnings.push('Same-game parlay: ' + game.split(' vs ')[0].split(' ').pop() + ' vs ' + game.split(' vs ')[1]?.split(' ').pop());
-    }
+  Object.keys(byGame).forEach(function(game) {
+    var legs = byGame[game];
+    if (legs.length < 2) return;
+    // Check for direct market contradictions within same game
+    legs.forEach(function(a, ai) {
+      legs.forEach(function(b, bi) {
+        if (bi <= ai) return;
+        var am = (a.market||'').toLowerCase();
+        var bm = (b.market||'').toLowerCase();
+        // Same market category?
+        var aIsTotal = am.includes('total') || am.includes('over') || am.includes('under');
+        var bIsTotal = bm.includes('total') || bm.includes('over') || bm.includes('under');
+        var aIsSpread = am.includes('run line') || am.includes('spread') || am.includes('puck line');
+        var bIsSpread = bm.includes('run line') || bm.includes('spread') || bm.includes('puck line');
+        var aIsML = am.includes('moneyline') || am.includes('to win');
+        var bIsML = bm.includes('moneyline') || bm.includes('to win');
+        // Both totals — Over vs Under = conflict
+        if (aIsTotal && bIsTotal) {
+          var aOver = (a.pick||'').toLowerCase().includes('over');
+          var bOver = (b.pick||'').toLowerCase().includes('over');
+          if (aOver !== bOver) warnings.push('Conflict: Over + Under in same game');
+        }
+        // Both spreads — opposite teams = conflict
+        if (aIsSpread && bIsSpread && a.game === b.game) {
+          var aTeam = (a.pick||'').split(' ')[0];
+          var bTeam = (b.pick||'').split(' ')[0];
+          if (aTeam && bTeam && aTeam !== bTeam) warnings.push('Conflict: opposite spreads in same game');
+        }
+        // Both moneyline — different teams = conflict
+        if (aIsML && bIsML) {
+          warnings.push('Conflict: two moneylines in same game');
+        }
+        // Different market categories (spread + total, ML + total, ML + spread) = ALLOWED, no warning
+      });
+    });
   });
   return warnings;
 }
@@ -1653,30 +1684,53 @@ document.addEventListener('click', function(e) {
     betSlip.splice(existingIdx, 1);
     cell.classList.remove('selected');
   } else {
-    // VALIDATION: same-game conflict detection
-    var conflictKey = game; // same game = potential conflict
-    var marketBase = market.toLowerCase().split(' ')[0]; // 'run', 'total', 'to'
-
-    // Remove all conflicting legs from same game + same market type
+    // Only remove picks that are TRUE contradictions (same game, same market, opposite side)
     var replaced = false;
-    betSlip = betSlip.filter(function(b) {
-      var bMarketBase = (b.market||'').toLowerCase().split(' ')[0];
-      var sameGame = b.game === game;
-      var sameMarketType = bMarketBase === marketBase;
+    var mLower = (market||'').toLowerCase();
+    var pickLower = (pick||'').toLowerCase();
+    var isOver  = mLower.includes('over')  || pickLower.includes('over');
+    var isUnder = mLower.includes('under') || pickLower.includes('under');
+    var isTotal = mLower.includes('total') || isOver || isUnder;
+    var isSpread = mLower.includes('run line') || mLower.includes('spread') || mLower.includes('puck line');
+    var isML    = mLower.includes('moneyline') || mLower.includes('to win');
 
-      if (sameGame && sameMarketType) {
-        // Conflict: opposite side of same market (e.g. Over/Under, Team A/Team B spread, ML)
+    betSlip = betSlip.filter(function(b) {
+      if (b.game !== game) return true; // different game — keep
+      var bm = (b.market||'').toLowerCase();
+      var bp = (b.pick||'').toLowerCase();
+      var bIsTotal  = bm.includes('total') || bm.includes('over') || bm.includes('under');
+      var bIsSpread = bm.includes('run line') || bm.includes('spread') || bm.includes('puck line');
+      var bIsML     = bm.includes('moneyline') || bm.includes('to win');
+
+      // Over vs Under same game = conflict → remove
+      if (isTotal && bIsTotal) {
+        var bIsOver = bm.includes('over') || bp.includes('over');
+        if (isOver !== bIsOver) { // opposite sides
+          var oldCell = document.getElementById('c-' + b.cellId);
+          if (oldCell) oldCell.classList.remove('selected', 'sel');
+          replaced = true;
+          return false;
+        }
+      }
+      // Two moneylines same game = conflict → remove old
+      if (isML && bIsML) {
         var oldCell = document.getElementById('c-' + b.cellId);
-        if (oldCell) oldCell.classList.remove('selected');
+        if (oldCell) oldCell.classList.remove('selected', 'sel');
         replaced = true;
         return false;
       }
+      // Spread same exact pick = remove (same cell re-click handled by toggle)
+      if (isSpread && bIsSpread && b.cellId === cellId) {
+        var oldCell = document.getElementById('c-' + b.cellId);
+        if (oldCell) oldCell.classList.remove('selected', 'sel');
+        replaced = true;
+        return false;
+      }
+      // Different market categories (spread + total, ML + total, etc.) = ALLOWED → keep
       return true;
     });
 
-    if (replaced) {
-      showToast('Pick replaced: ' + pick);
-    }
+    if (replaced) showToast('Pick replaced');
 
     // Add new valid selection
     betSlip.push({
@@ -1687,15 +1741,7 @@ document.addEventListener('click', function(e) {
     cell.classList.add('selected');
     console.log('[highlight] classList after:', cell.className);
 
-    // Parlay conflict warning: same game legs not allowed in parlay
-    if (betSlip.length >= 2 && bsType === 'parlay') {
-      var gameGroups = {};
-      betSlip.forEach(function(b) { gameGroups[b.game] = (gameGroups[b.game]||0)+1; });
-      var hasSameGame = Object.values(gameGroups).some(function(c){ return c > 1; });
-      if (hasSameGame) {
-        showToast('⚠️ Parlay: Same-game legs may conflict');
-      }
-    }
+    // Same-game parlay: allowed if different markets
   }
 
   bsUpdate();
