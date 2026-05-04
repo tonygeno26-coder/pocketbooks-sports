@@ -27,8 +27,9 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 /* SPORT TABS */
 .sport-tabs{display:flex;gap:20px;padding:14px 16px 8px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border)}
 .sport-tabs::-webkit-scrollbar{display:none}
-.sport-tab{flex-shrink:0;font-size:0.9rem;font-weight:700;color:var(--gray);cursor:pointer;padding-bottom:6px;border-bottom:2px solid transparent;white-space:nowrap}
-.sport-tab.active{color:var(--white);border-bottom-color:var(--green)}
+.sport-tab{flex-shrink:0;display:flex;align-items:center;gap:6px;font-size:0.82rem;font-weight:700;color:var(--gray);cursor:pointer;padding:6px 2px 8px;border-bottom:2px solid transparent;white-space:nowrap;opacity:0.6;transition:opacity 0.15s,color 0.15s}
+.sport-tab.active{color:var(--white);border-bottom-color:var(--green);opacity:1}
+.sport-tab svg{width:17px;height:17px;flex-shrink:0}
 
 /* FILTER PILLS */
 .filter-row{display:flex;gap:8px;padding:12px 16px;overflow-x:auto;scrollbar-width:none}
@@ -197,13 +198,12 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 
 <!-- SPORT TABS -->
 <div class="sport-tabs">
-  <div class="sport-tab active" onclick="setSport(this,'featured')">Featured</div>
-  <div class="sport-tab" onclick="setSport(this,'mlb')">MLB</div>
-  <div class="sport-tab" onclick="setSport(this,'nba')">NBA</div>
-  <div class="sport-tab" onclick="setSport(this,'tennis')">Tennis</div>
-  <div class="sport-tab" onclick="setSport(this,'nhl')">NHL</div>
-  <div class="sport-tab" onclick="setSport(this,'soccer')">Soccer</div>
-  <div class="sport-tab" onclick="setSport(this,'golf')">Golf</div>
+  <div class="sport-tab active" id="st-mlb" onclick="setSport(this,'mlb')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3c1.5 2 2.5 5 2.5 9s-1 7-2.5 9"/><path d="M12 3c-1.5 2-2.5 5-2.5 9s1 7 2.5 9"/><line x1="3" y1="12" x2="21" y2="12"/></svg>MLB</div>
+  <div class="sport-tab" id="st-nba" onclick="setSport(this,'nba')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3c2 2.5 3 5.5 3 9s-1 6.5-3 9"/><path d="M12 3c-2 2.5-3 5.5-3 9s1 6.5 3 9"/><path d="M5 7.5Q8.5 9 12 9q3.5 0 7-1.5"/><path d="M5 16.5Q8.5 15 12 15q3.5 0 7 1.5"/></svg>NBA</div>
+  <div class="sport-tab" id="st-nhl" onclick="setSport(this,'nhl')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="18" rx="7" ry="2.5"/><line x1="8" y1="4" x2="12" y2="18"/><line x1="16" y1="4" x2="12" y2="18"/><line x1="7" y1="10" x2="17" y2="10"/></svg>NHL</div>
+  <div class="sport-tab" id="st-tennis" onclick="setSport(this,'tennis')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12c3-4 6-5 9-4"/><path d="M21 12c-3 4-6 5-9 4"/></svg>Tennis</div>
+  <div class="sport-tab" id="st-soccer" onclick="setSport(this,'soccer')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><polygon points="12,6 15,10 13,14 11,14 9,10"/><line x1="9" y1="10" x2="4.5" y2="8"/><line x1="15" y1="10" x2="19.5" y2="8"/><line x1="13" y1="14" x2="14.5" y2="19"/><line x1="11" y1="14" x2="9.5" y2="19"/></svg>Soccer</div>
+  <div class="sport-tab" id="st-golf" onclick="setSport(this,'golf')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="2" x2="12" y2="18"/><path d="M12 2l6 4-6 4"/><circle cx="12" cy="20" r="2"/><line x1="8" y1="22" x2="16" y2="22"/></svg>Golf</div>
 </div>
 
 <!-- FILTER PILLS -->
@@ -409,7 +409,7 @@ async function loadGames(sport){
   const el=document.getElementById('games-list');
   el.innerHTML='<div class="empty">Loading...</div>';
   try{
-    const _sport = sport==='featured'?'mlb':sport;
+    const _sport = sport || 'mlb';
     const _url = '/api/odds/'+_sport; // relative = Vercel proxy, no CORS
     console.log('[odds] fetching:', _url);
     let _res;
