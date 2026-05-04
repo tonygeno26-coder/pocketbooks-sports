@@ -293,43 +293,12 @@ body{font-family:-apple-system,Arial,sans-serif;background:#050505;color:#fff}
 </div>
 
 <!-- PHONE FRAME -->
-<div class="phone-frame-wrap" style="padding-top:92px">
+<div id="url-debug" style="text-align:center;font-size:0.65rem;color:#00c2ff;padding:6px 0;font-family:monospace;opacity:0.7">🔗 lobby.html?preview=1&screen=signin</div>
+<div class="phone-frame-wrap"  style="padding-top:92px">
   <div class="phone-frame" id="phone" style="max-width:390px;width:100%">
     <div class="phone-notch"></div>
-    <div class="phone-inner" style="height:780px" id="phone-inner">
-
-      <!-- All screens load via iframe — always shows latest real version -->
-      <div class="scr active" id="scr-welcome" style="height:100%">
-        <iframe src="lobby.html?preview=1&screen=signin" style="width:100%;height:780px;border:none" scrolling="yes"></iframe>
-      </div>
-      <div class="scr" id="scr-signup" style="height:100%">
-        <iframe src="lobby.html?preview=1&screen=signup" style="width:100%;height:780px;border:none" scrolling="yes"></iframe>
-      </div>
-      <div class="scr" id="scr-lobby" style="height:100%">
-        <iframe src="lobby.html?preview=1" style="width:100%;height:780px;border:none" scrolling="yes"></iframe>
-      </div>
-      <div class="scr" id="scr-join" style="height:100%">
-        <iframe src="lobby.html?preview=1&screen=join" style="width:100%;height:780px;border:none" scrolling="yes"></iframe>
-      </div>
-      <div class="scr" id="scr-create" style="height:100%">
-        <iframe src="lobby.html?preview=1&screen=create" style="width:100%;height:780px;border:none" scrolling="yes"></iframe>
-      </div>
-      <div class="scr" id="scr-myclubs" style="height:100%">
-        <iframe src="lobby.html?preview=1&screen=myclubs" style="width:100%;height:780px;border:none" scrolling="yes"></iframe>
-      </div>
-      <div class="scr" id="scr-player" style="height:100%">
-        <iframe src="player.html?preview=1&role=player" style="width:100%;height:780px;border:none" scrolling="yes"></iframe>
-      </div>
-      <div class="scr" id="scr-host" style="height:100%">
-        <iframe src="index.html?preview=1&role=host" style="width:100%;height:780px;border:none" scrolling="yes"></iframe>
-      </div>
-      <div class="scr" id="scr-pending" style="height:100%">
-        <iframe src="lobby.html?preview=1&screen=pending" style="width:100%;height:780px;border:none" scrolling="yes"></iframe>
-      </div>
-      <div class="scr" id="scr-profile" style="height:100%">
-        <iframe src="player.html?preview=1&screen=profile&role=player" style="width:100%;height:780px;border:none" scrolling="yes"></iframe>
-      </div>
-
+    <div class="phone-inner" style="height:780px;overflow:hidden" id="phone-inner">
+      <iframe id="main-iframe" src="lobby.html?preview=1&screen=signin&v=1" style="width:100%;height:780px;border:none;display:block" scrolling="yes"></iframe>
     </div><!-- phone-inner -->
   </div><!-- phone-frame -->
 </div>
@@ -337,15 +306,39 @@ body{font-family:-apple-system,Arial,sans-serif;background:#050505;color:#fff}
 <script>
 let curTheme = 'dark';
 
+// Screen → iframe URL map
+const SCREEN_URLS = {
+  welcome: 'lobby.html?preview=1&screen=signin',
+  signup:  'lobby.html?preview=1&screen=signup',
+  lobby:   'lobby.html?preview=1&screen=home',
+  join:    'lobby.html?preview=1&screen=join',
+  create:  'lobby.html?preview=1&screen=create',
+  myclubs: 'lobby.html?preview=1&screen=myclubs',
+  pending: 'lobby.html?preview=1&screen=pending',
+  player:  'player.html?preview=1&role=player',
+  host:    'index.html?preview=1&role=host',
+  profile: 'player.html?preview=1&screen=profile&role=player',
+};
+
 function go(screen) {
-  document.querySelectorAll('.scr').forEach(s=>s.classList.remove('active'));
-  const el = document.getElementById('scr-'+screen);
-  if (el) el.classList.add('active');
+  // Update tab highlight
   document.querySelectorAll('.stab').forEach(t=>t.classList.remove('active'));
   const tabMap={welcome:0,signup:1,lobby:2,join:3,create:4,myclubs:5,player:6,host:7,pending:8,profile:9};
   const tabs=document.querySelectorAll('.stab');
   if(tabMap[screen]!==undefined) tabs[tabMap[screen]]?.classList.add('active');
-  // Lazy-load: iframes load on first view
+
+  // Force reload single iframe with correct URL + cache bust
+  const base = SCREEN_URLS[screen] || SCREEN_URLS.lobby;
+  const url = base + '&v=' + Date.now();
+  const iframe = document.getElementById('main-iframe');
+  if (iframe) {
+    iframe.src = 'about:blank';
+    setTimeout(() => { iframe.src = url; }, 30);
+  }
+
+  // Update debug label
+  const dbg = document.getElementById('url-debug');
+  if (dbg) dbg.textContent = '🔗 ' + base;
 }
 
 function setW(mode){
@@ -354,7 +347,7 @@ function setW(mode){
   document.getElementById('btn-mobile').classList.toggle('on',mode==='mobile');
   document.getElementById('btn-tablet').classList.toggle('on',mode==='tablet');
   // Update all iframes with device param
-  document.querySelectorAll('iframe').forEach(fr=>{
+  document.querySelectorAll('#main-iframe').forEach(fr=>{
     const url = new URL(fr.src, window.location.href);
     url.searchParams.set('device', mode==='tablet'?'tablet':'iphone');
     fr.src = url.toString();
@@ -363,7 +356,7 @@ function setW(mode){
 
 function toggleAnim(){
   const animOn = document.getElementById('btn-anim')?.dataset.on !== 'true';
-  document.querySelectorAll('iframe').forEach(fr=>{
+  document.querySelectorAll('#main-iframe').forEach(fr=>{
     const url = new URL(fr.src, window.location.href);
     url.searchParams.set('anim', animOn?'on':'off');
     fr.src = url.toString();
@@ -373,7 +366,7 @@ function toggleAnim(){
 }
 
 function setTheme(t){
-  document.querySelectorAll('iframe').forEach(fr=>{
+  document.querySelectorAll('#main-iframe').forEach(fr=>{
     const url = new URL(fr.src, window.location.href);
     url.searchParams.set('theme', t);
     fr.src = url.toString();
