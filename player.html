@@ -450,6 +450,16 @@ async function loadGames(sport){
         <div class="mc-footer"><span class="mc-time">${time}</span><span class="mc-more">More ›</span></div>
       </div>`;
     }).join('');
+    // Re-sync highlights after DOM update
+    setTimeout(function(){
+      betSlip.forEach(function(b){
+        var c=document.getElementById('c-'+b.cellId);
+        if(c){
+          c.classList.add('selected');
+          console.log('[highlight] re-synced:',b.cellId);
+        }
+      });
+    },50);
   }catch(e){el.innerHTML='<div class="empty" style="color:#ff4444">'+e.message+'</div>';}
 }
 
@@ -897,7 +907,9 @@ document.addEventListener('click', function(e) {
       cellId: id, game: game, time: time, market: market,
       pick: pick, odds: odds, sport: sp, gameKey: gameKey
     });
+    console.log('[highlight] adding selected to:', id, 'classList before:', cell.className);
     cell.classList.add('selected');
+    console.log('[highlight] classList after:', cell.className);
 
     // Parlay conflict warning: same game legs not allowed in parlay
     if (betSlip.length >= 2 && bsType === 'parlay') {
