@@ -687,6 +687,7 @@ var betSlip = [];
 var bsType = 'straight'; // 'straight' or 'parlay'
 var bsStake = 0;
 
+function tPtsLabel(p){ return "+"+p+" pts"; }
 function amToDecimal(o){
   var n = parseInt(String(o).replace('+',''));
   if (!n || isNaN(n)) return 1;
@@ -704,11 +705,65 @@ function fmtOdds(o){ var n=parseInt(String(o).replace('+','')); return isNaN(n)?
 function fmtDollar(n){ var v=parseFloat(n); return isNaN(v)?'--':'$'+v.toFixed(2); }
 
 function bsSetType(t) {
-  if (t === 'teaser' || t === 'rr') { showToast('Coming soon'); return; }
+  if (t === 'rr' && betSlip.length < 3) { showToast('Need 3+ picks for Round Robin'); return; }
+  if (t === 'teaser' && getTeaserLegs().length < 2) { showToast('Need 2+ spread/total picks for Teaser'); return; }
   bsType = t;
   document.querySelectorAll('.bs-tab').forEach(function(el){ el.classList.remove('active'); });
   var tab = document.getElementById('bs-tab-'+t);
   if (tab) tab.classList.add('active');
+  bsRenderLegs();
+}
+
+
+// ===== ROUND ROBIN =====
+var rrSize = 2;
+function getCombos(arr, size) {
+  if (size === 1) return arr.map(function(x){ return [x]; });
+  var out = [];
+  arr.forEach(function(x, i) {
+    getCombos(arr.slice(i+1), size-1).forEach(function(rest){ out.push([x].concat(rest)); });
+  });
+  return out;
+}
+function setRRSize(s) {
+  rrSize = s;
+  document.querySelectorAll('.rr-size-btn').forEach(function(b){ b.classList.remove('active'); });
+  var btn = document.getElementById('rr-btn-'+s);
+  if (btn) btn.classList.add('active');
+  bsRenderLegs();
+}
+
+// ===== TEASER =====
+var teaserPts = 6;
+var TEASER_ELIGIBLE = ['run line','spread','total','over','under'];
+function isTeaserEligible(b) {
+  var m = (b.market||'').toLowerCase();
+  return TEASER_ELIGIBLE.some(function(t){ return m.includes(t); });
+}
+function getTeaserLegs() {
+  return betSlip.filter(isTeaserEligible);
+}
+function adjustTeaserLine(b, pts) {
+  // Extract numeric line from pick string
+  var m = (b.pick||'').match(/([+-]?\d+\.?\d*)/);
+  if (!m) return b.pick;
+  var line = parseFloat(m[1]);
+  var market = (b.market||'').toLowerCase();
+  var isTotal = market.includes('total') || market.includes('over') || market.includes('under');
+  var isUnder = market.includes('under') || (b.pick||'').toLowerCase().includes('under');
+  var adjusted;
+  if (isTotal) {
+    adjusted = isUnder ? (line + pts).toFixed(1) : (line - pts).toFixed(1);
+  } else {
+    adjusted = (line + pts).toFixed(1);
+  }
+  return (b.pick||'').replace(m[0], (adjusted > 0 ? '+' : '') + adjusted);
+}
+function setTeaserPts(pts) {
+  teaserPts = pts;
+  document.querySelectorAll('.teaser-pts-btn').forEach(function(b){ b.classList.remove('active'); });
+  var btn = document.getElementById('tpts-btn-'+pts);
+  if (btn) btn.classList.add('active');
   bsRenderLegs();
 }
 
@@ -756,7 +811,49 @@ function bsRenderLegs() {
     return '<div style="margin:0 14px 6px;padding:8px 12px;background:rgba(255,61,87,0.08);border:1px solid rgba(255,61,87,0.2);border-radius:8px;font-size:0.7rem;color:#ff6b7a">⚠️ '+w+'</div>';
   }).join('') : '';
 
-  var legs = bsType === 'parlay' ?
+  var legs;
+  if (bsType === 'rr') {
+    var rrCombos = getCombos(betSlip, Math.min(rrSize, betSlip.length));
+    var totalEntry = (bsStake||0) * rrCombos.length;
+    legs = '<div class="bs-section">Round Robin · '+betSlip.length+' picks · '+rrSize+'-leg</div>' +
+      '<div style="display:flex;gap:6px;padding:0 14px 10px">' +
+      [2,3,4].filter(function(s){ return s <= betSlip.length; }).map(function(s){
+        return '<button id="rr-btn-'+s+'" class="rr-size-btn bs-tab'+(s===rrSize?' active':'')+'" onclick="setRRSize('+s+')">'+s+'-leg</button>';
+      }).join('') + '</div>' +
+      '<div style="padding:0 14px;margin-bottom:8px;background:#1a1a1a;border-radius:10px;margin:0 14px 10px;padding:10px 14px">' +
+      '<div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px"><span style="color:#555">Combinations</span><span style="font-weight:800">'+rrCombos.length+' bets</span></div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:0.72rem"><span style="color:#555">Total Entry</span><span style="color:#00ff88;font-weight:800">'+fmtDollar(totalEntry)+'</span></div>' +
+      '</div>' +
+      rrCombos.slice(0,6).map(function(combo,i){
+        var d = combo.reduce(function(p,b){ return p*amToDecimal(b.odds); },1);
+        var raw = Math.round((d-1)*100);
+        var combinedOdds = isNaN(raw)?'--':(raw>0?'+'+raw:''+Math.round(-100/(d-1)));
+        return '<div class="bs-leg" style="margin:0 14px 6px">' +
+          '<div style="font-size:0.62rem;color:#555;margin-bottom:4px">Parlay '+(i+1)+' · '+combo.length+' picks</div>' +
+          combo.map(function(b){ return '<div style="font-size:0.75rem;color:#aaa">'+b.pick+' <span style="color:#00c2ff">'+fmtOdds(b.odds)+'</span></div>'; }).join('') +
+          '<div style="font-size:0.72rem;color:#00ff88;font-weight:800;margin-top:4px">Combined: '+combinedOdds+'</div>' +
+          '</div>';
+      }).join('') + (rrCombos.length>6?'<div style="text-align:center;font-size:0.7rem;color:#555;padding:4px">+' +(rrCombos.length-6)+' more combos</div>':'');
+  } else if (bsType === 'teaser') {
+    var tLegs = getTeaserLegs();
+    var ineligible = betSlip.filter(function(b){ return !isTeaserEligible(b); });
+    legs = '<div class="bs-section">Teaser · '+tPtsLabel(teaserPts)+'</div>' +
+      '<div style="display:flex;gap:6px;padding:0 14px 10px">' +
+      [6,6.5,7,4,4.5,5].slice(0,3).map(function(p){
+        return '<button id="tpts-btn-'+p+'" class="teaser-pts-btn bs-tab'+(p===teaserPts?' active':'')+'" onclick="setTeaserPts('+p+')">+'+p+'</button>';
+      }).join('') + '</div>' +
+      (ineligible.length ? '<div style="margin:0 14px 8px;padding:8px 12px;background:rgba(255,165,0,0.08);border:1px solid rgba(255,165,0,0.2);border-radius:8px;font-size:0.7rem;color:#ffa500">⚠️ '+ineligible.length+' moneyline pick(s) not teaser eligible</div>' : '') +
+      tLegs.map(function(b,i){
+        var adj = adjustTeaserLine(b, teaserPts);
+        return '<div class="bs-leg"><div class="bs-leg-top"><div style="flex:1">' +
+          '<div class="bs-market">'+b.market+'</div>' +
+          '<div style="font-size:0.72rem;color:#555;text-decoration:line-through">'+b.pick+'</div>' +
+          '<div class="bs-pick" style="color:#00ff88">'+adj+' <span style="font-size:0.62rem;color:#555">(+'+teaserPts+' pts)</span></div>' +
+          '<div class="bs-game">'+b.game+'</div></div>' +
+          '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px">' +
+          '<button class="bs-remove" onclick="bsRemove('+betSlip.indexOf(b)+')">✕</button></div></div></div>';
+      }).join('');
+  } else legs = bsType === 'parlay' ?
     // Parlay: one combined entry
     '<div class="bs-section">Parlay · ' + betSlip.length + ' picks</div>' +
     betSlip.map(function(b,i){
@@ -822,6 +919,11 @@ function bsAddStake(a) {
     if (isIn) { el.classList.add('selected'); }
     else { el.classList.remove('selected'); }
   });
+  // Enable/disable tabs based on selections
+  var rrTab = document.getElementById('bs-tab-rr');
+  var teaserTab = document.getElementById('bs-tab-teaser');
+  if (rrTab) { rrTab.style.opacity = betSlip.length >= 3 ? '1' : '0.35'; rrTab.style.cursor = betSlip.length >= 3 ? 'pointer' : 'not-allowed'; }
+  if (teaserTab) { teaserTab.style.opacity = getTeaserLegs().length >= 2 ? '1' : '0.35'; teaserTab.style.cursor = getTeaserLegs().length >= 2 ? 'pointer' : 'not-allowed'; }
 }
 
 function bsRemove(i) {
