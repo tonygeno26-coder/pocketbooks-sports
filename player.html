@@ -1636,12 +1636,21 @@ function bsRemove(i) {
 }
 
 function clearSlip() {
+  console.log('clear all clicked');
   bsStakes = {}; bsStake = 0;
+  // Remove highlights by stored cellIds first
   betSlip.forEach(function(b) {
-    var cellEl = document.getElementById('cell-' + b.cellId);
-    if (cellEl) cellEl.classList.remove('sel');
+    var byId = document.getElementById('c-' + b.cellId) || document.getElementById('cell-' + b.cellId);
+    if (byId) { byId.classList.remove('sel','selected'); byId.removeAttribute('aria-selected'); }
   });
-  betSlip = []; bsStake = 0;
+  betSlip = [];
+  // Nuclear sweep — remove all highlight classes from every odds cell
+  document.querySelectorAll('.odds-cell,.odds-box,.mkt-odds-box').forEach(function(el) {
+    el.classList.remove('sel','selected');
+    el.removeAttribute('aria-selected');
+    el.dataset.selected = 'false';
+  });
+  console.log('selections after clear', betSlip);
   bsUpdate();
 }
 
