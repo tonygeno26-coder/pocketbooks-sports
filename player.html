@@ -1184,11 +1184,8 @@ function bsRenderLegs() {
                 'value="'+(perBet||'')+'" ' +
                 'style="flex:1;background:none;border:none;outline:none;font-size:0.9rem;font-weight:800;color:#111;pointer-events:auto;user-select:text;-webkit-user-select:text;position:relative;z-index:20">' +
             '</div>' +
-            (perBet > 0 ?
-              '<div style="font-size:0.7rem;color:#555">'+fmtDollar(perBet)+' × '+cnt+' combos = <strong>'+fmtDollar(rowEntry)+'</strong></div>' +
-              '<div style="font-size:0.7rem;color:#00c853;font-weight:700;margin-top:2px">Est. Payout: '+fmtDollar(rowPay)+'</div>'
-              : '<div style="font-size:0.68rem;color:#aaa">'+cnt+' combinations · $'+perBet+' each</div>'
-            ) +
+            '<div data-rr-info="'+sz+'" style="font-size:0.7rem;color:#555;margin-bottom:2px">' +(perBet > 0 ? fmtDollar(perBet)+' × '+cnt+' combos = <strong style="color:#111">'+fmtDollar(rowEntry)+'</strong>' : cnt+' combinations · enter amount per combo')+'</div>' +
+            '<div data-rr-pay="'+sz+'" style="font-size:0.7rem;font-weight:700;margin-top:1px;color:#00c853">'+(perBet > 0 ? 'Est. Payout: '+fmtDollar(rowPay) : '')+'</div>' +
           '</div>' +
         '</div>';
       }).join('');
@@ -1565,24 +1562,32 @@ function rrInput(el) {
   var sz = parseInt(el.dataset.sz);
   var amt = parseFloat(val) || 0;
   rrStakes[sz] = amt;
-  // Recalculate total for footer
   var n = betSlip.length;
-  function nCr(n,r){if(r>n)return 0;if(r===0||r===n)return 1;var num=1,den=1;for(var i=0;i<r;i++){num*=(n-i);den*=(i+1);}return Math.round(num/den);}
+  // nCr inline
+  function _nCr(nn,r){if(r>nn)return 0;if(r===0||r===nn)return 1;var num=1,den=1;for(var i=0;i<r;i++){num*=(nn-i);den*=(i+1);}return Math.round(num/den);}
+  // Recalculate grand total for footer
   var totalEntry = 0;
-  Object.keys(rrStakes).forEach(function(k){ totalEntry += (rrStakes[k]||0)*nCr(n,parseInt(k)); });
+  Object.keys(rrStakes).forEach(function(k){ totalEntry += (rrStakes[k]||0)*_nCr(n,parseInt(k)); });
   bsStake = totalEntry;
-  // Update payout display in this card without re-render
+  // Update this card's display in-place
   var card = el.closest('.dkslip-card');
   if (card) {
     var combos = getCombos(betSlip, sz);
-    var pay = combos.reduce(function(s,combo){ var d=combo.reduce(function(p,b){return p*amToDecimal(b.odds);},1); return s+amt*d; },0);
-    var info = card.querySelectorAll('div[style*="font-size:0.7rem"]');
-    if (amt > 0) {
-      if (info[0]) info[0].innerHTML = fmtDollar(amt)+' × '+combos.length+' combos = <strong>'+fmtDollar(amt*combos.length)+'</strong>';
-      if (info[1]) { info[1].textContent = 'Est. Payout: '+fmtDollar(pay); info[1].style.color='#00c853'; }
-    } else {
-      if (info[0]) info[0].textContent = combos.length+' combinations · $0 each';
-      if (info[1]) info[1].textContent = '';
+    // Each combo = independent parlay: stake × (d1 × d2 × ... dn)
+    var pay = combos.reduce(function(s, combo) {
+      var d = combo.reduce(function(p, b) { return p * amToDecimal(b.odds); }, 1);
+      return s + amt * d;
+    }, 0);
+    var infoEl = card.querySelector('[data-rr-info="'+sz+'"]');
+    var payEl  = card.querySelector('[data-rr-pay="'+sz+'"]');
+    if (infoEl) {
+      infoEl.innerHTML = amt > 0
+        ? fmtDollar(amt)+' × '+combos.length+' combos = <strong style="color:#111">'+fmtDollar(amt*combos.length)+'</strong>'
+        : combos.length+' combinations · enter amount per combo';
+    }
+    if (payEl) {
+      payEl.textContent = amt > 0 ? 'Est. Payout: '+fmtDollar(pay) : '';
+      payEl.style.color = '#00c853';
     }
   }
   bsSyncPlaceBtn();
