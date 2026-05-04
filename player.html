@@ -1134,11 +1134,40 @@ function bsRenderLegs() {
     '<div style="display:flex;gap:6px;margin-bottom:12px">' +
     [25,50,100,200].map(function(a){ return '<button onclick="bsAddStake('+a+')" style="flex:1;padding:7px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;color:#aaa;font-size:0.72rem;font-weight:700;cursor:pointer">+'+a+'</button>'; }).join('') +
     '</div>' +
-    (payout > 0 ? '<div style="display:flex;justify-content:space-between;padding:10px 14px;background:#0a1f0a;border:1px solid rgba(0,255,136,0.2);border-radius:10px;margin-bottom:8px"><span style="font-size:0.78rem;color:#555">Est. Payout</span><span style="font-weight:900;color:#00ff88;font-size:0.92rem">'+fmtDollar(payout)+'</span></div>' : '') +
+    (payout > 0 ? '<div style="display:flex;justify-content:space-between;padding:10px 14px;background:#0a1f0a;border:1px solid rgba(0,255,136,0.2);border-radius:10px;margin-bottom:10px"><span style="font-size:0.78rem;color:#555">Est. Payout</span><span style="font-weight:900;color:#00ff88;font-size:0.92rem">'+fmtDollar(payout)+'</span></div>' : '') +
+    '<div id="bs-err" style="display:none;color:#ff4444;font-size:0.72rem;text-align:center;margin-bottom:8px;padding:6px;background:rgba(255,68,68,0.08);border-radius:8px">Enter a valid amount</div>' +
+    '<button id="bs-place-btn" onclick="bsPlaceBet()" ' +
+      (betSlip.length > 0 && bsStake > 0 ? '' : 'disabled ') +
+      'style="width:100%;padding:15px;background:' + (betSlip.length > 0 && bsStake > 0 ? '#00ff88' : '#1a1a1a') + ';color:' + (betSlip.length > 0 && bsStake > 0 ? '#000' : '#444') + ';border:' + (betSlip.length > 0 && bsStake > 0 ? 'none' : '1px solid #2a2a2a') + ';border-radius:12px;font-size:1rem;font-weight:900;cursor:' + (betSlip.length > 0 && bsStake > 0 ? 'pointer' : 'default') + ';transition:all 0.2s;letter-spacing:0.3px">Place Bet →</button>' +
     '</div>';
 
   el.innerHTML = legs + stakeSection;
 }
+
+
+function bsPlaceBet() {
+  var err = document.getElementById('bs-err');
+  if (!betSlip.length) {
+    if (err) { err.style.display = 'block'; err.textContent = 'Add at least one selection'; }
+    setTimeout(function(){ if(err) err.style.display='none'; }, 2500);
+    return;
+  }
+  if (!bsStake || bsStake <= 0) {
+    if (err) { err.style.display = 'block'; err.textContent = 'Enter a valid amount'; }
+    setTimeout(function(){ if(err) err.style.display='none'; }, 2500);
+    return;
+  }
+  console.log('BET SUBMITTED', { selections: betSlip, entryAmount: bsStake, type: bsType });
+  showToast('✅ Bet placed! ' + fmtDollar(bsStake) + ' · ' + betSlip.length + ' pick' + (betSlip.length>1?'s':''));
+  // TODO: POST to /api/bets
+}
+
+// Enter key in stake input triggers place bet
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'bs-stake-inp') {
+    bsPlaceBet();
+  }
+});
 
 function bsSetStake(v) {
   bsStake = parseFloat(v) || 0;
