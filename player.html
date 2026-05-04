@@ -1149,7 +1149,7 @@ function bsRenderLegs() {
     '<div id="bs-err" style="display:none;color:#ff4444;font-size:0.72rem;text-align:center;margin-bottom:8px;padding:6px;background:rgba(255,68,68,0.08);border-radius:8px">Enter a valid amount</div>' +
     '<button id="bs-place-btn" onclick="bsPlaceBet()" ' +
       (betSlip.length > 0 && bsStake > 0 ? '' : 'disabled ') +
-      'style="width:100%;padding:15px;background:' + (betSlip.length > 0 && bsStake > 0 ? '#00ff88' : '#1a1a1a') + ';color:' + (betSlip.length > 0 && bsStake > 0 ? '#000' : '#444') + ';border:' + (betSlip.length > 0 && bsStake > 0 ? 'none' : '1px solid #2a2a2a') + ';border-radius:12px;font-size:1rem;font-weight:900;cursor:' + (betSlip.length > 0 && bsStake > 0 ? 'pointer' : 'default') + ';transition:all 0.2s;letter-spacing:0.3px">Place Bet →</button>' +
+      'style="width:100%;padding:15px;background:' + (betSlip.length > 0 && bsStake > 0 ? '#00ff88' : '#1a1a1a') + ';color:' + (betSlip.length > 0 && bsStake > 0 ? '#000' : '#444') + ';border:' + (betSlip.length > 0 && bsStake > 0 ? 'none' : '1px solid #2a2a2a') + ';border-radius:12px;font-size:1rem;font-weight:900;cursor:' + (betSlip.length > 0 && bsStake > 0 ? 'pointer' : 'default') + ';transition:all 0.2s;letter-spacing:0.3px">Submit Bet →</button>' +
     '</div>';
 
   el.innerHTML = legs + stakeSection;
@@ -1159,17 +1159,81 @@ function bsRenderLegs() {
 function bsPlaceBet() {
   var err = document.getElementById('bs-err');
   if (!betSlip.length) {
-    if (err) { err.style.display = 'block'; err.textContent = 'Add at least one selection'; }
+    if (err) { err.style.display='block'; err.textContent='Add at least one selection'; }
     setTimeout(function(){ if(err) err.style.display='none'; }, 2500);
     return;
   }
   if (!bsStake || bsStake <= 0) {
-    if (err) { err.style.display = 'block'; err.textContent = 'Enter a valid amount'; }
+    if (err) { err.style.display='block'; err.textContent='Enter a valid amount'; }
     setTimeout(function(){ if(err) err.style.display='none'; }, 2500);
     return;
   }
-  console.log('BET SUBMITTED', { selections: betSlip, entryAmount: bsStake, type: bsType });
-  showToast('✅ Bet placed! ' + fmtDollar(bsStake) + ' · ' + betSlip.length + ' pick' + (betSlip.length>1?'s':''));
+  openBetConfirm();
+}
+
+function openBetConfirm() {
+  var payout = calcPayout(bsStake, betSlip, bsType);
+  var profit = Math.round((payout - bsStake) * 100) / 100;
+  var typeLabel = {straight:'Straight',parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[bsType] || bsType;
+
+  var legsHtml = betSlip.map(function(b) {
+    var logo = bsTeamLogo(b.pick, b.game);
+    var abbr = bsTeamAbbr(b.pick, b.game);
+    var logoHtml = logo
+      ? '<div class="bs-leg-logo" style="width:26px;height:26px;margin-right:8px"><img src="'+logo+'" alt="'+abbr+'"></div>'
+      : '<div class="bs-leg-logo" style="width:26px;height:26px;margin-right:8px;font-size:0.6rem">'+abbr+'</div>';
+    var teams = (b.game||'').split(' vs ');
+    var shortGame = teams.length===2 ? teams[0].split(' ').pop()+' vs '+teams[1].split(' ').pop() : (b.game||'');
+    return '<div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid #141414">' +
+      logoHtml +
+      '<div style="flex:1">' +
+        '<div style="font-size:0.6rem;color:#444">'+shortGame+'</div>' +
+        '<div style="font-size:0.84rem;font-weight:800;color:#f0f0f0;line-height:1.2">'+( b.pick||'Unknown')+'</div>' +
+        '<div style="font-size:0.65rem;color:#00c2ff;font-weight:700;text-transform:uppercase;letter-spacing:0.3px">'+(b.market||'')+'</div>' +
+      '</div>' +
+      '<div style="font-size:0.88rem;font-weight:900;color:#00ff88;margin-left:8px">'+fmtOdds(b.odds)+'</div>' +
+    '</div>';
+  }).join('');
+
+  var html =
+    '<div style="padding:18px 16px 0">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
+        '<div>' +
+          '<div style="font-size:0.6rem;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Bet Type</div>' +
+          '<div style="font-size:1rem;font-weight:900">'+typeLabel+' · '+betSlip.length+' pick'+(betSlip.length>1?'s':'')+'</div>' +
+        '</div>' +
+        '<button onclick="closeBetConfirm()" style="background:rgba(255,255,255,0.07);border:none;color:#888;width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer">✕</button>' +
+      '</div>' +
+      legsHtml +
+      '<div style="margin-top:12px;background:#0f0f0f;border-radius:12px;padding:12px 14px">' +
+        '<div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:6px"><span style="color:#555">Entry</span><span style="font-weight:800">'+fmtDollar(bsStake)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:6px"><span style="color:#555">Est. Payout</span><span style="color:#00ff88;font-weight:800">'+fmtDollar(payout)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:0.78rem;border-top:1px solid #1e1e1e;padding-top:8px;margin-top:4px"><span style="color:#555">Potential Profit</span><span style="color:#00ff88;font-weight:900;font-size:0.9rem">+'+fmtDollar(profit)+'</span></div>' +
+      '</div>' +
+      '<div style="font-size:0.62rem;color:#333;text-align:center;margin:10px 0 4px">Play credits only · No real money</div>' +
+      '<div style="display:flex;gap:10px;padding:12px 0 20px">' +
+        '<button onclick="closeBetConfirm()" style="flex:1;padding:14px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;color:#888;font-size:0.9rem;font-weight:700;cursor:pointer">Cancel</button>' +
+        '<button onclick="confirmBet()" style="flex:2;padding:14px;background:#00ff88;border:none;border-radius:12px;color:#000;font-size:0.95rem;font-weight:900;cursor:pointer;letter-spacing:0.3px">Confirm Bet →</button>' +
+      '</div>' +
+    '</div>';
+
+  document.getElementById('bet-confirm-body').innerHTML = html;
+  document.getElementById('modal-bet-confirm').classList.add('open');
+}
+
+function closeBetConfirm() {
+  document.getElementById('modal-bet-confirm').classList.remove('open');
+}
+
+function confirmBet() {
+  console.log('BET CONFIRMED', { type: bsType, selections: betSlip, entryAmount: bsStake });
+  closeBetConfirm();
+  // Clear slip
+  betSlip = [];
+  bsStake = 0;
+  bsUpdate();
+  document.getElementById('slip-bar').style.display = 'none';
+  showToast('✅ Bet submitted successfully!');
   // TODO: POST to /api/bets
 }
 
@@ -1388,6 +1452,13 @@ function bsToggle(cellId, game, time, market, pick, odds) {
   </div>
   <div id="bs-legs-container"></div>
   <div style="height:20px"></div>
+</div>
+
+<!-- BET CONFIRM MODAL -->
+<div id="modal-bet-confirm" class="modal-bg">
+  <div style="background:#0d0d0d;width:100%;max-width:430px;max-height:90vh;overflow-y:auto;border-radius:20px 20px 0 0;position:absolute;bottom:0;animation:slideUp 0.22s ease">
+    <div id="bet-confirm-body"></div>
+  </div>
 </div>
 
 <!-- GAME MARKETS MODAL -->
