@@ -349,6 +349,7 @@ input[type=number]{-moz-appearance:textfield}
 
 <script>
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
+console.log('player page loaded');
 let TOKEN=localStorage.getItem('pb-sports-token')||'';
 let slip=[],sType='straight',tPts=6,rrSz=2;
 
@@ -449,6 +450,7 @@ async function loadGames(sport){
     try { games = JSON.parse(_raw); } catch(parseErr) { throw new Error('Bad JSON: '+parseErr.message); }
     if(!Array.isArray(games)) throw new Error('Expected array, got: '+typeof games);
     console.log('[odds] games count:', games.length);
+    console.log('games render starting', games.length);
     if(!games.length){el.innerHTML='<div class="empty">No games available right now</div>';return;}
     const icons={MLB:'⚾',NBA:'🏀',NHL:'🏒',UFL:'🏈',NFL:'🏈',SOCCER:'⚽',TENNIS:'🎾',GOLF:'⛳'};
     window.gamesCache = window.gamesCache || {};
@@ -507,6 +509,7 @@ async function loadGames(sport){
         <div class="mc-footer"><span class="mc-time">${time}</span><button class="more-btn" data-game-id="${g.id}">More ›</button></div>
       </div>`;
     }).join('');
+    console.log('games rendered');
     // Re-sync highlights after DOM update
     setTimeout(function(){
       betSlip.forEach(function(b){
@@ -736,7 +739,7 @@ if (_pPreview) {
 if (_pPreview) {
   // profile screen handled elsewhere
 }
-loadGames('mlb');
+try { loadGames('mlb'); } catch(e) { console.error('loadGames init error:', e); }
 
 // Auto-join from URL param
 const urlParams = new URLSearchParams(window.location.search);
@@ -777,9 +780,6 @@ async function requestJoin(clubId, code) {
     setTimeout(hideJoinModal, 3000);
   } catch(e) { showToast('❌ Network error'); }
 }
-
-loadGames('mlb');
-
 
 // ===== GAME MARKETS =====
 var currentGame = null;
