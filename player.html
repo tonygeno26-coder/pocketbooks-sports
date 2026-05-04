@@ -123,6 +123,28 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .place-btn{display:block;width:calc(100% - 32px);margin:0 16px 32px;padding:16px;background:var(--green);color:#000;border:none;border-radius:12px;font-size:1rem;font-weight:900;cursor:pointer}
 .place-btn:disabled{opacity:0.4}
 .empty{text-align:center;padding:30px;color:var(--gray);font-size:0.85rem}
+
+/* BET SLIP */
+.bs-bar{display:none;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:406px;background:#00ff88;border-radius:14px;padding:13px 18px;justify-content:space-between;align-items:center;z-index:9000;cursor:pointer;box-shadow:0 8px 28px rgba(0,255,136,0.35)}
+.bs-bar.show{display:flex}
+.bs-badge{background:#000;color:#00ff88;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:900;margin-right:8px}
+.bs-drawer{display:none;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:#111;border-radius:20px 20px 0 0;z-index:9001;max-height:75vh;overflow-y:auto;box-shadow:0 -8px 40px rgba(0,0,0,0.7)}
+.bs-drawer.open{display:block}
+.bs-hdr{display:flex;justify-content:space-between;align-items:center;padding:16px 18px 12px;border-bottom:1px solid #1e1e1e;position:sticky;top:0;background:#111;z-index:1}
+.bs-title{font-size:1rem;font-weight:900}
+.bs-clear{font-size:0.72rem;color:#ff3d57;cursor:pointer;font-weight:700;background:none;border:none}
+.bs-close{background:rgba(255,255,255,0.08);border:none;color:#888;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:0.85rem}
+.bs-section{font-size:0.6rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#555;padding:12px 18px 6px}
+.bs-leg{background:#1a1a1a;border:1px solid #222;border-radius:12px;margin:0 14px 8px;padding:12px 14px}
+.bs-leg-top{display:flex;justify-content:space-between;align-items:flex-start}
+.bs-market{font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#00c2ff;margin-bottom:3px}
+.bs-pick{font-size:0.9rem;font-weight:800;margin-bottom:2px}
+.bs-game{font-size:0.68rem;color:#555}
+.bs-odds-val{font-size:1rem;font-weight:900;color:#00ff88}
+.bs-remove{background:none;border:none;color:#555;cursor:pointer;font-size:1.1rem;padding:0;line-height:1}
+.bs-overlay{display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,0.5)}
+.bs-overlay.show{display:block}
+.odds-b.sel{border-color:#00ff88 !important;background:rgba(0,255,136,0.12) !important;box-shadow:0 0 10px rgba(0,255,136,0.2)}
 </style>
 </head>
 <body>
@@ -391,7 +413,7 @@ async function loadGames(sport){
         if(!odds)return'<div class="odds-box" style="cursor:default"><span style="color:var(--gray)">—</span></div>';
         const c=odds>0?'odds-pos':'odds-neg';
         const f=(odds>0?'+':'')+odds;
-        return`<div class="odds-box" id="c-${id}" onclick="tog('${id}','${top||f}','${sp}',${odds})">${top?`<span class="odds-line">${top}</span>`:''}
+        return`<div class="odds-box" id="c-${id}" onclick="bsToggle('${id}','${top||f}','${sp}',${odds})">${top?`<span class="odds-line">${top}</span>`:''}
         <span class="odds-num ${c}">${f}</span></div>`;
       }
 
@@ -419,11 +441,11 @@ async function loadGames(sport){
 
 // CELL TOGGLE
 function tog(id,pick,sport,odds){
+  // Delegate to bsToggle for unified bet slip
+  bsToggle(id, pick, '', sport, pick, odds);
+  // Legacy slip compat
   const el=document.getElementById('c-'+id);
-  const i=slip.findIndex(b=>b.id===id);
-  if(i>=0){slip.splice(i,1);el.classList.remove('sel');}
-  else{slip.push({id,pick,sport,odds:parseInt(odds)});el.classList.add('sel');}
-  updBar();
+  if(el) el.classList.toggle('sel', betSlip.some(function(b){return b.cellId===id;}));
 }
 
 // SLIP
@@ -635,6 +657,86 @@ async function requestJoin(clubId, code) {
 
 loadGames('mlb');
 
+
+// ===== BET SLIP =====
+var betSlip = [];
+
+function bsUpdate() {
+  var bar = document.getElementById('bs-bar');
+  var badge = document.getElementById('bs-badge');
+  var countLabel = document.getElementById('bs-count-label');
+  if (betSlip.length > 0) {
+    bar.classList.add('show');
+    badge.textContent = betSlip.length;
+    countLabel.textContent = betSlip.length === 1 ? '— Singles' : '— ' + betSlip.length + ' Picks';
+  } else {
+    bar.classList.remove('show');
+    closeBetSlip();
+  }
+  bsRenderLegs();
+}
+
+function bsRenderLegs() {
+  var el = document.getElementById('bs-legs-container');
+  if (!betSlip.length) { el.innerHTML = '<div style="text-align:center;padding:24px;color:#555;font-size:0.82rem">Tap odds to add selections</div>'; return; }
+  var sectionLabel = betSlip.length === 1 ? 'Singles' : 'Parlay';
+  el.innerHTML = '<div class="bs-section">' + sectionLabel + '</div>' +
+    betSlip.map(function(b, i) {
+      return '<div class="bs-leg">' +
+        '<div class="bs-leg-top">' +
+        '<div style="flex:1">' +
+        '<div class="bs-market">' + b.market + '</div>' +
+        '<div class="bs-pick">' + b.pick + '</div>' +
+        '<div class="bs-game">' + b.game + '</div>' +
+        (b.time ? '<div style="font-size:0.62rem;color:#444;margin-top:2px">' + b.time + '</div>' : '') +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">' +
+        '<button class="bs-remove" onclick="bsRemove(' + i + ')">✕</button>' +
+        '<span class="bs-odds-val">' + (b.odds > 0 ? '+' : '') + b.odds + '</span>' +
+        '</div></div></div>';
+    }).join('');
+}
+
+function bsRemove(i) {
+  var b = betSlip[i];
+  // Deselect the odds box
+  var cellEl = document.getElementById('cell-' + b.cellId);
+  if (cellEl) cellEl.classList.remove('sel');
+  betSlip.splice(i, 1);
+  bsUpdate();
+}
+
+function clearSlip() {
+  betSlip.forEach(function(b) {
+    var cellEl = document.getElementById('cell-' + b.cellId);
+    if (cellEl) cellEl.classList.remove('sel');
+  });
+  betSlip = [];
+  bsUpdate();
+}
+
+function openBetSlip() {
+  document.getElementById('bs-drawer').classList.add('open');
+  document.getElementById('bs-overlay').classList.add('show');
+}
+
+function closeBetSlip() {
+  document.getElementById('bs-drawer').classList.remove('open');
+  document.getElementById('bs-overlay').classList.remove('show');
+}
+
+function bsToggle(cellId, game, time, market, pick, odds) {
+  var idx = betSlip.findIndex(function(b){ return b.cellId === cellId; });
+  var cellEl = document.getElementById('cell-' + cellId);
+  if (idx >= 0) {
+    betSlip.splice(idx, 1);
+    if (cellEl) cellEl.classList.remove('sel');
+  } else {
+    betSlip.push({ cellId: cellId, game: game, time: time, market: market, pick: pick, odds: parseInt(odds) });
+    if (cellEl) cellEl.classList.add('sel');
+  }
+  bsUpdate();
+}
 </script>
 
 <!-- JOIN CLUB MODAL -->
@@ -651,6 +753,31 @@ loadGames('mlb');
     </div>
     <div id="club-search-result"></div>
   </div>
+</div>
+
+<!-- BET SLIP OVERLAY -->
+<div class="bs-overlay" id="bs-overlay" onclick="closeBetSlip()"></div>
+
+<!-- BET SLIP BAR -->
+<div class="bs-bar" id="bs-bar" onclick="openBetSlip()">
+  <div style="display:flex;align-items:center">
+    <div class="bs-badge" id="bs-badge">0</div>
+    <span style="font-size:0.88rem;font-weight:800;color:#000">View Slip</span>
+  </div>
+  <span style="font-size:0.78rem;font-weight:700;color:#000;opacity:0.7">Tap to expand ›</span>
+</div>
+
+<!-- BET SLIP DRAWER -->
+<div class="bs-drawer" id="bs-drawer">
+  <div class="bs-hdr">
+    <div class="bs-title">Bet Slip <span id="bs-count-label" style="font-size:0.72rem;color:#555;font-weight:600"></span></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="bs-clear" onclick="clearSlip()">Clear All</button>
+      <button class="bs-close" onclick="closeBetSlip()">✕</button>
+    </div>
+  </div>
+  <div id="bs-legs-container"></div>
+  <div style="height:20px"></div>
 </div>
 
 </body>
