@@ -35,7 +35,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .filter-row{display:flex;gap:8px;padding:12px 16px;overflow-x:auto;scrollbar-width:none}
 .filter-row::-webkit-scrollbar{display:none}
 .pill{flex-shrink:0;padding:7px 16px;border-radius:20px;border:1.5px solid var(--border);font-size:0.82rem;font-weight:700;color:var(--gray);cursor:pointer;background:transparent;white-space:nowrap}
-.pill.active{border-color:var(--green);color:var(--green)}
+.pill.active{border-color:var(--green);color:var(--green);background:rgba(0,255,135,0.08);box-shadow:0 0 8px rgba(0,255,135,0.2)}
 
 /* PROMO CAROUSEL */
 .promo-wrap{padding:0 16px 12px;display:flex;gap:10px;overflow-x:auto;scrollbar-width:none}
@@ -190,12 +190,6 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 </div>
 
 <!-- TOP TABS -->
-<div class="top-tabs">
-  <div class="top-tab" onclick="setTopTab(this,'sports')">SPORTSBOOK</div>
-  <div class="top-tab active" onclick="setTopTab(this,'predictions')">PREDICTIONS</div>
-  <div class="top-tab" onclick="setTopTab(this,'horse')">HORSE</div>
-</div>
-
 <!-- SPORT TABS -->
 <div class="sport-tabs">
   <div class="sport-tab active" id="st-mlb" onclick="setSport(this,'mlb')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3c1.5 2 2.5 5 2.5 9s-1 7-2.5 9"/><path d="M12 3c-1.5 2-2.5 5-2.5 9s1 7 2.5 9"/><line x1="3" y1="12" x2="21" y2="12"/></svg>MLB</div>
@@ -212,6 +206,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
   <div class="pill" id="mf-spread" onclick="setMarketFilter(this,'spread')">Spread</div>
   <div class="pill" id="mf-totals" onclick="setMarketFilter(this,'totals')">Totals</div>
   <div class="pill" id="mf-ml" onclick="setMarketFilter(this,'moneyline')">To Win</div>
+  <div class="pill" id="mf-props" onclick="setMarketFilter(this,'props')">Props</div>
 </div>
 
 <!-- PROMO CAROUSEL -->
@@ -606,6 +601,10 @@ function setMarketFilter(el, filter) {
   document.querySelectorAll('.pill').forEach(function(p){ p.classList.remove('active'); });
   el.classList.add('active');
   // Show/hide columns in game cards
+  if (filter === 'props') {
+    showToast('Props unavailable from current odds provider');
+    return;
+  }
   var showSpread   = filter === 'lines' || filter === 'spread';
   var showTotals   = filter === 'lines' || filter === 'totals';
   var showML       = filter === 'lines' || filter === 'moneyline';
@@ -629,11 +628,7 @@ function setSport(el,sport){
   el.classList.add('active');
   loadGames(sport);
 }
-function setFilter(el,f){
-  document.querySelectorAll('.pill').forEach(p=>p.classList.remove('active'));
-  el.classList.add('active');
-  loadGames(f);
-}
+// setFilter removed — replaced by setMarketFilter
 function setBNav(el,tab){
   console.log('[nav] tab:', tab);
   document.querySelectorAll('.bn').forEach(function(n){ n.classList.remove('active'); });
