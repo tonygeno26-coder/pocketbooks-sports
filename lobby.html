@@ -529,9 +529,18 @@ function checkAuthGate() {
 }
 
 // PREVIEW MODE — must run before auth gate
-if (new URLSearchParams(window.location.search).get('preview') === '1') {
+const _params = new URLSearchParams(window.location.search);
+const _preview = _params.get('preview');
+const _screen = _params.get('screen');
+const _mode = _params.get('mode');
+if (_preview === '1') {
   const authEl = document.getElementById('auth-screen');
   if (authEl) authEl.style.display = 'none';
+} else if (_preview === 'auth') {
+  // Show auth screen in correct tab
+  if (_mode === 'signup') {
+    setTimeout(() => { if(typeof setAuthTab==='function') setAuthTab('signup'); }, 100);
+  }
 }
 
 const API = 'https://pocketbooks-sports-backend-production.up.railway.app';
@@ -821,6 +830,11 @@ if (isPreview) {
   renderClubsList();
   updateClubsTilePreview();
   document.getElementById('club-count-lbl').textContent = '2 clubs';
+  // Open correct screen from param
+  if (_screen === 'join') setTimeout(()=>openModal('modal-join'), 300);
+  if (_screen === 'create') setTimeout(()=>openModal('modal-create'), 300);
+  if (_screen === 'myclubs') setTimeout(()=>showMyClubsSection(), 300);
+  if (_screen === 'pending') setTimeout(()=>openModal('modal-pending'), 300);
 } else {
   checkAuthGate();
   loadUser();
