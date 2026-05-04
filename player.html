@@ -351,6 +351,12 @@ input[type=number]{-moz-appearance:textfield}
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 console.log('player page loaded');
 let TOKEN=localStorage.getItem('pb-sports-token')||'';
+// Balance + tickets
+var playerBalance = parseFloat(localStorage.getItem('pb-balance')) || 1000;
+var betTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
+function saveBalance(){ localStorage.setItem('pb-balance', playerBalance); }
+function saveTickets(){ localStorage.setItem('pb-tickets', JSON.stringify(betTickets)); }
+function fmtBalance(){ return '$'+playerBalance.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 let slip=[],sType='straight',tPts=6,rrSz=2;
 
 async function api(method,path,body){
@@ -767,6 +773,7 @@ if (_pPreview) {
   // profile screen handled elsewhere
 }
 try { loadGames('mlb'); } catch(e) { console.error('loadGames init error:', e); }
+renderMyBets();
 
 // Auto-join from URL param
 const urlParams = new URLSearchParams(window.location.search);
@@ -1462,25 +1469,28 @@ function openBetConfirm() {
     '</div>';
   }).join('');
 
+  var insufficient = playerBalance < bsStake;
   var html =
     '<div style="padding:18px 16px 0">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
         '<div>' +
-          '<div style="font-size:0.6rem;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Bet Type</div>' +
+          '<div style="font-size:0.6rem;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Confirm Bet</div>' +
           '<div style="font-size:1rem;font-weight:900">'+typeLabel+' · '+betSlip.length+' pick'+(betSlip.length>1?'s':'')+'</div>' +
         '</div>' +
         '<button onclick="closeBetConfirm()" style="background:rgba(255,255,255,0.07);border:none;color:#888;width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer">✕</button>' +
       '</div>' +
       legsHtml +
       '<div style="margin-top:12px;background:#0f0f0f;border-radius:12px;padding:12px 14px">' +
-        '<div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:6px"><span style="color:#555">Entry</span><span style="font-weight:800">'+fmtDollar(bsStake)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:6px"><span style="color:#555">Current Balance</span><span style="font-weight:800;color:#00c2ff">'+fmtBalance()+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:6px"><span style="color:#555">Total Risk</span><span style="font-weight:800;color:'+(insufficient?'#ff4444':'#fff')+'">'+fmtDollar(bsStake)+'</span></div>' +
         '<div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:6px"><span style="color:#555">Est. Payout</span><span style="color:#00ff88;font-weight:800">'+fmtDollar(payout)+'</span></div>' +
         '<div style="display:flex;justify-content:space-between;font-size:0.78rem;border-top:1px solid #1e1e1e;padding-top:8px;margin-top:4px"><span style="color:#555">Potential Profit</span><span style="color:#00ff88;font-weight:900;font-size:0.9rem">+'+fmtDollar(profit)+'</span></div>' +
+        (insufficient ? '<div style="margin-top:8px;padding:8px;background:rgba(255,68,68,0.1);border:1px solid rgba(255,68,68,0.3);border-radius:8px;font-size:0.72rem;color:#ff4444;text-align:center">Insufficient balance</div>' : '') +
       '</div>' +
       '<div style="font-size:0.62rem;color:#333;text-align:center;margin:10px 0 4px">Play credits only · No real money</div>' +
       '<div style="display:flex;gap:10px;padding:12px 0 20px">' +
         '<button onclick="closeBetConfirm()" style="flex:1;padding:14px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;color:#888;font-size:0.9rem;font-weight:700;cursor:pointer">Cancel</button>' +
-        '<button onclick="confirmBet()" style="flex:2;padding:14px;background:#00ff88;border:none;border-radius:12px;color:#000;font-size:0.95rem;font-weight:900;cursor:pointer;letter-spacing:0.3px">Confirm Bet →</button>' +
+        '<button onclick="confirmBet()" '+(insufficient?'disabled style="flex:2;padding:14px;background:#444;border:none;border-radius:12px;color:#888;font-size:0.95rem;font-weight:900;cursor:not-allowed"':'style="flex:2;padding:14px;background:#00ff88;border:none;border-radius:12px;color:#000;font-size:0.95rem;font-weight:900;cursor:pointer;letter-spacing:0.3px"')+'>Confirm Bet →</button>' +
       '</div>' +
     '</div>';
 
@@ -1493,15 +1503,36 @@ function closeBetConfirm() {
 }
 
 function confirmBet() {
-  console.log('BET CONFIRMED', { type: bsType, selections: betSlip, entryAmount: bsStake });
+  if (playerBalance < bsStake) { showToast('Insufficient balance'); return; }
+  var payout = calcPayout(bsStake, betSlip, bsType);
+  var typeLabel = {straight:'Singles',parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[bsType] || bsType;
+  // Deduct balance
+  playerBalance = Math.round((playerBalance - bsStake) * 100) / 100;
+  saveBalance();
+  // Create ticket
+  var ticket = {
+    id: 'T' + Date.now(),
+    type: typeLabel,
+    status: 'Open',
+    placedAt: new Date().toISOString(),
+    selections: betSlip.map(function(b){ return { pick: b.pick, market: b.market, game: b.game, odds: b.odds }; }),
+    riskAmount: bsStake,
+    estimatedPayout: Math.round(payout * 100) / 100,
+    potentialProfit: Math.round((payout - bsStake) * 100) / 100
+  };
+  betTickets.unshift(ticket);
+  saveTickets();
+  console.log('BET CONFIRMED', ticket);
   closeBetConfirm();
-  // Clear slip
-  betSlip = [];
-  bsStake = 0;
-  bsUpdate();
-  document.getElementById('slip-bar').style.display = 'none';
-  showToast('✅ Bet submitted successfully!');
-  // TODO: POST to /api/bets
+  closeBetSlip();
+  clearSlip();
+  // Update balance display
+  var balEl = document.getElementById('player-balance-display');
+  if (balEl) balEl.textContent = fmtBalance();
+  var balEl2 = document.getElementById('header-balance');
+  if (balEl2) balEl2.textContent = fmtBalance();
+  renderMyBets();
+  showToast('✅ Bet placed! ' + fmtDollar(bsStake) + ' deducted · Balance: ' + fmtBalance());
 }
 
 // Enter key in stake input triggers place bet
@@ -1511,6 +1542,39 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
+
+
+function renderMyBets() {
+  var el = document.getElementById('mybets-section');
+  if (!el) return;
+  if (!betTickets.length) {
+    el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#555;font-size:0.85rem">No bets placed yet</div>';
+    return;
+  }
+  var statusColor = { Open:'#00c2ff', Won:'#00ff88', Lost:'#ff4444', Void:'#888' };
+  el.innerHTML = '<div style="padding:14px 14px 0;font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#555">My Bets</div>' +
+    betTickets.map(function(t) {
+      var d = new Date(t.placedAt);
+      var dateStr = d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      var sc = statusColor[t.status] || '#888';
+      return '<div style="background:#1a1a1a;border-radius:14px;margin:10px 14px;padding:14px;border:1px solid #2a2a2a">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+          '<span style="font-size:0.82rem;font-weight:900">'+t.type+'</span>' +
+          '<span style="font-size:0.65rem;font-weight:800;color:'+sc+';background:rgba(0,0,0,0.3);padding:3px 8px;border-radius:20px;border:1px solid '+sc+'">'+t.status+'</span>' +
+        '</div>' +
+        t.selections.slice(0,3).map(function(s){
+          return '<div style="font-size:0.75rem;color:#888;margin-bottom:2px">'+s.pick+' <span style="color:#555">'+fmtOdds(s.odds)+'</span></div>';
+        }).join('') +
+        (t.selections.length>3?'<div style="font-size:0.68rem;color:#555">+' +(t.selections.length-3)+' more picks</div>':'') +
+        '<div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid #2a2a2a">' +
+          '<div><div style="font-size:0.62rem;color:#555">Risk</div><div style="font-size:0.82rem;font-weight:800">'+fmtDollar(t.riskAmount)+'</div></div>' +
+          '<div style="text-align:center"><div style="font-size:0.62rem;color:#555">To Win</div><div style="font-size:0.82rem;font-weight:800;color:#00ff88">'+fmtDollar(t.potentialProfit)+'</div></div>' +
+          '<div style="text-align:right"><div style="font-size:0.62rem;color:#555">Est. Payout</div><div style="font-size:0.82rem;font-weight:800;color:#00c2ff">'+fmtDollar(t.estimatedPayout)+'</div></div>' +
+        '</div>' +
+        '<div style="font-size:0.6rem;color:#444;margin-top:6px">'+dateStr+' · #'+t.id+'</div>' +
+      '</div>';
+    }).join('');
+}
 
 function bsSetSingleStake(cellId, val, idx) {
   bsStakes[cellId] = parseFloat(val) || 0;
