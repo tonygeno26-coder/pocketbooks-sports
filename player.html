@@ -1277,15 +1277,30 @@ function bsRenderLegs() {
     (function(){
       console.log('parlay selections', betSlip);
       var validLegs = betSlip.filter(function(b){ return b.odds && !isNaN(b.odds); });
+      // Detect same-game legs
+      var gameCount = {};
+      validLegs.forEach(function(b){ gameCount[b.game] = (gameCount[b.game]||0)+1; });
+      var hasSGP = Object.values(gameCount).some(function(c){ return c > 1; });
+      var sgpGameCount = Object.keys(gameCount).filter(function(g){ return gameCount[g]>1; }).length;
+      // Only compute combined odds for standard multi-game parlays
       var d = validLegs.reduce(function(p,b){ return p*amToDecimal(b.odds); }, 1);
       var raw = Math.round((d-1)*100);
       var co = (validLegs.length < 2) ? '--' : (isNaN(raw) ? '--' : (raw > 0 ? '+'+raw : ''+Math.round(-100/(d-1))));
+      // Label
+      var parlayLabel = hasSGP
+        ? (betSlip.length+' Pick '+(sgpGameCount>1?'SGPx':'SGP'))
+        : (betSlip.length+' Pick Parlay');
+      var oddsDisplay = hasSGP ? 'Est.' : co;
       var parlayPayout = bsStake > 0 ? fmtDollar(bsStake * d) : null;
+      var sgpNote = hasSGP
+        ? '<div style="padding:4px 14px 8px;font-size:0.65rem;color:#f59e0b;background:#fffbeb;border-bottom:1px solid #fde68a">⚠️ Same-game payout is estimated until SGP pricing is connected.</div>'
+        : '';
       return '<div class="dkslip-card">' +
         '<div class="dkslip-card-hdr">' +
-          '<span class="dkslip-card-title">'+betSlip.length+' Pick Parlay</span>' +
-          '<span class="dkslip-card-odds">'+co+'</span>' +
+          '<span class="dkslip-card-title">'+parlayLabel+'</span>' +
+          '<span class="dkslip-card-odds">'+oddsDisplay+'</span>' +
         '</div>' +
+        sgpNote +
         betSlip.map(function(b,i){
           var pm = b.market||'Market', pp = b.pick||'Unknown Selection', pg = b.game||'';
           var pteams = pg.split(' vs ');
@@ -1372,7 +1387,11 @@ function bsRenderLegs() {
         var co = isNaN(raw)?'--':(raw>0?'+'+raw:''+Math.round(-100/(d-1)));
         parlayMini = '<div class="parlay-mini">' +
           '<div class="parlay-mini-hdr">' +
-            '<span class="parlay-mini-title">'+betSlip.length+' Pick Parlay</span>' +
+            (function(){
+          var gc={};betSlip.forEach(function(b){gc[b.game]=(gc[b.game]||0)+1;});
+          var hasSGP=Object.values(gc).some(function(c){return c>1;});
+          return '<span class="parlay-mini-title">'+betSlip.length+' Pick '+(hasSGP?'SGP':'Parlay')+'</span>';
+        })() +
             '<span class="parlay-mini-odds">'+co+'</span>' +
           '</div>' +
           '<div style="font-size:0.65rem;color:#aaa;margin-bottom:8px">Tap Parlay tab to wager</div>' +
