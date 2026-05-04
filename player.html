@@ -962,6 +962,7 @@ function bsSetType(t) {
 // ===== ROUND ROBIN =====
 var rrSize = 2;
 var rrStakes = {}; // keyed by combo size
+var activeRRSize = 2; // which row is "selected" for footer input
 function getCombos(arr, size) {
   if (size === 1) return arr.map(function(x){ return [x]; });
   var out = [];
@@ -1167,13 +1168,14 @@ function bsRenderLegs() {
       });
 
       var sizeRows = availSizes.map(function(sz) {
+        var isActive = sz === activeRRSize;
         var cnt = nCr(n, sz);
         var perBet = rrStakes[sz] || 0;
         var rowEntry = perBet * cnt;
         var rowPay = perBet > 0 ? rrPayout(sz, perBet) : 0;
         return '<div class="dkslip-card" style="margin-bottom:8px;overflow:hidden">' +
-          '<div class="dkslip-card-hdr">' +
-            '<span class="dkslip-card-title">'+sz+'-Pick Round Robin</span>' +
+          '<div class="dkslip-card-hdr" style="'+(isActive?'background:#f0faf5':'')+'" onclick="activeRRSize=sz;var fi=document.getElementById(\'bs-stake-inp\');if(fi)fi.value=rrStakes[sz]||\'\'">' +
+            '<span class="dkslip-card-title">'+(isActive?'● ':'')+sz+'-Pick Round Robin</span>' +
             '<span class="dkslip-card-odds" style="font-size:0.75rem;color:#555">'+cnt+'x</span>' +
           '</div>' +
           '<div style="padding:10px 14px 12px">' +
@@ -1546,6 +1548,14 @@ function bsParlayInput(el) {
   if (parts.length > 2) val = parts[0]+'.'+parts.slice(1).join('');
   if (el.value !== val) el.value = val;
   var amt = parseFloat(val) || 0;
+  if (bsType === 'rr') {
+    // Footer input controls activeRRSize row
+    rrStakes[activeRRSize] = amt;
+    var rowInp = document.querySelector('input[data-sz="'+activeRRSize+'"]');
+    if (rowInp) { rowInp.value = amt > 0 ? amt : ''; rrInput(rowInp); return; }
+    bsSyncPlaceBtn();
+    return;
+  }
   console.log('parlay amount changed', amt);
   bsStake = amt;
   var valid = betSlip.length >= (bsType==='parlay'?2:1) && amt > 0;
@@ -1590,6 +1600,10 @@ function rrInput(el) {
       payEl.style.color = '#00c853';
     }
   }
+  // Sync footer to this row
+  activeRRSize = sz;
+  var footerInp = document.getElementById('bs-stake-inp');
+  if (footerInp && document.activeElement !== footerInp) footerInp.value = amt > 0 ? amt : '';
   bsSyncPlaceBtn();
 }
 
@@ -1599,12 +1613,24 @@ function bsSetStake(v) {
   bsSyncPlaceBtn();
 }
 function bsAddStake(a) {
-  if (bsType === 'parlay' || bsType === 'teaser' || bsType === 'rr') {
+  if (bsType === 'rr') {
+    var curAmt = rrStakes[activeRRSize] || 0;
+    var newAmt = curAmt + a;
+    rrStakes[activeRRSize] = newAmt;
+    // Update footer input
+    var inp = document.getElementById('bs-stake-inp');
+    if (inp) inp.value = newAmt;
+    // Trigger same logic as typing in the row
+    var rowInp = document.querySelector('input[data-sz="'+activeRRSize+'"]');
+    if (rowInp) { rowInp.value = newAmt; rrInput(rowInp); return; }
+    bsSyncPlaceBtn();
+    return;
+  }
+  if (bsType === 'parlay' || bsType === 'teaser') {
     bsStake = (bsStake || 0) + a;
     var inp = document.getElementById('bs-stake-inp');
     if (inp) { inp.value = bsStake; }
     console.log('parlay amount changed', bsStake);
-    console.log('parlay button enabled', bsStake > 0 && betSlip.length >= (bsType==='parlay'?2:1));
     bsSyncPlaceBtn();
     return;
   }
@@ -1700,6 +1726,15 @@ function bsSyncPlaceBtn() {
         ? Object.values(bsStakes).reduce(function(s,v){ return s+(v||0); }, 0)
         : bsStake;
       if (bsType === 'rr') {
+        var rrTotalPay = 0;
+        Object.keys(rrStakes).forEach(function(k){
+          var s=rrStakes[k]||0; if(!s)return;
+          var sz=parseInt(k);
+          getCombos(betSlip,sz).forEach(function(combo){
+            var d=combo.reduce(function(p,b){return p*amToDecimal(b.odds);},1);
+            rrTotalPay+=s*d;
+          });
+        });
         btn.textContent = 'Place Round Robin  $' + totalE.toFixed(2);
       } else if (bsType === 'parlay') {
         btn.textContent = 'Place Parlay  $' + totalE.toFixed(2);
