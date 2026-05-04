@@ -1446,6 +1446,7 @@ function bsPlaceBet() {
 }
 
 function openBetConfirm() {
+  console.log("confirm modal open");
   var payout = calcPayout(bsStake, betSlip, bsType);
   var profit = payout - bsStake;
   var typeLabel = {straight:'Straight',parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[bsType] || bsType;
@@ -1522,7 +1523,7 @@ function confirmBet() {
   };
   betTickets.unshift(ticket);
   saveTickets();
-  console.log('BET CONFIRMED', ticket);
+  console.log('ticket created', ticket);
   closeBetConfirm();
   closeBetSlip();
   clearSlip();
@@ -1534,6 +1535,15 @@ function confirmBet() {
   renderMyBets();
   showToast('✅ Bet placed! ' + fmtDollar(bsStake) + ' deducted · Balance: ' + fmtBalance());
 }
+
+
+// Place Bet event delegation (belt + suspenders)
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('[data-action="place-bet"]');
+  if (!btn) return;
+  console.log('place bet clicked');
+  bsPlaceBet();
+}, true);
 
 // Enter key in stake input triggers place bet
 document.addEventListener('keydown', function(e) {
@@ -2106,7 +2116,7 @@ function bsToggle(cellId, game, time, market, pick, odds) {
       <span>Est. Payout</span>
       <span id="dk-payout-val"></span>
     </div>
-    <button id="bs-place-btn" class="dkslip-place-btn empty" onclick="bsPlaceBet()" disabled>
+    <button id="bs-place-btn" class="dkslip-place-btn empty" data-action="place-bet" disabled>
       Enter Entry Amount
     </button>
   </div>
