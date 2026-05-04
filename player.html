@@ -951,6 +951,10 @@ function bsSetType(t) {
   var tab = document.getElementById('bs-tab-'+t);
   if (tab) tab.classList.add('active');
   bsRenderLegs();
+  // Sync footer input value with current stake
+  var inp = document.getElementById('bs-stake-inp');
+  if (inp) inp.value = bsStake > 0 ? bsStake : '';
+  bsSyncPlaceBtn();
 }
 
 
@@ -1491,8 +1495,8 @@ function bsParlayInput(el) {
   var amt = parseFloat(val) || 0;
   console.log('parlay amount changed', amt);
   bsStake = amt;
-  var valid = betSlip.length >= 2 && amt > 0;
-  console.log('place parlay enabled', valid);
+  var valid = betSlip.length >= (bsType==='parlay'?2:1) && amt > 0;
+  console.log('parlay button enabled', valid);
   bsSyncPlaceBtn();
 }
 
@@ -1502,11 +1506,12 @@ function bsSetStake(v) {
   bsSyncPlaceBtn();
 }
 function bsAddStake(a) {
-  if (bsType === 'parlay') {
+  if (bsType === 'parlay' || bsType === 'teaser' || bsType === 'rr') {
     bsStake = (bsStake || 0) + a;
     var inp = document.getElementById('bs-stake-inp');
     if (inp) { inp.value = bsStake; }
     console.log('parlay amount changed', bsStake);
+    console.log('parlay button enabled', bsStake > 0 && betSlip.length >= (bsType==='parlay'?2:1));
     bsSyncPlaceBtn();
     return;
   }
@@ -1856,7 +1861,9 @@ function bsToggle(cellId, game, time, market, pick, odds) {
       <span>$</span>
       <input id="bs-stake-inp" type="text" inputmode="decimal" placeholder="0.00"
         oninput="bsParlayInput(this)" onclick="event.stopPropagation()"
-        style="flex:1;background:none;border:none;outline:none;font-size:1rem;font-weight:900;color:#111;pointer-events:auto;user-select:text;-webkit-user-select:text;position:relative;z-index:20">
+        ontouchstart="event.stopPropagation()" onpointerdown="event.stopPropagation()"
+        onfocus="console.log('parlay input focused')"
+        style="flex:1;background:none;border:none;outline:none;font-size:1rem;font-weight:900;color:#111;pointer-events:auto;user-select:text;-webkit-user-select:text;position:relative;z-index:20;-webkit-user-select:text">
     </div>
     <div class="dkslip-payout" id="dk-payout-row" style="display:none">
       <span>Est. Payout</span>
