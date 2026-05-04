@@ -528,6 +528,12 @@ function checkAuthGate() {
   }
 }
 
+// PREVIEW MODE — must run before auth gate
+if (new URLSearchParams(window.location.search).get('preview') === '1') {
+  const authEl = document.getElementById('auth-screen');
+  if (authEl) authEl.style.display = 'none';
+}
+
 const API = 'https://pocketbooks-sports-backend-production.up.railway.app';
 let TOKEN = localStorage.getItem('pb-sports-token') || '';
 let userClubs = JSON.parse(localStorage.getItem('pb-clubs') || '[]');
