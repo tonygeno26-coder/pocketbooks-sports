@@ -532,6 +532,41 @@ function checkAuthGate() {
 const _params = new URLSearchParams(window.location.search);
 const _preview = _params.get('preview') === '1';
 const _screen = _params.get('screen') || 'home';
+const _state = _params.get('state') || 'active';
+const _theme = _params.get('theme') || 'dark';
+const _anim = _params.get('anim') !== 'off';
+const _device = _params.get('device') || 'iphone';
+
+// Apply device frame
+if (_device === 'tablet') document.body.style.maxWidth = '600px';
+
+// Apply theme
+if (_theme === 'casino') {
+  document.documentElement.style.setProperty('--green','#f5c842');
+  document.documentElement.style.setProperty('--cyan','#e8a020');
+  document.body.style.background = '#0a0500';
+} else if (_theme === 'neon') {
+  document.documentElement.style.setProperty('--green','#ff00ff');
+  document.documentElement.style.setProperty('--cyan','#00ffff');
+  document.body.style.background = '#050010';
+}
+
+// Disable animations
+if (!_anim) {
+  const s = document.createElement('style');
+  s.textContent = '*{animation:none!important;transition:none!important}';
+  document.head.appendChild(s);
+}
+
+// State mock data map
+const STATE_DATA = {
+  empty:   { clubs:[], diamonds:0, name:'NewUser', id:'0001' },
+  active:  { clubs:[{id:1,code:'7K92Q',name:'Vegas Crew',role:'host',status:'approved',balance:0},{id:2,code:'3M8KQ',name:'Night Life',role:'player',status:'approved',balance:340}], diamonds:2450, name:'TonyG26', id:'1042' },
+  pending: { clubs:[{id:3,code:'9Z4WR',name:'High Rollers',role:'player',status:'pending',balance:0}], diamonds:100, name:'NewPlayer', id:'2201' },
+  winning: { clubs:[{id:1,code:'7K92Q',name:'Vegas Crew',role:'player',status:'approved',balance:1840}], diamonds:5200, name:'LuckyMike', id:'3310' },
+  losing:  { clubs:[{id:1,code:'7K92Q',name:'Vegas Crew',role:'player',status:'approved',balance:-620}], diamonds:80, name:'RiskyRon', id:'4421' },
+};
+const _mockData = STATE_DATA[_state] || STATE_DATA.active;
 if (_preview) {
   const authEl = document.getElementById('auth-screen');
   if (authEl) {
@@ -820,14 +855,10 @@ const isPreview = new URLSearchParams(window.location.search).get('preview') ===
 if (isPreview) {
   // DevPreview mode: skip auth, show mock logged-in state
   document.getElementById('auth-screen').style.display = 'none';
-  document.getElementById('u-name').textContent = 'TonyG26';
-  document.getElementById('u-id').textContent = 'ID: 1042';
-  document.getElementById('w-diamonds').textContent = '2,450';
-  // Mock clubs
-  userClubs = [
-    {id:1, code:'7K92Q', name:'Vegas Crew', role:'host', status:'approved', balance:0},
-    {id:2, code:'3M8KQ', name:'Night Life', role:'player', status:'approved', balance:340},
-  ];
+  document.getElementById('u-name').textContent = _mockData.name;
+  document.getElementById('u-id').textContent = 'ID: ' + _mockData.id;
+  document.getElementById('w-diamonds').textContent = _mockData.diamonds.toLocaleString();
+  userClubs = _mockData.clubs;
   setActiveClub(userClubs[0]);
   renderClubsList();
   updateClubsTilePreview();

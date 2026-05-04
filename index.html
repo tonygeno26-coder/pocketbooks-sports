@@ -394,6 +394,23 @@ function switchClub(id) {
 const _hp = new URLSearchParams(window.location.search);
 const _hPreview = _hp.get('preview') === '1';
 const _hRole = _hp.get('role') || 'host';
+const _hState = _hp.get('state') || 'balanced';
+const _hTheme = _hp.get('theme') || 'dark';
+const _hAnim = _hp.get('anim') !== 'off';
+const _hDevice = _hp.get('device') || 'iphone';
+if (_hPreview) {
+  if (_hDevice === 'tablet') document.body.style.maxWidth = '600px';
+  if (_hTheme === 'casino') { document.documentElement.style.setProperty('--green','#f5c842'); document.documentElement.style.setProperty('--cyan','#e8a020'); }
+  if (_hTheme === 'neon') { document.documentElement.style.setProperty('--green','#ff00ff'); document.documentElement.style.setProperty('--cyan','#00ffff'); }
+  if (!_hAnim) { const s=document.createElement('style'); s.textContent='*{animation:none!important;transition:none!important}'; document.head.appendChild(s); }
+  // highRisk state: override demo data
+  if (_hState === 'highRisk') {
+    setTimeout(() => {
+      G.players = G.players.map(p => ({...p, winRate: p.winRate + 15, sharp: 'sharp'}));
+      renderPlayers();
+    }, 500);
+  }
+}
 renderPlayers();
 if(TOKEN) loadClubs();
   }

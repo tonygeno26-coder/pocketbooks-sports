@@ -353,6 +353,31 @@ function setW(mode){
   f.style.maxWidth=mode==='tablet'?'600px':'390px';
   document.getElementById('btn-mobile').classList.toggle('on',mode==='mobile');
   document.getElementById('btn-tablet').classList.toggle('on',mode==='tablet');
+  // Update all iframes with device param
+  document.querySelectorAll('iframe').forEach(fr=>{
+    const url = new URL(fr.src, window.location.href);
+    url.searchParams.set('device', mode==='tablet'?'tablet':'iphone');
+    fr.src = url.toString();
+  });
+}
+
+function toggleAnim(){
+  const animOn = document.getElementById('btn-anim')?.dataset.on !== 'true';
+  document.querySelectorAll('iframe').forEach(fr=>{
+    const url = new URL(fr.src, window.location.href);
+    url.searchParams.set('anim', animOn?'on':'off');
+    fr.src = url.toString();
+  });
+  const btn = document.getElementById('btn-anim');
+  if (btn) { btn.dataset.on = animOn?'true':'false'; btn.textContent = animOn?'🎬 Anim On':'🎬 Anim Off'; }
+}
+
+function setTheme(t){
+  document.querySelectorAll('iframe').forEach(fr=>{
+    const url = new URL(fr.src, window.location.href);
+    url.searchParams.set('theme', t);
+    fr.src = url.toString();
+  });
 }
 
 function toggleTheme(){

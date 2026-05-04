@@ -541,6 +541,18 @@ const _pp = new URLSearchParams(window.location.search);
 const _pPreview = _pp.get('preview') === '1';
 const _pScreen = _pp.get('screen') || 'home';
 const _pRole = _pp.get('role') || 'player';
+const _pState = _pp.get('state') || 'active';
+const _pTheme = _pp.get('theme') || 'dark';
+const _pAnim = _pp.get('anim') !== 'off';
+const _pDevice = _pp.get('device') || 'iphone';
+if (_pPreview) {
+  if (_pDevice === 'tablet') document.body.style.maxWidth = '600px';
+  if (_pTheme === 'casino') { document.documentElement.style.setProperty('--green','#f5c842'); document.documentElement.style.setProperty('--cyan','#e8a020'); document.body.style.background='#0a0500'; }
+  if (_pTheme === 'neon') { document.documentElement.style.setProperty('--green','#ff00ff'); document.documentElement.style.setProperty('--cyan','#00ffff'); document.body.style.background='#050010'; }
+  if (!_pAnim) { const s=document.createElement('style'); s.textContent='*{animation:none!important;transition:none!important}'; document.head.appendChild(s); }
+  if (_pState === 'winning') { /* player is up */ }
+  if (_pState === 'losing') { /* player is down */ }
+}
 if (_pPreview) {
   if (_pScreen === 'profile') setTimeout(()=>setBNav(document.querySelectorAll('.bn')[1],'mybets'), 200);
 }
