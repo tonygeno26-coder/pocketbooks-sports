@@ -1418,10 +1418,12 @@ function bsParlayInput(el) {
   var val = el.value.replace(/[^0-9.]/g,'');
   var parts = val.split('.');
   if (parts.length > 2) val = parts[0]+'.'+parts.slice(1).join('');
-  el.value = val;
+  if (el.value !== val) el.value = val;
   var amt = parseFloat(val) || 0;
-  console.log('input value changed', amt);
+  console.log('parlay amount changed', amt);
   bsStake = amt;
+  var valid = betSlip.length >= 2 && amt > 0;
+  console.log('place parlay enabled', valid);
   bsSyncPlaceBtn();
 }
 
@@ -1431,6 +1433,14 @@ function bsSetStake(v) {
   bsSyncPlaceBtn();
 }
 function bsAddStake(a) {
+  if (bsType === 'parlay') {
+    bsStake = (bsStake || 0) + a;
+    var inp = document.getElementById('bs-stake-inp');
+    if (inp) { inp.value = bsStake; }
+    console.log('parlay amount changed', bsStake);
+    bsSyncPlaceBtn();
+    return;
+  }
   bsStake = (bsStake||0) + a;
   var inp = document.getElementById('bs-stake-inp');
   if (inp) inp.value = bsStake;
@@ -1510,21 +1520,25 @@ function bsSyncPlaceBtn() {
   var payVal = document.getElementById('dk-payout-val');
   var badge2 = document.getElementById('bs-badge2');
   if (badge2) badge2.textContent = betSlip.length;
-  var valid = betSlip.length > 0 && bsStake > 0;
+  var valid = bsType === "parlay" ? (betSlip.length >= 2 && bsStake > 0) : (betSlip.length > 0 && bsStake > 0);
   if (btn) {
     btn.disabled = !valid;
     btn.className = 'dkslip-place-btn ' + (valid ? 'ready' : 'empty');
     if (betSlip.length === 0) {
       btn.textContent = 'Add Selections';
     } else if (!valid) {
-      btn.textContent = 'Enter Entry Amount';
+      btn.textContent = bsType === 'parlay' && betSlip.length < 2 ? 'Add 1 more pick for Parlay' : 'Enter Entry Amount';
     } else {
       var totalE = bsType === 'straight'
         ? Object.values(bsStakes).reduce(function(s,v){ return s+(v||0); }, 0)
         : bsStake;
-      btn.textContent = bsType === 'straight' && betSlip.length > 1
-        ? 'Place ' + betSlip.length + ' Bets  $' + totalE.toFixed(2)
-        : 'Place Bet  $' + totalE.toFixed(2);
+      if (bsType === 'parlay') {
+        btn.textContent = 'Place Parlay  $' + totalE.toFixed(2);
+      } else if (bsType === 'straight' && betSlip.length > 1) {
+        btn.textContent = 'Place ' + betSlip.length + ' Bets  $' + totalE.toFixed(2);
+      } else {
+        btn.textContent = 'Place Bet  $' + totalE.toFixed(2);
+      }
     }
   }
   if (payRow && payVal) {
@@ -1747,8 +1761,9 @@ function bsToggle(cellId, game, time, market, pick, odds) {
     </div>
     <div class="dkslip-input-row">
       <span>$</span>
-      <input id="bs-stake-inp" type="number" placeholder="0.00" readonly
-        data-ntype="parlay" data-nlabel="Parlay Entry" onclick="numpadOpenFromEl(this)" style="pointer-events:auto">
+      <input id="bs-stake-inp" type="text" inputmode="decimal" placeholder="0.00"
+        oninput="bsParlayInput(this)" onclick="event.stopPropagation()"
+        style="flex:1;background:none;border:none;outline:none;font-size:1rem;font-weight:900;color:#111;pointer-events:auto;user-select:text;-webkit-user-select:text;position:relative;z-index:20">
     </div>
     <div class="dkslip-payout" id="dk-payout-row" style="display:none">
       <span>Est. Payout</span>
