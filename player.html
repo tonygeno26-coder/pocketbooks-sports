@@ -665,7 +665,11 @@ var betSlip = [];
 var bsType = 'straight'; // 'straight' or 'parlay'
 var bsStake = 0;
 
-function amToDecimal(o){ return o > 0 ? o/100+1 : 100/Math.abs(o)+1; }
+function amToDecimal(o){
+  var n = parseInt(String(o).replace('+',''));
+  if (!n || isNaN(n)) return 1;
+  return n > 0 ? n/100+1 : 100/Math.abs(n)+1;
+}
 function calcPayout(stake, legs, type) {
   if (!stake || !legs.length) return 0;
   if (type === 'parlay') {
@@ -674,8 +678,8 @@ function calcPayout(stake, legs, type) {
   }
   return legs.reduce(function(s,b){ return s + Math.round(stake * amToDecimal(b.odds) * 100) / 100; }, 0);
 }
-function fmtOdds(o){ return (o>0?'+':'')+o; }
-function fmtDollar(n){ return '$'+parseFloat(n).toFixed(2); }
+function fmtOdds(o){ var n=parseInt(String(o).replace('+','')); return isNaN(n)?'--':(n>0?'+':'')+n; }
+function fmtDollar(n){ var v=parseFloat(n); return isNaN(v)?'--':'$'+v.toFixed(2); }
 
 function bsSetType(t) {
   if (t === 'teaser' || t === 'rr') { showToast('Coming soon'); return; }
@@ -721,8 +725,12 @@ function bsRenderLegs() {
     }).join('') +
     // Combined odds display
     (function(){
-      var d = betSlip.reduce(function(p,b){ return p*amToDecimal(b.odds); },1);
-      var combined = Math.round((d-1)*100) > 0 ? '+'+Math.round((d-1)*100) : ''+Math.round(-100/(d-1));
+      var validLegs = betSlip.filter(function(b){ return b.odds && !isNaN(b.odds); });
+      if (!validLegs.length) return '';
+      var d = validLegs.reduce(function(p,b){ return p*amToDecimal(b.odds); },1);
+      var raw = Math.round((d-1)*100);
+      var combined = isNaN(raw) ? '--' : (raw > 0 ? '+'+raw : ''+Math.round(-100/(d-1)));
+      if (isNaN(parseFloat(combined))) combined = '--';
       return '<div style="margin:8px 14px 0;padding:10px 14px;background:#1a1a1a;border-radius:10px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:0.72rem;color:#555">Combined Odds</span><span style="font-weight:900;color:#00ff88;font-size:0.92rem">'+combined+'</span></div>';
     })()
     :
@@ -793,13 +801,29 @@ function closeBetSlip() {
   document.getElementById('bs-overlay').classList.remove('show');
 }
 
+function bsNormalize(cellId, game, time, market, pick, odds) {
+  // Parse odds safely — strip +, convert to integer
+  var oddsNum = parseInt(String(odds).replace('+','')) || 0;
+  return {
+    cellId: cellId,
+    game: game || 'Unknown Game',
+    time: time || '',
+    market: market || 'Market',
+    pick: pick || 'Selection',
+    odds: oddsNum,
+    gameKey: (game||'') + '|' + (market||'')
+  };
+}
+
 function bsToggle(cellId, game, time, market, pick, odds) {
-  // Remove any existing selection from same game+market (replace logic)
-  var gameKey = game + '|' + market;
+  var sel = bsNormalize(cellId, game, time, market, pick, odds);
+  if (!sel.odds) { console.warn('bsToggle: invalid odds', odds); return; }
+  console.log('selected bet:', sel);
+  // Replace same game+market
   betSlip = betSlip.filter(function(b) {
-    if (b.gameKey === gameKey && b.cellId !== cellId) {
-      var old = document.getElementById('cell-' + b.cellId);
-      if (old) old.classList.remove('sel');
+    if (b.gameKey === sel.gameKey && b.cellId !== cellId) {
+      var el = document.getElementById('cell-' + b.cellId);
+      if (el) el.classList.remove('sel');
       return false;
     }
     return true;
@@ -810,7 +834,7 @@ function bsToggle(cellId, game, time, market, pick, odds) {
     betSlip.splice(idx, 1);
     if (cellEl) cellEl.classList.remove('sel');
   } else {
-    betSlip.push({ cellId:cellId, game:game, time:time, market:market, pick:pick, odds:parseInt(odds), gameKey:gameKey });
+    betSlip.push(sel);
     if (cellEl) cellEl.classList.add('sel');
   }
   bsUpdate();
