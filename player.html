@@ -1453,30 +1453,25 @@ function bsAddSingleStake(cellId, amt, idx) {
 function bsSetStakeAll(val) {
   var amt = parseFloat(val) || 0;
   console.log('stake all amount', amt);
+  // Update state
   betSlip.forEach(function(b){ bsStakes[b.cellId] = amt; });
   bsStake = amt * betSlip.length;
   var totalPayout = betSlip.reduce(function(s,b){ return s + amt * amToDecimal(b.odds); }, 0);
   console.log('single stakes', JSON.stringify(bsStakes));
   console.log('total stake', bsStake);
   console.log('total payout', totalPayout);
-  // Update each card's payout WITHOUT full re-render (preserves focus)
-  betSlip.forEach(function(b) {
-    var card = document.querySelector('[data-cid="'+b.cellId+'"]');
-    if (card) {
-      // Update that card's input value
-      var inp = card.tagName === 'INPUT' ? card : card.querySelector && card.querySelector('input');
-      if (inp) inp.value = amt || '';
-    }
-    // Find payout el by card structure
-    var allCards = document.querySelectorAll('.dkslip-card');
-    allCards.forEach(function(c) {
-      var cinp = c.querySelector('[data-cid="'+b.cellId+'"]');
-      if (cinp) {
-        var payEl = c.querySelector('.single-payout');
-        if (payEl) payEl.textContent = amt > 0 ? 'Est. Return: '+fmtDollar(amt * amToDecimal(b.odds)) : '';
-      }
-    });
+  // Update each card in-place: input value + payout text
+  document.querySelectorAll('.dkslip-card').forEach(function(card) {
+    var inp = card.querySelector('input[data-cid]');
+    if (!inp) return;
+    var b = betSlip.find(function(x){ return x.cellId === inp.dataset.cid; });
+    if (!b) return;
+    // Don't overwrite if this input is currently focused (let user keep cursor position)
+    if (document.activeElement !== inp) inp.value = amt > 0 ? amt : '';
+    var payEl = card.querySelector('.single-payout');
+    if (payEl) payEl.textContent = amt > 0 ? 'Est. Return: '+fmtDollar(amt * amToDecimal(b.odds)) : '';
   });
+  // Update footer button + payout
   bsSyncPlaceBtn();
 }
 
@@ -1645,6 +1640,12 @@ function bsSyncPlaceBtn() {
       }
       payVal.textContent = fmtDollar(totalPay);
       payRow.style.display = 'flex';
+      // Show total entry + payout as subtitle in button
+      if (btn && bsType === 'straight') {
+        var totalEntry = Object.values(bsStakes).reduce(function(s,v){ return s+(v||0); }, 0);
+        var activeBets = betSlip.filter(function(b){ return (bsStakes[b.cellId]||0) > 0; }).length;
+        btn.title = 'Total Payout: '+fmtDollar(totalPay);
+      }
     } else { payRow.style.display = 'none'; }
   }
 }
