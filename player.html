@@ -154,7 +154,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .dkslip-qa:hover{background:#e8e8e8}
 .dkslip-input-row{display:flex;align-items:center;background:#f5f5f5;border:1.5px solid #ddd;border-radius:10px;padding:10px 12px;margin-bottom:10px}
 .dkslip-input-row span{font-size:0.9rem;font-weight:800;color:#555;margin-right:4px}
-.dkslip-input-row input{flex:1;background:none;border:none;outline:none;font-size:1rem;font-weight:900;color:#111}
+.dkslip-input-row input{flex:1;background:none;border:none;outline:none;font-size:1rem;font-weight:900;color:#111;pointer-events:auto;user-select:text;-webkit-user-select:text;position:relative;z-index:10}
 .dkslip-payout{display:flex;justify-content:space-between;margin-bottom:10px;padding:0 2px}
 .dkslip-payout span:first-child{font-size:0.75rem;color:#777;font-weight:600}
 .dkslip-payout span:last-child{font-size:0.82rem;font-weight:900;color:#00c853}
@@ -166,7 +166,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .single-qa{flex:1;padding:7px 2px;background:#fff;border:1px solid #ddd;border-radius:8px;color:#333;font-size:0.7rem;font-weight:700;cursor:pointer;text-align:center}
 .single-inp-row{display:flex;align-items:center;background:#fff;border:1.5px solid #ddd;border-radius:8px;padding:8px 10px;margin-bottom:6px}
 .single-inp-row span{font-size:0.85rem;font-weight:800;color:#888;margin-right:3px}
-.single-inp-row input{flex:1;background:none;border:none;outline:none;font-size:0.95rem;font-weight:900;color:#111}
+.single-inp-row input{flex:1;background:none;border:none;outline:none;font-size:0.95rem;font-weight:900;color:#111;pointer-events:auto;user-select:text;-webkit-user-select:text;position:relative;z-index:10}
 .single-payout{font-size:0.72rem;color:#00c853;font-weight:700;text-align:right}
 .parlay-mini{background:#fff;border-radius:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08);padding:12px 14px}
 .parlay-mini-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px}
@@ -216,6 +216,17 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .bs-leg-time{font-size:0.6rem;color:#383838}
 .bs-odds-val{font-size:0.92rem;font-weight:900;color:#00ff88}
 .bs-remove{background:rgba(255,255,255,0.06);border:none;color:#555;width:22px;height:22px;border-radius:50%;font-size:0.65rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.numpad{position:fixed;bottom:72px;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:#e9e9ef;border-top:1px solid #d0d0d0;z-index:100002;display:none;padding:8px 8px calc(8px + env(safe-area-inset-bottom,0px))}
+.numpad.show{display:block}
+.numpad-row{display:flex;gap:6px;margin-bottom:6px}
+.numpad-key{flex:1;background:#fff;border:none;border-radius:10px;height:52px;font-size:1.25rem;font-weight:600;color:#111;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,0.15);transition:background 0.1s;-webkit-tap-highlight-color:transparent}
+.numpad-key:active{background:#d0d0d0}
+.numpad-key.dark{background:#a8a8b3;color:#fff}
+.numpad-key.zero{flex:2}
+.numpad-active-bar{display:flex;align-items:center;padding:6px 12px;background:#fff;border-radius:10px;margin-bottom:8px;gap:8px}
+.numpad-active-label{font-size:0.65rem;color:#888;font-weight:700;flex:1}
+.numpad-active-val{font-size:1.1rem;font-weight:900;color:#111}
+.numpad-done{width:100%;background:#00c853;color:#fff;border:none;border-radius:10px;padding:12px;font-size:0.95rem;font-weight:900;cursor:pointer;margin-bottom:4px}
 </style>
 </head>
 <body>
@@ -1154,9 +1165,9 @@ function bsRenderLegs() {
         '<span style="font-size:0.72rem;font-weight:700;color:#555;flex:1">Stake All</span>' +
         '<div style="display:flex;align-items:center;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:8px;padding:6px 10px">' +
           '<span style="font-size:0.82rem;color:#888;margin-right:3px">$</span>' +
-          '<input type="number" placeholder="0.00" inputmode="decimal" id="stake-all-inp" ' +
-            'style="width:70px;background:none;border:none;outline:none;font-size:0.88rem;font-weight:800;color:#111" ' +
-            'oninput="bsSetStakeAll(this.value)">' +
+          '<input type="number" placeholder="0.00" readonly id="stake-all-inp" ' +
+            'style="width:70px;background:none;border:none;outline:none;font-size:0.88rem;font-weight:800;color:#111;pointer-events:auto" ' +
+            'data-ntype="all" data-nlabel="Stake All" onclick="numpadOpenFromEl(this)" value="'+(bsStake&&bsType==="straight"?bsStake:'')+'">' +
         '</div></div>';
       var cards = betSlip.map(function(b,i){
         var matchup = b.game || 'Unknown Game';
@@ -1193,7 +1204,7 @@ function bsRenderLegs() {
             '<div class="single-inp-row">' +
               '<span>$</span>' +
               '<input type="number" placeholder="0.00" inputmode="decimal" value="'+(st||'')+'" ' +
-                'data-cid="'+b.cellId+'" data-idx="'+i+'" oninput="bsSetSingleStake(this.dataset.cid,this.value,this.dataset.idx)" ' +
+                'readonly data-ntype="single" data-cid="'+b.cellId+'" data-nlabel="'+pick.slice(0,18)+'" onclick="numpadOpenFromEl(this)" ' +
                 'style="width:100%">' +
             '</div>' +
             (payout ? '<div class="single-payout">Est. Return: '+payout+'</div>' : '') +
@@ -1354,6 +1365,61 @@ function bsAddStake(a) {
   // Sync fixed Place Bet bar — show whenever drawer is open
   bsSyncPlaceBtn();
 }
+
+// ── NUMERIC KEYPAD ──
+var numpadTarget = null;  // { type: 'all'|'single'|'parlay', cellId, inputEl }
+var numpadStr = '0';
+
+function numpadOpen(type, cellId, label) {
+  numpadTarget = { type: type, cellId: cellId };
+  var cur = type === 'all' ? bsStake
+    : type === 'single' ? (bsStakes[cellId] || 0)
+    : bsStake;
+  numpadStr = cur > 0 ? String(cur) : '0';
+  document.getElementById('numpad-display').textContent = numpadStr;
+  document.getElementById('numpad-label').textContent = label || 'Entry';
+  document.getElementById('numpad').classList.add('show');
+  // Adjust slip height to not overlap keypad
+  var drawer = document.getElementById('bs-drawer');
+  if (drawer) drawer.style.height = 'calc(85vh - 260px)';
+}
+
+function numpadDone() {
+  document.getElementById('numpad').classList.remove('show');
+  var drawer = document.getElementById('bs-drawer');
+  if (drawer) drawer.style.height = '';
+  numpadTarget = null;
+  numpadStr = '0';
+}
+
+function numpadKey(k) {
+  if (k === 'back') {
+    numpadStr = numpadStr.length > 1 ? numpadStr.slice(0, -1) : '0';
+  } else if (k === '.') {
+    if (!numpadStr.includes('.')) numpadStr += '.';
+  } else {
+    if (numpadStr === '0' && k !== '.') numpadStr = k;
+    else numpadStr += k;
+  }
+  // Cap at 2 decimals
+  var parts = numpadStr.split('.');
+  if (parts[1] && parts[1].length > 2) numpadStr = parts[0] + '.' + parts[1].slice(0,2);
+  document.getElementById('numpad-display').textContent = numpadStr;
+  var val = parseFloat(numpadStr) || 0;
+  console.log('amount input changed', val);
+  if (!numpadTarget) return;
+  if (numpadTarget.type === 'all') {
+    bsSetStakeAll(val);
+  } else if (numpadTarget.type === 'single') {
+    bsStakes[numpadTarget.cellId] = val;
+    bsStake = Object.values(bsStakes).reduce(function(s,v){ return s+(v||0); }, 0);
+    bsRenderLegs();
+  } else {
+    bsStake = val;
+    bsSetStake(val);
+  }
+}
+
 function bsSyncPlaceBtn() {
   var btn = document.getElementById('bs-place-btn');
   var payRow = document.getElementById('dk-payout-row');
@@ -1364,7 +1430,18 @@ function bsSyncPlaceBtn() {
   if (btn) {
     btn.disabled = !valid;
     btn.className = 'dkslip-place-btn ' + (valid ? 'ready' : 'empty');
-    btn.textContent = betSlip.length === 0 ? 'Add Selections' : (valid ? 'Place Bet →' : 'Enter Entry Amount');
+    if (betSlip.length === 0) {
+      btn.textContent = 'Add Selections';
+    } else if (!valid) {
+      btn.textContent = 'Enter Entry Amount';
+    } else {
+      var totalE = bsType === 'straight'
+        ? Object.values(bsStakes).reduce(function(s,v){ return s+(v||0); }, 0)
+        : bsStake;
+      btn.textContent = bsType === 'straight' && betSlip.length > 1
+        ? 'Place ' + betSlip.length + ' Bets  $' + totalE.toFixed(2)
+        : 'Place Bet  $' + totalE.toFixed(2);
+    }
   }
   if (payRow && payVal) {
     if (valid) {
@@ -1411,6 +1488,7 @@ function closeBetSlip() {
   document.getElementById('bs-drawer').classList.remove('open');
   var fb = document.getElementById('bs-fixed-bar'); if(fb) fb.style.display='none'; bsSyncPlaceBtn();
   document.getElementById('bs-overlay').classList.remove('show');
+  if(document.getElementById('numpad')) document.getElementById('numpad').classList.remove('show');
 }
 
 // Event delegation — single handler for all .odds-cell clicks
@@ -1585,8 +1663,8 @@ function bsToggle(cellId, game, time, market, pick, odds) {
     </div>
     <div class="dkslip-input-row">
       <span>$</span>
-      <input id="bs-stake-inp" type="number" placeholder="0.00" inputmode="decimal"
-        oninput="bsSetStake(this.value)" onkeydown="if(event.key==='Enter')bsPlaceBet()">
+      <input id="bs-stake-inp" type="number" placeholder="0.00" readonly
+        data-ntype="parlay" data-nlabel="Parlay Entry" onclick="numpadOpenFromEl(this)" style="pointer-events:auto">
     </div>
     <div class="dkslip-payout" id="dk-payout-row" style="display:none">
       <span>Est. Payout</span>
@@ -1596,6 +1674,35 @@ function bsToggle(cellId, game, time, market, pick, odds) {
       Enter Entry Amount
     </button>
   </div>
+</div>
+
+<!-- NUMERIC KEYPAD -->
+<div id="numpad" class="numpad">
+  <div class="numpad-active-bar">
+    <span class="numpad-active-label" id="numpad-label">Entry</span>
+    <span class="numpad-active-val">$<span id="numpad-display">0</span></span>
+  </div>
+  <div class="numpad-row">
+    <button class="numpad-key" onclick="numpadKey('1')">1</button>
+    <button class="numpad-key" onclick="numpadKey('2')">2</button>
+    <button class="numpad-key" onclick="numpadKey('3')">3</button>
+  </div>
+  <div class="numpad-row">
+    <button class="numpad-key" onclick="numpadKey('4')">4</button>
+    <button class="numpad-key" onclick="numpadKey('5')">5</button>
+    <button class="numpad-key" onclick="numpadKey('6')">6</button>
+  </div>
+  <div class="numpad-row">
+    <button class="numpad-key" onclick="numpadKey('7')">7</button>
+    <button class="numpad-key" onclick="numpadKey('8')">8</button>
+    <button class="numpad-key" onclick="numpadKey('9')">9</button>
+  </div>
+  <div class="numpad-row">
+    <button class="numpad-key" onclick="numpadKey('.')">.</button>
+    <button class="numpad-key zero" onclick="numpadKey('0')">0</button>
+    <button class="numpad-key dark" onclick="numpadKey('back')">⌫</button>
+  </div>
+  <button class="numpad-done" onclick="numpadDone()">Done</button>
 </div>
 
 <!-- BET CONFIRM MODAL -->
