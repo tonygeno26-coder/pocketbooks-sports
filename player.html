@@ -702,6 +702,23 @@ function bsSetType(t) {
   bsRenderLegs();
 }
 
+function bsValidate() {
+  // Returns array of conflict warnings
+  var warnings = [];
+  var gameGroups = {};
+  betSlip.forEach(function(b) {
+    if (!gameGroups[b.game]) gameGroups[b.game] = [];
+    gameGroups[b.game].push(b.market);
+  });
+  Object.keys(gameGroups).forEach(function(game) {
+    var markets = gameGroups[game];
+    if (markets.length > 1) {
+      warnings.push('Same-game parlay: ' + game.split(' vs ')[0].split(' ').pop() + ' vs ' + game.split(' vs ')[1]?.split(' ').pop());
+    }
+  });
+  return warnings;
+}
+
 function bsUpdate() {
   var bar = document.getElementById('bs-bar');
   var badge = document.getElementById('bs-badge');
@@ -724,6 +741,10 @@ function bsRenderLegs() {
   var el = document.getElementById('bs-legs-container');
   if (!el) return;
   if (!betSlip.length) { el.innerHTML = '<div style="text-align:center;padding:24px;color:#555;font-size:0.82rem">Tap odds to add selections</div>'; return; }
+  var warnings = bsValidate();
+  var warningHtml = warnings.length && bsType==='parlay' ? warnings.map(function(w){
+    return '<div style="margin:0 14px 6px;padding:8px 12px;background:rgba(255,61,87,0.08);border:1px solid rgba(255,61,87,0.2);border-radius:8px;font-size:0.7rem;color:#ff6b7a">⚠️ '+w+'</div>';
+  }).join('') : '';
 
   var legs = bsType === 'parlay' ?
     // Parlay: one combined entry
@@ -761,6 +782,7 @@ function bsRenderLegs() {
         '<span class="bs-odds-val">'+fmtOdds(b.odds)+'</span></div></div></div>';
     }).join('');
 
+  legs = warningHtml + legs;
   // Stake + payout
   var payout = calcPayout(bsStake, betSlip, bsType);
   var stakeSection = '<div style="padding:12px 14px;border-top:1px solid #1e1e1e;margin-top:4px">' +
@@ -845,22 +867,47 @@ document.addEventListener('click', function(e) {
     betSlip.splice(existingIdx, 1);
     cell.classList.remove('selected');
   } else {
-    // SELECT: remove any existing pick from same game+market (both sides)
+    // VALIDATION: same-game conflict detection
+    var conflictKey = game; // same game = potential conflict
+    var marketBase = market.toLowerCase().split(' ')[0]; // 'run', 'total', 'to'
+
+    // Remove all conflicting legs from same game + same market type
+    var replaced = false;
     betSlip = betSlip.filter(function(b) {
-      if (b.gameKey === gameKey) {
-        // Remove highlight from old cell
+      var bMarketBase = (b.market||'').toLowerCase().split(' ')[0];
+      var sameGame = b.game === game;
+      var sameMarketType = bMarketBase === marketBase;
+
+      if (sameGame && sameMarketType) {
+        // Conflict: opposite side of same market (e.g. Over/Under, Team A/Team B spread, ML)
         var oldCell = document.getElementById('c-' + b.cellId);
         if (oldCell) oldCell.classList.remove('selected');
+        replaced = true;
         return false;
       }
       return true;
     });
-    // Add new selection
+
+    if (replaced) {
+      showToast('Pick replaced: ' + pick);
+    }
+
+    // Add new valid selection
     betSlip.push({
       cellId: id, game: game, time: time, market: market,
       pick: pick, odds: odds, sport: sp, gameKey: gameKey
     });
     cell.classList.add('selected');
+
+    // Parlay conflict warning: same game legs not allowed in parlay
+    if (betSlip.length >= 2 && bsType === 'parlay') {
+      var gameGroups = {};
+      betSlip.forEach(function(b) { gameGroups[b.game] = (gameGroups[b.game]||0)+1; });
+      var hasSameGame = Object.values(gameGroups).some(function(c){ return c > 1; });
+      if (hasSameGame) {
+        showToast('⚠️ Parlay: Same-game legs may conflict');
+      }
+    }
   }
 
   bsUpdate();
