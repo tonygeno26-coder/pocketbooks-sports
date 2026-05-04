@@ -874,12 +874,12 @@ function calcPayout(stake, legs, type) {
   if (!stake || !legs.length) return 0;
   if (type === 'parlay') {
     var d = legs.reduce(function(p,b){ return p * amToDecimal(b.odds); }, 1);
-    return Math.round(stake * d * 100) / 100;
+    return stake * d;
   }
-  return legs.reduce(function(s,b){ return s + Math.round(stake * amToDecimal(b.odds) * 100) / 100; }, 0);
+  return legs.reduce(function(s,b){ return s + stake * amToDecimal(b.odds); }, 0);
 }
 function fmtOdds(o){ var n=parseInt(String(o).replace('+','')); return isNaN(n)?'--':(n>0?'+':'')+n; }
-function fmtDollar(n){ var v=parseFloat(n); return isNaN(v)?'--':'$'+v.toFixed(2); }
+function fmtDollar(n){ var v=parseFloat(n); if(isNaN(v)) return '--'; return '$'+(Math.round(v*100)/100).toFixed(2); }
 
 function bsSetType(t) {
   if (t === 'rr' && betSlip.length < 3) { showToast('Need 3+ picks for Round Robin'); return; }
@@ -1040,7 +1040,7 @@ function bsRenderLegs() {
     // Payout = sum of each combo's payout (not single combined odds)
     var totalPayout = rrCombos.reduce(function(sum, combo) {
       var d = combo.reduce(function(p,b){ return p*amToDecimal(b.odds); }, 1);
-      return sum + Math.round((bsStake||0) * d * 100) / 100;
+      return sum + (bsStake||0) * d;
     }, 0);
     var betWord = rrCombos.length === 1 ? 'bet' : 'bets';
     legs = '<div class="bs-section">Round Robin · '+betSlip.length+' picks · '+safeRRSize+'-leg</div>' +
@@ -1071,7 +1071,7 @@ function bsRenderLegs() {
     var ineligible = betSlip.filter(function(b){ return !isTeaserEligible(b); });
     var tOdds = getTeaserOdds(tLegs.length, teaserPts);
     var tOddsFmt = (tOdds > 0 ? '+' : '') + tOdds;
-    var tPayout = bsStake > 0 ? Math.round(bsStake * amToDecimal(tOdds) * 100) / 100 : 0;
+    var tPayout = bsStake > 0 ? bsStake * amToDecimal(tOdds) : 0;
     legs = '<div class="bs-section">Teaser · '+tPtsLabel(teaserPts)+' · '+tLegs.length+' picks</div>' +
       '<div style="display:flex;gap:6px;padding:0 14px 10px">' +
       [6,6.5,7].map(function(p){
@@ -1192,7 +1192,7 @@ function bsPlaceBet() {
 
 function openBetConfirm() {
   var payout = calcPayout(bsStake, betSlip, bsType);
-  var profit = Math.round((payout - bsStake) * 100) / 100;
+  var profit = payout - bsStake;
   var typeLabel = {straight:'Straight',parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[bsType] || bsType;
 
   var legsHtml = betSlip.map(function(b) {
