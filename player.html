@@ -159,6 +159,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .mkt-odds-box:active{transform:scale(0.95)}
 .mkt-odds-num{font-size:0.85rem;font-weight:900;color:#e0e0e0}
 .mkt-odds-num.pos{color:#00ff88}
+.more-btn{cursor:pointer;pointer-events:auto;color:#00ff88;font-weight:700;font-size:0.72rem;background:none;border:none;padding:0;z-index:20;position:relative}
 </style>
 </head>
 <body>
@@ -461,7 +462,7 @@ async function loadGames(sport){
           ${cell(g.id+'-un',un?'U '+un.line:null,un?.odds)}
           ${cell(g.id+'-ml-hw',null,hwML?.odds,'To Win',hwN+' ML')}
         </div>
-        <div class="mc-footer"><span class="mc-time">${time}</span><span class="mc-more">More ›</span></div>
+        <div class="mc-footer"><span class="mc-time">${time}</span><button class="more-btn" data-game-id="${g.id}">More ›</button></div>
       </div>`;
     }).join('');
     // Re-sync highlights after DOM update
@@ -903,6 +904,18 @@ function setTeaserPts(pts) {
   if (btn) btn.classList.add('active');
   bsRenderLegs();
 }
+
+
+// More button delegation
+document.addEventListener('click', function(e) {
+  var more = e.target.closest ? e.target.closest('.more-btn') : null;
+  if (!more) return;
+  var gameId = more.dataset.gameId || more.getAttribute('data-game-id');
+  console.log('More clicked', gameId);
+  var game = window.gamesCache && window.gamesCache[gameId];
+  if (game) { openMarkets(game); }
+  else { console.warn('Game not in cache:', gameId); }
+}, true);
 
 function bsValidate() {
   // Returns array of conflict warnings
