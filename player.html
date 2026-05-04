@@ -94,7 +94,8 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .bn.active .bn-icon svg{stroke:var(--green);filter:drop-shadow(0 0 4px rgba(0,255,135,0.5))}
 
 /* BET SLIP MODAL */
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:200;align-items:flex-end;justify-content:center}
+.modal-bg{display:none !important;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:200;align-items:flex-end;justify-content:center;pointer-events:none}
+.modal-bg.open{display:flex !important;pointer-events:auto}
 .modal-bg.open{display:flex}
 .modal{background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:430px;max-height:90vh;overflow-y:auto}
 .mh{padding:18px 20px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--card)}
@@ -634,17 +635,10 @@ async function requestJoin(clubId, code) {
 
 loadGames('mlb');
 
-// Fix click blocking: ensure modals closed, nav on top
-document.addEventListener('DOMContentLoaded', function() {
-  document.querySelectorAll('.modal-bg').forEach(function(m){ m.classList.remove('open'); m.style.display='none'; });
-  var ms = document.getElementById('modal-slip'); if(ms){ms.classList.remove('open');ms.style.display='none';}
-  var nav = document.getElementById('bottom-nav');
-  if(nav){ nav.style.zIndex='99999'; nav.style.pointerEvents='auto'; nav.style.position='fixed'; }
-});
 </script>
 
 <!-- JOIN CLUB MODAL -->
-<div id="modal-join-club" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:300;align-items:flex-end;justify-content:center">
+<div id="modal-join-club" class="modal-bg" style="">
   <div style="background:#141414;border-radius:20px 20px 0 0;width:100%;max-width:430px;padding:24px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
       <span style="font-size:1.1rem;font-weight:900">Join a Club</span>
