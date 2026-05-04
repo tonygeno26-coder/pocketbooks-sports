@@ -147,6 +147,18 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .bs-overlay{display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,0.5)}
 .bs-overlay.show{display:block}
 .odds-b.sel{border-color:#00ff88 !important;background:rgba(0,255,136,0.12) !important;box-shadow:0 0 10px rgba(0,255,136,0.2)}
+.mkt-tab{flex-shrink:0;padding:7px 16px;border-radius:20px;border:1px solid #2a2a2a;background:transparent;color:#555;font-size:0.78rem;font-weight:700;cursor:pointer;transition:all 0.15s}
+.mkt-tab.active{border-color:#00c2ff;color:#00c2ff;background:rgba(0,194,255,0.1)}
+.mkt-group{margin-bottom:14px}
+.mkt-group-header{display:flex;justify-content:space-between;align-items:center;padding:8px 0;cursor:pointer;border-bottom:1px solid #1e1e1e;margin-bottom:8px}
+.mkt-group-title{font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#888}
+.mkt-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #111}
+.mkt-pick-name{font-size:0.82rem;font-weight:600;color:#ccc;flex:1}
+.mkt-odds-box{min-width:70px;text-align:center;padding:8px 10px;background:#1a1a1a;border:1.5px solid #2a2a2a;border-radius:9px;cursor:pointer;pointer-events:auto;transition:all 0.15s}
+.mkt-odds-box.selected{border-color:#fff !important;box-shadow:0 0 8px rgba(255,255,255,0.5) !important;background:rgba(0,255,136,0.15) !important}
+.mkt-odds-box:active{transform:scale(0.95)}
+.mkt-odds-num{font-size:0.85rem;font-weight:900;color:#e0e0e0}
+.mkt-odds-num.pos{color:#00ff88}
 </style>
 </head>
 <body>
@@ -400,7 +412,9 @@ async function loadGames(sport){
     console.log('[odds] games count:', games.length);
     if(!games.length){el.innerHTML='<div class="empty">No games available right now</div>';return;}
     const icons={MLB:'⚾',NBA:'🏀',NHL:'🏒',UFL:'🏈',NFL:'🏈',SOCCER:'⚽',TENNIS:'🎾',GOLF:'⛳'};
+    window.gamesCache = window.gamesCache || {};
     el.innerHTML=games.map(g=>{
+      window.gamesCache[g.id]=g;
       const aw=g.away,hw=g.home;
       const awN=aw.split(' ').slice(-1)[0],hwN=hw.split(' ').slice(-1)[0];
       const awC=aw.split(' ').slice(0,-1).join(' '),hwC=hw.split(' ').slice(0,-1).join(' ');
@@ -680,6 +694,117 @@ async function requestJoin(clubId, code) {
 }
 
 loadGames('mlb');
+
+
+// ===== GAME MARKETS =====
+var currentGame = null;
+var currentMktTab = 'popular';
+
+function openMarkets(gameData) {
+  currentGame = gameData;
+  currentMktTab = 'popular';
+  document.getElementById('mkt-matchup').textContent = gameData.away + ' vs ' + gameData.home;
+  document.getElementById('mkt-time').textContent = new Date(gameData.time).toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  document.getElementById('modal-markets').classList.add('open');
+  renderMarkets('popular');
+  // Load extended markets from API if needed
+  loadExtendedMarkets(gameData);
+}
+
+function closeMarkets() {
+  document.getElementById('modal-markets').classList.remove('open');
+  currentGame = null;
+}
+
+function setMktTab(tab) {
+  currentMktTab = tab;
+  document.querySelectorAll('.mkt-tab').forEach(function(t){ t.classList.remove('active'); });
+  var btn = document.getElementById('mkt-tab-'+tab);
+  if (btn) btn.classList.add('active');
+  renderMarkets(tab);
+}
+
+function renderMarkets(tab) {
+  var el = document.getElementById('mkt-content');
+  if (!currentGame) { el.innerHTML = ''; return; }
+  var g = currentGame;
+  var groups = [];
+
+  if (tab === 'popular' || tab === 'lines') {
+    // Moneyline
+    if (g.moneyline && g.moneyline.length) {
+      groups.push({ title: 'Moneyline', rows: g.moneyline.map(function(m){
+        return { name: m.team, id: g.id+'-ml-'+m.team.split(' ').pop(), odds: m.odds, market: 'To Win', pick: m.team+' ML', game: g.away+' vs '+g.home, time: g.time };
+      })});
+    }
+    // Spreads
+    if (g.spreads && g.spreads.length) {
+      groups.push({ title: 'Run Line / Spread', rows: g.spreads.map(function(s){
+        return { name: s.team+' '+(s.line>0?'+':'')+s.line, id: g.id+'-sp-'+s.team.split(' ').pop(), odds: s.odds, market: 'Run Line', pick: s.team+' '+(s.line>0?'+':'')+s.line, game: g.away+' vs '+g.home, time: g.time };
+      })});
+    }
+  }
+
+  if (tab === 'popular' || tab === 'totals') {
+    if (g.totals && g.totals.length) {
+      groups.push({ title: 'Total', rows: g.totals.map(function(t){
+        return { name: t.name+' '+t.line, id: g.id+'-tot-'+t.name, odds: t.odds, market: 'Total', pick: t.name+' '+t.line, game: g.away+' vs '+g.home, time: g.time };
+      })});
+    }
+    // Alternate totals if available
+    if (g.alt_totals && g.alt_totals.length) {
+      groups.push({ title: 'Alternate Totals', rows: g.alt_totals.map(function(t){
+        return { name: t.name+' '+t.line, id: g.id+'-atot-'+t.name+t.line, odds: t.odds, market: 'Alt Total', pick: t.name+' '+t.line, game: g.away+' vs '+g.home, time: g.time };
+      })});
+    }
+  }
+
+  if (tab === 'props') {
+    if (g.player_props && g.player_props.length) {
+      var propsByPlayer = {};
+      g.player_props.forEach(function(p){ (propsByPlayer[p.player]||(propsByPlayer[p.player]=[])).push(p); });
+      Object.keys(propsByPlayer).forEach(function(pname){
+        groups.push({ title: pname, rows: propsByPlayer[pname].map(function(p){
+          return { name: p.market+': '+(p.line>0?'+':'')+p.line, id: g.id+'-pp-'+pname+p.market, odds: p.odds, market: 'Prop', pick: pname+' '+p.market+' '+(p.line>0?'+':'')+p.line, game: g.away+' vs '+g.home, time: g.time };
+        })});
+      });
+    } else {
+      el.innerHTML = '<div style="text-align:center;padding:30px;color:#555;font-size:0.82rem">Player props not available for this game</div>';
+      return;
+    }
+  }
+
+  if (!groups.length) {
+    el.innerHTML = '<div style="text-align:center;padding:30px;color:#555;font-size:0.82rem">More markets unavailable</div>';
+    return;
+  }
+
+  el.innerHTML = groups.map(function(group) {
+    return '<div class="mkt-group">' +
+      '<div class="mkt-group-header"><span class="mkt-group-title">'+group.title+'</span></div>' +
+      group.rows.map(function(row) {
+        var isSelected = betSlip.some(function(b){ return b.cellId === row.id; });
+        var fmtO = (row.odds>0?'+':'')+row.odds;
+        var posClass = row.odds>0?' pos':'';
+        return '<div class="mkt-row">' +
+          '<span class="mkt-pick-name">'+row.name+'</span>' +
+          '<div class="mkt-odds-box odds-cell'+(isSelected?' selected':'')+'" id="c-'+row.id+'" '+
+          'data-id="'+row.id+'" data-game="'+row.game.replace(/"/g,'')+'" data-time="'+(row.time||'')+'" '+
+          'data-market="'+row.market+'" data-pick="'+row.pick.replace(/"/g,'')+'" data-odds="'+row.odds+'" data-sport="'+(currentGame.sport||'')+'">' +
+          '<span class="mkt-odds-num'+posClass+'">'+fmtO+'</span>' +
+          '</div></div>';
+      }).join('') +
+      '</div>';
+  }).join('');
+}
+
+async function loadExtendedMarkets(g) {
+  // Try to load h2h + alternate markets from API
+  // Current API only returns main lines; extended markets require paid tier
+  // Store what we have, future: fetch /api/odds/:sport/:gameId
+  if (!g.alt_totals) g.alt_totals = [];
+  if (!g.player_props) g.player_props = [];
+}
 
 
 // ===== BET SLIP =====
@@ -1146,6 +1271,29 @@ function bsToggle(cellId, game, time, market, pick, odds) {
   </div>
   <div id="bs-legs-container"></div>
   <div style="height:20px"></div>
+</div>
+
+<!-- GAME MARKETS MODAL -->
+<div id="modal-markets" class="modal-bg">
+  <div style="background:#0a0a0a;width:100%;max-width:430px;height:100vh;overflow-y:auto;display:flex;flex-direction:column">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:rgba(10,10,10,0.97);border-bottom:1px solid #1a1a1a;position:sticky;top:0;z-index:10">
+      <button onclick="closeMarkets()" style="background:rgba(255,255,255,0.08);border:none;color:#aaa;width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center">←</button>
+      <div>
+        <div id="mkt-matchup" style="font-size:0.95rem;font-weight:900"></div>
+        <div id="mkt-time" style="font-size:0.65rem;color:#555;margin-top:1px"></div>
+      </div>
+    </div>
+    <!-- Market tabs -->
+    <div style="display:flex;overflow-x:auto;scrollbar-width:none;padding:10px 14px;gap:8px;border-bottom:1px solid #1a1a1a">
+      <button class="mkt-tab active" id="mkt-tab-popular" onclick="setMktTab('popular')">Popular</button>
+      <button class="mkt-tab" id="mkt-tab-lines" onclick="setMktTab('lines')">Lines</button>
+      <button class="mkt-tab" id="mkt-tab-totals" onclick="setMktTab('totals')">Totals</button>
+      <button class="mkt-tab" id="mkt-tab-props" onclick="setMktTab('props')">Props</button>
+    </div>
+    <!-- Market content -->
+    <div id="mkt-content" style="padding:14px;flex:1"></div>
+  </div>
 </div>
 
 </body>
