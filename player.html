@@ -536,11 +536,13 @@ function showToast(msg){
   t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2500);
 }
 
-// Preview mode
+// Preview mode — standardized params
 const _pp = new URLSearchParams(window.location.search);
-if (_pp.get('preview') === '1') {
-  const sc = _pp.get('screen');
-  if (sc === 'profile') setTimeout(()=>setBNav(document.querySelectorAll('.bn')[1],'mybets'), 200);
+const _pPreview = _pp.get('preview') === '1';
+const _pScreen = _pp.get('screen') || 'home';
+const _pRole = _pp.get('role') || 'player';
+if (_pPreview) {
+  if (_pScreen === 'profile') setTimeout(()=>setBNav(document.querySelectorAll('.bn')[1],'mybets'), 200);
 }
 loadGames('mlb');
 
