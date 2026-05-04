@@ -633,6 +633,14 @@ async function requestJoin(clubId, code) {
 }
 
 loadGames('mlb');
+
+// Fix click blocking: ensure modals closed, nav on top
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.modal-bg').forEach(function(m){ m.classList.remove('open'); m.style.display='none'; });
+  var ms = document.getElementById('modal-slip'); if(ms){ms.classList.remove('open');ms.style.display='none';}
+  var nav = document.getElementById('bottom-nav');
+  if(nav){ nav.style.zIndex='99999'; nav.style.pointerEvents='auto'; nav.style.position='fixed'; }
+});
 </script>
 
 <!-- JOIN CLUB MODAL -->
