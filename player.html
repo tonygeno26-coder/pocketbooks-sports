@@ -85,13 +85,14 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .slip-count{background:#000;color:var(--green);width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:900;margin-right:8px}
 
 /* BOTTOM NAV */
-.bnav{position:fixed;bottom:0;left:0;right:0;width:100%;background:rgba(10,10,10,0.98);border-top:1px solid #222;display:flex;padding:10px 0 24px;z-index:99999;pointer-events:auto !important}
-.bn{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;padding:4px 0}
-.bn-icon{width:22px;height:22px;display:flex;align-items:center;justify-content:center}
-.bn-icon svg{width:22px;height:22px;stroke:#555;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:stroke 0.2s}
-.bn-label{font-size:0.58rem;color:#555;font-weight:600;transition:color 0.2s}
+.bnav{position:fixed;bottom:0;left:0;right:0;width:100%;max-width:430px;margin:0 auto;background:rgba(8,8,8,0.99);border-top:1px solid #1e1e1e;display:flex;align-items:stretch;height:72px;padding-bottom:env(safe-area-inset-bottom,0px);z-index:99999;pointer-events:auto;box-shadow:0 -4px 24px rgba(0,0,0,0.6)}
+.bn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:8px 2px;background:none;border:none;-webkit-tap-highlight-color:transparent;transition:transform 0.1s;pointer-events:auto}
+.bn:active{transform:scale(0.9)}
+.bn-icon{width:24px;height:24px;display:flex;align-items:center;justify-content:center}
+.bn-icon svg{width:22px;height:22px;stroke:#505050;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:stroke 0.18s}
+.bn-label{font-size:0.57rem;color:#505050;font-weight:600;letter-spacing:0.1px;transition:color 0.18s;white-space:nowrap}
 .bn.active .bn-label{color:var(--green)}
-.bn.active .bn-icon svg{stroke:var(--green);filter:drop-shadow(0 0 4px rgba(0,255,135,0.5))}
+.bn.active .bn-icon svg{stroke:var(--green);filter:drop-shadow(0 0 5px rgba(0,255,135,0.6))}
 
 /* BET SLIP MODAL */
 .modal-bg{display:none !important;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:200;align-items:flex-end;justify-content:center;pointer-events:none}
@@ -296,26 +297,26 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 </div>
 
 <!-- BOTTOM NAV -->
-<nav id="bottom-nav" style="position:fixed;bottom:0;left:0;right:0;width:100%;background:rgba(10,10,10,0.98);border-top:1px solid #1a1a1a;display:flex;padding:10px 0 24px;z-index:99999;pointer-events:auto">
-  <button onclick="console.log('NAV:sportsbook');setBNav(this,'sportsbook')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:5px 0;pointer-events:auto;color:#00ff88">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-    <span style="font-size:0.57rem;font-weight:600;color:#00ff88">Sportsbook</span>
+<nav id="bottom-nav" class="bnav">
+  <button class="bn active" id="bn-home" onclick="setBNav(this,'home')" aria-label="Home">
+    <div class="bn-icon"><svg viewBox="0 0 24 24"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H15v-5h-6v5H4a1 1 0 0 1-1-1z"/></svg></div>
+    <span class="bn-label">Home</span>
   </button>
-  <button onclick="console.log('NAV:search');setBNav(this,'search')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:5px 0;pointer-events:auto;color:#444">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-    <span style="font-size:0.57rem;font-weight:600">Search</span>
+  <button class="bn" id="bn-live" onclick="setBNav(this,'live')" aria-label="Live">
+    <div class="bn-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M6.3 6.3a8 8 0 0 0 0 11.4M17.7 6.3a8 8 0 0 1 0 11.4M3.5 3.5a13 13 0 0 0 0 17M20.5 3.5a13 13 0 0 1 0 17"/></svg></div>
+    <span class="bn-label">Live</span>
   </button>
-  <button onclick="console.log('NAV:trades');setBNav(this,'trades')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:5px 0;pointer-events:auto;color:#444">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
-    <span style="font-size:0.57rem;font-weight:600">My Trades</span>
+  <button class="bn" id="bn-mybets" onclick="setBNav(this,'mybets')" aria-label="My Bets">
+    <div class="bn-icon"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg></div>
+    <span class="bn-label">My Bets</span>
   </button>
-  <button onclick="console.log('NAV:predictions');setBNav(this,'predictions')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:5px 0;pointer-events:auto;color:#444">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 8l2.5 5H9.5L12 8z"></path><line x1="12" y1="16" x2="12" y2="18"></line></svg>
-    <span style="font-size:0.57rem;font-weight:600">Predictions</span>
+  <button class="bn" id="bn-sportsbook" onclick="setBNav(this,'sportsbook')" aria-label="Sportsbook">
+    <div class="bn-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3c0 0-4 3.5-4 9s4 9 4 9"/><path d="M12 3c0 0 4 3.5 4 9s-4 9-4 9"/><line x1="3.5" y1="9" x2="20.5" y2="9"/><line x1="3.5" y1="15" x2="20.5" y2="15"/></svg></div>
+    <span class="bn-label">Sportsbook</span>
   </button>
-  <button onclick="console.log('NAV:rewards');setBNav(this,'rewards')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:5px 0;pointer-events:auto;color:#444">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line></svg>
-    <span style="font-size:0.57rem;font-weight:600">Rewards</span>
+  <button class="bn" id="bn-rewards" onclick="setBNav(this,'rewards')" aria-label="Rewards">
+    <div class="bn-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M12 12v9"/><path d="M8 16h8"/><path d="M9 12l-5 5M15 12l5 5"/></svg></div>
+    <span class="bn-label">Rewards</span>
   </button>
 </nav>
 
@@ -611,21 +612,31 @@ function setFilter(el,f){
 }
 function setBNav(el,tab){
   console.log('[nav] tab:', tab);
-  document.querySelectorAll('.bn').forEach(n=>n.classList.remove('active'));
+  document.querySelectorAll('.bn').forEach(function(n){ n.classList.remove('active'); });
   el.classList.add('active');
   ['sportsbook-section','mybets-section','predictions-section'].forEach(id=>{
     const s=document.getElementById(id); if(s) s.style.display='none';
   });
   const ss=document.getElementById('sport-scroll');
   const pb=document.getElementById('promo-banner');
-  if(tab==='sportsbook'||tab==='sports'){
+  if(tab==='home'||tab==='sportsbook'||tab==='sports'){
     const sec=document.getElementById('sportsbook-section');
     if(sec) sec.style.display='block';
     if(ss) ss.style.display='flex';
     if(pb) pb.style.display='flex';
     loadGames('mlb');
+  } else if(tab==='live'){
+    const sec=document.getElementById('live-section');
+    if(sec) sec.style.display='block';
+    if(ss) ss.style.display='none';
+    if(pb) pb.style.display='none';
   } else if(tab==='predictions'){
     const sec=document.getElementById('predictions-section');
+    if(sec) sec.style.display='block';
+    if(ss) ss.style.display='none';
+    if(pb) pb.style.display='none';
+  } else if(tab==='rewards'){
+    const sec=document.getElementById('rewards-section');
     if(sec) sec.style.display='block';
     if(ss) ss.style.display='none';
     if(pb) pb.style.display='none';
