@@ -829,9 +829,12 @@ function bsRenderLegs() {
         return '<button id="rr-btn-'+s+'" class="rr-size-btn bs-tab'+(s===safeRRSize?' active':'')+'" onclick="setRRSize('+s+')">'+s+'-leg</button>';
       }).join('') + '</div>' +
       '<div style="background:#1a1a1a;border-radius:10px;margin:0 14px 10px;padding:10px 14px">' +
-      '<div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px"><span style="color:#555">Combinations</span><span style="font-weight:800">'+rrCombos.length+' '+betWord+'</span></div>' +
-      '<div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px"><span style="color:#555">Total Entry</span><span style="color:#00ff88;font-weight:800">'+fmtDollar(totalEntry)+'</span></div>' +
-      (bsStake > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.72rem"><span style="color:#555">Max Payout</span><span style="color:#00ff88;font-weight:900">'+fmtDollar(totalPayout)+'</span></div>' : '') +
+      '<div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:6px"><span style="color:#555"># of Bets</span><span style="font-weight:900;font-size:0.82rem">'+rrCombos.length+' '+betWord+'</span></div>' +
+      (bsStake > 0 ?
+        '<div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px"><span style="color:#555">Per Bet</span><span style="font-weight:800">'+fmtDollar(bsStake)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px;color:#aaa"><span>'+fmtDollar(bsStake)+' × '+rrCombos.length+' '+betWord+' =</span><span style="color:#00ff88;font-weight:800">'+fmtDollar(totalEntry)+' total</span></div>'
+        : '<div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px"><span style="color:#555">Total Entry</span><span style="color:#555">Enter amount below</span></div>') +
+      (bsStake > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.72rem;border-top:1px solid #2a2a2a;padding-top:6px;margin-top:4px"><span style="color:#555">Max Payout</span><span style="color:#00ff88;font-weight:900;font-size:0.82rem">'+fmtDollar(totalPayout)+'</span></div>' : '') +
       '</div>' +
       rrCombos.slice(0,6).map(function(combo,i){
         var d = combo.reduce(function(p,b){ return p*amToDecimal(b.odds); },1);
