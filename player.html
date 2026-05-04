@@ -1165,10 +1165,7 @@ function bsRenderLegs() {
     [25,50,100,200].map(function(a){ return '<button onclick="bsAddStake('+a+')" style="flex:1;padding:7px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;color:#aaa;font-size:0.72rem;font-weight:700;cursor:pointer">+'+a+'</button>'; }).join('') +
     '</div>' +
     (payout > 0 ? '<div style="display:flex;justify-content:space-between;padding:10px 14px;background:#0a1f0a;border:1px solid rgba(0,255,136,0.2);border-radius:10px;margin-bottom:10px"><span style="font-size:0.78rem;color:#555">Est. Payout</span><span style="font-weight:900;color:#00ff88;font-size:0.92rem">'+fmtDollar(payout)+'</span></div>' : '') +
-    '<div id="bs-err" style="display:none;color:#ff4444;font-size:0.72rem;text-align:center;margin-bottom:8px;padding:6px;background:rgba(255,68,68,0.08);border-radius:8px">Enter a valid amount</div>' +
-    '<button id="bs-place-btn" onclick="bsPlaceBet()" ' +
-      (betSlip.length > 0 && bsStake > 0 ? '' : 'disabled ') +
-      'style="width:100%;padding:15px;background:' + (betSlip.length > 0 && bsStake > 0 ? '#00ff88' : '#1a1a1a') + ';color:' + (betSlip.length > 0 && bsStake > 0 ? '#000' : '#444') + ';border:' + (betSlip.length > 0 && bsStake > 0 ? 'none' : '1px solid #2a2a2a') + ';border-radius:12px;font-size:1rem;font-weight:900;cursor:' + (betSlip.length > 0 && bsStake > 0 ? 'pointer' : 'default') + ';transition:all 0.2s;letter-spacing:0.3px">Place Bet →</button>' +
+    '<div id="bs-err" style="display:none;color:#ff4444;font-size:0.72rem;text-align:center;margin-bottom:6px;padding:6px;background:rgba(255,68,68,0.08);border-radius:8px">Enter a valid amount</div>' +
     '</div>';
 
   el.innerHTML = legs;
@@ -1285,6 +1282,19 @@ function bsAddStake(a) {
   var teaserTab = document.getElementById('bs-tab-teaser');
   if (rrTab) { rrTab.style.opacity = betSlip.length >= 3 ? '1' : '0.35'; rrTab.style.cursor = betSlip.length >= 3 ? 'pointer' : 'not-allowed'; }
   if (teaserTab) { teaserTab.style.opacity = getTeaserLegs().length >= 2 ? '1' : '0.35'; teaserTab.style.cursor = getTeaserLegs().length >= 2 ? 'pointer' : 'not-allowed'; }
+  // Sync fixed Place Bet bar
+  var fixedBar = document.getElementById('bs-fixed-bar');
+  var fixedBtn = document.getElementById('bs-fixed-place-btn');
+  var drawerOpen = document.getElementById('bs-drawer') && document.getElementById('bs-drawer').classList.contains('open');
+  if (fixedBar) fixedBar.style.display = (drawerOpen && betSlip.length > 0) ? 'block' : 'none';
+  if (fixedBtn) {
+    var valid = betSlip.length > 0 && bsStake > 0;
+    fixedBtn.disabled = !valid;
+    fixedBtn.style.background = valid ? '#00ff88' : '#1a1a1a';
+    fixedBtn.style.color = valid ? '#000' : '#444';
+    fixedBtn.style.border = valid ? 'none' : '1px solid #2a2a2a';
+    fixedBtn.style.cursor = valid ? 'pointer' : 'default';
+  }
 }
 
 function bsRemove(i) {
@@ -1307,10 +1317,12 @@ function clearSlip() {
 
 function openBetSlip() {
   document.getElementById('bs-drawer').classList.add('open');
+  bsUpdate();
   document.getElementById('bs-overlay').classList.add('show');
 }
 function closeBetSlip() {
   document.getElementById('bs-drawer').classList.remove('open');
+  var fb = document.getElementById('bs-fixed-bar'); if(fb) fb.style.display='none';
   document.getElementById('bs-overlay').classList.remove('show');
 }
 
@@ -1447,6 +1459,14 @@ function bsToggle(cellId, game, time, market, pick, odds) {
 <!-- BET SLIP OVERLAY -->
 <div class="bs-overlay" id="bs-overlay" onclick="closeBetSlip()"></div>
 
+<!-- FIXED PLACE BET BAR -->
+<div id="bs-fixed-bar" style="display:none;position:fixed;bottom:72px;left:50%;transform:translateX(-50%);width:100%;max-width:430px;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));background:#111;border-top:1px solid #1e1e1e;z-index:19999;box-shadow:0 -4px 20px rgba(0,0,0,0.6)">
+  <button id="bs-fixed-place-btn" onclick="bsPlaceBet()" disabled
+    style="width:100%;padding:15px;background:#1a1a1a;color:#444;border:1px solid #2a2a2a;border-radius:12px;font-size:1rem;font-weight:900;cursor:default;transition:all 0.2s;letter-spacing:0.3px">
+    Place Bet →
+  </button>
+</div>
+
 <!-- BET SLIP BAR -->
 <div class="bs-bar" id="bs-bar" onclick="openBetSlip()">
   <div style="display:flex;align-items:center">
@@ -1471,7 +1491,7 @@ function bsToggle(cellId, game, time, market, pick, odds) {
     <button id="bs-tab-teaser" class="bs-tab" onclick="bsSetType('teaser')" style="opacity:0.4">Teaser</button>
     <button id="bs-tab-rr" class="bs-tab" onclick="bsSetType('rr')" style="opacity:0.4">R.Robin</button>
   </div>
-  <div id="bs-legs-container" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:8px"></div>
+  <div id="bs-legs-container" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:120px"></div>
   <!-- Sticky Place Bet footer -->
   <div id="bs-sticky-footer" style="flex-shrink:0;background:#111;border-top:1px solid #1e1e1e;padding:12px 14px calc(12px + env(safe-area-inset-bottom,0px));z-index:50"></div>
 </div>
