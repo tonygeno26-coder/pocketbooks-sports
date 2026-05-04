@@ -360,8 +360,11 @@ async function loadGames(sport){
   const el=document.getElementById('games-list');
   el.innerHTML='<div class="empty">Loading...</div>';
   try{
-    const games=await api('GET','/api/odds/'+(sport==='featured'?'mlb':sport));
-    if(!games.length){el.innerHTML='<div class="empty">No games today</div>';return;}
+    // Odds endpoint is public — bypass auth token requirement
+    const _odds_res = await fetch(API+'/api/odds/'+(sport==='featured'?'mlb':sport));
+    if(!_odds_res.ok) throw new Error('Odds API error: '+_odds_res.status);
+    const games = await _odds_res.json();
+    if(!Array.isArray(games)||!games.length){el.innerHTML='<div class="empty">No games available right now</div>';return;}
     const icons={MLB:'⚾',NBA:'🏀',NHL:'🏒',UFL:'🏈',NFL:'🏈',SOCCER:'⚽',TENNIS:'🎾',GOLF:'⛳'};
     el.innerHTML=games.map(g=>{
       const aw=g.away,hw=g.home;
