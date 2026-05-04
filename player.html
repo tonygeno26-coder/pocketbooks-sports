@@ -206,14 +206,12 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
   <div class="sport-tab" id="st-golf" onclick="setSport(this,'golf')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="2" x2="12" y2="18"/><path d="M12 2l6 4-6 4"/><circle cx="12" cy="20" r="2"/><line x1="8" y1="22" x2="16" y2="22"/></svg>Golf</div>
 </div>
 
-<!-- FILTER PILLS -->
+<!-- MARKET FILTER PILLS -->
 <div class="filter-row">
-  <div class="pill active" onclick="setFilter(this,'mlb')">MLB</div>
-  <div class="pill" onclick="setFilter(this,'nba')">NBA</div>
-  <div class="pill" onclick="setFilter(this,'soccer')">Soccer</div>
-  <div class="pill" onclick="setFilter(this,'nhl')">NHL</div>
-  <div class="pill" onclick="setFilter(this,'pga')">PGA</div>
-  <div class="pill" onclick="setFilter(this,'tennis')">Tennis</div>
+  <div class="pill active" id="mf-lines" onclick="setMarketFilter(this,'lines')">Game Lines</div>
+  <div class="pill" id="mf-spread" onclick="setMarketFilter(this,'spread')">Spread</div>
+  <div class="pill" id="mf-totals" onclick="setMarketFilter(this,'totals')">Totals</div>
+  <div class="pill" id="mf-ml" onclick="setMarketFilter(this,'moneyline')">To Win</div>
 </div>
 
 <!-- PROMO CAROUSEL -->
@@ -600,6 +598,32 @@ function setTopTab(el,tab){
   document.querySelectorAll('.top-tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
 }
+
+// Market filter
+var activeMarketFilter = 'lines';
+function setMarketFilter(el, filter) {
+  activeMarketFilter = filter;
+  document.querySelectorAll('.pill').forEach(function(p){ p.classList.remove('active'); });
+  el.classList.add('active');
+  // Show/hide columns in game cards
+  var showSpread   = filter === 'lines' || filter === 'spread';
+  var showTotals   = filter === 'lines' || filter === 'totals';
+  var showML       = filter === 'lines' || filter === 'moneyline';
+  document.querySelectorAll('.mc-col-label').forEach(function(col, i) {
+    // 0=spacer, 1=Run Line, 2=Total, 3=To Win
+    if (i === 1) col.style.display = showSpread  ? '' : 'none';
+    if (i === 2) col.style.display = showTotals  ? '' : 'none';
+    if (i === 3) col.style.display = showML      ? '' : 'none';
+  });
+  document.querySelectorAll('.mc-team-row').forEach(function(row) {
+    var cells = row.querySelectorAll('.odds-box');
+    // cells: 0=spread, 1=total, 2=moneyline
+    if (cells[0]) cells[0].style.display = showSpread  ? '' : 'none';
+    if (cells[1]) cells[1].style.display = showTotals  ? '' : 'none';
+    if (cells[2]) cells[2].style.display = showML      ? '' : 'none';
+  });
+}
+
 function setSport(el,sport){
   document.querySelectorAll('.sport-tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
