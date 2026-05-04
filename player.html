@@ -1231,6 +1231,7 @@ document.addEventListener('keydown', function(e) {
 function bsSetStake(v) {
   bsStake = parseFloat(v) || 0;
   bsRenderLegs();
+  bsSyncPlaceBtn();
 }
 function bsAddStake(a) {
   bsStake = (bsStake||0) + a;
@@ -1248,11 +1249,15 @@ function bsAddStake(a) {
   var teaserTab = document.getElementById('bs-tab-teaser');
   if (rrTab) { rrTab.style.opacity = betSlip.length >= 3 ? '1' : '0.35'; rrTab.style.cursor = betSlip.length >= 3 ? 'pointer' : 'not-allowed'; }
   if (teaserTab) { teaserTab.style.opacity = getTeaserLegs().length >= 2 ? '1' : '0.35'; teaserTab.style.cursor = getTeaserLegs().length >= 2 ? 'pointer' : 'not-allowed'; }
-  // Sync fixed Place Bet bar
+  // Sync fixed Place Bet bar — show whenever drawer is open
+  bsSyncPlaceBtn();
+}
+function bsSyncPlaceBtn() {
   var fixedBar = document.getElementById('bs-fixed-bar');
   var fixedBtn = document.getElementById('bs-fixed-place-btn');
-  var drawerOpen = document.getElementById('bs-drawer') && document.getElementById('bs-drawer').classList.contains('open');
-  if (fixedBar) fixedBar.style.display = (drawerOpen && betSlip.length > 0) ? 'block' : 'none';
+  var drawer = document.getElementById('bs-drawer');
+  var drawerOpen = drawer && (drawer.style.display !== 'none') && drawer.classList.contains('open');
+  if (fixedBar) fixedBar.style.display = drawerOpen ? 'block' : 'none';
   if (fixedBtn) {
     var valid = betSlip.length > 0 && bsStake > 0;
     fixedBtn.disabled = !valid;
@@ -1260,6 +1265,7 @@ function bsAddStake(a) {
     fixedBtn.style.color = valid ? '#000' : '#444';
     fixedBtn.style.border = valid ? 'none' : '1px solid #2a2a2a';
     fixedBtn.style.cursor = valid ? 'pointer' : 'default';
+    fixedBtn.textContent = valid ? 'Place Bet →' : 'Enter amount to bet';
   }
 }
 
@@ -1284,11 +1290,12 @@ function clearSlip() {
 function openBetSlip() {
   document.getElementById('bs-drawer').classList.add('open');
   bsUpdate();
+  setTimeout(bsSyncPlaceBtn, 50);
   document.getElementById('bs-overlay').classList.add('show');
 }
 function closeBetSlip() {
   document.getElementById('bs-drawer').classList.remove('open');
-  var fb = document.getElementById('bs-fixed-bar'); if(fb) fb.style.display='none';
+  var fb = document.getElementById('bs-fixed-bar'); if(fb) fb.style.display='none'; bsSyncPlaceBtn();
   document.getElementById('bs-overlay').classList.remove('show');
 }
 
@@ -1426,10 +1433,14 @@ function bsToggle(cellId, game, time, market, pick, odds) {
 <div class="bs-overlay" id="bs-overlay" onclick="closeBetSlip()"></div>
 
 <!-- FIXED PLACE BET BAR -->
-<div id="bs-fixed-bar" style="display:none;position:fixed;bottom:72px;left:50%;transform:translateX(-50%);width:100%;max-width:430px;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));background:#111;border-top:1px solid #1e1e1e;z-index:19999;box-shadow:0 -4px 20px rgba(0,0,0,0.6)">
+<div id="bs-fixed-bar" style="display:none;position:fixed;bottom:72px;left:50%;transform:translateX(-50%);width:100%;max-width:430px;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));background:#111;border-top:1px solid #1e1e1e;z-index:100001;box-shadow:0 -4px 20px rgba(0,0,0,0.8)">
+  <div id="bs-fixed-payout" style="display:none;display:flex;justify-content:space-between;margin-bottom:8px;padding:0 2px">
+    <span style="font-size:0.72rem;color:#555">Est. Payout</span>
+    <span id="bs-fixed-payout-val" style="font-size:0.82rem;font-weight:900;color:#00ff88"></span>
+  </div>
   <button id="bs-fixed-place-btn" onclick="bsPlaceBet()" disabled
     style="width:100%;padding:15px;background:#1a1a1a;color:#444;border:1px solid #2a2a2a;border-radius:12px;font-size:1rem;font-weight:900;cursor:default;transition:all 0.2s;letter-spacing:0.3px">
-    Place Bet →
+    Enter amount to bet
   </button>
 </div>
 
