@@ -227,6 +227,10 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .numpad-active-label{font-size:0.65rem;color:#888;font-weight:700;flex:1}
 .numpad-active-val{font-size:1.1rem;font-weight:900;color:#111}
 .numpad-done{width:100%;background:#00c853;color:#fff;border:none;border-radius:10px;padding:12px;font-size:0.95rem;font-weight:900;cursor:pointer;margin-bottom:4px}
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
+.single-inp-row input,.dkslip-input-row input,.stake-all-row input{pointer-events:auto !important;user-select:text !important;-webkit-user-select:text !important;position:relative;z-index:20}
 </style>
 </head>
 <body>
@@ -1209,7 +1213,7 @@ function bsRenderLegs() {
             '<div class="single-inp-row">' +
               '<span>$</span>' +
               '<input type="number" placeholder="0.00" inputmode="decimal" value="'+(st||'')+'" ' +
-                'readonly data-ntype="single" data-cid="'+b.cellId+'" data-nlabel="'+pick.slice(0,18)+'" onclick="numpadOpenFromEl(this)" ' +
+                'data-cid="'+b.cellId+'" oninput="bsSingleInput(this)" onclick="event.stopPropagation()" onfocus="console.log(\'input focused\')" ' +
                 'style="width:100%">' +
             '</div>' +
             (payout ? '<div class="single-payout">Est. Return: '+payout+'</div>' : '') +
@@ -1337,13 +1341,58 @@ function bsSetSingleStake(cellId, val, idx) {
 function bsAddSingleStake(cellId, amt, idx) {
   bsStakes[cellId] = (bsStakes[cellId] || 0) + amt;
   bsStake = Object.values(bsStakes).reduce(function(s,v){ return s+(v||0); }, 0);
-  bsRenderLegs();
+  // Update input value without full re-render
+  var inp = document.querySelector('[data-cid="'+cellId+'"]');
+  if (inp) { inp.value = bsStakes[cellId] || ''; bsSingleInput(inp); }
+  else bsRenderLegs();
 }
 function bsSetStakeAll(val) {
   var amt = parseFloat(val) || 0;
   betSlip.forEach(function(b){ bsStakes[b.cellId] = amt; });
   bsStake = amt * betSlip.length;
   bsRenderLegs();
+}
+
+
+function bsStakeAllInput(el) {
+  var val = el.value.replace(/[^0-9.]/g,'');
+  // allow only one decimal
+  var parts = val.split('.');
+  if (parts.length > 2) val = parts[0]+'.'+parts.slice(1).join('');
+  el.value = val;
+  var amt = parseFloat(val) || 0;
+  console.log('input value changed', amt);
+  bsSetStakeAll(amt);
+}
+
+function bsSingleInput(el) {
+  var val = el.value.replace(/[^0-9.]/g,'');
+  var parts = val.split('.');
+  if (parts.length > 2) val = parts[0]+'.'+parts.slice(1).join('');
+  el.value = val;
+  var cellId = el.dataset.cid;
+  var amt = parseFloat(val) || 0;
+  console.log('input value changed', amt, cellId);
+  bsStakes[cellId] = amt;
+  bsStake = Object.values(bsStakes).reduce(function(s,v){ return s+(v||0); }, 0);
+  bsSyncPlaceBtn();
+  // Update just this card's payout display without full re-render
+  var payEl = el.closest('.dkslip-card').querySelector('.single-payout');
+  if (payEl) {
+    var b = betSlip.find(function(x){ return x.cellId === cellId; });
+    payEl.textContent = amt > 0 && b ? 'Est. Return: '+fmtDollar(amt * amToDecimal(b.odds)) : '';
+  }
+}
+
+function bsParlayInput(el) {
+  var val = el.value.replace(/[^0-9.]/g,'');
+  var parts = val.split('.');
+  if (parts.length > 2) val = parts[0]+'.'+parts.slice(1).join('');
+  el.value = val;
+  var amt = parseFloat(val) || 0;
+  console.log('input value changed', amt);
+  bsStake = amt;
+  bsSyncPlaceBtn();
 }
 
 function bsSetStake(v) {
