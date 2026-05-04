@@ -784,10 +784,11 @@ function bsAddStake(a) {
   var inp = document.getElementById('bs-stake-inp');
   if (inp) inp.value = bsStake;
   bsRenderLegs();
-  // Sync visual selection state
+  // Sync visual selection state across all rendered cells
   document.querySelectorAll('.odds-cell').forEach(function(el) {
-    var isSelected = betSlip.some(function(b){ return b.cellId === el.dataset.id; });
-    el.classList.toggle('selected', isSelected);
+    var isIn = betSlip.some(function(b){ return b.cellId === el.dataset.id; });
+    if (isIn) { el.classList.add('selected'); }
+    else { el.classList.remove('selected'); }
   });
 }
 
@@ -818,29 +819,52 @@ function closeBetSlip() {
   document.getElementById('bs-overlay').classList.remove('show');
 }
 
-// Event delegation for odds-cell clicks
+// Event delegation — single handler for all .odds-cell clicks
 document.addEventListener('click', function(e) {
-  var cell = e.target.closest('.odds-cell');
+  var cell = e.target.closest ? e.target.closest('.odds-cell') : null;
   if (!cell) return;
-  e.stopPropagation();
-  var id = cell.dataset.id;
-  var game = cell.dataset.game || 'Unknown';
-  var time = cell.dataset.time || '';
-  var market = cell.dataset.market || 'Market';
-  var pick = cell.dataset.pick || '';
-  var odds = parseFloat(cell.dataset.odds) || 0;
-  var sp = cell.dataset.sport || '';
-  console.log('odds clicked', {id, game, market, pick, odds});
-  bsToggle(id, game, time, market, pick, odds);
-  // Highlight: same game+market = deselect others
-  var gameKey = game + '|' + market;
-  document.querySelectorAll('.odds-cell').forEach(function(el) {
-    var elKey = (el.dataset.game||'') + '|' + (el.dataset.market||'');
-    if (elKey === gameKey && el !== cell) el.classList.remove('selected');
-  });
-  var isSelected = betSlip.some(function(b){ return b.cellId === id; });
-  cell.classList.toggle('selected', isSelected);
-});
+
+  var id      = cell.dataset.id || '';
+  var game    = cell.dataset.game || 'Unknown Game';
+  var time    = cell.dataset.time || '';
+  var market  = cell.dataset.market || 'Market';
+  var pick    = cell.dataset.pick || '';
+  var odds    = parseInt(cell.dataset.odds) || 0;
+  var sp      = cell.dataset.sport || '';
+  var gameKey = game + '|' + market; // unique key = game + market type
+
+  if (!odds) return; // ignore cells with no valid odds
+
+  console.log('odds clicked:', { id, game, market, pick, odds, gameKey });
+
+  // Check if this cell is already selected
+  var existingIdx = betSlip.findIndex(function(b) { return b.cellId === id; });
+
+  if (existingIdx >= 0) {
+    // DESELECT: remove from slip
+    betSlip.splice(existingIdx, 1);
+    cell.classList.remove('selected');
+  } else {
+    // SELECT: remove any existing pick from same game+market (both sides)
+    betSlip = betSlip.filter(function(b) {
+      if (b.gameKey === gameKey) {
+        // Remove highlight from old cell
+        var oldCell = document.getElementById('c-' + b.cellId);
+        if (oldCell) oldCell.classList.remove('selected');
+        return false;
+      }
+      return true;
+    });
+    // Add new selection
+    betSlip.push({
+      cellId: id, game: game, time: time, market: market,
+      pick: pick, odds: odds, sport: sp, gameKey: gameKey
+    });
+    cell.classList.add('selected');
+  }
+
+  bsUpdate();
+}, true); // useCapture=true ensures this fires before any stopPropagation
 
 function bsNormalize(cellId, game, time, market, pick, odds) {
   // Parse odds safely — strip +, convert to integer
