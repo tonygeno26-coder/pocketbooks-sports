@@ -799,8 +799,26 @@ const urlCode = new URLSearchParams(window.location.search).get('join');
 if (urlCode) { document.getElementById('join-code').value = urlCode.toUpperCase(); setTimeout(()=>openModal('modal-join'),500); }
 
 // Init
-checkAuthGate();
-loadUser();
+const isPreview = new URLSearchParams(window.location.search).get('preview') === '1';
+if (isPreview) {
+  // DevPreview mode: skip auth, show mock logged-in state
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('u-name').textContent = 'TonyG26';
+  document.getElementById('u-id').textContent = 'ID: 1042';
+  document.getElementById('w-diamonds').textContent = '2,450';
+  // Mock clubs
+  userClubs = [
+    {id:1, code:'7K92Q', name:'Vegas Crew', role:'host', status:'approved', balance:0},
+    {id:2, code:'3M8KQ', name:'Night Life', role:'player', status:'approved', balance:340},
+  ];
+  setActiveClub(userClubs[0]);
+  renderClubsList();
+  updateClubsTilePreview();
+  document.getElementById('club-count-lbl').textContent = '2 clubs';
+} else {
+  checkAuthGate();
+  loadUser();
+}
 if (userClubs.length) { renderClubsList(); document.getElementById('club-count-lbl').textContent = userClubs.length + ' clubs'; updateClubsTilePreview(); }
 if (activeClub) setActiveClub(activeClub);
 </script>
