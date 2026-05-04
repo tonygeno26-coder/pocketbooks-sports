@@ -68,7 +68,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .odds-box{text-align:center;padding:9px 4px;background:#242424;border-radius:11px;cursor:pointer;border:1.5px solid #303030;transition:transform 0.1s,border-color 0.12s,background 0.12s,box-shadow 0.12s;min-height:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.04)}
 .odds-box:active{transform:scale(0.97)}
 .odds-box:hover{border-color:#444;background:#2a2a2a}
-.odds-box.sel{border-color:#00ff88;background:rgba(0,255,136,0.1);box-shadow:0 0 12px rgba(0,255,136,0.25),inset 0 1px 0 rgba(0,255,136,0.1)}
+.odds-box.sel,.odds-cell.selected{border:2px solid #fff !important;outline:2px solid rgba(255,255,255,0.4) !important;box-shadow:0 0 14px rgba(255,255,255,.9),0 0 18px rgba(0,255,136,.6) !important;background:rgba(0,255,136,0.18) !important}
 .odds-pos{color:#00ff88;text-shadow:0 0 10px rgba(0,255,136,0.5)}
 .odds-line{font-size:0.65rem;color:#666;line-height:1}
 .odds-num{font-size:0.95rem;font-weight:900;letter-spacing:-0.3px}
@@ -426,14 +426,18 @@ async function loadGames(sport){
       const sp=g.sport?.toUpperCase()||'MLB';
       const icon=icons[sp]||'🏅';
 
-      function cell(id,top,odds,marketType,teamPick){
+      function cell(id,top,odds,marketType,teamPick,teamName){
         if(!odds)return'<div class="odds-box" style="cursor:default;pointer-events:none"><span style="color:var(--gray)">—</span></div>';
         const c=odds>0?'odds-pos':'odds-neg';
         const f=(odds>0?'+':'')+odds;
         const safeGame=(aw+' vs '+hw).replace(/"/g,'').replace(/'/g,'');
-        const safeTime=(time||'').replace(/"/g,'');
-        const safeMkt=(marketType||top||'Market').replace(/"/g,'').replace(/'/g,'');
-        const safePick=(teamPick||top||f).replace(/"/g,'').replace(/'/g,'');
+        const safeTime=g.time||'';
+        const safeMkt=(marketType||'Market').replace(/"/g,'').replace(/'/g,'');
+        // Build clean pick label: always include full team name
+        var pickLabel = teamPick || top || f;
+        // Never allow bare line like "-1.5" without team
+        if(pickLabel && /^[+-]?\d+\.?\d*$/.test(pickLabel.trim()) && teamName) pickLabel = teamName+' '+pickLabel;
+        const safePick=(pickLabel||'Unknown Selection').replace(/"/g,'').replace(/'/g,'');
         return`<div class="odds-box odds-cell" id="c-${id}"
           data-id="${id}"
           data-game="${safeGame}"
@@ -451,16 +455,16 @@ async function loadGames(sport){
         <div class="mc-cols"><div></div><div class="mc-col-label">Run Line</div><div class="mc-col-label">Total</div><div class="mc-col-label">To Win</div></div>
         <div class="mc-team-row">
           <div class="mc-team">${teamAvatar(aw)}<div><div class="mc-city">${awC}</div><div class="mc-name">${awN}</div></div></div>
-          ${cell(g.id+'-sp-aw',awSp?(awSp.line>0?'+':'')+awSp.line:null,awSp?.odds)}
-          ${cell(g.id+'-ov',ov?'O '+ov.line:null,ov?.odds)}
-          ${cell(g.id+'-ml-aw',null,awML?.odds,'To Win',awN+' ML')}
+          ${cell(g.id+'-sp-aw',awSp?(awSp.line>0?'+':'')+awSp.line:null,awSp?.odds,'Run Line',aw+' '+(awSp?(awSp.line>0?'+':'')+awSp.line:''),aw)}
+          ${cell(g.id+'-ov',ov?'O '+ov.line:null,ov?.odds,'Total','Over '+ov?.line)}
+          ${cell(g.id+'-ml-aw',null,awML?.odds,'Moneyline',aw+' To Win')}
         </div>
         <div class="mc-divider"></div>
         <div class="mc-team-row">
           <div class="mc-team">${teamAvatar(hw)}<div><div class="mc-city">${hwC}</div><div class="mc-name">${hwN}</div></div></div>
-          ${cell(g.id+'-sp-hw',hwSp?(hwSp.line>0?'+':'')+hwSp.line:null,hwSp?.odds)}
-          ${cell(g.id+'-un',un?'U '+un.line:null,un?.odds)}
-          ${cell(g.id+'-ml-hw',null,hwML?.odds,'To Win',hwN+' ML')}
+          ${cell(g.id+'-sp-hw',hwSp?(hwSp.line>0?'+':'')+hwSp.line:null,hwSp?.odds,'Run Line',hw+' '+(hwSp?(hwSp.line>0?'+':'')+hwSp.line:''),hw)}
+          ${cell(g.id+'-un',un?'U '+un.line:null,un?.odds,'Total','Under '+un?.line)}
+          ${cell(g.id+'-ml-hw',null,hwML?.odds,'Moneyline',hw+' To Win')}
         </div>
         <div class="mc-footer"><span class="mc-time">${time}</span><button class="more-btn" data-game-id="${g.id}">More ›</button></div>
       </div>`;
@@ -1065,7 +1069,8 @@ function bsRenderLegs() {
       var pick = b.pick || 'Unknown Selection';
       var teams = matchup.split(' vs ');
       var shortMatchup = teams.length===2 ? teams[0].split(' ').pop()+' vs '+teams[1].split(' ').pop() : matchup;
-      var timeStr = b.time ? new Date(b.time).toLocaleString('en-US',{weekday:'short',hour:'2-digit',minute:'2-digit'}) : '';
+      var timeStr = '';
+      try { if(b.time){ var td=new Date(b.time); if(!isNaN(td.getTime())) timeStr=td.toLocaleString('en-US',{weekday:'short',hour:'2-digit',minute:'2-digit'}); } } catch(e){}
       return '<div class="bs-leg">' +
         '<div class="bs-leg-top">' +
         '<div style="flex:1">' +
@@ -1108,7 +1113,7 @@ function bsAddStake(a) {
   document.querySelectorAll('.odds-cell').forEach(function(el) {
     var isIn = betSlip.some(function(b){ return b.cellId === el.dataset.id; });
     if (isIn) { el.classList.add('selected'); }
-    else { el.classList.remove('selected'); }
+    else { el.classList.remove('selected'); el.classList.remove('sel'); }
   });
   // Enable/disable tabs based on selections
   var rrTab = document.getElementById('bs-tab-rr');
