@@ -865,22 +865,33 @@ const isPreview = new URLSearchParams(window.location.search).get('preview') ===
 if (isPreview) {
   // DevPreview mode: skip auth, show mock logged-in state
   document.getElementById('auth-screen').style.display = 'none';
+  // Load mock data
   document.getElementById('u-name').textContent = _mockData.name;
   document.getElementById('u-id').textContent = 'ID: ' + _mockData.id;
   document.getElementById('w-diamonds').textContent = _mockData.diamonds.toLocaleString();
   userClubs = _mockData.clubs;
-  setActiveClub(userClubs[0]);
-  renderClubsList();
-  updateClubsTilePreview();
-  document.getElementById('club-count-lbl').textContent = '2 clubs';
-  // Open correct screen from standardized screen param
-  const screenMap = {
-    join: ()=>openModal('modal-join'),
-    create: ()=>openModal('modal-create'),
-    myclubs: ()=>showMyClubsSection(),
-    pending: ()=>openModal('modal-pending'),
-  };
-  if (screenMap[_screen]) setTimeout(screenMap[_screen], 300);
+  if (userClubs.length) { setActiveClub(userClubs[0]); renderClubsList(); updateClubsTilePreview(); }
+  document.getElementById('club-count-lbl').textContent = userClubs.length + ' clubs';
+
+  // Route to correct screen — only default home if screen param missing
+  function renderPreviewScreen(screen) {
+    const routes = {
+      home:    () => { /* default — lobby already visible */ },
+      join:    () => openModal('modal-join'),
+      create:  () => openModal('modal-create'),
+      myclubs: () => showMyClubsSection(),
+      pending: () => {
+        if (document.getElementById('pending-club-name')) document.getElementById('pending-club-name').textContent = 'Vegas Crew';
+        if (document.getElementById('pending-club-code')) document.getElementById('pending-club-code').textContent = 'PB-7K92Q';
+        openModal('modal-pending');
+      },
+      signin:  () => { /* auth screen handled above */ },
+      signup:  () => { /* auth screen handled above */ },
+    };
+    const fn = routes[screen] || routes['home'];
+    setTimeout(fn, 350);
+  }
+  renderPreviewScreen(_screen);
 } else {
   checkAuthGate();
   loadUser();
