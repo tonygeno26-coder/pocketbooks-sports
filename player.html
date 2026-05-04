@@ -961,6 +961,7 @@ function bsSetType(t) {
 
 // ===== ROUND ROBIN =====
 var rrSize = 2;
+var rrStakes = {}; // keyed by combo size
 function getCombos(arr, size) {
   if (size === 1) return arr.map(function(x){ return [x]; });
   var out = [];
@@ -1132,39 +1133,79 @@ function bsRenderLegs() {
 
   var legs;
   if (bsType === 'rr') {
-    var maxRR = Math.min(3, betSlip.length - 1); // hide 4-leg, max 3-leg
-    var safeRRSize = Math.min(rrSize, maxRR);
-    var rrCombos = getCombos(betSlip, safeRRSize);
-    var totalEntry = (bsStake||0) * rrCombos.length;
-    // Payout = sum of each combo's payout (not single combined odds)
-    var totalPayout = rrCombos.reduce(function(sum, combo) {
-      var d = combo.reduce(function(p,b){ return p*amToDecimal(b.odds); }, 1);
-      return sum + (bsStake||0) * d;
-    }, 0);
-    var betWord = rrCombos.length === 1 ? 'bet' : 'bets';
-    legs = '<div class="bs-section">Round Robin · '+betSlip.length+' picks · '+safeRRSize+'-leg</div>' +
-      '<div style="display:flex;gap:6px;padding:0 14px 10px">' +
-      [2,3].filter(function(s){ return s <= betSlip.length && s <= maxRR; }).map(function(s){
-        return '<button id="rr-btn-'+s+'" class="rr-size-btn bs-tab'+(s===safeRRSize?' active':'')+'" onclick="setRRSize('+s+')">'+s+'-leg</button>';
-      }).join('') + '</div>' +
-      '<div style="background:#1a1a1a;border-radius:10px;margin:0 14px 10px;padding:10px 14px">' +
-      '<div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:6px"><span style="color:#555"># of Bets</span><span style="font-weight:900;font-size:0.82rem">'+rrCombos.length+' '+betWord+'</span></div>' +
-      (bsStake > 0 ?
-        '<div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px"><span style="color:#555">Per Bet</span><span style="font-weight:800">'+fmtDollar(bsStake)+'</span></div>' +
-        '<div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px;color:#aaa"><span>'+fmtDollar(bsStake)+' × '+rrCombos.length+' '+betWord+' =</span><span style="color:#00ff88;font-weight:800">'+fmtDollar(totalEntry)+' total</span></div>'
-        : '<div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px"><span style="color:#555">Total Entry</span><span style="color:#555">Enter amount below</span></div>') +
-      (bsStake > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.72rem;border-top:1px solid #2a2a2a;padding-top:6px;margin-top:4px"><span style="color:#555">Max Payout</span><span style="color:#00ff88;font-weight:900;font-size:0.82rem">'+fmtDollar(totalPayout)+'</span></div>' : '') +
-      '</div>' +
-      rrCombos.slice(0,6).map(function(combo,i){
-        var d = combo.reduce(function(p,b){ return p*amToDecimal(b.odds); },1);
-        var raw = Math.round((d-1)*100);
-        var combinedOdds = isNaN(raw)?'--':(raw>0?'+'+raw:''+Math.round(-100/(d-1)));
-        return '<div class="bs-leg" style="margin:0 14px 6px">' +
-          '<div style="font-size:0.62rem;color:#555;margin-bottom:4px">Parlay '+(i+1)+' · '+combo.length+' picks</div>' +
-          combo.map(function(b){ return '<div style="font-size:0.75rem;color:#aaa">'+b.pick+' <span style="color:#00c2ff">'+fmtOdds(b.odds)+'</span></div>'; }).join('') +
-          '<div style="font-size:0.72rem;color:#00ff88;font-weight:800;margin-top:4px">Combined: '+combinedOdds+'</div>' +
-          '</div>';
-      }).join('') + (rrCombos.length>6?'<div style="text-align:center;font-size:0.7rem;color:#555;padding:4px">+' +(rrCombos.length-6)+' more combos</div>':'');
+    if (betSlip.length < 3) {
+      legs = '<div style="text-align:center;padding:30px 20px;color:#888;font-size:0.85rem">Add at least 3 picks to build a round robin.</div>';
+    } else {
+      // Build available combo sizes 2..n-1
+      var n = betSlip.length;
+      var availSizes = [];
+      for (var sz = 2; sz < n; sz++) availSizes.push(sz);
+
+      // nCr helper
+      function nCr(n,r) {
+        if (r > n) return 0; if (r===0||r===n) return 1;
+        var num=1,den=1;
+        for(var i=0;i<r;i++){num*=(n-i);den*=(i+1);}
+        return Math.round(num/den);
+      }
+      function rrPayout(size, perBet) {
+        var combos = getCombos(betSlip, size);
+        return combos.reduce(function(s,combo){
+          var d = combo.reduce(function(p,b){ return p*amToDecimal(b.odds); },1);
+          return s + perBet * d;
+        }, 0);
+      }
+
+      var totalRREntry = 0;
+      var totalRRPayout = 0;
+      Object.keys(rrStakes).forEach(function(sz) {
+        var s = rrStakes[sz] || 0;
+        if (!s) return;
+        var cnt = nCr(n, parseInt(sz));
+        totalRREntry += s * cnt;
+        totalRRPayout += rrPayout(parseInt(sz), s);
+      });
+
+      var sizeRows = availSizes.map(function(sz) {
+        var cnt = nCr(n, sz);
+        var perBet = rrStakes[sz] || 0;
+        var rowEntry = perBet * cnt;
+        var rowPay = perBet > 0 ? rrPayout(sz, perBet) : 0;
+        return '<div class="dkslip-card" style="margin-bottom:8px;overflow:hidden">' +
+          '<div class="dkslip-card-hdr">' +
+            '<span class="dkslip-card-title">'+sz+'-Pick Round Robin</span>' +
+            '<span class="dkslip-card-odds" style="font-size:0.75rem;color:#555">'+cnt+'x</span>' +
+          '</div>' +
+          '<div style="padding:10px 14px 12px">' +
+            '<div class="single-inp-row" style="margin-bottom:6px" onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" ontouchstart="event.stopPropagation()">' +
+              '<span>$</span>' +
+              '<input type="text" inputmode="decimal" placeholder="0.00 per combo" ' +
+                'data-sz="'+sz+'" oninput="rrInput(this)" ' +
+                'value="'+(perBet||'')+'" ' +
+                'style="flex:1;background:none;border:none;outline:none;font-size:0.9rem;font-weight:800;color:#111;pointer-events:auto;user-select:text;-webkit-user-select:text;position:relative;z-index:20">' +
+            '</div>' +
+            (perBet > 0 ?
+              '<div style="font-size:0.7rem;color:#555">'+fmtDollar(perBet)+' × '+cnt+' combos = <strong>'+fmtDollar(rowEntry)+'</strong></div>' +
+              '<div style="font-size:0.7rem;color:#00c853;font-weight:700;margin-top:2px">Est. Payout: '+fmtDollar(rowPay)+'</div>'
+              : '<div style="font-size:0.68rem;color:#aaa">'+cnt+' combinations · $'+perBet+' each</div>'
+            ) +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      // All Combos summary row
+      var allCnt = availSizes.reduce(function(s,sz){ return s+nCr(n,sz); },0);
+      legs = '<div style="font-size:0.62rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#999;padding:4px 2px 8px">Round Robins · '+n+' picks</div>' +
+        sizeRows +
+        (Object.keys(rrStakes).some(function(k){ return (rrStakes[k]||0)>0; }) ?
+          '<div class="dkslip-card" style="padding:10px 14px">' +
+            '<div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:4px"><span style="color:#555">Total Entry</span><span style="font-weight:800">'+fmtDollar(totalRREntry)+'</span></div>' +
+            '<div style="display:flex;justify-content:space-between;font-size:0.78rem"><span style="color:#555">Max Payout</span><span style="color:#00c853;font-weight:900">'+fmtDollar(totalRRPayout)+'</span></div>' +
+          '</div>' : '');
+
+      // Update bsStake for footer button
+      bsStake = totalRREntry;
+    }
   } else if (bsType === 'teaser') {
     var tLegs = getTeaserLegs();
     var ineligible = betSlip.filter(function(b){ return !isTeaserEligible(b); });
@@ -1515,6 +1556,38 @@ function bsParlayInput(el) {
   bsSyncPlaceBtn();
 }
 
+
+function rrInput(el) {
+  var val = el.value.replace(/[^0-9.]/g,'');
+  var parts = val.split('.');
+  if (parts.length > 2) val = parts[0]+'.'+parts.slice(1).join('');
+  if (el.value !== val) el.value = val;
+  var sz = parseInt(el.dataset.sz);
+  var amt = parseFloat(val) || 0;
+  rrStakes[sz] = amt;
+  // Recalculate total for footer
+  var n = betSlip.length;
+  function nCr(n,r){if(r>n)return 0;if(r===0||r===n)return 1;var num=1,den=1;for(var i=0;i<r;i++){num*=(n-i);den*=(i+1);}return Math.round(num/den);}
+  var totalEntry = 0;
+  Object.keys(rrStakes).forEach(function(k){ totalEntry += (rrStakes[k]||0)*nCr(n,parseInt(k)); });
+  bsStake = totalEntry;
+  // Update payout display in this card without re-render
+  var card = el.closest('.dkslip-card');
+  if (card) {
+    var combos = getCombos(betSlip, sz);
+    var pay = combos.reduce(function(s,combo){ var d=combo.reduce(function(p,b){return p*amToDecimal(b.odds);},1); return s+amt*d; },0);
+    var info = card.querySelectorAll('div[style*="font-size:0.7rem"]');
+    if (amt > 0) {
+      if (info[0]) info[0].innerHTML = fmtDollar(amt)+' × '+combos.length+' combos = <strong>'+fmtDollar(amt*combos.length)+'</strong>';
+      if (info[1]) { info[1].textContent = 'Est. Payout: '+fmtDollar(pay); info[1].style.color='#00c853'; }
+    } else {
+      if (info[0]) info[0].textContent = combos.length+' combinations · $0 each';
+      if (info[1]) info[1].textContent = '';
+    }
+  }
+  bsSyncPlaceBtn();
+}
+
 function bsSetStake(v) {
   bsStake = parseFloat(v) || 0;
   bsRenderLegs();
@@ -1609,7 +1682,7 @@ function bsSyncPlaceBtn() {
   var payVal = document.getElementById('dk-payout-val');
   var badge2 = document.getElementById('bs-badge2');
   if (badge2) badge2.textContent = betSlip.length;
-  var valid = bsType === "parlay" ? (betSlip.length >= 2 && bsStake > 0) : (betSlip.length > 0 && bsStake > 0);
+  var valid = bsType === 'parlay' ? (betSlip.length >= 2 && bsStake > 0) : bsType === 'rr' ? (betSlip.length >= 3 && bsStake > 0) : (betSlip.length > 0 && bsStake > 0);
   if (btn) {
     btn.disabled = !valid;
     btn.className = 'dkslip-place-btn ' + (valid ? 'ready' : 'empty');
@@ -1621,7 +1694,9 @@ function bsSyncPlaceBtn() {
       var totalE = bsType === 'straight'
         ? Object.values(bsStakes).reduce(function(s,v){ return s+(v||0); }, 0)
         : bsStake;
-      if (bsType === 'parlay') {
+      if (bsType === 'rr') {
+        btn.textContent = 'Place Round Robin  $' + totalE.toFixed(2);
+      } else if (bsType === 'parlay') {
         btn.textContent = 'Place Parlay  $' + totalE.toFixed(2);
       } else if (bsType === 'straight' && betSlip.length > 1) {
         btn.textContent = 'Place ' + betSlip.length + ' Bets  $' + totalE.toFixed(2);
