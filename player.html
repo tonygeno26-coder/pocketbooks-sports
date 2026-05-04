@@ -1452,21 +1452,40 @@ function bsAddSingleStake(cellId, amt, idx) {
 }
 function bsSetStakeAll(val) {
   var amt = parseFloat(val) || 0;
+  console.log('stake all amount', amt);
   betSlip.forEach(function(b){ bsStakes[b.cellId] = amt; });
   bsStake = amt * betSlip.length;
-  bsRenderLegs();
+  var totalPayout = betSlip.reduce(function(s,b){ return s + amt * amToDecimal(b.odds); }, 0);
+  console.log('single stakes', JSON.stringify(bsStakes));
+  console.log('total stake', bsStake);
+  console.log('total payout', totalPayout);
+  // Update each card's payout WITHOUT full re-render (preserves focus)
+  betSlip.forEach(function(b) {
+    var card = document.querySelector('[data-cid="'+b.cellId+'"]');
+    if (card) {
+      // Update that card's input value
+      var inp = card.tagName === 'INPUT' ? card : card.querySelector && card.querySelector('input');
+      if (inp) inp.value = amt || '';
+    }
+    // Find payout el by card structure
+    var allCards = document.querySelectorAll('.dkslip-card');
+    allCards.forEach(function(c) {
+      var cinp = c.querySelector('[data-cid="'+b.cellId+'"]');
+      if (cinp) {
+        var payEl = c.querySelector('.single-payout');
+        if (payEl) payEl.textContent = amt > 0 ? 'Est. Return: '+fmtDollar(amt * amToDecimal(b.odds)) : '';
+      }
+    });
+  });
+  bsSyncPlaceBtn();
 }
-
 
 function bsStakeAllInput(el) {
   var val = el.value.replace(/[^0-9.]/g,'');
-  // allow only one decimal
   var parts = val.split('.');
   if (parts.length > 2) val = parts[0]+'.'+parts.slice(1).join('');
-  el.value = val;
-  var amt = parseFloat(val) || 0;
-  console.log('input value changed', amt);
-  bsSetStakeAll(amt);
+  if (el.value !== val) el.value = val;
+  bsSetStakeAll(val);
 }
 
 function bsSingleInput(el) {
