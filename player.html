@@ -85,7 +85,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .slip-count{background:#000;color:var(--green);width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:900;margin-right:8px}
 
 /* BOTTOM NAV */
-.bnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:rgba(10,10,10,0.97);border-top:1px solid #222;display:flex;padding:10px 0 24px;z-index:100;backdrop-filter:blur(12px)}
+.bnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:rgba(10,10,10,0.97);border-top:1px solid #222;display:flex;padding:10px 0 24px;z-index:9999;backdrop-filter:blur(12px);pointer-events:auto}
 .bn{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;padding:4px 0}
 .bn-icon{width:22px;height:22px;display:flex;align-items:center;justify-content:center}
 .bn-icon svg{width:22px;height:22px;stroke:#555;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:stroke 0.2s}
@@ -525,12 +525,34 @@ function setFilter(el,f){
   loadGames(f);
 }
 function setBNav(el,tab){
+  console.log('[nav] tab:', tab);
   document.querySelectorAll('.bn').forEach(n=>n.classList.remove('active'));
   el.classList.add('active');
-  if(tab==='trades')showToast('My Trades coming soon!');
-  if(tab==='rewards')showToast('💎 Rewards coming soon!');
-  if(tab==='search'){ showJoinModal(); return; }
-  if(tab==='search')showToast('Search coming soon!');
+  ['sportsbook-section','mybets-section','predictions-section'].forEach(id=>{
+    const s=document.getElementById(id); if(s) s.style.display='none';
+  });
+  const ss=document.getElementById('sport-scroll');
+  const pb=document.getElementById('promo-banner');
+  if(tab==='predictions'||tab==='sports'){
+    const sec=document.getElementById('sportsbook-section');
+    if(sec) sec.style.display='block';
+    if(ss) ss.style.display='flex';
+    if(pb) pb.style.display='flex';
+    loadGames('mlb');
+  } else if(tab==='trades'){
+    const sec=document.getElementById('mybets-section');
+    if(sec) sec.style.display='block';
+    if(ss) ss.style.display='none';
+    if(pb) pb.style.display='none';
+    loadMyBets();
+  } else {
+    const sec=document.getElementById('sportsbook-section');
+    if(sec) sec.style.display='block';
+    if(ss) ss.style.display='flex';
+    if(pb) pb.style.display='flex';
+    if(tab==='search') showToast('🔍 Search coming soon');
+    if(tab==='rewards') showToast('🎁 Rewards coming soon');
+  }
 }
 
 function showToast(msg){
