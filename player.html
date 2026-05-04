@@ -813,16 +813,25 @@ function bsRenderLegs() {
 
   var legs;
   if (bsType === 'rr') {
-    var rrCombos = getCombos(betSlip, Math.min(rrSize, betSlip.length));
+    var maxRR = Math.min(3, betSlip.length - 1); // hide 4-leg, max 3-leg
+    var safeRRSize = Math.min(rrSize, maxRR);
+    var rrCombos = getCombos(betSlip, safeRRSize);
     var totalEntry = (bsStake||0) * rrCombos.length;
-    legs = '<div class="bs-section">Round Robin · '+betSlip.length+' picks · '+rrSize+'-leg</div>' +
+    // Payout = sum of each combo's payout (not single combined odds)
+    var totalPayout = rrCombos.reduce(function(sum, combo) {
+      var d = combo.reduce(function(p,b){ return p*amToDecimal(b.odds); }, 1);
+      return sum + Math.round((bsStake||0) * d * 100) / 100;
+    }, 0);
+    var betWord = rrCombos.length === 1 ? 'bet' : 'bets';
+    legs = '<div class="bs-section">Round Robin · '+betSlip.length+' picks · '+safeRRSize+'-leg</div>' +
       '<div style="display:flex;gap:6px;padding:0 14px 10px">' +
-      [2,3,4].filter(function(s){ return s <= betSlip.length; }).map(function(s){
-        return '<button id="rr-btn-'+s+'" class="rr-size-btn bs-tab'+(s===rrSize?' active':'')+'" onclick="setRRSize('+s+')">'+s+'-leg</button>';
+      [2,3].filter(function(s){ return s <= betSlip.length && s <= maxRR; }).map(function(s){
+        return '<button id="rr-btn-'+s+'" class="rr-size-btn bs-tab'+(s===safeRRSize?' active':'')+'" onclick="setRRSize('+s+')">'+s+'-leg</button>';
       }).join('') + '</div>' +
-      '<div style="padding:0 14px;margin-bottom:8px;background:#1a1a1a;border-radius:10px;margin:0 14px 10px;padding:10px 14px">' +
-      '<div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px"><span style="color:#555">Combinations</span><span style="font-weight:800">'+rrCombos.length+' bets</span></div>' +
-      '<div style="display:flex;justify-content:space-between;font-size:0.72rem"><span style="color:#555">Total Entry</span><span style="color:#00ff88;font-weight:800">'+fmtDollar(totalEntry)+'</span></div>' +
+      '<div style="background:#1a1a1a;border-radius:10px;margin:0 14px 10px;padding:10px 14px">' +
+      '<div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px"><span style="color:#555">Combinations</span><span style="font-weight:800">'+rrCombos.length+' '+betWord+'</span></div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:0.72rem;margin-bottom:4px"><span style="color:#555">Total Entry</span><span style="color:#00ff88;font-weight:800">'+fmtDollar(totalEntry)+'</span></div>' +
+      (bsStake > 0 ? '<div style="display:flex;justify-content:space-between;font-size:0.72rem"><span style="color:#555">Max Payout</span><span style="color:#00ff88;font-weight:900">'+fmtDollar(totalPayout)+'</span></div>' : '') +
       '</div>' +
       rrCombos.slice(0,6).map(function(combo,i){
         var d = combo.reduce(function(p,b){ return p*amToDecimal(b.odds); },1);
