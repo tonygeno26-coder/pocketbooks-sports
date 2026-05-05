@@ -356,6 +356,7 @@ input[type=number]{-moz-appearance:textfield}
 <script>
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 console.log('player page loaded');
+try { var _storedCount = JSON.parse(localStorage.getItem('pb-tickets')||'[]').length; dbgBanner('PAGE LOADED\n'+_storedCount+' saved tickets\nBalance: '+(localStorage.getItem('pb-balance')||'1000'), '#003'); } catch(e){}
 let TOKEN=localStorage.getItem('pb-sports-token')||'';
 // Balance + tickets
 var playerBalance = parseFloat(localStorage.getItem('pb-balance')) || 1000;
@@ -1567,6 +1568,7 @@ function confirmBet() {
   // Deduct balance
   playerBalance = Math.round((playerBalance - bsStake) * 100) / 100;
   saveBalance();
+  dbgBanner('STEP 3: Balance deducted\nNew balance: '+fmtBalance(), '#030');
   // Create ticket
   var _playerData = JSON.parse(localStorage.getItem('pb-player') || 'null') || {};
   var _clubData   = JSON.parse(localStorage.getItem('pb-club')   || 'null') || {};
@@ -1607,12 +1609,15 @@ function confirmBet() {
   };
   betTickets.unshift(ticket);
   saveTickets();
-  dbgBanner('TICKET SAVED: '+ticket.id+'\nTotal tickets: '+betTickets.length, '#006');
+  var savedCheck = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
+  dbgBanner('STEP 4: Ticket saved\nID: '+ticket.id+'\nIn storage: '+savedCheck.length+' tickets', '#006');
   console.log('TICKET SAVED', ticket.id, 'localStorage:', localStorage.getItem('pb-tickets'));
   // Save to hostActiveBets for host dashboard
   var hostBets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
   hostBets.unshift(ticket);
   localStorage.setItem('hostActiveBets', JSON.stringify(hostBets));
+  var hostCheck = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
+  dbgBanner('STEP 5: hostActiveBets saved\n'+hostCheck.length+' host bets', '#040');
   console.log('ticket created', ticket);
   console.log('host active bet saved', ticket);
   closeBetConfirm();
