@@ -361,10 +361,14 @@ function renderHostBets(){
     var picks=(t.selections||[]).slice(0,2).map(function(s){
       return '<div style="font-size:0.75rem;color:#888">'+s.pick+' <span style="color:var(--cyan)">'+((s.odds>0?'+':'')+s.odds)+'</span></div>';
     }).join('');
+    var pName = t.playerUsername || t.playerName || 'Player';
+    var pReal = t.playerRealName ? ' ('+t.playerRealName+')' : '';
+    var pId   = t.playerId || '';
     return '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;margin:8px 16px;padding:14px">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
         '<div><div style="font-size:0.88rem;font-weight:800">'+t.type+'</div>'+
-        '<div style="font-size:0.62rem;color:#555;margin-top:2px">'+dt+' · '+(t.playerName||'Player')+'</div></div>'+
+        '<div style="font-size:0.72rem;color:var(--cyan);font-weight:700;margin-top:1px">'+pName+pReal+'</div>'+
+        '<div style="font-size:0.6rem;color:#555;margin-top:1px">'+dt+(pId?' · ID: '+pId:'')+'</div></div>'+
         '<span style="font-size:0.65rem;font-weight:800;color:var(--cyan);background:var(--cyan-dim);padding:3px 10px;border-radius:12px;border:1px solid rgba(0,194,255,0.25)">ACTIVE</span>'+
       '</div>'+
       picks+
@@ -484,7 +488,8 @@ function openPlayerSettings(pid, _p){
   var existing=document.getElementById('ps-overlay');
   if(existing)existing.remove();
   var p=_p||(loadClubPlayers().find(function(x){return x.playerId===pid;})||{});
-  showToastHost('PROFILE OPENED\nID: '+pid+'\nrealName: '+(p.realName||''));
+  var _pActiveBets=JSON.parse(localStorage.getItem('hostActiveBets')||'[]').filter(function(b){return b.playerId===pid&&(b.status==='active'||b.status==='open');});
+  showToastHost('PLAYER ACTIVE BETS: '+_pActiveBets.length+'\nID: '+pid+'\nrealName: '+(p.realName||''));
   var lim=getHostPlayerLimits(pid);
   var sa=lim.sportsAccess||{};
   var bl=lim.betLimits||{};

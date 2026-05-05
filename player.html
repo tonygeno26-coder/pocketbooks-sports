@@ -1604,12 +1604,21 @@ function confirmBet() {
   // Create ticket
   var _playerData = JSON.parse(localStorage.getItem('pb-player') || 'null') || {};
   var _clubData   = JSON.parse(localStorage.getItem('pb-club')   || 'null') || {};
+  // Fallback: look up player from clubPlayers (for TestPlayer01 demo)
+  var _clubPlayers = JSON.parse(localStorage.getItem('pb-club-players')||'[]');
+  var _myClubEntry = _clubPlayers.find(function(p){ return p.playerId===(_playerData.id||TOKEN||'P1001'); }) || _clubPlayers[0] || {};
+  var _resolvedId   = _playerData.id   || TOKEN || _myClubEntry.playerId || 'P1001';
+  var _resolvedName = _playerData.name || _playerData.username || _myClubEntry.playerName || 'TestPlayer01';
+  var _resolvedReal = _myClubEntry.realName || '';
+  var _resolvedClub = _clubData.id || _myClubEntry.clubId || '';
   var ticket = {
     id: 'T' + Date.now(),
-    playerId:   _playerData.id   || TOKEN || 'guest',
-    playerName: _playerData.name || _playerData.username || 'Player',
-    clubId:     _clubData.id     || '',
-    clubName:   _clubData.name   || '',
+    playerId:       _resolvedId,
+    playerUsername: _resolvedName,
+    playerRealName: _resolvedReal,
+    playerName:     _resolvedName,
+    clubId:         _resolvedClub,
+    clubName:       _clubData.name || '',
     type: typeLabel,
     status: 'active',
     source: 'player',
@@ -1650,6 +1659,7 @@ function confirmBet() {
   localStorage.setItem('hostActiveBets', JSON.stringify(hostBets));
   var hostCheck = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
   dbgBanner('STEP 5: hostActiveBets saved\n'+hostCheck.length+' host bets', '#040');
+  dbgBanner('TICKET PLAYER: '+ticket.playerId+'\n'+ticket.playerUsername+(ticket.playerRealName?' ('+ticket.playerRealName+')':''), '#004');
   console.log('ticket created', ticket);
   console.log('host active bet saved', ticket);
   closeBetConfirm();
