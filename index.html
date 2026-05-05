@@ -489,7 +489,7 @@ function openPlayerSettings(pid, _p){
       +'<input type="text" placeholder="Real name (optional)" value="'+(p.realName||'')+'" data-pid="'+pid+'"'
       +' oninput="var pl=loadClubPlayers();var px=pl.find(function(x){return x.playerId===this.dataset.pid;});if(px){px.realName=this.value;saveClubPlayers(pl);}" '
       +' style="width:100%;background:#252525;border:1px solid #333;border-radius:8px;padding:8px 10px;color:#fff;font-size:0.85rem;outline:none;margin-bottom:8px">'
-      +'<textarea placeholder="Notes..." data-pid="'+pid+'"'
+      +'<textarea id="ps-notes" placeholder="Notes..." data-pid="'+pid+'"'
       +' oninput="var pl=loadClubPlayers();var px=pl.find(function(x){return x.playerId===this.dataset.pid;});if(px){px.notes=this.value;saveClubPlayers(pl);}"'
       +' style="width:100%;background:#252525;border:1px solid #333;border-radius:8px;padding:8px 10px;color:#fff;font-size:0.82rem;outline:none;resize:none;height:60px">'+( p.notes||'')+'</textarea>'
     +'</div>'
@@ -670,17 +670,35 @@ function renderPlayersTab(){
 
 
 function savePlayerProfile(pid){
-  var ov = document.getElementById('ps-overlay');
-  // Collect current input values from the panel
-  var creditInp = document.getElementById('ps-credit');
-  if (creditInp) {
-    var l=getHostPlayerLimits(pid);
-    l.creditLimit=parseFloat(creditInp.value)||0;
-    saveHostPlayerLimits(pid,l);
+  showToastHost('SAVE CLICKED: '+pid);
+  console.log('savePlayerProfile', pid);
+  // Read current input values
+  var realNameInp = document.getElementById('ps-realname');
+  var notesInp    = document.getElementById('ps-notes');
+  var creditInp   = document.getElementById('ps-credit');
+  var realName = realNameInp ? realNameInp.value : '';
+  var notes    = notesInp    ? notesInp.value    : '';
+  var credit   = creditInp   ? parseFloat(creditInp.value)||0 : 0;
+  console.log('values:', {realName:realName, notes:notes, credit:credit});
+  // Load players from localStorage (do not use stale in-memory ref)
+  var players = JSON.parse(localStorage.getItem('pb-club-players')||'[]');
+  var idx = players.findIndex(function(p){ return p.playerId===pid; });
+  console.log('clubPlayers before save:', JSON.stringify(players));
+  if (idx === -1) {
+    showToastHost('SAVE ERROR: PLAYER NOT FOUND\nID: '+pid);
+    console.warn('Player not found:', pid, 'players:', players);
+    return;
   }
-  // Close panel, refresh list
-  if(ov) ov.remove();
-  showToastHost('PLAYER SAVED');
+  players[idx] = Object.assign({}, players[idx], { realName:realName, notes:notes });
+  localStorage.setItem('pb-club-players', JSON.stringify(players));
+  // Save limits
+  var lim = getHostPlayerLimits(pid);
+  lim.creditLimit = credit;
+  saveHostPlayerLimits(pid, lim);
+  console.log('clubPlayers after save:', JSON.stringify(players));
+  showToastHost('PLAYER SAVED\n'+(realName||players[idx].playerName));
+  var ov = document.getElementById('ps-overlay');
+  if (ov) ov.remove();
   _playersActiveTab='all';
   renderPlayersTab();
 }
