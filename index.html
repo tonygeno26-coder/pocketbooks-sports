@@ -539,6 +539,7 @@ function openPlayerSettings(pid, _p){
       ?'<button data-pid="'+pid+'" onclick="unblockPlayer(this.dataset.pid);document.getElementById(\'ps-overlay\').remove();" style="width:100%;padding:14px;background:#00ff88;border:none;border-radius:12px;color:#000;font-size:0.9rem;font-weight:900;cursor:pointer;margin-bottom:8px">Unblock Player</button>'
       :'<button data-pid="'+pid+'" onclick="blockPlayer(this.dataset.pid);document.getElementById(\'ps-overlay\').remove();" style="width:100%;padding:14px;background:rgba(255,61,87,0.1);border:1px solid rgba(255,61,87,0.4);border-radius:12px;color:#ff3d57;font-size:0.9rem;font-weight:900;cursor:pointer;margin-bottom:8px">Block Player</button>'
     )
+  +'<button data-pid="'+pid+'" onclick="savePlayerProfile(this.dataset.pid)" style="width:100%;padding:16px;background:#00ff88;border:none;border-radius:12px;color:#000;font-size:0.95rem;font-weight:900;cursor:pointer;margin-top:6px;margin-bottom:4px;letter-spacing:0.3px">💾 Save Player</button>'
   +'</div>';
   document.body.appendChild(ov);
   ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
@@ -578,6 +579,8 @@ function renderPlayersTab(){
           +'<span style="font-size:0.88rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+p.playerName+'</span>'
           +'<span style="font-size:0.6rem;font-weight:800;color:'+sc+';background:rgba(0,0,0,0.3);padding:2px 7px;border-radius:10px;border:1px solid '+sc+';flex-shrink:0">'+p.status.toUpperCase()+'</span>'
         +'</div>'
+        +(p.realName?'<div style="font-size:0.72rem;color:#aaa;margin-top:1px">'+p.realName+'</div>':'')
+        +'<div style="font-size:0.65rem;color:#444;margin-top:1px">ID: '+p.playerId+'</div>'
         +'<div style="font-size:0.68rem;color:#555;margin-top:2px">'
           +'<span style="color:#00c2ff">$'+avail.toFixed(0)+'</span>/<span style="color:#555">$'+(lim.creditLimit||0)+'</span> credit'
           +(activeBets?' · <span style="color:#f5c842">'+activeBets+' active bet'+(activeBets>1?'s':'')+'</span>':'')
@@ -663,6 +666,23 @@ function renderPlayersTab(){
   el.style.background='#0a0a0a';
   el.style.minHeight='100vh';
   el.innerHTML=html;
+}
+
+
+function savePlayerProfile(pid){
+  var ov = document.getElementById('ps-overlay');
+  // Collect current input values from the panel
+  var creditInp = document.getElementById('ps-credit');
+  if (creditInp) {
+    var l=getHostPlayerLimits(pid);
+    l.creditLimit=parseFloat(creditInp.value)||0;
+    saveHostPlayerLimits(pid,l);
+  }
+  // Close panel, refresh list
+  if(ov) ov.remove();
+  showToastHost('PLAYER SAVED');
+  _playersActiveTab='all';
+  renderPlayersTab();
 }
 
 function openPlayerProfile(pid){
