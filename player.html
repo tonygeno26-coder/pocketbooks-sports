@@ -1961,6 +1961,7 @@ function openBetSlip() {
   if (pbw) pbw.style.display = 'block';
   bsUpdate();
   setTimeout(bsSyncPlaceBtn, 50);
+  setTimeout(runPlaceBetHitTest, 600);
   document.getElementById('bs-overlay').classList.add('show'); setTimeout(bsSyncPlaceBtn,30);
 }
 function closeBetSlip() {
@@ -2100,17 +2101,44 @@ function bsToggle(cellId, game, time, market, pick, odds) {
   bsUpdate();
 }
 
-// ── TOUCH DEBUG (single tap on place-bet-wrap only) ─────────────────────────
-document.addEventListener('click', function(e){
-  var wrap = document.getElementById('place-bet-wrap');
-  if (!wrap) return;
-  var r = wrap.getBoundingClientRect();
-  // Only log if tap is near the button area
-  if (e.clientY >= r.top && e.clientY <= r.bottom) {
-    var el = document.elementFromPoint(e.clientX, e.clientY);
-    console.log('button area hit target:', el && el.tagName, el && el.id, el && el.className);
+// ── HIT TEST: runs 1s after slip opens, logs exact blocker ──────────────────
+function runPlaceBetHitTest() {
+  var btn = document.getElementById('bs-place-btn');
+  if (!btn) { console.warn('HIT TEST: button not found'); return; }
+  var r = btn.getBoundingClientRect();
+  var x = r.left + r.width / 2;
+  var y = r.top + r.height / 2;
+  var hit = document.elementFromPoint(x, y);
+  console.log('BUTTON:', btn);
+  console.log('BUTTON RECT:', JSON.stringify({top:Math.round(r.top),left:Math.round(r.left),bottom:Math.round(r.bottom),right:Math.round(r.right),width:Math.round(r.width),height:Math.round(r.height)}));
+  console.log('ELEMENT AT BUTTON CENTER:', hit);
+  if (hit && hit !== btn) {
+    var cs = window.getComputedStyle(hit);
+    console.warn('BLOCKER:', hit.tagName, '#'+hit.id, '.'+hit.className, 'z-index:'+cs.zIndex, 'pointer-events:'+cs.pointerEvents, 'display:'+cs.display);
+    showToast('Blocked by: '+hit.tagName+(hit.id?' #'+hit.id:'')+(hit.className?' .'+String(hit.className).split(' ')[0]:''));
+    // Auto-fix: set the blocker to pointer-events:none if it's not interactive
+    var safe = ['BUTTON','A','INPUT','SELECT','TEXTAREA'];
+    if (safe.indexOf(hit.tagName) === -1) {
+      hit.style.pointerEvents = 'none';
+      console.log('AUTO-FIXED: set pointer-events:none on blocker');
+      showToast('Auto-fixed blocker: '+hit.tagName+(hit.id?' #'+hit.id:''));
+    }
+  } else if (hit === btn) {
+    console.log('HIT TEST PASS: button is hittable');
+    // Attach direct onclick as final fallback
+    btn.onclick = function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('PLACE BET DIRECT CLICK');
+      showToast('PLACE BET CLICKED');
+      window.bsPlaceBet();
+    };
+    console.log('Direct onclick attached to button');
+  } else {
+    console.warn('HIT TEST: elementFromPoint returned null at', x, y);
+    showToast('Hit test: null at center');
   }
-}, { capture:true });
+}
 // ─────────────────────────────────────────────────────────────────────────────
 
 </script>
@@ -2187,7 +2215,7 @@ document.addEventListener('click', function(e){
 </div>
 
 <!-- PLACE BET BUTTON — fixed, outside all drawers/overlays -->
-<div id="place-bet-wrap" style="display:none;position:fixed;bottom:72px;left:50%;transform:translateX(-50%);width:100%;max-width:430px;padding:10px 14px 12px;background:#fff;border-top:1px solid #e0e0e0;z-index:999999;pointer-events:auto;box-shadow:0 -2px 12px rgba(0,0,0,0.15)">
+<div id="place-bet-wrap" style="display:none;position:fixed;bottom:72px;left:50%;transform:translateX(-50%);width:100%;max-width:430px;padding:10px 14px 12px;background:#fff;border-top:1px solid #e0e0e0;z-index:2147483647;pointer-events:auto;box-shadow:0 -2px 12px rgba(0,0,0,0.15)">
   <div id="dk-payout-row2" style="display:none;justify-content:space-between;margin-bottom:8px;padding:0 2px">
     <span style="font-size:0.75rem;color:#888">Est. Payout</span>
     <span id="dk-payout-val2" style="font-size:0.82rem;font-weight:900;color:#00c853"></span>
