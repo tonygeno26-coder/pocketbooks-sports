@@ -1464,6 +1464,34 @@ window.bsPlaceBet = function bsPlaceBet() {
       return;
     }
     dbgBanner('STEP 2: validation passed\nSTEP 3: opening modal...', '#040');
+    // Host validation
+    var _pid = (JSON.parse(localStorage.getItem('pb-player')||'null')||{}).id || TOKEN || null;
+    if (_pid) {
+      var _players = JSON.parse(localStorage.getItem('pb-club-players')||'[]');
+      var _me = _players.find(function(p){ return p.playerId === _pid; });
+      if (_me) {
+        if (_me.status === 'blocked') {
+          dbgBanner('BET BLOCKED\nBlocked by host', '#800');
+          showToast('Bet blocked by host settings'); return;
+        }
+        var _avail = getClientAvailCredit(_pid);
+        if (bsStake > _avail) {
+          dbgBanner('EXCEEDS CREDIT\nAvailable: $'+_avail.toFixed(2), '#800');
+          showToast('Exceeds available credit ($'+_avail.toFixed(2)+' available)'); return;
+        }
+        var _lim = getPlayerLimitsClient(_pid);
+        var _bt = bsType==='straight'?'straight':bsType==='rr'?'roundRobin':bsType;
+        var _btl = (_lim.betLimits||{})[_bt] || {min:1,max:10000};
+        if (bsStake < _btl.min) { showToast('Below minimum bet ($'+_btl.min+')'); return; }
+        if (bsStake > _btl.max) { showToast('Above maximum bet ($'+_btl.max+')'); return; }
+        if (betSlip.length) {
+          var _sport = (betSlip[0].sport||'MLB').toUpperCase();
+          if (_lim.sportsAccess && _lim.sportsAccess[_sport] === false) {
+            showToast('Sport not enabled by host: '+_sport); return;
+          }
+        }
+      }
+    }
     openBetConfirm();
     dbgBanner('STEP 4: modal rendered', '#006');
   } catch(e) {
@@ -1959,6 +1987,20 @@ function numpadKey(k) {
     bsSetStake(val);
   }
 }
+
+
+// ── CLIENT-SIDE HOST VALIDATION ──────────────────────────────────────────────
+function getPlayerLimitsClient(pid){
+  var all=JSON.parse(localStorage.getItem('pb-player-limits')||'{}');
+  return all[pid]||{creditLimit:0,sportsAccess:{MLB:true,NBA:true,NHL:true,Soccer:true,UFL:true},betLimits:{straight:{min:1,max:10000},parlay:{min:1,max:10000},teaser:{min:1,max:10000},roundRobin:{min:1,max:10000}}};
+}
+function getClientAvailCredit(pid){
+  var lim=getPlayerLimitsClient(pid);
+  var bets=JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
+  var openRisk=bets.filter(function(b){return (b.status==='active'||b.status==='open')&&b.playerId===pid;}).reduce(function(s,b){return s+(b.riskAmount||0);},0);
+  return Math.max(0,(lim.creditLimit||0)-openRisk);
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 function bsSyncPlaceBtn() {
   var btn = document.getElementById('bs-place-btn');

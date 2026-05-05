@@ -276,6 +276,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 </div>
 
 <!-- BOTTOM NAV -->
+<div id="players-section" style="display:none;padding-bottom:100px"></div>
 <div id="bets-section" style="display:none;padding-bottom:100px">
   <div style="padding:16px 16px 8px;display:flex;justify-content:space-between;align-items:center">
     <span style="font-size:1rem;font-weight:900">Active Bets</span>
@@ -374,6 +375,7 @@ function setBN(el,tab){
   } else if(tab==='players'){
     var s=document.getElementById('players-section');
     if(s)s.style.display='block';
+    renderPlayersTab();
   } else if(tab==='diamonds'){
     var s=document.getElementById('diamonds-section');
     if(s)s.style.display='block';
@@ -384,6 +386,192 @@ function setBN(el,tab){
     loadHostActiveBets();
   }
 }
+
+
+// ── HOST PLAYER CONTROLS ─────────────────────────────────────────────────────
+function loadClubPlayers(){ return JSON.parse(localStorage.getItem('pb-club-players')||'[]'); }
+function saveClubPlayers(arr){ localStorage.setItem('pb-club-players', JSON.stringify(arr)); }
+function loadJoinRequests(){ return JSON.parse(localStorage.getItem('pb-join-requests')||'[]'); }
+function saveJoinRequests(arr){ localStorage.setItem('pb-join-requests', JSON.stringify(arr)); }
+function getHostPlayerLimits(pid){
+  var all=JSON.parse(localStorage.getItem('pb-player-limits')||'{}');
+  return all[pid]||{creditLimit:0,sportsAccess:{MLB:true,NBA:true,NHL:true,Soccer:true,UFL:true},betLimits:{straight:{min:1,max:100},parlay:{min:1,max:100},teaser:{min:1,max:100},roundRobin:{min:1,max:100}}};
+}
+function saveHostPlayerLimits(pid,limits){
+  var all=JSON.parse(localStorage.getItem('pb-player-limits')||'{}');
+  all[pid]=limits;
+  localStorage.setItem('pb-player-limits',JSON.stringify(all));
+}
+function getOpenRisk(pid){
+  var bets=JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
+  return bets.filter(function(b){return (b.status==='active'||b.status==='open')&&b.playerId===pid;}).reduce(function(s,b){return s+(b.riskAmount||0);},0);
+}
+function getAvailCredit(pid){
+  var lim=getHostPlayerLimits(pid);
+  return Math.max(0,(lim.creditLimit||0)-getOpenRisk(pid));
+}
+
+function approveRequest(req){
+  var requests=loadJoinRequests().filter(function(r){return r.playerId!==req.playerId;});
+  saveJoinRequests(requests);
+  var players=loadClubPlayers();
+  var existing=players.find(function(p){return p.playerId===req.playerId;});
+  if(!existing){
+    players.push({playerId:req.playerId,playerName:req.playerName,clubId:req.clubId,status:'approved',joinedAt:new Date().toISOString()});
+    saveClubPlayers(players);
+  }
+  var lim=getHostPlayerLimits(req.playerId);
+  var creditInput=prompt('Set credit limit for '+req.playerName+' ($)', '100');
+  var credit=parseFloat(creditInput)||0;
+  lim.creditLimit=credit;
+  saveHostPlayerLimits(req.playerId,lim);
+  renderPlayersTab();
+  showToastHost('Approved: '+req.playerName+' · Credit: $'+credit);
+}
+function declineRequest(pid){
+  saveJoinRequests(loadJoinRequests().filter(function(r){return r.playerId!==pid;}));
+  renderPlayersTab();
+}
+function blockPlayer(pid){
+  var players=loadClubPlayers();
+  var p=players.find(function(x){return x.playerId===pid;});
+  if(p){p.status='blocked'; saveClubPlayers(players); renderPlayersTab();}
+}
+function unblockPlayer(pid){
+  var players=loadClubPlayers();
+  var p=players.find(function(x){return x.playerId===pid;});
+  if(p){p.status='approved'; saveClubPlayers(players); renderPlayersTab();}
+}
+
+function openPlayerSettings(pid){
+  var existing=document.getElementById('ps-overlay');
+  if(existing)existing.remove();
+  var p=(loadClubPlayers().find(function(x){return x.playerId===pid;})||{});
+  var lim=getHostPlayerLimits(pid);
+  var sa=lim.sportsAccess||{};
+  var bl=lim.betLimits||{};
+  var sports=['MLB','NBA','NHL','Soccer','UFL'];
+  var betTypes=['straight','parlay','teaser','roundRobin'];
+  var ov=document.createElement('div');
+  ov.id='ps-overlay';
+  ov.style.cssText='position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.7);display:flex;align-items:flex-end;justify-content:center';
+  ov.innerHTML='<div style="background:#111;width:100%;max-width:430px;max-height:88vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px))">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'
+      +'<div style="font-size:1rem;font-weight:900">'+p.playerName+'</div>'
+      +'<button onclick="document.getElementById(\'ps-overlay\').remove()" style="background:#2a2a2a;border:none;color:#888;width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer">✕</button>'
+    +'</div>'
+    // Credit limit
+    +'<div style="background:#1a1a1a;border-radius:12px;padding:14px;margin-bottom:12px">'
+      +'<div style="font-size:0.7rem;color:#555;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Credit Limit</div>'
+      +'<div style="display:flex;align-items:center;gap:8px">'
+        +'<span style="color:#888">$</span>'
+        +'<input id="ps-credit" type="number" value="'+(lim.creditLimit||0)+'" style="flex:1;background:#252525;border:1px solid #333;border-radius:8px;padding:8px 10px;color:#fff;font-size:0.95rem;font-weight:800;outline:none"'
+        +' data-pid="'+pid+'" oninput="var l=getHostPlayerLimits(this.dataset.pid);l.creditLimit=parseFloat(this.value)||0;saveHostPlayerLimits(this.dataset.pid,l);">'
+        +'<span style="font-size:0.68rem;color:#555">Available: $<span id="ps-avail">'+getAvailCredit(pid).toFixed(2)+'</span></span>'
+      +'</div>'
+    +'</div>'
+    // Sports
+    +'<div style="background:#1a1a1a;border-radius:12px;padding:14px;margin-bottom:12px">'
+      +'<div style="font-size:0.7rem;color:#555;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Sports Access</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:8px">'
+      +sports.map(function(s){
+        var on=sa[s]!==false;
+        return '<label style="display:flex;align-items:center;gap:6px;background:#252525;border:1px solid #333;border-radius:8px;padding:6px 10px;cursor:pointer">'
+          +'<input type="checkbox" '+(on?'checked':'')+' data-pid="'+pid+'" data-sport="'+s+'" onchange="var l=getHostPlayerLimits(this.dataset.pid);l.sportsAccess=l.sportsAccess||{};l.sportsAccess[this.dataset.sport]=this.checked;saveHostPlayerLimits(this.dataset.pid,l);" style="accent-color:#00ff88">'
+          +'<span style="font-size:0.78rem;font-weight:700;color:#ccc">'+s+'</span>'
+        +'</label>';
+      }).join('')
+      +'</div>'
+    +'</div>'
+    // Bet limits
+    +'<div style="background:#1a1a1a;border-radius:12px;padding:14px;margin-bottom:12px">'
+      +'<div style="font-size:0.7rem;color:#555;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Bet Limits</div>'
+      +betTypes.map(function(bt){
+        var btl=(bl[bt])||{min:1,max:100};
+        return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+          +'<span style="font-size:0.75rem;font-weight:700;color:#888;width:80px;text-transform:capitalize">'+bt+'</span>'
+          +'<span style="font-size:0.68rem;color:#555">Min</span>'
+          +'<input type="number" value="'+btl.min+'" data-pid="'+pid+'" data-bt="'+bt+'" data-field="min"'
+          +' style="width:64px;background:#252525;border:1px solid #333;border-radius:6px;padding:5px 8px;color:#fff;font-size:0.82rem;font-weight:700;outline:none"'
+          +' oninput="var l=getHostPlayerLimits(this.dataset.pid);l.betLimits=l.betLimits||{};var b=l.betLimits[this.dataset.bt]=l.betLimits[this.dataset.bt]||{min:1,max:100};b.min=parseFloat(this.value)||1;saveHostPlayerLimits(this.dataset.pid,l);">'
+          +'<span style="font-size:0.68rem;color:#555">Max</span>'
+          +'<input type="number" value="'+btl.max+'" data-pid="'+pid+'" data-bt="'+bt+'" data-field="max"'
+          +' style="width:64px;background:#252525;border:1px solid #333;border-radius:6px;padding:5px 8px;color:#fff;font-size:0.82rem;font-weight:700;outline:none"'
+          +' oninput="var l=getHostPlayerLimits(this.dataset.pid);l.betLimits=l.betLimits||{};var b=l.betLimits[this.dataset.bt]=l.betLimits[this.dataset.bt]||{min:1,max:100};b.max=parseFloat(this.value)||100;saveHostPlayerLimits(this.dataset.pid,l);">'
+        +'</div>';
+      }).join('')
+    +'</div>'
+    // Block button
+    +(p.status==='blocked'
+      ?'<button data-pid="'+pid+'" onclick="unblockPlayer(this.dataset.pid);document.getElementById(\'ps-overlay\').remove();" style="width:100%;padding:14px;background:#00ff88;border:none;border-radius:12px;color:#000;font-size:0.9rem;font-weight:900;cursor:pointer;margin-bottom:8px">Unblock Player</button>'
+      :'<button data-pid="'+pid+'" onclick="blockPlayer(this.dataset.pid);document.getElementById(\'ps-overlay\').remove();" style="width:100%;padding:14px;background:rgba(255,61,87,0.1);border:1px solid rgba(255,61,87,0.4);border-radius:12px;color:#ff3d57;font-size:0.9rem;font-weight:900;cursor:pointer;margin-bottom:8px">Block Player</button>'
+    )
+  +'</div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
+}
+
+function renderPlayersTab(){
+  var el=document.getElementById('players-section');
+  if(!el)return;
+  var requests=loadJoinRequests();
+  var players=loadClubPlayers();
+  var approved=players.filter(function(p){return p.status==='approved';});
+  var blocked=players.filter(function(p){return p.status==='blocked';});
+  var html='<div style="padding:16px 16px 8px;font-size:1rem;font-weight:900">Players</div>';
+  // Pending
+  if(requests.length){
+    html+='<div style="padding:4px 16px;font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#f5c842">Pending Requests ('+requests.length+')</div>';
+    html+=requests.map(function(r){
+      return '<div style="background:#141414;border:1px solid #f5c842;border-radius:14px;margin:8px 16px;padding:14px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center">'
+          +'<div><div style="font-size:0.88rem;font-weight:800">'+r.playerName+'</div><div style="font-size:0.62rem;color:#555;margin-top:2px">Requested to join</div></div>'
+          +'<div style="display:flex;gap:8px">'
+            +'<button data-pid="'+r.playerId+'" onclick="declineRequest(this.dataset.pid)" style="padding:7px 12px;background:rgba(255,61,87,0.1);border:1px solid rgba(255,61,87,0.3);border-radius:8px;color:#ff3d57;font-size:0.75rem;font-weight:700;cursor:pointer">Decline</button>'
+            +'<button data-req="'+encodeURIComponent(JSON.stringify(r))+'" onclick="approveRequest(JSON.parse(decodeURIComponent(this.dataset.req)))" style="padding:7px 12px;background:#00ff88;border:none;border-radius:8px;color:#000;font-size:0.75rem;font-weight:900;cursor:pointer">Approve</button>'
+          +'</div>'
+        +'</div>'
+      +'</div>';
+    }).join('');
+  }
+  // Approved
+  if(approved.length){
+    html+='<div style="padding:12px 16px 4px;font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#00ff88">Approved ('+approved.length+')</div>';
+    html+=approved.map(function(p){
+      var avail=getAvailCredit(p.playerId);
+      var lim=getHostPlayerLimits(p.playerId);
+      return '<div style="background:#141414;border:1px solid #252525;border-radius:14px;margin:8px 16px;padding:14px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center">'
+          +'<div><div style="font-size:0.88rem;font-weight:800">'+p.playerName+'</div>'
+          +'<div style="font-size:0.72rem;color:#555;margin-top:3px">Credit: <span style="color:#00ff88">$'+avail.toFixed(2)+'</span> / $'+(lim.creditLimit||0)+'</div></div>'
+          +'<button data-pid="'+p.playerId+'" onclick="openPlayerSettings(this.dataset.pid)" style="padding:7px 14px;background:#1a1a1a;border:1px solid #333;border-radius:8px;color:#ccc;font-size:0.75rem;font-weight:700;cursor:pointer">Edit</button>'
+        +'</div>'
+      +'</div>';
+    }).join('');
+  }
+  // Blocked
+  if(blocked.length){
+    html+='<div style="padding:12px 16px 4px;font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#ff3d57">Blocked ('+blocked.length+')</div>';
+    html+=blocked.map(function(p){
+      return '<div style="background:#141414;border:1px solid rgba(255,61,87,0.2);border-radius:14px;margin:8px 16px;padding:14px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center">'
+          +'<div style="font-size:0.88rem;font-weight:800">'+p.playerName+'</div>'
+          +'<button data-pid="'+p.playerId+'" onclick="unblockPlayer(this.dataset.pid)" style="padding:7px 14px;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.3);border-radius:8px;color:#00ff88;font-size:0.75rem;font-weight:700;cursor:pointer">Unblock</button>'
+        +'</div>'
+      +'</div>';
+    }).join('');
+  }
+  if(!requests.length&&!players.length){
+    html+='<div style="margin:16px;background:#141414;border:1px solid #252525;border-radius:18px;padding:32px 20px;text-align:center">'
+      +'<div style="font-size:2.5rem;margin-bottom:12px">👥</div>'
+      +'<div style="font-size:1rem;font-weight:800;margin-bottom:6px">No players yet</div>'
+      +'<div style="font-size:0.8rem;color:#666;margin-bottom:20px">Share your club code to get join requests</div>'
+    +'</div>';
+  }
+  html+='<div style="height:80px"></div>';
+  el.innerHTML=html;
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function apiCall(method,path,body){
   const r=await fetch(API+path,{method,headers:{'Content-Type':'application/json',...(TOKEN?{'Authorization':'Bearer '+TOKEN}:{})},body:body?JSON.stringify(body):undefined});
