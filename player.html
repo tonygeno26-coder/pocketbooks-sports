@@ -1484,11 +1484,15 @@ window.bsPlaceBet = function bsPlaceBet() {
         var _btl = (_lim.betLimits||{})[_bt] || {min:1,max:10000};
         if (bsStake < _btl.min) { showToast('Below minimum bet ($'+_btl.min+')'); return; }
         if (bsStake > _btl.max) { showToast('Above maximum bet ($'+_btl.max+')'); return; }
-        if (betSlip.length) {
-          var _sport = (betSlip[0].sport||'MLB').toUpperCase();
-          if (_lim.sportsAccess && _lim.sportsAccess[_sport] === false) {
-            showToast('Sport not enabled by host: '+_sport); return;
-          }
+        // Check every pick's sport — block entire bet if any blocked sport
+        var _blockedSport = null;
+        betSlip.forEach(function(b){
+          if (!_blockedSport && isSportBlocked(b.sport)) _blockedSport = b.sport;
+        });
+        if (_blockedSport) {
+          dbgBanner('BET BLOCKED: blocked sport '+_blockedSport, '#800');
+          showToast('This bet includes '+_blockedSport+', which is blocked by host settings');
+          return;
         }
       }
     }
@@ -1990,6 +1994,26 @@ function numpadKey(k) {
 
 
 // ── CLIENT-SIDE HOST VALIDATION ──────────────────────────────────────────────
+
+// ── SPORTS ACCESS ENFORCEMENT ────────────────────────────────────────────────
+function getMyHostSportsAccess(){
+  var pid = (JSON.parse(localStorage.getItem('pb-player')||'null')||{}).id || TOKEN || null;
+  if (!pid) return null; // no player identity = no restrictions
+  var lim = JSON.parse(localStorage.getItem('pb-player-limits')||'{}')[pid];
+  if (!lim) return null;
+  return lim.sportsAccess || null;
+}
+function isSportBlocked(sport){
+  var access = getMyHostSportsAccess();
+  if (!access) return false; // no restrictions set
+  var s = (sport||'').toUpperCase().trim();
+  // Normalize: "baseball" / "mlb" etc.
+  var map = { BASEBALL:'MLB', BASKETBALL:'NBA', HOCKEY:'NHL', FOOTBALL:'NFL', SOCCER:'Soccer', TENNIS:'Tennis', GOLF:'Golf', UFL:'UFL' };
+  var key = map[s] || s;
+  return access[key] === false;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function getPlayerLimitsClient(pid){
   var all=JSON.parse(localStorage.getItem('pb-player-limits')||'{}');
   return all[pid]||{creditLimit:0,sportsAccess:{MLB:true,NBA:true,NHL:true,Soccer:true,UFL:true},betLimits:{straight:{min:1,max:10000},parlay:{min:1,max:10000},teaser:{min:1,max:10000},roundRobin:{min:1,max:10000}}};
@@ -2186,6 +2210,13 @@ document.addEventListener('click', function(e) {
 
     if (replaced) showToast('Pick replaced');
 
+    // Sports access check before adding
+    if (isSportBlocked(sp)) {
+      console.log('SPORT CHECK:', sp, 'blocked');
+      dbgBanner('SPORT CHECK: '+sp+' blocked\nHost has restricted this sport', '#800');
+      showToast((sp||'This sport')+' betting is blocked by host settings');
+      return;
+    }
     // Add new valid selection
     betSlip.push({
       cellId: id, game: game, time: time, market: market,
