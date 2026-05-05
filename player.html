@@ -1431,24 +1431,38 @@ function bsRenderLegs() {
 
 
 window.bsPlaceBet = function bsPlaceBet() {
-  dbgBanner('✅ PLACE BET CLICKED\npicks:'+betSlip.length+' stake:'+bsStake, '#020');
-  console.log('PLACE BET CLICKED', { betSlip: betSlip.length, bsStake: bsStake });
-  var err = document.getElementById('bs-err');
-  if (!betSlip.length) {
-    if (err) { err.style.display='block'; err.textContent='Add at least one selection'; }
-    setTimeout(function(){ if(err) err.style.display='none'; }, 2500);
-    return;
+  // Recompute effective stake (Singles uses bsStakes map, others use bsStake)
+  if (bsType === 'straight') {
+    bsStake = Object.values(bsStakes).reduce(function(s,v){ return s+(parseFloat(v)||0); }, 0);
   }
-  if (!bsStake || bsStake <= 0) {
-    if (err) { err.style.display='block'; err.textContent='Enter a valid amount'; }
-    setTimeout(function(){ if(err) err.style.display='none'; }, 2500);
-    return;
+  dbgBanner('STEP 1: bsPlaceBet started\npicks:'+betSlip.length+' stake:'+bsStake+' type:'+bsType, '#020');
+  console.log('PLACE BET CLICKED', { betSlip: betSlip.length, bsStake: bsStake, bsType: bsType, bsStakes: bsStakes });
+  try {
+    var err = document.getElementById('bs-err');
+    if (!betSlip.length) {
+      dbgBanner('ERROR: no picks', '#800');
+      if (err) { err.style.display='block'; err.textContent='Add at least one selection'; }
+      setTimeout(function(){ if(err) err.style.display='none'; }, 2500);
+      return;
+    }
+    if (!bsStake || bsStake <= 0) {
+      dbgBanner('ERROR: no amount entered\nbsStake='+bsStake+' bsStakes='+JSON.stringify(bsStakes), '#800');
+      if (err) { err.style.display='block'; err.textContent='Enter a valid amount'; }
+      setTimeout(function(){ if(err) err.style.display='none'; }, 2500);
+      return;
+    }
+    dbgBanner('STEP 2: validation passed\nSTEP 3: opening modal...', '#040');
+    openBetConfirm();
+    dbgBanner('STEP 4: modal rendered', '#006');
+  } catch(e) {
+    dbgBanner('ERROR in bsPlaceBet:\n'+e.message, '#800');
+    console.error('bsPlaceBet error:', e);
   }
-  openBetConfirm();
 }
 
 function openBetConfirm() {
   console.log("confirm modal open");
+  try {
   var payout = calcPayout(bsStake, betSlip, bsType);
   var profit = payout - bsStake;
   var typeLabel = {straight:'Straight',parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[bsType] || bsType;
@@ -1499,6 +1513,7 @@ function openBetConfirm() {
 
   document.getElementById('bet-confirm-body').innerHTML = html;
   document.getElementById('modal-bet-confirm').classList.add('open');
+  } catch(e) { dbgBanner('ERROR in openBetConfirm:\n'+e.message,'#800'); console.error(e); }
 }
 
 function closeBetConfirm() {
