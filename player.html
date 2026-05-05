@@ -1504,6 +1504,7 @@ function closeBetConfirm() {
 }
 
 function confirmBet() {
+  console.log("confirm bet clicked");
   if (playerBalance < bsStake) { showToast('Insufficient balance'); return; }
   var payout = calcPayout(bsStake, betSlip, bsType);
   var typeLabel = {straight:'Singles',parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[bsType] || bsType;
@@ -1511,10 +1512,17 @@ function confirmBet() {
   playerBalance = Math.round((playerBalance - bsStake) * 100) / 100;
   saveBalance();
   // Create ticket
+  var _playerData = JSON.parse(localStorage.getItem('pb-player') || 'null') || {};
+  var _clubData   = JSON.parse(localStorage.getItem('pb-club')   || 'null') || {};
   var ticket = {
     id: 'T' + Date.now(),
+    playerId:   _playerData.id   || TOKEN || 'guest',
+    playerName: _playerData.name || _playerData.username || 'Player',
+    clubId:     _clubData.id     || '',
+    clubName:   _clubData.name   || '',
     type: typeLabel,
-    status: 'open',
+    status: 'active',
+    source: 'player',
     placedAt: new Date().toISOString(),
     selections: betSlip.map(function(b){
       var teams2 = (b.game||'').split(' vs ');
@@ -1532,23 +1540,35 @@ function confirmBet() {
         side: side
       };
     }),
+    odds: betSlip.length === 1 ? fmtOdds(betSlip[0].odds) : (function(){
+      var d=betSlip.reduce(function(p,b){return p*amToDecimal(b.odds);},1);
+      var raw=Math.round((d-1)*100);
+      return isNaN(raw)?'--':(raw>0?'+'+raw:''+Math.round(-100/(d-1)));
+    })(),
     riskAmount: bsStake,
     estimatedPayout: Math.round(payout * 100) / 100,
     potentialProfit: Math.round((payout - bsStake) * 100) / 100
   };
   betTickets.unshift(ticket);
   saveTickets();
+  // Save to hostActiveBets for host dashboard
+  var hostBets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
+  hostBets.unshift(ticket);
+  localStorage.setItem('hostActiveBets', JSON.stringify(hostBets));
   console.log('ticket created', ticket);
+  console.log('host active bet saved', ticket);
   closeBetConfirm();
   closeBetSlip();
   clearSlip();
   // Update balance display
-  var balEl = document.getElementById('player-balance-display');
-  if (balEl) balEl.textContent = fmtBalance();
-  var balEl2 = document.getElementById('header-balance');
-  if (balEl2) balEl2.textContent = fmtBalance();
+  // Update all balance display elements
+  ['player-balance-display','header-balance','pb-balance-header'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.textContent = fmtBalance();
+  });
+  console.log('balance updated', playerBalance);
   renderMyBets();
-  showToast('✅ Bet placed! ' + fmtDollar(bsStake) + ' deducted · Balance: ' + fmtBalance());
+  showToast('✅ Bet placed successfully · Balance: ' + fmtBalance());
 }
 
 
@@ -1556,7 +1576,8 @@ function confirmBet() {
 document.addEventListener('click', function(e) {
   var btn = e.target.closest('[data-action="place-bet"]');
   if (!btn) return;
-  console.log('place bet clicked');
+  if (btn.dataset.disabled === 'true') return; // not ready
+  console.log('PLACE BET CLICKED');
   bsPlaceBet();
 }, true);
 
@@ -1572,9 +1593,9 @@ document.addEventListener('keydown', function(e) {
 function renderMyBets() {
   var el = document.getElementById('mybets-section');
   if (!el) return;
-  var open   = betTickets.filter(function(t){ return t.status==='open'; });
-  var settled = betTickets.filter(function(t){ return t.status!=='open'; });
-  var sc = { open:'#00c2ff', won:'#00ff88', lost:'#ff4444', push:'#888', partial:'#f59e0b' };
+  var open   = betTickets.filter(function(t){ return t.status==='open'||t.status==='active'; });
+  var settled = betTickets.filter(function(t){ return t.status!=='open'&&t.status!=='active'; });
+  var sc = { open:'#00c2ff', active:'#00c2ff', won:'#00ff88', lost:'#ff4444', push:'#888', partial:'#f59e0b' };
   function ticketCard(t) {
     var color = sc[t.status] || '#888';
     var d = new Date(t.placedAt);
@@ -1847,7 +1868,7 @@ function bsSyncPlaceBtn() {
   if (badge2) badge2.textContent = betSlip.length;
   var valid = bsType === 'parlay' ? (betSlip.length >= 2 && bsStake > 0) : bsType === 'rr' ? (betSlip.length >= 3 && bsStake > 0) : (betSlip.length > 0 && bsStake > 0);
   if (btn) {
-    btn.disabled = !valid;
+    btn.dataset.disabled = valid ? 'false' : 'true';
     btn.className = 'dkslip-place-btn ' + (valid ? 'ready' : 'empty');
     if (betSlip.length === 0) {
       btn.textContent = 'Add Selections';
@@ -2137,7 +2158,7 @@ function bsToggle(cellId, game, time, market, pick, odds) {
       <span>Est. Payout</span>
       <span id="dk-payout-val"></span>
     </div>
-    <button id="bs-place-btn" class="dkslip-place-btn empty" data-action="place-bet" disabled>
+    <button id="bs-place-btn" class="dkslip-place-btn empty" data-action="place-bet" data-disabled="true">
       Enter Entry Amount
     </button>
   </div>
