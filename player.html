@@ -1865,6 +1865,7 @@ function numpadKey(k) {
 
 function bsSyncPlaceBtn() {
   var btn = document.getElementById('bs-place-btn');
+  var wrap = document.getElementById('place-bet-wrap');
   var payRow = document.getElementById('dk-payout-row');
   var payVal = document.getElementById('dk-payout-val');
   var badge2 = document.getElementById('bs-badge2');
@@ -1872,9 +1873,10 @@ function bsSyncPlaceBtn() {
   var valid = bsType === 'parlay' ? (betSlip.length >= 2 && bsStake > 0) : bsType === 'rr' ? (betSlip.length >= 3 && bsStake > 0) : (betSlip.length > 0 && bsStake > 0);
   if (btn) {
     btn.dataset.disabled = valid ? 'false' : 'true';
-    btn.className = 'dkslip-place-btn ' + (valid ? 'ready' : 'empty');
-    btn.style.pointerEvents = 'auto';
+    btn.style.background = valid ? '#00c853' : '#e0e0e0';
+    btn.style.color = valid ? '#fff' : '#aaa';
     btn.style.cursor = valid ? 'pointer' : 'default';
+    btn.style.pointerEvents = 'auto';
     if (betSlip.length === 0) {
       btn.textContent = 'Add Selections';
     } else if (!valid) {
@@ -1955,12 +1957,16 @@ function clearSlip() {
 
 function openBetSlip() {
   document.getElementById('bs-drawer').classList.add('open');
+  var pbw = document.getElementById('place-bet-wrap');
+  if (pbw) pbw.style.display = 'block';
   bsUpdate();
   setTimeout(bsSyncPlaceBtn, 50);
   document.getElementById('bs-overlay').classList.add('show'); setTimeout(bsSyncPlaceBtn,30);
 }
 function closeBetSlip() {
   document.getElementById('bs-drawer').classList.remove('open');
+  var pbw2 = document.getElementById('place-bet-wrap');
+  if (pbw2) pbw2.style.display = 'none';
   var fb = document.getElementById('bs-fixed-bar'); if(fb) fb.style.display='none'; bsSyncPlaceBtn();
   document.getElementById('bs-overlay').classList.remove('show');
   if(document.getElementById('numpad')) document.getElementById('numpad').classList.remove('show');
@@ -2093,6 +2099,26 @@ function bsToggle(cellId, game, time, market, pick, odds) {
   }
   bsUpdate();
 }
+
+// ── TOUCH DEBUG ──────────────────────────────────────────────────────────────
+(function(){
+  function dbgHit(x, y) {
+    var el = document.elementFromPoint(x, y);
+    if (!el) return;
+    var info = el.tagName + (el.id?' #'+el.id:'') + (el.className?' .'+String(el.className).split(' ')[0]:'');
+    showToast('Tap hit: ' + info);
+    console.log('TOUCH HIT ELEMENT:', el, el.tagName, el.id, el.className, 'zIndex:', window.getComputedStyle(el).zIndex, 'pointerEvents:', window.getComputedStyle(el).pointerEvents);
+  }
+  document.addEventListener('touchstart', function(e){
+    var t = e.touches[0];
+    dbgHit(t.clientX, t.clientY);
+  }, { capture:true, passive:true });
+  document.addEventListener('click', function(e){
+    dbgHit(e.clientX, e.clientY);
+  }, { capture:true });
+})();
+// ─────────────────────────────────────────────────────────────────────────────
+
 </script>
 
 <!-- JOIN CLUB MODAL -->
@@ -2163,10 +2189,19 @@ function bsToggle(cellId, game, time, market, pick, odds) {
       <span>Est. Payout</span>
       <span id="dk-payout-val"></span>
     </div>
-    <button id="bs-place-btn" class="dkslip-place-btn empty" data-action="place-bet" data-disabled="true" onclick="window.bsPlaceBet()">
-      Enter Entry Amount
-    </button>
   </div>
+</div>
+
+<!-- PLACE BET BUTTON — fixed, outside all drawers/overlays -->
+<div id="place-bet-wrap" style="display:none;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;padding:10px 14px calc(10px + env(safe-area-inset-bottom,16px));background:#fff;border-top:1px solid #e0e0e0;z-index:999999;pointer-events:auto">
+  <div id="dk-payout-row2" style="display:none;justify-content:space-between;margin-bottom:8px;padding:0 2px">
+    <span style="font-size:0.75rem;color:#888">Est. Payout</span>
+    <span id="dk-payout-val2" style="font-size:0.82rem;font-weight:900;color:#00c853"></span>
+  </div>
+  <button id="bs-place-btn" data-action="place-bet" data-disabled="true" onclick="window.bsPlaceBet()"
+    style="width:100%;padding:16px;background:#e0e0e0;color:#aaa;border:none;border-radius:12px;font-size:1rem;font-weight:900;cursor:default;transition:all 0.15s;letter-spacing:0.3px;pointer-events:auto">
+    Enter Entry Amount
+  </button>
 </div>
 
 <!-- NUMERIC KEYPAD -->
