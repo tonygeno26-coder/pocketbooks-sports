@@ -349,6 +349,7 @@ function loadHostActiveBets(){
 
 function renderHostBets(){
   var active=loadHostActiveBets();
+  showToastHost('HOST BETS RENDERED WITH PLAYER NAMES\n'+active.length+' bets · players: '+[...new Set(active.map(function(t){return t.playerUsername||t.playerName||'?';}))]  .join(', '));
   var el=document.getElementById('host-bets-list');
   if(!el) return;
   if(!active.length){
@@ -559,6 +560,20 @@ function openPlayerSettings(pid, _p){
       ?'<button data-pid="'+pid+'" onclick="unblockPlayer(this.dataset.pid);document.getElementById(\'ps-overlay\').remove();" style="width:100%;padding:14px;background:#00ff88;border:none;border-radius:12px;color:#000;font-size:0.9rem;font-weight:900;cursor:pointer;margin-bottom:8px">Unblock Player</button>'
       :'<button data-pid="'+pid+'" onclick="blockPlayer(this.dataset.pid);document.getElementById(\'ps-overlay\').remove();" style="width:100%;padding:14px;background:rgba(255,61,87,0.1);border:1px solid rgba(255,61,87,0.4);border-radius:12px;color:#ff3d57;font-size:0.9rem;font-weight:900;cursor:pointer;margin-bottom:8px">Block Player</button>'
     )
+  // Active bets for this player
+  +(function(){
+    var pBets=JSON.parse(localStorage.getItem('hostActiveBets')||'[]').filter(function(b){return b.playerId===pid&&(b.status==='active'||b.status==='open');});
+    if(!pBets.length) return '';
+    return '<div style="background:#1a1a1a;border-radius:12px;padding:14px;margin-bottom:12px">'
+      +'<div style="font-size:0.7rem;color:#555;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Active Bets ('+pBets.length+')</div>'
+      +pBets.slice(0,5).map(function(b){
+        return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #252525">'
+          +'<div style="font-size:0.78rem;color:#ccc">'+b.type+' · '+b.selections.length+' pick'+(b.selections.length>1?'s':'')+'</div>'
+          +'<div style="font-size:0.78rem;font-weight:700;color:#ff3d57">$'+parseFloat(b.riskAmount||0).toFixed(2)+'</div>'
+        +'</div>';
+      }).join('')
+    +'</div>';
+  })()
   +'<button data-pid="'+pid+'" onclick="savePlayerProfile(this.dataset.pid)" style="width:100%;padding:16px;background:#00ff88;border:none;border-radius:12px;color:#000;font-size:0.95rem;font-weight:900;cursor:pointer;margin-top:6px;margin-bottom:4px;letter-spacing:0.3px">💾 Save Player</button>'
   +'</div>';
   document.body.appendChild(ov);
