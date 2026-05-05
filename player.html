@@ -1514,9 +1514,24 @@ function confirmBet() {
   var ticket = {
     id: 'T' + Date.now(),
     type: typeLabel,
-    status: 'Open',
+    status: 'open',
     placedAt: new Date().toISOString(),
-    selections: betSlip.map(function(b){ return { pick: b.pick, market: b.market, game: b.game, odds: b.odds }; }),
+    selections: betSlip.map(function(b){
+      var teams2 = (b.game||'').split(' vs ');
+      var p = (b.pick||'').toLowerCase();
+      var homeTeam = teams2[1] ? teams2[1].trim().toLowerCase() : '';
+      var side = p.includes('over') ? 'over' : p.includes('under') ? 'under' :
+        (homeTeam && p.includes(homeTeam.split(' ').pop())) ? 'home' : 'away';
+      return {
+        gameId: b.cellId ? b.cellId.split('-').slice(0,4).join('-') : b.game,
+        sport: b.sport || '',
+        matchup: b.game || '',
+        pick: b.pick || '',
+        market: b.market || '',
+        odds: b.odds,
+        side: side
+      };
+    }),
     riskAmount: bsStake,
     estimatedPayout: Math.round(payout * 100) / 100,
     potentialProfit: Math.round((payout - bsStake) * 100) / 100
@@ -1557,33 +1572,39 @@ document.addEventListener('keydown', function(e) {
 function renderMyBets() {
   var el = document.getElementById('mybets-section');
   if (!el) return;
-  if (!betTickets.length) {
-    el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#555;font-size:0.85rem">No bets placed yet</div>';
-    return;
+  var open   = betTickets.filter(function(t){ return t.status==='open'; });
+  var settled = betTickets.filter(function(t){ return t.status!=='open'; });
+  var sc = { open:'#00c2ff', won:'#00ff88', lost:'#ff4444', push:'#888', partial:'#f59e0b' };
+  function ticketCard(t) {
+    var color = sc[t.status] || '#888';
+    var d = new Date(t.placedAt);
+    var dateStr = d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    return '<div style="background:#1a1a1a;border-radius:14px;margin:8px 14px;padding:14px;border:1px solid #2a2a2a">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+        '<span style="font-size:0.82rem;font-weight:900">'+t.type+'</span>' +
+        '<span style="font-size:0.65rem;font-weight:800;color:'+color+';background:rgba(0,0,0,0.3);padding:3px 8px;border-radius:20px;border:1px solid '+color+'">'+t.status.toUpperCase()+'</span>' +
+      '</div>' +
+      (t.selections||[]).slice(0,3).map(function(s){ return '<div style="font-size:0.75rem;color:#888;margin-bottom:2px">'+s.pick+' <span style="color:#555">'+fmtOdds(s.odds)+'</span></div>'; }).join('') +
+      ((t.selections||[]).length>3?'<div style="font-size:0.68rem;color:#555">+'+(t.selections.length-3)+' more</div>':'') +
+      '<div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid #2a2a2a">' +
+        '<div><div style="font-size:0.6rem;color:#555">Risk</div><div style="font-size:0.82rem;font-weight:800">'+fmtDollar(t.riskAmount)+'</div></div>' +
+        '<div style="text-align:center"><div style="font-size:0.6rem;color:#555">To Win</div><div style="font-size:0.82rem;font-weight:800;color:#00ff88">'+fmtDollar(t.potentialProfit)+'</div></div>' +
+        '<div style="text-align:right"><div style="font-size:0.6rem;color:#555">'+(t.status==='open'?'Est. Payout':'Payout')+'</div><div style="font-size:0.82rem;font-weight:800;color:#00c2ff">'+fmtDollar(t.status==='open'?t.estimatedPayout:(t.actualPayout||0))+'</div></div>' +
+      '</div>' +
+      '<div style="font-size:0.6rem;color:#444;margin-top:6px">'+dateStr+' · '+t.id+'</div>' +
+    '</div>';
   }
-  var statusColor = { Open:'#00c2ff', Won:'#00ff88', Lost:'#ff4444', Void:'#888' };
-  el.innerHTML = '<div style="padding:14px 14px 0;font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#555">My Bets</div>' +
-    betTickets.map(function(t) {
-      var d = new Date(t.placedAt);
-      var dateStr = d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
-      var sc = statusColor[t.status] || '#888';
-      return '<div style="background:#1a1a1a;border-radius:14px;margin:10px 14px;padding:14px;border:1px solid #2a2a2a">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
-          '<span style="font-size:0.82rem;font-weight:900">'+t.type+'</span>' +
-          '<span style="font-size:0.65rem;font-weight:800;color:'+sc+';background:rgba(0,0,0,0.3);padding:3px 8px;border-radius:20px;border:1px solid '+sc+'">'+t.status+'</span>' +
-        '</div>' +
-        t.selections.slice(0,3).map(function(s){
-          return '<div style="font-size:0.75rem;color:#888;margin-bottom:2px">'+s.pick+' <span style="color:#555">'+fmtOdds(s.odds)+'</span></div>';
-        }).join('') +
-        (t.selections.length>3?'<div style="font-size:0.68rem;color:#555">+' +(t.selections.length-3)+' more picks</div>':'') +
-        '<div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid #2a2a2a">' +
-          '<div><div style="font-size:0.62rem;color:#555">Risk</div><div style="font-size:0.82rem;font-weight:800">'+fmtDollar(t.riskAmount)+'</div></div>' +
-          '<div style="text-align:center"><div style="font-size:0.62rem;color:#555">To Win</div><div style="font-size:0.82rem;font-weight:800;color:#00ff88">'+fmtDollar(t.potentialProfit)+'</div></div>' +
-          '<div style="text-align:right"><div style="font-size:0.62rem;color:#555">Est. Payout</div><div style="font-size:0.82rem;font-weight:800;color:#00c2ff">'+fmtDollar(t.estimatedPayout)+'</div></div>' +
-        '</div>' +
-        '<div style="font-size:0.6rem;color:#444;margin-top:6px">'+dateStr+' · #'+t.id+'</div>' +
-      '</div>';
-    }).join('');
+  var html = '<div style="padding:14px 14px 8px;display:flex;justify-content:space-between;align-items:center">' +
+    '<span style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#555">My Bets</span>' +
+    '<button onclick="checkOpenTickets()" style="font-size:0.65rem;font-weight:700;color:#00c2ff;background:none;border:1px solid #00c2ff;border-radius:12px;padding:4px 10px;cursor:pointer">Check Results</button>' +
+  '</div>';
+  if (!betTickets.length) {
+    html += '<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">No bets placed yet</div>';
+  } else {
+    if (open.length) { html += '<div style="font-size:0.65rem;color:#555;padding:4px 14px 2px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Open ('+open.length+')</div>'; open.forEach(function(t){ html+=ticketCard(t); }); }
+    if (settled.length) { html += '<div style="font-size:0.65rem;color:#555;padding:12px 14px 2px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Settled ('+settled.length+')</div>'; settled.forEach(function(t){ html+=ticketCard(t); }); }
+  }
+  el.innerHTML = html;
 }
 
 function bsSetSingleStake(cellId, val, idx) {
