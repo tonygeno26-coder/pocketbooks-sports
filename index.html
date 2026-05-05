@@ -389,6 +389,29 @@ function setBN(el,tab){
 
 
 // ── HOST PLAYER CONTROLS ─────────────────────────────────────────────────────
+
+// ── MOCK PLAYER FOR TESTING ───────────────────────────────────────────────────
+(function(){
+  var existing = JSON.parse(localStorage.getItem('pb-club-players')||'[]');
+  if (!existing.length) {
+    var mock = [{
+      playerId:'P1001', playerName:'TestPlayer01', realName:'', notes:'',
+      status:'approved', clubId:'demo-club', color:'#1a3a5a', joinedAt: new Date().toISOString()
+    }];
+    localStorage.setItem('pb-club-players', JSON.stringify(mock));
+    // Set limits
+    var allLimits = JSON.parse(localStorage.getItem('pb-player-limits')||'{}');
+    allLimits['P1001'] = {
+      creditLimit:500,
+      sportsAccess:{MLB:true,NBA:true,NHL:true,Soccer:true,UFL:true},
+      betLimits:{straight:{min:1,max:100},parlay:{min:1,max:100},teaser:{min:1,max:100},roundRobin:{min:1,max:100}}
+    };
+    localStorage.setItem('pb-player-limits', JSON.stringify(allLimits));
+    showToastHost('MOCK PLAYER LOADED');
+  }
+})();
+// ─────────────────────────────────────────────────────────────────────────────
+
 function loadClubPlayers(){ return JSON.parse(localStorage.getItem('pb-club-players')||'[]'); }
 function saveClubPlayers(arr){ localStorage.setItem('pb-club-players', JSON.stringify(arr)); }
 function loadJoinRequests(){ return JSON.parse(localStorage.getItem('pb-join-requests')||'[]'); }
@@ -459,6 +482,16 @@ function openPlayerSettings(pid, _p){
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'
       +'<div style="font-size:1rem;font-weight:900">'+p.playerName+'</div>'
       +'<button onclick="document.getElementById(\'ps-overlay\').remove()" style="background:#2a2a2a;border:none;color:#888;width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer">✕</button>'
+    +'</div>'
+    // Real name + notes
+    +'<div style="background:#1a1a1a;border-radius:12px;padding:14px;margin-bottom:12px">'
+      +'<div style="font-size:0.7rem;color:#555;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Player Info</div>'
+      +'<input type="text" placeholder="Real name (optional)" value="'+(p.realName||'')+'" data-pid="'+pid+'"'
+      +' oninput="var pl=loadClubPlayers();var px=pl.find(function(x){return x.playerId===this.dataset.pid;});if(px){px.realName=this.value;saveClubPlayers(pl);}" '
+      +' style="width:100%;background:#252525;border:1px solid #333;border-radius:8px;padding:8px 10px;color:#fff;font-size:0.85rem;outline:none;margin-bottom:8px">'
+      +'<textarea placeholder="Notes..." data-pid="'+pid+'"'
+      +' oninput="var pl=loadClubPlayers();var px=pl.find(function(x){return x.playerId===this.dataset.pid;});if(px){px.notes=this.value;saveClubPlayers(pl);}"'
+      +' style="width:100%;background:#252525;border:1px solid #333;border-radius:8px;padding:8px 10px;color:#fff;font-size:0.82rem;outline:none;resize:none;height:60px">'+( p.notes||'')+'</textarea>'
     +'</div>'
     // Credit limit
     +'<div style="background:#1a1a1a;border-radius:12px;padding:14px;margin-bottom:12px">'
