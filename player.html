@@ -1430,7 +1430,9 @@ function bsRenderLegs() {
 }
 
 
-function bsPlaceBet() {
+window.bsPlaceBet = function bsPlaceBet() {
+  showToast('PLACE BET CLICKED');
+  console.log('PLACE BET CLICKED', { betSlip: betSlip.length, bsStake: bsStake });
   var err = document.getElementById('bs-err');
   if (!betSlip.length) {
     if (err) { err.style.display='block'; err.textContent='Add at least one selection'; }
@@ -1577,8 +1579,9 @@ document.addEventListener('click', function(e) {
   var btn = e.target.closest('[data-action="place-bet"]');
   if (!btn) return;
   if (btn.dataset.disabled === 'true') return; // not ready
-  console.log('PLACE BET CLICKED');
-  bsPlaceBet();
+  console.log('PLACE BET CLICKED via delegation');
+  showToast('PLACE BET CLICKED');
+  window.bsPlaceBet();
 }, true);
 
 // Enter key in stake input triggers place bet
@@ -1870,6 +1873,8 @@ function bsSyncPlaceBtn() {
   if (btn) {
     btn.dataset.disabled = valid ? 'false' : 'true';
     btn.className = 'dkslip-place-btn ' + (valid ? 'ready' : 'empty');
+    btn.style.pointerEvents = 'auto';
+    btn.style.cursor = valid ? 'pointer' : 'default';
     if (betSlip.length === 0) {
       btn.textContent = 'Add Selections';
     } else if (!valid) {
@@ -2158,7 +2163,7 @@ function bsToggle(cellId, game, time, market, pick, odds) {
       <span>Est. Payout</span>
       <span id="dk-payout-val"></span>
     </div>
-    <button id="bs-place-btn" class="dkslip-place-btn empty" data-action="place-bet" data-disabled="true">
+    <button id="bs-place-btn" class="dkslip-place-btn empty" data-action="place-bet" data-disabled="true" onclick="window.bsPlaceBet()">
       Enter Entry Amount
     </button>
   </div>
