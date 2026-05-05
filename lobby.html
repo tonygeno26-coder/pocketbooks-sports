@@ -249,7 +249,7 @@ if (location.search.includes('preview=1')) {
         <span style="font-size:0.65rem;color:#999">TAP TO ENTER ›</span>
       </div>
       <div class="ac-body" id="ac-body-el">
-        <div id="ac-empty-state" style="text-align:center;padding:10px">
+        <div id="ac-empty-state" style="text-align:center;padding:6px 10px">
           <div style="font-size:2.5rem;margin-bottom:10px;opacity:0.6">🃏</div>
           <div style="font-size:0.82rem;font-weight:700;color:#333;margin-bottom:14px">Join or create a club<br>to start betting</div>
           <div style="display:flex;gap:8px;justify-content:center">
@@ -682,35 +682,48 @@ async function loadMyClubs() {
 
 function renderClubsList() {
   const el = document.getElementById('clubs-list-el');
-  if (!userClubs.length) { el.innerHTML = '<div style="text-align:center;padding:30px;color:#444;font-size:0.85rem">No clubs yet — join or create one</div>'; return; }
+  if (!el) return;
+  if (typeof showToast === 'function') showToast('LOBBY CLUBS RENDERED: '+userClubs.length);
+  if (!userClubs.length) {
+    el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#444;font-size:0.85rem"><div style="font-size:2rem;margin-bottom:10px">🃏</div>No clubs yet — join or create one</div>';
+    return;
+  }
   el.innerHTML = userClubs.map(c => {
     const isHost = c.role === 'host';
-    const isPending = c.status === 'pending';
+    const isPending = c.status === 'pending' || c.status === 'demo';
     const bal = parseFloat(c.balance)||0;
-    const balCol = bal>0?'#00ff88':bal<0?'#ff3d57':'#555';
-    const roleClass = isHost?'role-host':isPending?'role-pending':'role-player';
-    const roleLabel = isHost?'Host':isPending?'Pending':'Player';
-    return `<div class="club-row" onclick="selectClub(${c.id})">
-      <div class="cr-left">
-        <div class="cr-avatar">${(c.name||'').slice(0,2).toUpperCase()}</div>
-        <div>
-          <div class="cr-name">${c.name}</div>
-          <div class="cr-meta">
-            <span class="cr-id">PB-${c.code||c.id}</span>
-            <span class="role-badge ${roleClass}">${roleLabel}</span>
+    const balCol = bal>0?'#00ff88':bal<0?'#ff3d57':'#888';
+    const roleLabel = isHost?'Host':isPending?c.status==='demo'?'Preview':'Pending':'Player';
+    const roleColor = isHost?'#f5c842':isPending?'#888':'#00c2ff';
+    const members = c.members||0;
+    const actionBtn = isHost
+      ? `<button onclick="event.stopPropagation();window.location='index.html'" style="padding:8px 16px;background:#f5c842;color:#000;border:none;border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Host Dashboard</button>`
+      : isPending&&c.status==='demo'
+        ? `<button onclick="event.stopPropagation();openModal('modal-join')" style="padding:8px 16px;background:rgba(0,194,255,0.15);color:#00c2ff;border:1px solid rgba(0,194,255,0.3);border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Join Club</button>`
+        : `<button onclick="event.stopPropagation();selectClub(${c.id});setTimeout(()=>{window.location='player.html'},100)" style="padding:8px 16px;background:#00ff88;color:#000;border:none;border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Sportsbook</button>`;
+    return `<div onclick="selectClub(${c.id})" style="background:#141414;border:1px solid #252525;border-radius:16px;padding:16px;margin-bottom:10px;cursor:pointer;transition:border-color 0.15s" onmouseenter="this.style.borderColor='#333'" onmouseleave="this.style.borderColor='#252525'">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#1a2a1a,#0a1a0a);border:1px solid #333;display:flex;align-items:center;justify-content:center;font-size:1rem;font-weight:900;color:#00ff88;flex-shrink:0">${(c.name||'').slice(0,2).toUpperCase()}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+            <span style="font-size:0.92rem;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.name}</span>
+            <span style="font-size:0.6rem;font-weight:800;color:${roleColor};background:rgba(0,0,0,0.4);padding:2px 8px;border-radius:10px;border:1px solid ${roleColor};flex-shrink:0">${roleLabel}</span>
           </div>
+          <div style="font-size:0.65rem;color:#555">ID: ${c.code||c.id} · ${members} member${members!==1?'s':''}</div>
+          ${c.pendingRequests?`<div style="font-size:0.65rem;color:#f5c842;margin-top:2px">⏳ ${c.pendingRequests} pending request${c.pendingRequests>1?'s':''}</div>`:''}
         </div>
-      </div>
-      <div class="cr-right">
-        <div class="cr-balance" style="color:${balCol}">${bal>0?'+':''}$${Math.abs(bal).toLocaleString()}</div>
-        <div class="cr-dir">${isHost?'managing':isPending?'awaiting approval':bal>0?'you owe':bal<0?'owes you':'even'}</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0">
+          <div style="font-size:0.82rem;font-weight:900;color:${balCol}">${bal?((bal>0?'+':'')+' $'+Math.abs(bal).toLocaleString()):'$0'}</div>
+          ${actionBtn}
+        </div>
       </div>
     </div>`;
   }).join('');
 }
 
-function showMyClubsSection() {
+function showMyClubsSection(forceShow) {
   const sec = document.getElementById('section-my-clubs');
+  if (forceShow) { sec.style.display = 'block'; return; }
   const isVisible = sec.style.display !== 'none';
   sec.style.display = isVisible ? 'none' : 'block';
 }
@@ -907,6 +920,33 @@ if (isPreview) {
 }
 if (userClubs.length) { renderClubsList(); document.getElementById('club-count-lbl').textContent = userClubs.length + ' clubs'; updateClubsTilePreview(); }
 if (activeClub) setActiveClub(activeClub);
+
+// ── MOCK CLUBS SEED ───────────────────────────────────────────────────────────
+(function(){
+  var stored = JSON.parse(localStorage.getItem('pb-user-clubs')||'null');
+  if (stored && stored.length) { /* already have clubs */ }
+  else {
+    var mock = [
+      { id:26819, code:'DNKYM', name:'DONKEYMANIA', role:'host', status:'approved', balance:8950, members:12, pendingRequests:2 },
+      { id:43107, code:'VGSAR', name:'Vegas Action Room', role:'player', status:'approved', balance:1000, members:8, pendingRequests:0 },
+      { id:90214, code:'PBCLB', name:'Pocket Books Club', role:'player', status:'demo', balance:0, members:0, pendingRequests:0 }
+    ];
+    localStorage.setItem('pb-user-clubs', JSON.stringify(mock));
+  }
+  // Load into userClubs if not already populated by API
+  setTimeout(function(){
+    if (typeof userClubs !== 'undefined' && !userClubs.length) {
+      var saved = JSON.parse(localStorage.getItem('pb-user-clubs')||'[]');
+      saved.forEach(function(c){ userClubs.push(c); });
+      if (typeof renderClubsList === 'function') renderClubsList();
+      if (typeof updateClubsTilePreview === 'function') updateClubsTilePreview();
+      if (typeof showMyClubsSection === 'function') showMyClubsSection(true);
+      if (typeof showToast === 'function') showToast('LOBBY CLUBS RENDERED: '+saved.length);
+    }
+  }, 400);
+})();
+// ─────────────────────────────────────────────────────────────────────────────
+
 </script>
 </body>
 </html>
