@@ -470,6 +470,7 @@ function openPlayerSettings(pid, _p){
   var existing=document.getElementById('ps-overlay');
   if(existing)existing.remove();
   var p=_p||(loadClubPlayers().find(function(x){return x.playerId===pid;})||{});
+  showToastHost('PROFILE OPENED\nID: '+pid+'\nrealName: '+(p.realName||''));
   var lim=getHostPlayerLimits(pid);
   var sa=lim.sportsAccess||{};
   var bl=lim.betLimits||{};
@@ -486,7 +487,7 @@ function openPlayerSettings(pid, _p){
     // Real name + notes
     +'<div style="background:#1a1a1a;border-radius:12px;padding:14px;margin-bottom:12px">'
       +'<div style="font-size:0.7rem;color:#555;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Player Info</div>'
-      +'<input type="text" placeholder="Real name (optional)" value="'+(p.realName||'')+'" data-pid="'+pid+'"'
+      +'<input type="text" id="ps-realname" placeholder="Real name (optional)" value="'+(p.realName||'')+'" data-pid="'+pid+'"'
       +' oninput="var pl=loadClubPlayers();var px=pl.find(function(x){return x.playerId===this.dataset.pid;});if(px){px.realName=this.value;saveClubPlayers(pl);}" '
       +' style="width:100%;background:#252525;border:1px solid #333;border-radius:8px;padding:8px 10px;color:#fff;font-size:0.85rem;outline:none;margin-bottom:8px">'
       +'<textarea id="ps-notes" placeholder="Notes..." data-pid="'+pid+'"'
@@ -553,7 +554,8 @@ function renderPlayersTab(){
   if (!el) return;
   var requests = loadJoinRequests();
   var players  = loadClubPlayers();
-  showToastHost('PLAYERS SCREEN RENDERED: '+players.length+' players');
+  var savedPlayers=JSON.parse(localStorage.getItem('pb-club-players')||'[]');
+  showToastHost('LIST RENDERED\nplayers: '+savedPlayers.length+'\nrealNames: '+savedPlayers.map(function(p){return p.realName||'none';}).join(','));
 
   function getActiveBetsCount(pid){
     return JSON.parse(localStorage.getItem('hostActiveBets')||'[]').filter(function(b){ return b.playerId===pid && (b.status==='active'||b.status==='open'); }).length;
@@ -691,6 +693,7 @@ function savePlayerProfile(pid){
   }
   players[idx] = Object.assign({}, players[idx], { realName:realName, notes:notes });
   localStorage.setItem('pb-club-players', JSON.stringify(players));
+  showToastHost('LOCALSTORAGE SAVED\nrealName: '+realName);
   // Save limits
   var lim = getHostPlayerLimits(pid);
   lim.creditLimit = credit;
