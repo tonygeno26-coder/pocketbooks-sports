@@ -1469,47 +1469,59 @@ function openBetConfirm() {
   var profit = payout - bsStake;
   var typeLabel = {straight:'Singles',parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[bsType] || bsType;
 
+  // Build DK-style light modal content
   var legsHtml = betSlip.map(function(b) {
-    var logo = bsTeamLogo(b.pick, b.game);
+    var logo = (bsTeamLogo(b.pick, b.game)||'').replace('/500-dark/','/500/');
     var abbr = bsTeamAbbr(b.pick, b.game);
     var logoHtml = logo
-      ? '<div class="bs-leg-logo" style="width:26px;height:26px;margin-right:8px"><img src="'+logo+'" alt="'+abbr+'"></div>'
-      : '<div class="bs-leg-logo" style="width:26px;height:26px;margin-right:8px;font-size:0.6rem">'+abbr+'</div>';
+      ? '<div style="width:36px;height:36px;border-radius:8px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;padding:4px;flex-shrink:0;margin-right:10px;overflow:hidden"><img src="'+logo+'" alt="'+abbr+'" style="width:100%;height:100%;object-fit:contain"></div>'
+      : '<div style="width:36px;height:36px;border-radius:8px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:900;color:#333;flex-shrink:0;margin-right:10px">'+abbr+'</div>';
     var teams = (b.game||'').split(' vs ');
     var shortGame = teams.length===2 ? teams[0].split(' ').pop()+' vs '+teams[1].split(' ').pop() : (b.game||'');
-    return '<div style="display:flex;align-items:center;padding:8px 0;border-bottom:1px solid #141414">' +
+    var stake = bsType==='straight' ? (bsStakes[b.cellId]||0) : null;
+    return '<div style="display:flex;align-items:center;padding:11px 0;border-bottom:1px solid #f0f0f0">' +
       logoHtml +
-      '<div style="flex:1">' +
-        '<div style="font-size:0.6rem;color:#444">'+shortGame+'</div>' +
-        '<div style="font-size:0.84rem;font-weight:800;color:#f0f0f0;line-height:1.2">'+( b.pick||'Unknown')+'</div>' +
-        '<div style="font-size:0.65rem;color:#00c2ff;font-weight:700;text-transform:uppercase;letter-spacing:0.3px">'+(b.market||'')+'</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:0.6rem;color:#aaa;margin-bottom:2px">'+shortGame+'</div>' +
+        '<div style="font-size:0.88rem;font-weight:900;color:#111;line-height:1.2;white-space:normal">'+( b.pick||'Unknown')+'</div>' +
+        '<div style="font-size:0.65rem;color:#0064c8;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;margin-top:1px">'+(b.market||'')+'</div>' +
+        (stake ? '<div style="font-size:0.68rem;color:#555;margin-top:2px">Risk: '+fmtDollar(stake)+'</div>' : '') +
       '</div>' +
-      '<div style="font-size:0.88rem;font-weight:900;color:#00ff88;margin-left:8px">'+fmtOdds(b.odds)+'</div>' +
+      '<div style="font-size:0.92rem;font-weight:900;color:#111;margin-left:10px;flex-shrink:0">'+fmtOdds(b.odds)+'</div>' +
     '</div>';
   }).join('');
 
   var insufficient = playerBalance < bsStake;
   var html =
-    '<div style="padding:18px 16px 0">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
+    // Handle bar
+    '<div style="width:36px;height:4px;background:#e0e0e0;border-radius:2px;margin:12px auto 0"></div>' +
+    '<div style="padding:16px 16px 0">' +
+      // Header
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">' +
         '<div>' +
-          '<div style="font-size:0.6rem;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Confirm Bet</div>' +
-          '<div style="font-size:1rem;font-weight:900">'+typeLabel+' · '+betSlip.length+' pick'+(betSlip.length>1?'s':'')+'</div>' +
+          '<div style="font-size:0.62rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Confirm Bet</div>' +
+          '<div style="font-size:1.05rem;font-weight:900;color:#111">'+typeLabel+' · '+betSlip.length+' pick'+(betSlip.length>1?'s':'')+'</div>' +
         '</div>' +
-        '<button onclick="closeBetConfirm()" style="background:rgba(255,255,255,0.07);border:none;color:#888;width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer">✕</button>' +
+        '<button onclick="closeBetConfirm()" style="background:#f5f5f5;border:none;color:#555;width:34px;height:34px;border-radius:50%;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">✕</button>' +
       '</div>' +
-      legsHtml +
-      '<div style="margin-top:12px;background:#0f0f0f;border-radius:12px;padding:12px 14px">' +
-        '<div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:6px"><span style="color:#555">Current Balance</span><span style="font-weight:800;color:#00c2ff">'+fmtBalance()+'</span></div>' +
-        '<div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:6px"><span style="color:#555">Total Risk</span><span style="font-weight:800;color:'+(insufficient?'#ff4444':'#fff')+'">'+fmtDollar(bsStake)+'</span></div>' +
-        '<div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:6px"><span style="color:#555">Est. Payout</span><span style="color:#00ff88;font-weight:800">'+fmtDollar(payout)+'</span></div>' +
-        '<div style="display:flex;justify-content:space-between;font-size:0.78rem;border-top:1px solid #1e1e1e;padding-top:8px;margin-top:4px"><span style="color:#555">Potential Profit</span><span style="color:#00ff88;font-weight:900;font-size:0.9rem">+'+fmtDollar(profit)+'</span></div>' +
-        (insufficient ? '<div style="margin-top:8px;padding:8px;background:rgba(255,68,68,0.1);border:1px solid rgba(255,68,68,0.3);border-radius:8px;font-size:0.72rem;color:#ff4444;text-align:center">Insufficient balance</div>' : '') +
+      // Picks
+      '<div style="background:#fafafa;border-radius:14px;padding:0 12px;margin-bottom:14px">' +
+        legsHtml +
       '</div>' +
-      '<div style="font-size:0.62rem;color:#333;text-align:center;margin:10px 0 4px">Play credits only · No real money</div>' +
-      '<div style="display:flex;gap:10px;padding:12px 0 20px">' +
-        '<button onclick="closeBetConfirm()" style="flex:1;padding:14px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;color:#888;font-size:0.9rem;font-weight:700;cursor:pointer">Cancel</button>' +
-        '<button onclick="confirmBet()" '+(insufficient?'disabled style="flex:2;padding:14px;background:#444;border:none;border-radius:12px;color:#888;font-size:0.95rem;font-weight:900;cursor:not-allowed"':'style="flex:2;padding:14px;background:#00ff88;border:none;border-radius:12px;color:#000;font-size:0.95rem;font-weight:900;cursor:pointer;letter-spacing:0.3px"')+'>Confirm Bet →</button>' +
+      // Summary card
+      '<div style="background:#f8f8f8;border:1px solid #eee;border-radius:14px;padding:14px;margin-bottom:12px">' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:#888">Current Balance</span><span style="font-size:0.82rem;font-weight:800;color:#0064c8">'+fmtBalance()+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:#888">Total Risk</span><span style="font-size:0.82rem;font-weight:800;color:'+(insufficient?'#cc0000':'#111')+'">'+fmtDollar(bsStake)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:#888">Est. Payout</span><span style="font-size:0.82rem;font-weight:800;color:#00875a">'+fmtDollar(payout)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid #e8e8e8"><span style="font-size:0.82rem;font-weight:700;color:#888">Potential Profit</span><span style="font-size:0.92rem;font-weight:900;color:#00875a">+'+fmtDollar(profit)+'</span></div>' +
+        (insufficient ? '<div style="margin-top:10px;padding:8px 12px;background:#fff0f0;border:1px solid #ffcccc;border-radius:8px;font-size:0.75rem;color:#cc0000;text-align:center;font-weight:700">⚠️ Insufficient balance</div>' : '') +
+      '</div>' +
+      // Disclaimer
+      '<div style="font-size:0.62rem;color:#bbb;text-align:center;margin-bottom:10px">Play credits only · Not real money</div>' +
+      // Buttons
+      '<div style="display:flex;gap:10px;padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))">' +
+        '<button onclick="closeBetConfirm()" style="flex:1;padding:15px;background:#f0f0f0;border:none;border-radius:12px;color:#555;font-size:0.9rem;font-weight:700;cursor:pointer">Cancel</button>' +
+        '<button onclick="confirmBet()" style="flex:2;padding:15px;background:'+(insufficient?'#ccc':'#00c853')+';border:none;border-radius:12px;color:'+(insufficient?'#888':'#fff')+';font-size:0.95rem;font-weight:900;cursor:'+(insufficient?'not-allowed':'pointer')+';letter-spacing:0.3px">'+(insufficient?'Insufficient balance':'Confirm Bet →')+'</button>' +
       '</div>' +
     '</div>';
 
