@@ -121,7 +121,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .bs-bar{display:none;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:406px;background:#00ff88;border-radius:14px;padding:13px 18px;justify-content:space-between;align-items:center;z-index:9000;cursor:pointer;box-shadow:0 8px 28px rgba(0,255,136,0.35)}
 .bs-bar.show{display:flex}
 /* DK-style slip */
-.dkslip-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9998}
+.dkslip-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9998;pointer-events:none}
 .dkslip-overlay.show{display:block}
 .dkslip{display:none;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;height:85vh;background:#f2f2f2;border-radius:20px 20px 0 0;z-index:100000;flex-direction:column;box-shadow:0 -8px 40px rgba(0,0,0,0.6);overflow:visible}
 .dkslip.open{display:flex !important;flex-direction:column;border-radius:20px 20px 0 0}
@@ -2100,23 +2100,17 @@ function bsToggle(cellId, game, time, market, pick, odds) {
   bsUpdate();
 }
 
-// ── TOUCH DEBUG ──────────────────────────────────────────────────────────────
-(function(){
-  function dbgHit(x, y) {
-    var el = document.elementFromPoint(x, y);
-    if (!el) return;
-    var info = el.tagName + (el.id?' #'+el.id:'') + (el.className?' .'+String(el.className).split(' ')[0]:'');
-    showToast('Tap hit: ' + info);
-    console.log('TOUCH HIT ELEMENT:', el, el.tagName, el.id, el.className, 'zIndex:', window.getComputedStyle(el).zIndex, 'pointerEvents:', window.getComputedStyle(el).pointerEvents);
+// ── TOUCH DEBUG (single tap on place-bet-wrap only) ─────────────────────────
+document.addEventListener('click', function(e){
+  var wrap = document.getElementById('place-bet-wrap');
+  if (!wrap) return;
+  var r = wrap.getBoundingClientRect();
+  // Only log if tap is near the button area
+  if (e.clientY >= r.top && e.clientY <= r.bottom) {
+    var el = document.elementFromPoint(e.clientX, e.clientY);
+    console.log('button area hit target:', el && el.tagName, el && el.id, el && el.className);
   }
-  document.addEventListener('touchstart', function(e){
-    var t = e.touches[0];
-    dbgHit(t.clientX, t.clientY);
-  }, { capture:true, passive:true });
-  document.addEventListener('click', function(e){
-    dbgHit(e.clientX, e.clientY);
-  }, { capture:true });
-})();
+}, { capture:true });
 // ─────────────────────────────────────────────────────────────────────────────
 
 </script>
@@ -2193,7 +2187,7 @@ function bsToggle(cellId, game, time, market, pick, odds) {
 </div>
 
 <!-- PLACE BET BUTTON — fixed, outside all drawers/overlays -->
-<div id="place-bet-wrap" style="display:none;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;padding:10px 14px calc(10px + env(safe-area-inset-bottom,16px));background:#fff;border-top:1px solid #e0e0e0;z-index:999999;pointer-events:auto">
+<div id="place-bet-wrap" style="display:none;position:fixed;bottom:72px;left:50%;transform:translateX(-50%);width:100%;max-width:430px;padding:10px 14px 12px;background:#fff;border-top:1px solid #e0e0e0;z-index:999999;pointer-events:auto;box-shadow:0 -2px 12px rgba(0,0,0,0.15)">
   <div id="dk-payout-row2" style="display:none;justify-content:space-between;margin-bottom:8px;padding:0 2px">
     <span style="font-size:0.75rem;color:#888">Est. Payout</span>
     <span id="dk-payout-val2" style="font-size:0.82rem;font-weight:900;color:#00c853"></span>
