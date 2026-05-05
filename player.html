@@ -1431,7 +1431,7 @@ function bsRenderLegs() {
 
 
 window.bsPlaceBet = function bsPlaceBet() {
-  showToast('PLACE BET CLICKED');
+  dbgBanner('✅ PLACE BET CLICKED\npicks:'+betSlip.length+' stake:'+bsStake, '#020');
   console.log('PLACE BET CLICKED', { betSlip: betSlip.length, bsStake: bsStake });
   var err = document.getElementById('bs-err');
   if (!betSlip.length) {
@@ -2101,6 +2101,24 @@ function bsToggle(cellId, game, time, market, pick, odds) {
   bsUpdate();
 }
 
+// ── MOBILE DEBUG BANNER ──────────────────────────────────────────────────────
+function dbgBanner(msg, color) {
+  var b = document.getElementById('_dbg_banner');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = '_dbg_banner';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#000;color:#0f0;font-size:16px;font-weight:900;padding:16px 12px;text-align:center;font-family:monospace;white-space:pre-wrap;word-break:break-all;border-bottom:3px solid #0f0;pointer-events:none';
+    document.body.appendChild(b);
+  }
+  b.style.background = color || '#000';
+  b.style.color = '#fff';
+  b.textContent = msg;
+  b.style.display = 'block';
+  clearTimeout(b._t);
+  b._t = setTimeout(function(){ b.style.display='none'; }, 10000);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // ── HIT TEST: runs 1s after slip opens, logs exact blocker ──────────────────
 function runPlaceBetHitTest() {
   var btn = document.getElementById('bs-place-btn');
@@ -2115,28 +2133,29 @@ function runPlaceBetHitTest() {
   if (hit && hit !== btn) {
     var cs = window.getComputedStyle(hit);
     console.warn('BLOCKER:', hit.tagName, '#'+hit.id, '.'+hit.className, 'z-index:'+cs.zIndex, 'pointer-events:'+cs.pointerEvents, 'display:'+cs.display);
-    showToast('Blocked by: '+hit.tagName+(hit.id?' #'+hit.id:'')+(hit.className?' .'+String(hit.className).split(' ')[0]:''));
+    dbgBanner('BLOCKED BY:\n'+hit.tagName+(hit.id?' #'+hit.id:'')+(hit.className?'\n.'+String(hit.className).replace(/ /g,' .'):''), '#800');
     // Auto-fix: set the blocker to pointer-events:none if it's not interactive
     var safe = ['BUTTON','A','INPUT','SELECT','TEXTAREA'];
     if (safe.indexOf(hit.tagName) === -1) {
       hit.style.pointerEvents = 'none';
       console.log('AUTO-FIXED: set pointer-events:none on blocker');
-      showToast('Auto-fixed blocker: '+hit.tagName+(hit.id?' #'+hit.id:''));
+      dbgBanner('AUTO-FIXED BLOCKER:\n'+hit.tagName+(hit.id?' #'+hit.id:'')+(hit.className?'\n.'+String(hit.className).replace(/ /g,' .'):''), '#060');
     }
   } else if (hit === btn) {
+    dbgBanner('HIT TEST PASS\nButton reachable - attaching onclick', '#006');
     console.log('HIT TEST PASS: button is hittable');
     // Attach direct onclick as final fallback
     btn.onclick = function(e) {
       e.preventDefault();
       e.stopPropagation();
       console.log('PLACE BET DIRECT CLICK');
-      showToast('PLACE BET CLICKED');
+      dbgBanner('✅ CLICK FIRED\nbsPlaceBet called', '#020');
       window.bsPlaceBet();
     };
     console.log('Direct onclick attached to button');
   } else {
     console.warn('HIT TEST: elementFromPoint returned null at', x, y);
-    showToast('Hit test: null at center');
+    dbgBanner('HIT TEST: null at '+Math.round(x)+','+Math.round(y)+'\nButton rect: '+JSON.stringify({t:Math.round(r.top),l:Math.round(r.left),w:Math.round(r.width),h:Math.round(r.height)}), '#550');
   }
 }
 // ─────────────────────────────────────────────────────────────────────────────
