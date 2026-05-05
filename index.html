@@ -320,16 +320,30 @@ function showToastHost(msg){
 }
 
 function loadHostActiveBets(){
-  var tickets=JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
+  var raw=JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
+  // Deduplicate by ticket id
+  var seen={};
+  var tickets=raw.filter(function(t){
+    if(!t.id||seen[t.id]) return false;
+    seen[t.id]=true; return true;
+  });
   var active=tickets.filter(function(t){return t.status==='active'||t.status==='open';});
-  var totalRisk=active.reduce(function(s,t){return s+(t.riskAmount||0);},0);
+  // Sum riskAmount — try multiple field names for safety
+  var totalRisk=active.reduce(function(s,t){
+    var r=parseFloat(t.riskAmount||t.risk||t.amount||0);
+    return s+r;
+  },0);
+  // Debug log each ticket
+  active.forEach(function(t){
+    console.log('active ticket:', t.id, t.status, 'riskAmount:', t.riskAmount);
+  });
+  showToastHost('AT RISK CALC: '+active.length+' active tickets = $'+totalRisk.toFixed(2));
   var el=document.getElementById('stat-active-bets');
   var el2=document.getElementById('stat-active-risk');
   var cnt=document.getElementById('host-bets-count');
   if(el) el.textContent=active.length;
   if(el2) el2.textContent='$'+totalRisk.toFixed(2);
   if(cnt) cnt.textContent=active.length+' bet'+(active.length!==1?'s':'');
-  showToastHost('HOST ACTIVE BETS: '+active.length);
   return active;
 }
 
