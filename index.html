@@ -155,7 +155,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 </div>
 
 <!-- SHARP ALERT -->
-<div class="alert-card" id="sharp-alerts">
+<div class="alert-card" id="sharp-alerts" style="display:none">
   <div class="alert-dot">
     <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
   </div>
@@ -179,6 +179,20 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
   </div>
 </div>
 
+<!-- ACTIVE BETS STAT -->
+<script>
+(function(){
+  var tickets = JSON.parse(localStorage.getItem("hostActiveBets")||"[]");
+  var active = tickets.filter(function(t){return t.status==="active"||t.status==="open";});
+  var totalRisk = active.reduce(function(s,t){return s+(t.riskAmount||0);},0);
+  document.addEventListener("DOMContentLoaded", function(){
+    var el = document.getElementById("stat-active-bets");
+    if(el) el.textContent = active.length;
+    var el2 = document.getElementById("stat-active-risk");
+    if(el2) el2.textContent = "$"+totalRisk.toFixed(2);
+  });
+})();
+</script>
 <!-- WEEKLY STATS -->
 <div class="stats-row">
   <div class="stat-card">
@@ -408,6 +422,12 @@ if (_hPreview) {
     setTimeout(() => {
       G.players = G.players.map(p => ({...p, winRate: p.winRate + 15, sharp: 'sharp'}));
       renderPlayers();
+// Show sharp alert only if real sharp players exist
+(function(){
+  var sharp = (typeof PLAYERS !== 'undefined' ? PLAYERS : []).filter(function(p){ return p.sharp==='sharp'; });
+  var alertEl = document.getElementById('sharp-alerts');
+  if(alertEl) alertEl.style.display = sharp.length ? 'flex' : 'none';
+})();
     }, 500);
   }
 }
@@ -487,70 +507,8 @@ function showToast(msg) {
 }
 
 // DEMO PLAYERS
-let G={players:[
-  {id:1,name:'MARCO',avatar:'MA',color:'#ff3d57',winRate:70,bets:47,balance:-840,sharp:'sharp'},
-  {id:2,name:'JUNIOR',avatar:'JR',color:'#00ff88',winRate:42,bets:31,balance:1240,sharp:'square'},
-  {id:3,name:'TONY',avatar:'TO',color:'#f5c842',winRate:55,bets:22,balance:-200,sharp:'watch'},
-  {id:4,name:'DENNY',avatar:'DE',color:'#00c2ff',winRate:38,bets:18,balance:3100,sharp:'square'},
-]};
-
-function renderPlayers(){
-  const el=document.getElementById('player-list');
-  let owesYou=0,youOwe=0;
-  G.players.forEach(p=>{
-    if(p.balance<0)owesYou+=Math.abs(p.balance);
-    else youOwe+=p.balance;
-  });
-  document.getElementById('total-owes-you').textContent='$'+owesYou.toLocaleString();
-  document.getElementById('total-you-owe').textContent='$'+youOwe.toLocaleString();
-
-  el.innerHTML=G.players.map(p=>{
-    const bc=p.balance>0?'var(--green)':p.balance<0?'var(--red)':'var(--gray)';
-    const dir=p.balance>0?'you owe':p.balance<0?'owes you':'square';
-    const bclass=p.sharp==='sharp'?'badge-sharp':p.sharp==='watch'?'badge-watch':'badge-square';
-    const blabel=p.sharp==='sharp'?'⚡ Sharp':p.sharp==='watch'?'◉ Watch':'✓ Square';
-    return`<div class="player-row">
-      <div class="pr-left">
-        <div class="pr-avatar" style="background:${p.color}18;color:${p.color};border-color:${p.color}33">${p.avatar}</div>
-        <div>
-          <div class="pr-name">${p.name}</div>
-          <div class="pr-meta">
-            <span class="pr-bets">${p.bets} bets · ${p.winRate}%</span>
-            <span class="badge ${bclass}">${blabel}</span>
-          </div>
-        </div>
-      </div>
-      <div class="pr-right">
-        <div class="pr-amount" style="color:${bc}">${p.balance>0?'+':''}$${Math.abs(p.balance).toLocaleString()}</div>
-        <div class="pr-dir">${dir}</div>
-        <button onclick="openLimits(${p.id},'${p.name.replace(/'/g,'')}')" style="font-size:0.62rem;background:var(--card2);border:1px solid var(--border);color:var(--light);padding:3px 8px;border-radius:6px;cursor:pointer;margin-top:3px;font-weight:600">Limits</button>
-      </div>
-    </div>\`;
-  }).join('');
-
-  // Stats
-  const handle=G.players.reduce((s,p)=>s+p.bets*100,0);
-  document.getElementById('stat-handle').textContent='$'+handle.toLocaleString();
-  document.getElementById('stat-hold').textContent='8.4%';
-  document.getElementById('stat-profit').textContent='$1,193';
-}
-
-function setSport(el,sport){
-  document.querySelectorAll('.sf-pill').forEach(p=>p.classList.remove('active'));
-  el.classList.add('active');
-}
-
-function setBN(el,tab){
-  document.querySelectorAll('.bn').forEach(n=>n.classList.remove('active'));
-  el.classList.add('active');
-}
-
-function openAddPlayer(){document.getElementById('modal-add').style.display='flex';}
-function closeAddPlayer(){document.getElementById('modal-add').style.display='none';}
-function addPlayer(){
-  const name=document.getElementById('np-name').value.trim().toUpperCase();
-  if(!name)return;
-  const colors=['#00c2ff','#00ff88','#f5c842','#ff3d57','#e879f9'];
+let G={players:[]};
+function addPlayerToG(name,colors){
   G.players.push({id:Date.now(),name,avatar:name.slice(0,2),color:colors[G.players.length%5],winRate:0,bets:0,balance:0,sharp:'square'});
   closeAddPlayer();
   renderPlayers();
