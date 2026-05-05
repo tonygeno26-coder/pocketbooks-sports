@@ -732,6 +732,7 @@ function setBNav(el,tab){
   } else if(tab==='sportsbook_legacy'){
   } else if(tab==='mybets'||tab==='trades'){
     console.log('MY BETS CLICKED');
+    dbgBanner('MY BETS CLICKED\nTickets: '+betTickets.length+' stored', '#004');
     const sec=document.getElementById('mybets-section');
     if(sec) sec.style.display='block';
     if(ss) ss.style.display='none';
@@ -1599,6 +1600,8 @@ function confirmBet() {
   };
   betTickets.unshift(ticket);
   saveTickets();
+  dbgBanner('TICKET SAVED: '+ticket.id+'\nTotal tickets: '+betTickets.length, '#006');
+  console.log('TICKET SAVED', ticket.id, 'localStorage:', localStorage.getItem('pb-tickets'));
   // Save to hostActiveBets for host dashboard
   var hostBets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
   hostBets.unshift(ticket);
@@ -1641,40 +1644,76 @@ document.addEventListener('keydown', function(e) {
 
 function renderMyBets() {
   var el = document.getElementById('mybets-section');
-  if (!el) return;
-  var open   = betTickets.filter(function(t){ return t.status==='open'||t.status==='active'; });
-  var settled = betTickets.filter(function(t){ return t.status!=='open'&&t.status!=='active'; });
-  var sc = { open:'#00c2ff', active:'#00c2ff', won:'#00ff88', lost:'#ff4444', push:'#888', partial:'#f59e0b' };
+  if (!el) { console.warn('mybets-section not found'); return; }
+  // Always reload from localStorage to get latest
+  try { betTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(e){}
+  console.log('renderMyBets: tickets=', betTickets.length);
+  var sc = { active:'#0064c8', open:'#0064c8', won:'#00875a', lost:'#cc0000', push:'#888', partial:'#f59e0b' };
   function ticketCard(t) {
-    var color = sc[t.status] || '#888';
+    var color = sc[t.status] || '#555';
     var d = new Date(t.placedAt);
-    var dateStr = d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
-    return '<div style="background:#1a1a1a;border-radius:14px;margin:8px 14px;padding:14px;border:1px solid #2a2a2a">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
-        '<span style="font-size:0.82rem;font-weight:900">'+t.type+'</span>' +
-        '<span style="font-size:0.65rem;font-weight:800;color:'+color+';background:rgba(0,0,0,0.3);padding:3px 8px;border-radius:20px;border:1px solid '+color+'">'+t.status.toUpperCase()+'</span>' +
+    var dateStr = isNaN(d) ? t.placedAt : d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    var picks = (t.selections||[]).slice(0,3).map(function(s){
+      return '<div style="font-size:0.78rem;color:#333;padding:4px 0;border-bottom:1px solid #f0f0f0">' +
+        '<span style="font-weight:800">'+s.pick+'</span>' +
+        ' <span style="color:#0064c8;font-size:0.7rem">'+fmtOdds(s.odds)+'</span>' +
+        ' <span style="color:#aaa;font-size:0.68rem">· '+(s.market||'')+'</span>' +
+        '</div>';
+    }).join('');
+    var morePicks = (t.selections||[]).length > 3 ? '<div style="font-size:0.68rem;color:#aaa;padding-top:4px">+'+(t.selections.length-3)+' more picks</div>' : '';
+    return '<div style="background:#fff;border-radius:14px;margin:8px 0;padding:16px;border:1px solid #e8e8e8;box-shadow:0 1px 4px rgba(0,0,0,0.06)">' +
+      // Header row
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+        '<div>' +
+          '<div style="font-size:0.88rem;font-weight:900;color:#111">'+t.type+'</div>' +
+          '<div style="font-size:0.62rem;color:#aaa;margin-top:2px">'+dateStr+'</div>' +
+        '</div>' +
+        '<span style="font-size:0.68rem;font-weight:800;color:'+color+';background:'+(t.status==='lost'?'#fff0f0':t.status==='won'?'#f0fff4':'#f0f4ff')+';padding:4px 10px;border-radius:20px;border:1px solid '+color+'">'+t.status.toUpperCase()+'</span>' +
       '</div>' +
-      (t.selections||[]).slice(0,3).map(function(s){ return '<div style="font-size:0.75rem;color:#888;margin-bottom:2px">'+s.pick+' <span style="color:#555">'+fmtOdds(s.odds)+'</span></div>'; }).join('') +
-      ((t.selections||[]).length>3?'<div style="font-size:0.68rem;color:#555">+'+(t.selections.length-3)+' more</div>':'') +
-      '<div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid #2a2a2a">' +
-        '<div><div style="font-size:0.6rem;color:#555">Risk</div><div style="font-size:0.82rem;font-weight:800">'+fmtDollar(t.riskAmount)+'</div></div>' +
-        '<div style="text-align:center"><div style="font-size:0.6rem;color:#555">To Win</div><div style="font-size:0.82rem;font-weight:800;color:#00ff88">'+fmtDollar(t.potentialProfit)+'</div></div>' +
-        '<div style="text-align:right"><div style="font-size:0.6rem;color:#555">'+(t.status==='open'?'Est. Payout':'Payout')+'</div><div style="font-size:0.82rem;font-weight:800;color:#00c2ff">'+fmtDollar(t.status==='open'?t.estimatedPayout:(t.actualPayout||0))+'</div></div>' +
+      // Picks
+      '<div style="margin-bottom:10px">' + picks + morePicks + '</div>' +
+      // Ticket ID
+      '<div style="font-size:0.6rem;color:#ccc;margin-bottom:10px">Ticket: '+t.id+'</div>' +
+      // Stats row
+      '<div style="display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid #f0f0f0">' +
+        '<div style="text-align:center">' +
+          '<div style="font-size:0.6rem;color:#aaa;margin-bottom:2px">RISK</div>' +
+          '<div style="font-size:0.88rem;font-weight:900;color:#111">'+fmtDollar(t.riskAmount)+'</div>' +
+        '</div>' +
+        '<div style="text-align:center">' +
+          '<div style="font-size:0.6rem;color:#aaa;margin-bottom:2px">TO WIN</div>' +
+          '<div style="font-size:0.88rem;font-weight:900;color:#00875a">'+fmtDollar(t.potentialProfit)+'</div>' +
+        '</div>' +
+        '<div style="text-align:center">' +
+          '<div style="font-size:0.6rem;color:#aaa;margin-bottom:2px">EST PAYOUT</div>' +
+          '<div style="font-size:0.88rem;font-weight:900;color:#0064c8">'+fmtDollar(t.estimatedPayout)+'</div>' +
+        '</div>' +
       '</div>' +
-      '<div style="font-size:0.6rem;color:#444;margin-top:6px">'+dateStr+' · '+t.id+'</div>' +
     '</div>';
   }
-  var html = '<div style="padding:14px 14px 8px;display:flex;justify-content:space-between;align-items:center">' +
-    '<span style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#555">My Bets</span>' +
-    '<button onclick="checkOpenTickets()" style="font-size:0.65rem;font-weight:700;color:#00c2ff;background:none;border:1px solid #00c2ff;border-radius:12px;padding:4px 10px;cursor:pointer">Check Results</button>' +
-  '</div>';
+  var active   = betTickets.filter(function(t){ return t.status==='active'||t.status==='open'; });
+  var settled  = betTickets.filter(function(t){ return t.status!=='active'&&t.status!=='open'; });
+  var html =
+    '<div style="padding:16px 14px 8px;display:flex;justify-content:space-between;align-items:center">' +
+      '<span style="font-size:1rem;font-weight:900;color:#111">My Bets</span>' +
+      '<button onclick="checkOpenTickets()" style="font-size:0.7rem;font-weight:700;color:#0064c8;background:none;border:1.5px solid #0064c8;border-radius:20px;padding:5px 12px;cursor:pointer">Check Results</button>' +
+    '</div>';
   if (!betTickets.length) {
-    html += '<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">No bets placed yet</div>';
+    html += '<div style="text-align:center;padding:50px 20px;color:#aaa;font-size:0.9rem">No active bets yet</div>';
   } else {
-    if (open.length) { html += '<div style="font-size:0.65rem;color:#555;padding:4px 14px 2px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Open ('+open.length+')</div>'; open.forEach(function(t){ html+=ticketCard(t); }); }
-    if (settled.length) { html += '<div style="font-size:0.65rem;color:#555;padding:12px 14px 2px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Settled ('+settled.length+')</div>'; settled.forEach(function(t){ html+=ticketCard(t); }); }
+    if (active.length) {
+      html += '<div style="padding:4px 14px;font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#0064c8">Active Bets ('+active.length+')</div>';
+      html += '<div style="padding:0 14px">' + active.map(ticketCard).join('') + '</div>';
+    }
+    if (settled.length) {
+      html += '<div style="padding:12px 14px 4px;font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#888">Settled ('+settled.length+')</div>';
+      html += '<div style="padding:0 14px">' + settled.map(ticketCard).join('') + '</div>';
+    }
   }
+  html += '<div style="height:80px"></div>'; // nav clearance
   el.innerHTML = html;
+  el.style.background = '#f5f5f5';
+  el.style.minHeight = '100vh';
 }
 
 function bsSetSingleStake(cellId, val, idx) {
