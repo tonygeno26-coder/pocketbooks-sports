@@ -277,6 +277,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 
 <!-- BOTTOM NAV -->
 <div id="players-section" style="display:none;padding-bottom:100px"></div>
+<div id="settlements-section" style="display:none;background:#0a0a0a;min-height:100vh;padding-bottom:100px"></div>
 <div id="bets-section" style="display:none;padding-bottom:100px">
   <div style="padding:16px 16px 8px;display:flex;justify-content:space-between;align-items:center">
     <span style="font-size:1rem;font-weight:900">Active Bets</span>
@@ -302,9 +303,9 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
     <div class="bn-ico"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
     <div class="bn-lbl">Players <span id="req-badge" style="display:none;background:var(--red);color:#fff;font-size:0.55rem;padding:1px 5px;border-radius:8px;font-weight:800;vertical-align:middle"></span></div>
   </div>
-  <div class="bn" onclick="setBN(this,'diamonds')">
-    <div class="bn-ico"><svg viewBox="0 0 24 24"><polygon points="12 2 2 7 12 22 22 7 12 2"/><line x1="2" y1="7" x2="22" y2="7"/><line x1="12" y1="2" x2="12" y2="22"/></svg></div>
-    <div class="bn-lbl">Diamonds</div>
+  <div class="bn" onclick="setBN(this,'settlements')">
+    <div class="bn-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+    <div class="bn-lbl">Settle</div>
   </div>
 </div>
 
@@ -382,7 +383,7 @@ function renderHostBets(){
   }).join('');
 }
 
-const SECTIONS=['home-content','bets-section','players-section','diamonds-section'];
+const SECTIONS=['home-content','bets-section','players-section','settlements-section'];
 function setBN(el,tab){
   document.querySelectorAll('.bn').forEach(function(b){b.classList.remove('active');});
   el.classList.add('active');
@@ -395,9 +396,10 @@ function setBN(el,tab){
     var s=document.getElementById('players-section');
     if(s)s.style.display='block';
     renderPlayersTab();
-  } else if(tab==='diamonds'){
-    var s=document.getElementById('diamonds-section');
+  } else if(tab==='settlements'){
+    var s=document.getElementById('settlements-section');
     if(s)s.style.display='block';
+    renderSettlements();
   } else {
     var s=document.getElementById('home-content');
     if(s)s.style.display='block';
