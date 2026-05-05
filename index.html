@@ -180,19 +180,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 </div>
 
 <!-- ACTIVE BETS STAT -->
-<script>
-(function(){
-  var tickets = JSON.parse(localStorage.getItem("hostActiveBets")||"[]");
-  var active = tickets.filter(function(t){return t.status==="active"||t.status==="open";});
-  var totalRisk = active.reduce(function(s,t){return s+(t.riskAmount||0);},0);
-  document.addEventListener("DOMContentLoaded", function(){
-    var el = document.getElementById("stat-active-bets");
-    if(el) el.textContent = active.length;
-    var el2 = document.getElementById("stat-active-risk");
-    if(el2) el2.textContent = "$"+totalRisk.toFixed(2);
-  });
-})();
-</script>
+
 <!-- WEEKLY STATS -->
 <div class="stats-row">
   <div class="stat-card">
@@ -206,6 +194,16 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
   <div class="stat-card">
     <div class="stat-val" style="color:var(--green)" id="stat-profit">$0</div>
     <div class="stat-lbl">Profit</div>
+  </div>
+</div>
+<div class="stats-row" style="margin-top:8px">
+  <div class="stat-card" style="grid-column:span 2">
+    <div class="stat-val" style="color:var(--cyan)" id="stat-active-bets">0</div>
+    <div class="stat-lbl">Active Bets</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val" style="color:var(--red);font-size:0.95rem" id="stat-active-risk">$0</div>
+    <div class="stat-lbl">At Risk</div>
   </div>
 </div>
 
@@ -278,6 +276,14 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 </div>
 
 <!-- BOTTOM NAV -->
+<div id="bets-section" style="display:none;padding-bottom:100px">
+  <div style="padding:16px 16px 8px;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:1rem;font-weight:900">Active Bets</span>
+    <span id="host-bets-count" style="font-size:0.72rem;color:var(--cyan);background:var(--cyan-dim);padding:3px 10px;border-radius:12px">0 bets</span>
+  </div>
+  <div id="host-bets-list"></div>
+</div>
+
 <div class="bnav">
   <div class="bn active" onclick="setBN(this,'home')">
     <div class="bn-ico"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>
@@ -304,6 +310,80 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 <script>
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 let TOKEN=localStorage.getItem('pb-sports-token')||'';
+
+function showToastHost(msg){
+  var t=document.createElement('div');
+  t.style.cssText='position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#111;color:#0f0;font-size:14px;font-weight:900;padding:12px 20px;border-radius:10px;z-index:9999999;white-space:pre-wrap;max-width:90vw;text-align:center;border:1px solid #0f0';
+  t.textContent=msg;document.body.appendChild(t);
+  clearTimeout(t._t);t._t=setTimeout(function(){t.remove();},6000);
+}
+
+function loadHostActiveBets(){
+  var tickets=JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
+  var active=tickets.filter(function(t){return t.status==='active'||t.status==='open';});
+  var totalRisk=active.reduce(function(s,t){return s+(t.riskAmount||0);},0);
+  var el=document.getElementById('stat-active-bets');
+  var el2=document.getElementById('stat-active-risk');
+  var cnt=document.getElementById('host-bets-count');
+  if(el) el.textContent=active.length;
+  if(el2) el2.textContent='$'+totalRisk.toFixed(2);
+  if(cnt) cnt.textContent=active.length+' bet'+(active.length!==1?'s':'');
+  showToastHost('HOST ACTIVE BETS: '+active.length);
+  return active;
+}
+
+function renderHostBets(){
+  var active=loadHostActiveBets();
+  var el=document.getElementById('host-bets-list');
+  if(!el) return;
+  if(!active.length){
+    el.innerHTML='<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">No active bets yet</div>';
+    return;
+  }
+  el.innerHTML=active.map(function(t){
+    var d=new Date(t.placedAt);
+    var dt=isNaN(d)?t.placedAt:d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    var picks=(t.selections||[]).slice(0,2).map(function(s){
+      return '<div style="font-size:0.75rem;color:#888">'+s.pick+' <span style="color:var(--cyan)">'+((s.odds>0?'+':'')+s.odds)+'</span></div>';
+    }).join('');
+    return '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;margin:8px 16px;padding:14px">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
+        '<div><div style="font-size:0.88rem;font-weight:800">'+t.type+'</div>'+
+        '<div style="font-size:0.62rem;color:#555;margin-top:2px">'+dt+' · '+(t.playerName||'Player')+'</div></div>'+
+        '<span style="font-size:0.65rem;font-weight:800;color:var(--cyan);background:var(--cyan-dim);padding:3px 10px;border-radius:12px;border:1px solid rgba(0,194,255,0.25)">ACTIVE</span>'+
+      '</div>'+
+      picks+
+      '<div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">'+
+        '<div><div style="font-size:0.6rem;color:#555">RISK</div><div style="font-size:0.85rem;font-weight:800">$'+t.riskAmount.toFixed(2)+'</div></div>'+
+        '<div><div style="font-size:0.6rem;color:#555">TO WIN</div><div style="font-size:0.85rem;font-weight:800;color:var(--green)">$'+t.potentialProfit.toFixed(2)+'</div></div>'+
+        '<div><div style="font-size:0.6rem;color:#555">PAYOUT</div><div style="font-size:0.85rem;font-weight:800;color:var(--cyan)">$'+t.estimatedPayout.toFixed(2)+'</div></div>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+const SECTIONS=['home-content','bets-section','players-section','diamonds-section'];
+function setBN(el,tab){
+  document.querySelectorAll('.bn').forEach(function(b){b.classList.remove('active');});
+  el.classList.add('active');
+  SECTIONS.forEach(function(id){var s=document.getElementById(id);if(s)s.style.display='none';});
+  if(tab==='bets'){
+    var s=document.getElementById('bets-section');
+    if(s)s.style.display='block';
+    renderHostBets();
+  } else if(tab==='players'){
+    var s=document.getElementById('players-section');
+    if(s)s.style.display='block';
+  } else if(tab==='diamonds'){
+    var s=document.getElementById('diamonds-section');
+    if(s)s.style.display='block';
+  } else {
+    var s=document.getElementById('home-content');
+    if(s)s.style.display='block';
+    else { /* home = default, show everything not in a section */ }
+    loadHostActiveBets();
+  }
+}
 
 async function apiCall(method,path,body){
   const r=await fetch(API+path,{method,headers:{'Content-Type':'application/json',...(TOKEN?{'Authorization':'Bearer '+TOKEN}:{})},body:body?JSON.stringify(body):undefined});
@@ -422,6 +502,7 @@ if (_hPreview) {
     setTimeout(() => {
       G.players = G.players.map(p => ({...p, winRate: p.winRate + 15, sharp: 'sharp'}));
       renderPlayers();
+loadHostActiveBets();
 // Show sharp alert only if real sharp players exist
 (function(){
   var sharp = (typeof PLAYERS !== 'undefined' ? PLAYERS : []).filter(function(p){ return p.sharp==='sharp'; });
