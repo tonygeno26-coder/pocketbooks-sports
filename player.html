@@ -703,7 +703,7 @@ function setBNav(el,tab){
   console.log('[nav] tab:', tab);
   document.querySelectorAll('.bn').forEach(function(n){ n.classList.remove('active'); });
   el.classList.add('active');
-  ['sportsbook-section','mybets-section','predictions-section'].forEach(id=>{
+  ['sportsbook-section','mybets-section','predictions-section','live-section','rewards-section'].forEach(id=>{
     const s=document.getElementById(id); if(s) s.style.display='none';
   });
   const ss=document.getElementById('sport-scroll');
@@ -730,12 +730,15 @@ function setBNav(el,tab){
     if(ss) ss.style.display='none';
     if(pb) pb.style.display='none';
   } else if(tab==='sportsbook_legacy'){
-  } else if(tab==='trades'){
+  } else if(tab==='mybets'||tab==='trades'){
+    console.log('MY BETS CLICKED');
     const sec=document.getElementById('mybets-section');
     if(sec) sec.style.display='block';
     if(ss) ss.style.display='none';
     if(pb) pb.style.display='none';
-    loadMyBets();
+    // Also hide place-bet-wrap
+    var pbw=document.getElementById('place-bet-wrap'); if(pbw) pbw.style.display='none';
+    renderMyBets();
   } else {
     const sec=document.getElementById('sportsbook-section');
     if(sec) sec.style.display='block';
