@@ -1463,9 +1463,11 @@ window.bsPlaceBet = function bsPlaceBet() {
 function openBetConfirm() {
   console.log("confirm modal open");
   try {
-  var payout = calcPayout(bsStake, betSlip, bsType);
+  var payout = bsType === 'straight'
+    ? betSlip.reduce(function(s,b){ return s+(bsStakes[b.cellId]||0)*amToDecimal(b.odds);},0)
+    : calcPayout(bsStake, betSlip, bsType);
   var profit = payout - bsStake;
-  var typeLabel = {straight:'Straight',parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[bsType] || bsType;
+  var typeLabel = {straight:'Singles',parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[bsType] || bsType;
 
   var legsHtml = betSlip.map(function(b) {
     var logo = bsTeamLogo(b.pick, b.game);
@@ -1511,13 +1513,27 @@ function openBetConfirm() {
       '</div>' +
     '</div>';
 
-  document.getElementById('bet-confirm-body').innerHTML = html;
-  document.getElementById('modal-bet-confirm').classList.add('open');
+  // Remove any existing modal
+  var existing = document.getElementById('bc-modal-overlay');
+  if (existing) existing.remove();
+  // Build overlay appended to body — above everything
+  var overlay = document.createElement('div');
+  overlay.id = 'bc-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.65);display:flex;align-items:flex-end;justify-content:center;pointer-events:auto';
+  overlay.innerHTML =
+    '<div style="background:#fff;color:#111;width:100%;max-width:430px;max-height:85vh;overflow-y:auto;border-radius:20px 20px 0 0;padding:0 0 env(safe-area-inset-bottom,16px)">' +
+      '<div style="padding:4px 0 2px;text-align:center"><div style="width:36px;height:4px;background:#ddd;border-radius:2px;margin:12px auto 0"></div></div>' +
+      html +
+    '</div>';
+  document.body.appendChild(overlay);
+  // Close on overlay tap
+  overlay.addEventListener('click', function(e){ if(e.target===overlay) closeBetConfirm(); });
   } catch(e) { dbgBanner('ERROR in openBetConfirm:\n'+e.message,'#800'); console.error(e); }
 }
 
 function closeBetConfirm() {
-  document.getElementById('modal-bet-confirm').classList.remove('open');
+  var ov = document.getElementById('bc-modal-overlay');
+  if (ov) ov.remove();
 }
 
 function confirmBet() {
