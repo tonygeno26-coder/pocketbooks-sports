@@ -443,10 +443,10 @@ function unblockPlayer(pid){
   if(p){p.status='approved'; saveClubPlayers(players); renderPlayersTab();}
 }
 
-function openPlayerSettings(pid){
+function openPlayerSettings(pid, _p){
   var existing=document.getElementById('ps-overlay');
   if(existing)existing.remove();
-  var p=(loadClubPlayers().find(function(x){return x.playerId===pid;})||{});
+  var p=_p||(loadClubPlayers().find(function(x){return x.playerId===pid;})||{});
   var lim=getHostPlayerLimits(pid);
   var sa=lim.sportsAccess||{};
   var bl=lim.betLimits||{};
@@ -511,115 +511,131 @@ function openPlayerSettings(pid){
   ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
 }
 
+var _playersActiveTab = 'all';
+var _playersSearch = '';
+
 function renderPlayersTab(){
-  var el=document.getElementById('players-section');
-  if(!el)return;
-  var requests=loadJoinRequests();
-  var players=loadClubPlayers();
-  var approved=players.filter(function(p){return p.status==='approved';});
-  var blocked=players.filter(function(p){return p.status==='blocked';});
-  var html='<div style="padding:16px 16px 8px;font-size:1rem;font-weight:900">Players</div>';
-  // Pending
-  if(requests.length){
-    html+='<div style="padding:4px 16px;font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#f5c842">Pending Requests ('+requests.length+')</div>';
-    html+=requests.map(function(r){
-      return '<div style="background:#141414;border:1px solid #f5c842;border-radius:14px;margin:8px 16px;padding:14px">'
-        +'<div style="display:flex;justify-content:space-between;align-items:center">'
-          +'<div><div style="font-size:0.88rem;font-weight:800">'+r.playerName+'</div><div style="font-size:0.62rem;color:#555;margin-top:2px">Requested to join</div></div>'
-          +'<div style="display:flex;gap:8px">'
-            +'<button data-pid="'+r.playerId+'" onclick="declineRequest(this.dataset.pid)" style="padding:7px 12px;background:rgba(255,61,87,0.1);border:1px solid rgba(255,61,87,0.3);border-radius:8px;color:#ff3d57;font-size:0.75rem;font-weight:700;cursor:pointer">Decline</button>'
-            +'<button data-req="'+encodeURIComponent(JSON.stringify(r))+'" onclick="approveRequest(JSON.parse(decodeURIComponent(this.dataset.req)))" style="padding:7px 12px;background:#00ff88;border:none;border-radius:8px;color:#000;font-size:0.75rem;font-weight:900;cursor:pointer">Approve</button>'
-          +'</div>'
-        +'</div>'
-      +'</div>';
-    }).join('');
+  var el = document.getElementById('players-section');
+  if (!el) return;
+  var requests = loadJoinRequests();
+  var players  = loadClubPlayers();
+  showToastHost('PLAYERS SCREEN RENDERED: '+players.length+' players');
+
+  function getActiveBetsCount(pid){
+    return JSON.parse(localStorage.getItem('hostActiveBets')||'[]').filter(function(b){ return b.playerId===pid && (b.status==='active'||b.status==='open'); }).length;
   }
-  // Approved
-  if(approved.length){
-    html+='<div style="padding:12px 16px 4px;font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#00ff88">Approved ('+approved.length+')</div>';
-    html+=approved.map(function(p){
-      var avail=getAvailCredit(p.playerId);
-      var lim=getHostPlayerLimits(p.playerId);
-      return '<div style="background:#141414;border:1px solid #252525;border-radius:14px;margin:8px 16px;padding:14px">'
-        +'<div style="display:flex;justify-content:space-between;align-items:center">'
-          +'<div><div style="font-size:0.88rem;font-weight:800">'+p.playerName+'</div>'
-          +'<div style="font-size:0.72rem;color:#555;margin-top:3px">Credit: <span style="color:#00ff88">$'+avail.toFixed(2)+'</span> / $'+(lim.creditLimit||0)+'</div></div>'
-          +'<button data-pid="'+p.playerId+'" onclick="openPlayerSettings(this.dataset.pid)" style="padding:7px 14px;background:#1a1a1a;border:1px solid #333;border-radius:8px;color:#ccc;font-size:0.75rem;font-weight:700;cursor:pointer">Edit</button>'
-        +'</div>'
-      +'</div>';
-    }).join('');
+  function getOpenRiskAmt(pid){
+    return JSON.parse(localStorage.getItem('hostActiveBets')||'[]').filter(function(b){ return b.playerId===pid && (b.status==='active'||b.status==='open'); }).reduce(function(s,b){return s+(b.riskAmount||0);},0);
   }
-  // Blocked
-  if(blocked.length){
-    html+='<div style="padding:12px 16px 4px;font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#ff3d57">Blocked ('+blocked.length+')</div>';
-    html+=blocked.map(function(p){
-      return '<div style="background:#141414;border:1px solid rgba(255,61,87,0.2);border-radius:14px;margin:8px 16px;padding:14px">'
-        +'<div style="display:flex;justify-content:space-between;align-items:center">'
-          +'<div style="font-size:0.88rem;font-weight:800">'+p.playerName+'</div>'
-          +'<button data-pid="'+p.playerId+'" onclick="unblockPlayer(this.dataset.pid)" style="padding:7px 14px;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.3);border-radius:8px;color:#00ff88;font-size:0.75rem;font-weight:700;cursor:pointer">Unblock</button>'
-        +'</div>'
-      +'</div>';
-    }).join('');
+  function avatarHtml(name, color){
+    var abbr=(name||'?').slice(0,2).toUpperCase();
+    var bg = color || '#2a2a2a';
+    return '<div style="width:40px;height:40px;border-radius:50%;background:'+bg+';display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:900;color:#fff;flex-shrink:0">'+abbr+'</div>';
   }
-  if(!requests.length&&!players.length){
-    html+='<div style="margin:16px;background:#141414;border:1px solid #252525;border-radius:18px;padding:32px 20px;text-align:center">'
-      +'<div style="font-size:2.5rem;margin-bottom:12px">👥</div>'
-      +'<div style="font-size:1rem;font-weight:800;margin-bottom:6px">No players yet</div>'
-      +'<div style="font-size:0.8rem;color:#666;margin-bottom:20px">Share your club code to get join requests</div>'
+  function playerRow(p){
+    var lim=getHostPlayerLimits(p.playerId);
+    var avail=getAvailCredit(p.playerId);
+    var openRisk=getOpenRiskAmt(p.playerId);
+    var activeBets=getActiveBetsCount(p.playerId);
+    var sc=p.status==='blocked'?'#ff3d57':p.status==='approved'?'#00ff88':'#f5c842';
+    return '<div data-pid="'+p.playerId+'" onclick="openPlayerProfile(this.dataset.pid)" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #1a1a1a;cursor:pointer;-webkit-tap-highlight-color:transparent">'
+      +avatarHtml(p.playerName, p.color||'#2a4a3a')
+      +'<div style="flex:1;min-width:0">'
+        +'<div style="display:flex;align-items:center;gap:8px">'
+          +'<span style="font-size:0.88rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+p.playerName+'</span>'
+          +'<span style="font-size:0.6rem;font-weight:800;color:'+sc+';background:rgba(0,0,0,0.3);padding:2px 7px;border-radius:10px;border:1px solid '+sc+';flex-shrink:0">'+p.status.toUpperCase()+'</span>'
+        +'</div>'
+        +'<div style="font-size:0.68rem;color:#555;margin-top:2px">'
+          +'<span style="color:#00c2ff">$'+avail.toFixed(0)+'</span>/<span style="color:#555">$'+(lim.creditLimit||0)+'</span> credit'
+          +(activeBets?' · <span style="color:#f5c842">'+activeBets+' active bet'+(activeBets>1?'s':'')+'</span>':'')
+        +'</div>'
+      +'</div>'
+      +'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#444" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>'
     +'</div>';
   }
-  html+='<div style="height:80px"></div>';
+  function requestRow(r){
+    return '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #1a1a1a">'
+      +avatarHtml(r.playerName,'#3a2a0a')
+      +'<div style="flex:1">'
+        +'<div style="font-size:0.88rem;font-weight:800">'+r.playerName+'</div>'
+        +'<div style="font-size:0.65rem;color:#f5c842;margin-top:2px">Wants to join</div>'
+      +'</div>'
+      +'<div style="display:flex;gap:6px">'
+        +'<button data-pid="'+r.playerId+'" onclick="event.stopPropagation();declineRequest(this.dataset.pid)" style="padding:6px 10px;background:rgba(255,61,87,0.1);border:1px solid rgba(255,61,87,0.3);border-radius:8px;color:#ff3d57;font-size:0.72rem;font-weight:700;cursor:pointer">✕</button>'
+        +'<button data-req="'+encodeURIComponent(JSON.stringify(r))+'" onclick="event.stopPropagation();approveRequest(JSON.parse(decodeURIComponent(this.dataset.req)))" style="padding:6px 12px;background:#00ff88;border:none;border-radius:8px;color:#000;font-size:0.72rem;font-weight:900;cursor:pointer">✓ Approve</button>'
+      +'</div>'
+    +'</div>';
+  }
+
+  // Filter by search + tab
+  var q=(_playersSearch||'').toLowerCase();
+  var filtered=players.filter(function(p){
+    if(q && !p.playerName.toLowerCase().includes(q)) return false;
+    if(_playersActiveTab==='applicants') return false;
+    return true;
+  });
+  var filteredReqs=requests.filter(function(r){
+    if(q && !r.playerName.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  var html=
+    // Header
+    '<div style="padding:14px 16px 0;position:sticky;top:0;background:#0a0a0a;z-index:10">'
+      +'<div style="font-size:1.1rem;font-weight:900;margin-bottom:12px">Member Management</div>'
+      // Search
+      +'<div style="display:flex;align-items:center;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:10px 14px;margin-bottom:10px;gap:8px">'
+        +'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>'
+        +'<input id="player-search" type="text" placeholder="Search players..." value="'+_playersSearch+'"'
+        +' oninput="_playersSearch=this.value;renderPlayersTab()"'
+        +' style="flex:1;background:none;border:none;outline:none;color:#fff;font-size:0.85rem">'
+      +'</div>'
+      // Tabs
+      +'<div style="display:flex;gap:4px;margin-bottom:0">'
+        +['all','applicants'].map(function(t){
+          var isActive=t===_playersActiveTab;
+          var cnt=t==='all'?players.length:requests.length;
+          return '<button onclick="_playersActiveTab=\''+t+'\';renderPlayersTab()" style="flex:1;padding:8px 4px;background:'+(isActive?'#fff':'transparent')+';color:'+(isActive?'#000':'#555')+';border:none;border-radius:8px;font-size:0.78rem;font-weight:800;cursor:pointer">'+t.charAt(0).toUpperCase()+t.slice(1)+(cnt?' ('+cnt+')':'')+'</button>';
+        }).join('')
+      +'</div>'
+    +'</div>'
+    // List
+    +'<div>';
+
+  if (_playersActiveTab==='applicants') {
+    if (!filteredReqs.length) {
+      html+='<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">No pending applicants</div>';
+    } else {
+      html+=filteredReqs.map(requestRow).join('');
+    }
+  } else {
+    // Show applicants banner if any
+    if (requests.length && !q) {
+      html+='<div onclick="_playersActiveTab=\'applicants\';renderPlayersTab()" style="margin:10px 16px;background:rgba(245,200,66,0.08);border:1px solid rgba(245,200,66,0.3);border-radius:12px;padding:10px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between">'
+        +'<span style="font-size:0.82rem;font-weight:700;color:#f5c842">'+requests.length+' pending request'+(requests.length>1?'s':'')+'</span>'
+        +'<span style="font-size:0.72rem;color:#f5c842">Review →</span>'
+      +'</div>';
+    }
+    if (!filtered.length) {
+      html+='<div style="margin:16px;background:#141414;border:1px solid #252525;border-radius:18px;padding:32px 20px;text-align:center">'
+        +'<div style="font-size:2.5rem;margin-bottom:12px">👥</div>'
+        +'<div style="font-size:1rem;font-weight:800;margin-bottom:6px">No players yet</div>'
+        +'<div style="font-size:0.8rem;color:#666">Share your club code to get join requests</div>'
+      +'</div>';
+    } else {
+      html+=filtered.map(playerRow).join('');
+    }
+  }
+  html+='</div><div style="height:80px"></div>';
+  el.style.background='#0a0a0a';
+  el.style.minHeight='100vh';
   el.innerHTML=html;
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
-async function apiCall(method,path,body){
-  const r=await fetch(API+path,{method,headers:{'Content-Type':'application/json',...(TOKEN?{'Authorization':'Bearer '+TOKEN}:{})},body:body?JSON.stringify(body):undefined});
-  return r.json();
-}
-
-// JOIN REQUESTS
-let pendingRequests = [];
-let editingLimitsFor = null;
-
-async function loadRequests() {
-  if (!currentClub || !TOKEN) return;
-  try {
-    const reqs = await apiCall('GET', '/api/clubs/'+currentClub.id+'/requests');
-    pendingRequests = reqs;
-    const badge = document.getElementById('req-badge');
-    const sec = document.getElementById('requests-section');
-    if (reqs.length) {
-      badge.textContent = reqs.length;
-      badge.style.display = 'inline';
-      sec.style.display = 'block';
-      document.getElementById('req-count').textContent = reqs.length + ' pending';
-      document.getElementById('requests-list').innerHTML = reqs.map(r =>
-        `<div style="background:var(--card);border:1px solid rgba(255,61,87,0.2);border-radius:14px;padding:13px 15px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
-          <div>
-            <div style="font-size:0.9rem;font-weight:800">${r.name}</div>
-            <div style="font-size:0.7rem;color:var(--gray);margin-top:2px">${r.email} · Requested ${new Date(r.joined_at).toLocaleDateString()}</div>
-          </div>
-          <div style="display:flex;gap:8px">
-            <button onclick="handleRequest(${r.id},'approve')" style="padding:7px 14px;background:rgba(0,255,136,0.15);border:1px solid var(--green);color:var(--green);border-radius:8px;font-size:0.75rem;font-weight:800;cursor:pointer">Approve</button>
-            <button onclick="handleRequest(${r.id},'reject')" style="padding:7px 14px;background:rgba(255,61,87,0.1);border:1px solid var(--red);color:var(--red);border-radius:8px;font-size:0.75rem;font-weight:800;cursor:pointer">Reject</button>
-          </div>
-        </div>`
-      ).join('');
-    } else {
-      badge.style.display = 'none';
-      sec.style.display = 'none';
-    }
-  } catch(e) {}
-}
-
-async function handleRequest(memberId, action) {
-  try {
-    await apiCall('PATCH', '/api/clubs/'+currentClub.id+'/requests/'+memberId, { action });
-    showToast(action === 'approve' ? '✅ Player approved!' : '❌ Request rejected');
-    loadRequests();
-    if (action === 'approve') loadClubMembers(currentClub.id);
-  } catch(e) { showToast('❌ '+e.message); }
+function openPlayerProfile(pid){
+  var players=loadClubPlayers();
+  var p=players.find(function(x){return x.playerId===pid;})||{playerId:pid,playerName:'Unknown',status:'approved'};
+  openPlayerSettings(pid, p);
 }
 
 function openLimits(playerId, playerName) {
