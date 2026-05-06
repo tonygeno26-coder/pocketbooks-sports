@@ -570,7 +570,15 @@ function checkAuthGate() {
   var fromParam = new URLSearchParams(window.location.search).get('from');
   if (fromParam === 'player' || fromParam === 'host') {
     document.getElementById('auth-screen').style.display = 'none';
-    console.log('[lobby] auth bypassed: from=' + fromParam);
+    // Ensure lobby home content is visible
+    var contentEl = document.querySelector('.content');
+    if (contentEl) contentEl.style.display = '';
+    // Render clubs list with whatever is in storage
+    var _storedClubs = JSON.parse(localStorage.getItem('pb-clubs') || '[]');
+    if (_storedClubs.length && typeof renderClubsList === 'function') {
+      userClubs = _storedClubs; renderClubsList();
+    }
+    console.log('[lobby] auth bypassed: from=' + fromParam + ' | clubs:', _storedClubs.length);
     return;
   }
   // Accept JWT OR any local session signal
