@@ -345,7 +345,8 @@ function calcHostStats() {
 
   var active   = all.filter(function(t){ return t.status==='active' || t.status==='open'; });
   var settled  = all.filter(function(t){ return t.status==='won' || t.status==='lost' || t.status==='push'; });
-  var voided   = all.filter(function(t){ return t.status==='voided' || t.status==='deleted'; });
+  // canceled = host-approved deletion — excluded from all stats (neither win nor loss)
+  var voided   = all.filter(function(t){ return t.status==='voided' || t.status==='deleted' || t.status==='canceled'; });
 
   // Handle
   var activeHandle   = active.reduce(function(s,t){  return s + (parseFloat(t.riskAmount)||0); }, 0);
@@ -442,24 +443,43 @@ function hostApproveDelete(ticketId) {
   var bets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
   var idx = bets.findIndex(function(t){ return t.id === ticketId; });
   if (idx === -1) { alert('Bet not found'); return; }
-  bets[idx].status              = 'voided';
-  bets[idx].deleteRequestStatus = 'approved';
-  bets[idx].deleteApprovedAt    = now;
-  bets[idx].deleteApprovedBy    = 'host';
+  var refundAmount = parseFloat(bets[idx].riskAmount || 0);
+  var playerId     = bets[idx].playerId || null;
+  // Audit fields
+  bets[idx].status                = 'canceled';
+  bets[idx].deleteRequestStatus   = 'approved';
+  bets[idx].deleteApprovedAt      = now;
+  bets[idx].deleteApprovedBy      = 'host';
+  bets[idx].canceledAt            = now;
+  bets[idx].canceledBy            = 'host';
+  bets[idx].refundAmount          = refundAmount;
+  bets[idx].cancellationReason    = 'host approved deletion request';
   localStorage.setItem('hostActiveBets', JSON.stringify(bets));
-  // Mirror to pb-tickets
+  // Mirror to pb-tickets + refund player balance
   var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
   var ti = tickets.findIndex(function(t){ return t.id === ticketId; });
   if (ti !== -1) {
-    tickets[ti].status              = 'voided';
+    tickets[ti].status              = 'canceled';
     tickets[ti].deleteRequestStatus = 'approved';
     tickets[ti].deleteApprovedAt    = now;
     tickets[ti].deleteApprovedBy    = 'host';
+    tickets[ti].canceledAt          = now;
+    tickets[ti].canceledBy          = 'host';
+    tickets[ti].refundAmount        = refundAmount;
+    tickets[ti].cancellationReason  = 'host approved deletion request';
     localStorage.setItem('pb-tickets', JSON.stringify(tickets));
+  }
+  // Refund player balance
+  if (refundAmount > 0) {
+    var currentBalance = parseFloat(localStorage.getItem('pb-balance') || '1000');
+    var newBalance = Math.round((currentBalance + refundAmount) * 100) / 100;
+    localStorage.setItem('pb-balance', String(newBalance));
+    showToastHost('✅ Bet '+ticketId+' canceled · $'+refundAmount.toFixed(2)+' refunded · new balance: $'+newBalance.toFixed(2));
+  } else {
+    showToastHost('✅ Bet '+ticketId+' canceled (no refund — risk amount was $0)');
   }
   renderHostBets();
   renderHostStats();
-  showToastHost('✅ Bet '+ticketId+' voided');
 }
 
 function hostDenyDelete(ticketId) {

@@ -1866,13 +1866,15 @@ function renderMyBets() {
     var morePicks = (t.selections||[]).length > 3 ? '<div style="font-size:0.68rem;color:#aaa;padding-top:4px">+'+(t.selections.length-3)+' more picks</div>' : '';
     var isDeletePending = t.deleteRequestStatus === 'pending';
     var isDeleteDenied  = t.deleteRequestStatus === 'denied';
-    var isVoided        = t.status === 'voided' || t.status === 'deleted';
+    var isVoided        = t.status === 'voided' || t.status === 'deleted' || t.status === 'canceled';
     var statusBadge = isDeletePending
       ? '<span style="font-size:0.68rem;font-weight:800;color:#f59e0b;background:#fffbeb;padding:4px 10px;border-radius:20px;border:1px solid #f59e0b">DELETE REQUESTED</span>'
       : isDeleteDenied
         ? '<span style="font-size:0.68rem;font-weight:800;color:#cc0000;background:#fff0f0;padding:4px 10px;border-radius:20px;border:1px solid #cc0000">REQUEST DENIED</span>'
-        : isVoided
-          ? '<span style="font-size:0.68rem;font-weight:800;color:#888;background:#f5f5f5;padding:4px 10px;border-radius:20px;border:1px solid #ddd">VOIDED</span>'
+        : t.status === 'canceled'
+          ? '<span style="font-size:0.68rem;font-weight:800;color:#555;background:#f0f0f0;padding:4px 10px;border-radius:20px;border:1px solid #ccc">BET CANCELED</span>'
+          : isVoided
+            ? '<span style="font-size:0.68rem;font-weight:800;color:#888;background:#f5f5f5;padding:4px 10px;border-radius:20px;border:1px solid #ddd">VOIDED</span>'
           : '<span style="font-size:0.68rem;font-weight:800;color:'+color+';background:'+(t.status==='lost'?'#fff0f0':t.status==='won'?'#f0fff4':'#f0f4ff')+';padding:4px 10px;border-radius:20px;border:1px solid '+color+'">'+t.status.toUpperCase()+'</span>';
     var canRequestDelete = (t.status==='active'||t.status==='open') && !isDeletePending && !isVoided;
     var deleteBtn = canRequestDelete
@@ -1909,7 +1911,7 @@ function renderMyBets() {
       deleteBtn +
     '</div>';
   }
-  var active   = betTickets.filter(function(t){ return t.status==='active'||t.status==='open'; });
+  var active   = betTickets.filter(function(t){ return (t.status==='active'||t.status==='open') && t.status!=='canceled'; });
   var settled  = betTickets.filter(function(t){ return t.status!=='active'&&t.status!=='open'; });
   var html =
     '<div style="padding:16px 14px 8px;display:flex;justify-content:space-between;align-items:center">' +
