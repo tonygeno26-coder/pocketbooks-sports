@@ -565,6 +565,41 @@ function returnToLobby() {
   }
 }
 // ══════════════════════════════════════════════════════════════════════════════
+
+// ═══ LOBBY NAVIGATION HELPERS ════════════════════════════════════════════════
+function hasAnyPocketBooksState() {
+  return Boolean(
+    localStorage.getItem('pb-player') ||
+    localStorage.getItem('pb-host') ||
+    localStorage.getItem('pb-active-club') ||
+    localStorage.getItem('pb-clubs') ||
+    localStorage.getItem('pb-club') ||
+    localStorage.getItem('pb-club-players') ||
+    localStorage.getItem('pb-tickets') ||
+    localStorage.getItem('pb-balance-start') ||
+    localStorage.getItem('pb-sports-token')
+  );
+}
+function hideAuthScreen() {
+  var el = document.getElementById('auth-screen');
+  if (el) el.style.display = 'none';
+}
+function showLobbyContent() {
+  var el = document.querySelector('.content');
+  if (el) el.style.display = '';
+  // Restore clubs from storage into userClubs
+  var stored = JSON.parse(localStorage.getItem('pb-clubs') || '[]');
+  if (!stored.length) {
+    var c = JSON.parse(localStorage.getItem('pb-club') || 'null');
+    if (c) stored = [c];
+  }
+  if (!stored.length && localStorage.getItem('pb-club-players')) {
+    stored = [{ id:'local', name:'Pocket Books Club', role:'host', status:'approved', code:'LOCAL' }];
+  }
+  if (stored.length) userClubs = stored;
+}
+// ══════════════════════════════════════════════════════════════════════════════
+
 function checkAuthGate() {
   // Bypass auth if coming from player/host dashboard via ?from= param
   var fromParam = new URLSearchParams(window.location.search).get('from');
@@ -594,14 +629,10 @@ function checkAuthGate() {
     return;
   }
   // Accept JWT OR any local session signal
-  var hasJWT      = !!TOKEN;
-  var hasSession  = !!(
-    localStorage.getItem('pb-player') ||
-    localStorage.getItem('pb-club-players') ||
-    localStorage.getItem('pb-tickets') ||
-    localStorage.getItem('pb-balance-start') ||
-    localStorage.getItem('pb-clubs') ||
-    localStorage.getItem('pb-active-club')
+  var hasJWT     = !!TOKEN;
+  var hasSession = hasAnyPocketBooksState();
+  var _ = !!(  // legacy compat placeholder
+    false
   );
   var isAuthed = hasJWT || hasSession;
   console.log('[lobby] checkAuthGate', { hasJWT: hasJWT, hasSession: hasSession, isAuthed: isAuthed });
