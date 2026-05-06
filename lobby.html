@@ -542,11 +542,11 @@ async function submitAuth() {
 }
 
 function checkAuthGate() {
-  if (!TOKEN) {
-    document.getElementById('auth-screen').style.display = 'flex';
-  } else {
-    document.getElementById('auth-screen').style.display = 'none';
-  }
+  // Accept JWT token OR local demo session (pb-player / pb-club-players in localStorage)
+  var hasJWT   = !!TOKEN;
+  var hasLocal = !!(localStorage.getItem('pb-player') || localStorage.getItem('pb-club-players'));
+  var isAuthed = hasJWT || hasLocal;
+  document.getElementById('auth-screen').style.display = isAuthed ? 'none' : 'flex';
 }
 
 // PREVIEW MODE — must run before auth gate
@@ -761,6 +761,20 @@ function selectClub(id) {
 }
 
 function enterActiveClub() {
+  // Fallback: restore activeClub from pb-club or pb-club-players if returning from player/host
+  if (!activeClub) {
+    var _pbClub = JSON.parse(localStorage.getItem('pb-club') || 'null');
+    var _pbPlayers = JSON.parse(localStorage.getItem('pb-club-players') || '[]');
+    if (_pbClub) { activeClub = _pbClub; }
+    else if (_pbPlayers.length) {
+      // Infer role from pb-club-players — if current user is host, route to index
+      var _pbPlayer = JSON.parse(localStorage.getItem('pb-player') || 'null');
+      var _pid = _pbPlayer && _pbPlayer.id;
+      var _me = _pid && _pbPlayers.find(function(p){ return p.playerId === _pid; });
+      window.location.href = (_me && _me.role === 'host') ? 'index.html' : 'player.html';
+      return;
+    }
+  }
   if (!activeClub) { openModal('modal-join'); return; }
   if (activeClub.status === 'pending') {
     document.getElementById('pending-club-name').textContent = activeClub.name;
