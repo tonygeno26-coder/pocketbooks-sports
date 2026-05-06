@@ -951,6 +951,25 @@ var betSlip = [];
 var bsType = 'straight';
 var bsStakes = {}; // per-bet stakes keyed by cellId
 var bsStake = 0;
+// Canonical payout state set by openBetConfirm, consumed by confirmBet
+var _pendingRisk   = 0;
+var _pendingPayout = 0;
+var _pendingProfit = 0;
+
+// ── MODULE-LEVEL helpers (used by confirm, renderLegs, syncBtn) ──
+function nCr(n, r) {
+  if (r > n) return 0; if (r === 0 || r === n) return 1;
+  var num = 1, den = 1;
+  for (var i = 0; i < r; i++) { num *= (n - i); den *= (i + 1); }
+  return Math.round(num / den);
+}
+function rrPayoutCalc(size, perBet, slip) {
+  var combos = getCombos(slip || betSlip, size);
+  return combos.reduce(function(s, combo) {
+    var d = combo.reduce(function(p, b) { return p * amToDecimal(b.odds); }, 1);
+    return s + perBet * sgpAdjust(d, combo);
+  }, 0);
+}
 
 function tPtsLabel(p){ return "+"+p+" pts"; }
 function amToDecimal(o){
@@ -980,6 +999,25 @@ function calcPayout(stake, legs, type) {
   if (type === 'parlay') {
     var d = legs.reduce(function(p,b){ return p * amToDecimal(b.odds); }, 1);
     return stake * parlayAdjust(d, legs);
+  }
+  if (type === 'teaser') {
+    var tOdds = getTeaserOdds(legs.length, teaserPts);
+    var tDec = amToDecimal(tOdds);
+    return stake * tDec;
+  }
+  if (type === 'rr') {
+    // RR: sum over all active size rows
+    return Object.keys(rrStakes).reduce(function(s, k) {
+      var st = rrStakes[k] || 0; if (!st) return s;
+      return s + rrPayoutCalc(parseInt(k), st, legs);
+    }, 0);
+  }
+  // straight: use per-bet stakes from bsStakes, fall back to stake/legs split
+  if (type === 'straight') {
+    return legs.reduce(function(s, b) {
+      var st = (bsStakes[b.cellId] || 0) || (stake / legs.length);
+      return s + st * amToDecimal(b.odds);
+    }, 0);
   }
   return legs.reduce(function(s,b){ return s + stake * amToDecimal(b.odds); }, 0);
 }
@@ -1185,20 +1223,7 @@ function bsRenderLegs() {
       var availSizes = [];
       for (var sz = 2; sz < n; sz++) availSizes.push(sz);
 
-      // nCr helper
-      function nCr(n,r) {
-        if (r > n) return 0; if (r===0||r===n) return 1;
-        var num=1,den=1;
-        for(var i=0;i<r;i++){num*=(n-i);den*=(i+1);}
-        return Math.round(num/den);
-      }
-      function rrPayout(size, perBet) {
-        var combos = getCombos(betSlip, size);
-        return combos.reduce(function(s,combo){
-          var d = combo.reduce(function(p,b){ return p*amToDecimal(b.odds); },1);
-          return s + perBet * sgpAdjust(d, combo);
-        }, 0);
-      }
+      // nCr and rrPayoutCalc are module-level functions
 
       var totalRREntry = 0;
       var totalRRPayout = 0;
@@ -1207,7 +1232,7 @@ function bsRenderLegs() {
         if (!s) return;
         var cnt = nCr(n, parseInt(sz));
         totalRREntry += s * cnt;
-        totalRRPayout += rrPayout(parseInt(sz), s);
+        totalRRPayout += rrPayoutCalc(parseInt(sz), s, betSlip);
       });
 
       var sizeRows = availSizes.map(function(sz) {
@@ -1215,7 +1240,7 @@ function bsRenderLegs() {
         var cnt = nCr(n, sz);
         var perBet = rrStakes[sz] || 0;
         var rowEntry = perBet * cnt;
-        var rowPay = perBet > 0 ? rrPayout(sz, perBet) : 0; // sgpAdjust applied inside rrPayout
+        var rowPay = perBet > 0 ? rrPayoutCalc(sz, perBet, betSlip) : 0; // sgpAdjust applied inside rrPayout
         return '<div class="dkslip-card" style="margin-bottom:8px;overflow:hidden">' +
           '<div class="dkslip-card-hdr" style="'+(isActive?'background:#f0faf5':'')+'" onclick="activeRRSize=sz;var fi=document.getElementById(\'bs-stake-inp\');if(fi)fi.value=rrStakes[sz]||\'\'">' +
             '<span class="dkslip-card-title">'+(isActive?'● ':'')+sz+'-Pick Round Robin</span>' +
@@ -1549,7 +1574,11 @@ function openBetConfirm() {
   }
   // Sync bsStake to computed risk (prevents double-count)
   bsStake = risk;
-  var profit = toWin; // alias for legacy code below
+  var profit = toWin;
+  // Store canonical values for confirmBet to consume
+  _pendingRisk   = risk;
+  _pendingPayout = payout;
+  _pendingProfit = toWin;
   var typeLabel = {straight:'Singles',parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[bsType] || bsType;
 
   // Build DK-style light modal content
@@ -1636,8 +1665,10 @@ function closeBetConfirm() {
 
 function confirmBet() {
   console.log("confirm bet clicked");
-  if (playerBalance < bsStake) { showToast('Insufficient balance'); return; }
-  var payout = calcPayout(bsStake, betSlip, bsType);
+  if (playerBalance < _pendingRisk) { showToast('Insufficient balance'); return; }
+  // Use canonical values set by openBetConfirm — never re-calculate
+  var payout = _pendingPayout;
+  bsStake    = _pendingRisk; // ensure consistency
   var typeLabel = {straight:'Singles',parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[bsType] || bsType;
   // Deduct balance
   playerBalance = Math.round((playerBalance - bsStake) * 100) / 100;
@@ -1687,8 +1718,8 @@ function confirmBet() {
       return isNaN(raw)?'--':(raw>0?'+'+raw:''+Math.round(-100/(d-1)));
     })(),
     riskAmount: bsStake,
-    estimatedPayout: Math.round(payout * 100) / 100,
-    potentialProfit: Math.round((payout - bsStake) * 100) / 100
+    estimatedPayout: Math.round(_pendingPayout * 100) / 100,
+    potentialProfit: Math.round(_pendingProfit * 100) / 100
   };
   betTickets.unshift(ticket);
   saveTickets();
