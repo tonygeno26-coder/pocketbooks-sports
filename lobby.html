@@ -541,11 +541,50 @@ async function submitAuth() {
   }
 }
 
+
+// ═══ RETURN TO LOBBY ══════════════════════════════════════════════════════════
+function returnToLobby() {
+  var _player    = JSON.parse(localStorage.getItem('pb-player') || 'null');
+  var _club      = JSON.parse(localStorage.getItem('pb-active-club') || localStorage.getItem('pb-club') || 'null');
+  var _players   = JSON.parse(localStorage.getItem('pb-club-players') || '[]');
+  var _hasTickets = (JSON.parse(localStorage.getItem('pb-tickets') || '[]')).length > 0;
+  console.log('Return to Lobby clicked', {
+    player: _player, club: _club, clubPlayers: _players.length, hasTickets: _hasTickets
+  });
+  if (!_player && !_players.length && !_hasTickets && !TOKEN) {
+    // Truly no session — show sign-in
+    document.getElementById('auth-screen').style.display = 'flex';
+    return;
+  }
+  // Determine role
+  var _role = (_player && _player.role) || (_club && _club.role) || 'player';
+  if (_role === 'host') {
+    window.location.href = 'index.html?from=lobby';
+  } else {
+    window.location.href = 'player.html?from=lobby';
+  }
+}
+// ══════════════════════════════════════════════════════════════════════════════
 function checkAuthGate() {
-  // Accept JWT token OR local demo session (pb-player / pb-club-players in localStorage)
-  var hasJWT   = !!TOKEN;
-  var hasLocal = !!(localStorage.getItem('pb-player') || localStorage.getItem('pb-club-players'));
-  var isAuthed = hasJWT || hasLocal;
+  // Bypass auth if coming from player/host dashboard via ?from= param
+  var fromParam = new URLSearchParams(window.location.search).get('from');
+  if (fromParam === 'player' || fromParam === 'host') {
+    document.getElementById('auth-screen').style.display = 'none';
+    console.log('[lobby] auth bypassed: from=' + fromParam);
+    return;
+  }
+  // Accept JWT OR any local session signal
+  var hasJWT      = !!TOKEN;
+  var hasSession  = !!(
+    localStorage.getItem('pb-player') ||
+    localStorage.getItem('pb-club-players') ||
+    localStorage.getItem('pb-tickets') ||
+    localStorage.getItem('pb-balance-start') ||
+    localStorage.getItem('pb-clubs') ||
+    localStorage.getItem('pb-active-club')
+  );
+  var isAuthed = hasJWT || hasSession;
+  console.log('[lobby] checkAuthGate', { hasJWT: hasJWT, hasSession: hasSession, isAuthed: isAuthed });
   document.getElementById('auth-screen').style.display = isAuthed ? 'none' : 'flex';
 }
 
