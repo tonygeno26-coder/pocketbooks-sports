@@ -1510,10 +1510,42 @@ window.bsPlaceBet = function bsPlaceBet() {
 function openBetConfirm() {
   console.log("confirm modal open");
   try {
-  var payout = bsType === 'straight'
-    ? betSlip.reduce(function(s,b){ return s+(bsStakes[b.cellId]||0)*amToDecimal(b.odds);},0)
-    : calcPayout(bsStake, betSlip, bsType);
-  var profit = payout - bsStake;
+  // ── SPORTSBOOK MATH ──────────────────────────────────────────────────────
+  // risk   = amount wagered (never double-counted)
+  // toWin  = profit only  = stake × (decimalOdds - 1)
+  // payout = total return = stake × decimalOdds  = risk + toWin
+  var risk, toWin, payout;
+  if (bsType === 'straight') {
+    // Singles: per-bet stakes, each calculated independently
+    risk   = betSlip.reduce(function(s,b){ return s+(bsStakes[b.cellId]||0); }, 0);
+    payout = betSlip.reduce(function(s,b){ var st=bsStakes[b.cellId]||0; return s+st*amToDecimal(b.odds); }, 0);
+    toWin  = payout - risk;
+    console.log('SINGLE CONFIRM: risk='+risk.toFixed(2)+' payout='+payout.toFixed(2)+' profit='+toWin.toFixed(2));
+    dbgBanner('SINGLE CONFIRM | Risk: $'+risk.toFixed(2)+' | To Win: $'+toWin.toFixed(2)+' | Payout: $'+payout.toFixed(2), '#004');
+  } else if (bsType === 'teaser') {
+    risk   = bsStake;
+    payout = calcPayout(bsStake, betSlip, bsType);
+    toWin  = payout - risk;
+  } else if (bsType === 'rr') {
+    risk   = bsStake; // total entry across all combos
+    payout = Object.keys(rrStakes).reduce(function(s,k){
+      var st=rrStakes[k]||0; if(!st)return s;
+      return s+getCombos(betSlip,parseInt(k)).reduce(function(cs,combo){
+        var d=combo.reduce(function(p,b){return p*amToDecimal(b.odds);},1);
+        return cs+st*sgpAdjust(d,combo);
+      },0);
+    },0);
+    toWin  = payout - risk;
+  } else {
+    // Parlay
+    risk   = bsStake;
+    payout = calcPayout(bsStake, betSlip, bsType);
+    toWin  = payout - risk;
+    console.log('PARLAY CONFIRM: risk='+risk.toFixed(2)+' payout='+payout.toFixed(2)+' profit='+toWin.toFixed(2));
+  }
+  // Sync bsStake to computed risk (prevents double-count)
+  bsStake = risk;
+  var profit = toWin; // alias for legacy code below
   var typeLabel = {straight:'Singles',parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[bsType] || bsType;
 
   // Build DK-style light modal content
@@ -1558,9 +1590,9 @@ function openBetConfirm() {
       // Summary card
       '<div style="background:#f8f8f8;border:1px solid #eee;border-radius:14px;padding:14px;margin-bottom:12px">' +
         '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:#888">Current Balance</span><span style="font-size:0.82rem;font-weight:800;color:#0064c8">'+fmtBalance()+'</span></div>' +
-        '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:#888">Total Risk</span><span style="font-size:0.82rem;font-weight:800;color:'+(insufficient?'#cc0000':'#111')+'">'+fmtDollar(bsStake)+'</span></div>' +
-        '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:#888">Est. Payout</span><span style="font-size:0.82rem;font-weight:800;color:#00875a">'+fmtDollar(payout)+'</span></div>' +
-        '<div style="display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid #e8e8e8"><span style="font-size:0.82rem;font-weight:700;color:#888">Potential Profit</span><span style="font-size:0.92rem;font-weight:900;color:#00875a">+'+fmtDollar(profit)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:#888">Risk</span><span style="font-size:0.82rem;font-weight:800;color:'+(insufficient?'#cc0000':'#111')+'">'+fmtDollar(bsStake)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:#888">Est. Return</span><span style="font-size:0.82rem;font-weight:800;color:#00875a">'+fmtDollar(payout)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid #e8e8e8"><span style="font-size:0.82rem;font-weight:700;color:#888">To Win</span><span style="font-size:0.92rem;font-weight:900;color:#00875a">+'+fmtDollar(profit)+'</span></div>' +
         (insufficient ? '<div style="margin-top:10px;padding:8px 12px;background:#fff0f0;border:1px solid #ffcccc;border-radius:8px;font-size:0.75rem;color:#cc0000;text-align:center;font-weight:700">⚠️ Insufficient balance</div>' : '') +
       '</div>' +
       // Disclaimer
