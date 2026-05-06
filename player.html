@@ -1599,7 +1599,7 @@ function bsRenderLegs() {
                 'data-cid="'+b.cellId+'" oninput="bsSingleInput(this)" onclick="event.stopPropagation()" onfocus="console.log(\'input focused\')" ' +
                 'style="width:100%">' +
             '</div>' +
-            (payout ? '<div class="single-payout" style="color:#00875a;font-weight:700;font-size:0.7rem">Payout: '+payout+'</div>' : '') +
+            '<div class="single-payout" data-payout-cid="'+b.cellId+'" style="color:#00875a;font-weight:700;font-size:0.7rem;min-height:1em">'+(payout?'Payout: '+payout:'')+'</div>' +
           '</div>' +
         '</div>';
       }).join('');
@@ -2125,17 +2125,12 @@ function bsSetStakeAll(val) {
   bsStake = amt * betSlip.length;
   // Update every card in-place without rebuilding DOM
   document.querySelectorAll('input[data-cid]').forEach(function(inp) {
-    // Never touch the stake-all input itself
     if (inp.id === 'stake-all-inp' || !inp.dataset.cid) return;
     var b = betSlip.find(function(x){ return x.cellId === inp.dataset.cid; });
     if (!b) return;
     inp.value = amt > 0 ? amt : '';
-    // Update payout text in same card
-    var card = inp.closest('.dkslip-card') || inp.parentElement;
-    if (card) {
-      var payEl = card.querySelector('.single-payout');
-      if (payEl) payEl.textContent = amt > 0 ? 'Payout: '+fmtDollar(amt * amToDecimal(b.odds)) : '';
-    }
+    var payEl = document.querySelector('[data-payout-cid="'+inp.dataset.cid+'"]');
+    if (payEl) payEl.textContent = amt > 0 ? 'Payout: '+fmtDollar(amt * amToDecimal(b.odds)) : '';
   });
   // Sync button + payout row immediately
   bsSyncPlaceBtn();
@@ -2164,7 +2159,7 @@ function bsSingleInput(el) {
   bsStake = Object.values(bsStakes).reduce(function(s,v){ return s+(v||0); }, 0);
   bsSyncPlaceBtn();
   // Update just this card's payout display without full re-render
-  var payEl = el.closest('.dkslip-card').querySelector('.single-payout');
+  var payEl = document.querySelector('[data-payout-cid="'+cellId+'"]');
   if (payEl) {
     var b = betSlip.find(function(x){ return x.cellId === cellId; });
     payEl.textContent = amt > 0 && b ? 'Payout: '+fmtDollar(amt * amToDecimal(b.odds)) : '';
