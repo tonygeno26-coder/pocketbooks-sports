@@ -2201,63 +2201,61 @@ function getClientAvailCredit(pid){
 
 function bsSyncPlaceBtn() {
   var btn = document.getElementById('bs-place-btn');
-  var wrap = document.getElementById('place-bet-wrap');
-  // Position wrap above the dkslip-entry footer so it never covers stake input
-  if (wrap) {
-    var entry = document.querySelector('.dkslip-entry');
-    var entryH = entry ? entry.offsetHeight : 120;
-    wrap.style.bottom = (72 + entryH) + 'px';
-  }
   var payRow = document.getElementById('dk-payout-row');
   var payVal = document.getElementById('dk-payout-val');
   var badge2 = document.getElementById('bs-badge2');
   if (badge2) badge2.textContent = betSlip.length;
-  var valid = bsType === 'parlay' ? (betSlip.length >= 2 && bsStake > 0) : bsType === 'rr' ? (betSlip.length >= 3 && bsStake > 0) : (betSlip.length > 0 && bsStake > 0);
-  if (btn) {
-    btn.dataset.disabled = valid ? 'false' : 'true';
-    btn.style.background = valid ? '#00c853' : '#e0e0e0';
-    btn.style.color = valid ? '#fff' : '#aaa';
-    btn.style.cursor = valid ? 'pointer' : 'default';
-    btn.style.pointerEvents = 'auto';
-    if (betSlip.length === 0) {
-      btn.textContent = 'Add Selections';
-    } else if (!valid) {
-      btn.textContent = bsType === 'parlay' && betSlip.length < 2 ? 'Add 1 more pick for Parlay' : 'Enter Entry Amount';
+
+  // Valid = has picks AND has a non-zero stake
+  var valid = bsType === 'parlay'
+    ? (betSlip.length >= 2 && bsStake > 0)
+    : bsType === 'rr'
+      ? (betSlip.length >= 3 && bsStake > 0)
+      : (betSlip.length > 0 && bsStake > 0);
+
+  // ── Payout calculation ──────────────────────────────────────────────────
+  var totalPay = 0;
+  var totalRisk = 0;
+  if (valid) {
+    if (bsType === 'straight') {
+      betSlip.forEach(function(b) {
+        var st = bsStakes[b.cellId] || 0;
+        totalRisk += st;
+        totalPay  += st * amToDecimal(b.odds);
+      });
     } else {
-      var totalE = bsType === 'straight'
-        ? Object.values(bsStakes).reduce(function(s,v){ return s+(v||0); }, 0)
-        : bsStake;
-      if (bsType === 'rr') {
-        var rrTotalPay = 0;
-        Object.keys(rrStakes).forEach(function(k){
-          var s=rrStakes[k]||0; if(!s)return;
-          var sz=parseInt(k);
-          getCombos(betSlip,sz).forEach(function(combo){
-            var d=combo.reduce(function(p,b){return p*amToDecimal(b.odds);},1);
-            rrTotalPay+=s*sgpAdjust(d,combo);
-          });
-        });
-        btn.textContent = 'Place Round Robin  $' + totalE.toFixed(2);
-      } else if (bsType === 'parlay') {
-        btn.textContent = 'Place Parlay  $' + totalE.toFixed(2);
-      } else if (bsType === 'straight' && betSlip.length > 1) {
-        btn.textContent = 'Place ' + betSlip.length + ' Bets  $' + totalE.toFixed(2);
-      } else {
-        btn.textContent = 'Place Bet  $' + totalE.toFixed(2);
-      }
+      totalRisk = bsStake;
+      totalPay  = calcPayout(bsStake, betSlip, bsType);
     }
   }
+
+  // ── Button: hidden when no valid stake ──────────────────────────────────
+  if (btn) {
+    if (!valid) {
+      btn.style.display = 'none';
+    } else {
+      btn.style.display = 'block';
+      btn.dataset.disabled = 'false';
+      btn.style.background = '#00c853';
+      btn.style.color = '#fff';
+      btn.style.cursor = 'pointer';
+      // Button text: "Place Bet $14.00" (stake amount, not payout)
+      var label = bsType === 'rr' ? 'Place Round Robin'
+        : bsType === 'parlay' ? 'Place Parlay'
+        : bsType === 'straight' && betSlip.length > 1 ? 'Place ' + betSlip.length + ' Bets'
+        : 'Place Bet';
+      btn.textContent = label + '  ' + fmtDollar(totalRisk);
+    }
+  }
+
+  // ── Payout row: hidden until valid ─────────────────────────────────────
   if (payRow && payVal) {
-    if (valid) {
-      var totalPay;
-      if (bsType === 'straight') {
-        totalPay = betSlip.reduce(function(s,b){ return s + (bsStakes[b.cellId]||0)*amToDecimal(b.odds); }, 0);
-      } else {
-        totalPay = calcPayout(bsStake, betSlip, bsType);
-      }
+    if (valid && totalPay > 0) {
       payVal.textContent = fmtDollar(totalPay);
       payRow.style.display = 'flex';
-    } else { payRow.style.display = 'none'; }
+    } else {
+      payRow.style.display = 'none';
+    }
   }
 }
 
@@ -2586,24 +2584,19 @@ function runPlaceBetHitTest() {
         onfocus="console.log('amount input focused', bsType)"
         style="flex:1;background:none;border:none;outline:none;font-size:1rem;font-weight:900;color:#111;pointer-events:auto;user-select:text;-webkit-user-select:text;position:relative;z-index:20;-webkit-user-select:text">
     </div>
-    <div class="dkslip-payout" id="dk-payout-row" style="display:none">
+    <div class="dkslip-payout" id="dk-payout-row" style="display:none;margin-bottom:8px">
       <span style="font-size:0.72rem;color:#888">Total Payout</span>
       <span id="dk-payout-val" style="font-weight:800;color:#00875a"></span>
     </div>
+    <button id="bs-place-btn" data-action="place-bet" data-disabled="true" onclick="window.bsPlaceBet()"
+      style="display:none;width:100%;padding:15px;background:#00c853;color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:900;cursor:pointer;transition:background 0.15s;letter-spacing:0.3px;pointer-events:auto;margin-bottom:4px">
+      Place Bet
+    </button>
   </div>
 </div>
 
-<!-- PLACE BET BUTTON — fixed, outside all drawers/overlays -->
-<div id="place-bet-wrap" style="display:none;position:fixed;bottom:72px;left:50%;transform:translateX(-50%);width:100%;max-width:430px;padding:10px 14px calc(12px + env(safe-area-inset-bottom,0px));background:#fff;border-top:1px solid #e0e0e0;z-index:200000;pointer-events:auto;box-shadow:0 -2px 12px rgba(0,0,0,0.15)">
-  <div id="dk-payout-row2" style="display:none;justify-content:space-between;margin-bottom:8px;padding:0 2px">
-    <span style="font-size:0.75rem;color:#888">Est. Payout</span>
-    <span id="dk-payout-val2" style="font-size:0.82rem;font-weight:900;color:#00c853"></span>
-  </div>
-  <button id="bs-place-btn" data-action="place-bet" data-disabled="true" onclick="window.bsPlaceBet()"
-    style="width:100%;padding:16px;background:#e0e0e0;color:#aaa;border:none;border-radius:12px;font-size:1rem;font-weight:900;cursor:default;transition:all 0.15s;letter-spacing:0.3px;pointer-events:auto">
-    Enter Entry Amount
-  </button>
-</div>
+<!-- PLACE BET BUTTON — kept in DOM for JS compatibility but hidden/empty -->
+<div id="place-bet-wrap" style="display:none"></div>
 
 <!-- NUMERIC KEYPAD -->
 <div id="numpad" class="numpad">
