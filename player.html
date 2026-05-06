@@ -369,11 +369,74 @@ console.log('player page loaded');
 try { var _storedCount = JSON.parse(localStorage.getItem('pb-tickets')||'[]').length; dbgBanner('PAGE LOADED\n'+_storedCount+' saved tickets\nBalance: '+(localStorage.getItem('pb-balance')||'1000'), '#003'); } catch(e){}
 let TOKEN=localStorage.getItem('pb-sports-token')||'';
 // Balance + tickets
-var playerBalance = parseFloat(localStorage.getItem('pb-balance')) || 1000;
 var betTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
-function saveBalance(){ localStorage.setItem('pb-balance', playerBalance); }
 function saveTickets(){ localStorage.setItem('pb-tickets', JSON.stringify(betTickets)); }
-function fmtBalance(){ return '$'+playerBalance.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+// ═══ CENTRALIZED BALANCE ENGINE ══════════════════════════════════════════════
+// availableBalance = startingBalance - openRisk + settledWinnings + refunds
+// Source of truth: localStorage['pb-balance-start'] + localStorage['pb-tickets']
+var _BASE_BALANCE = 1000; // default starting balance
+// Migrate: if old pb-balance exists and no pb-balance-start, use it as starting balance
+(function(){
+  if (!localStorage.getItem('pb-balance-start')) {
+    var old = parseFloat(localStorage.getItem('pb-balance'));
+    // Only trust old balance if no tickets exist yet (otherwise it's already-deducted)
+    var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
+    var hasActive = tickets.some(function(t){ return t.status==='active'||t.status==='open'; });
+    var start = (!isNaN(old) && !hasActive) ? old : _BASE_BALANCE;
+    localStorage.setItem('pb-balance-start', String(start));
+  }
+})();
+function _getStartingBalance() {
+  return parseFloat(localStorage.getItem('pb-balance-start')) || _BASE_BALANCE;
+}
+function calcAvailableBalance() {
+  var starting = _getStartingBalance();
+  var tickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]');
+  var openRisk = tickets
+    .filter(function(t){ return t.status==='active' || t.status==='open'; })
+    .reduce(function(s,t){ return s + (parseFloat(t.riskAmount)||0); }, 0);
+  var settledGains = tickets
+    .filter(function(t){ return t.status==='won'; })
+    .reduce(function(s,t){ return s + (parseFloat(t.potentialProfit)||0); }, 0);
+  var refunds = tickets
+    .filter(function(t){ return t.status==='canceled' || t.status==='push'; })
+    .reduce(function(s,t){ return s + (parseFloat(t.refundAmount||t.riskAmount)||0); }, 0);
+  // settled losses: risk already excluded from starting (never returned)
+  var available = Math.round((starting - openRisk + settledGains + refunds) * 100) / 100;
+  return { starting: starting, openRisk: openRisk, settledGains: settledGains, refunds: refunds, available: available };
+}
+function syncBalanceDisplays() {
+  var s = calcAvailableBalance();
+  var playerBalance = s.available;
+  // Update legacy var so old references work
+  window.playerBalance = playerBalance;
+  var bal = '$' + playerBalance.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  ['player-balance-display','header-balance','pb-balance-header'].forEach(function(id){
+    var el = document.getElementById(id); if (el) el.textContent = bal;
+  });
+  dbgBanner('BALANCE RECALCULATED\nStarting: $'+s.starting.toFixed(2)+'\nOpen Risk: $'+s.openRisk.toFixed(2)+'\nAvailable: $'+playerBalance.toFixed(2), '#005');
+  console.log('[balance]', s);
+  return s;
+}
+var playerBalance = calcAvailableBalance().available;
+function fmtBalance(){ return '$'+calcAvailableBalance().available.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function saveBalance(){ /* no-op: balance is derived, not stored directly */ }
+function loadBalance(){ var s = syncBalanceDisplays(); playerBalance = s.available; return playerBalance; }
+function addLedgerEntry(entry) {
+  var ledger = JSON.parse(localStorage.getItem('pb-ledger')||'[]');
+  ledger.unshift(entry); if (ledger.length > 500) ledger = ledger.slice(0,500);
+  localStorage.setItem('pb-ledger', JSON.stringify(ledger));
+}
+function applyBalanceChange(type, amount, ticketId, meta) {
+  // Balance derives from tickets — no direct mutation. Just log + sync.
+  var s = syncBalanceDisplays();
+  addLedgerEntry(Object.assign({ id:'L'+Date.now(), type:type, ticketId:ticketId||null,
+    amount:amount, balanceBefore: s.available - amount, balanceAfter: s.available,
+    createdAt: new Date().toISOString() }, meta||{}));
+  return s;
+}
+// ═════════════════════════════════════════════════════════════════════════════
 let slip=[],sType='straight',tPts=6,rrSz=2;
 
 async function api(method,path,body){
@@ -1617,7 +1680,9 @@ function openBetConfirm() {
     '</div>';
   }).join('');
 
-  var insufficient = playerBalance < bsStake;
+  var _avBal = calcAvailableBalance().available;
+  playerBalance = _avBal; // keep in sync
+  var insufficient = _avBal < bsStake;
   var html =
     // Handle bar
     '<div style="width:36px;height:4px;background:#e0e0e0;border-radius:2px;margin:12px auto 0"></div>' +
@@ -1679,11 +1744,12 @@ function closeBetConfirm() {
 
 function confirmBet() {
   console.log("confirm bet clicked");
-  loadBalance(); // always sync from storage before validation
+  var _avail = calcAvailableBalance().available;
+  playerBalance = _avail;
   var riskAmount = _pendingRisk;
   var payout     = _pendingPayout;
   bsStake        = riskAmount;
-  if (playerBalance < riskAmount) { showToast('Insufficient balance · have '+fmtBalance()); return; }
+  if (_avail < riskAmount) { showToast('Insufficient balance · have '+fmtBalance()); return; }
   var typeLabel = {straight:'Singles',parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[bsType] || bsType;
   // Create ticket
   var _playerData = JSON.parse(localStorage.getItem('pb-player') || 'null') || {};
@@ -1695,10 +1761,7 @@ function confirmBet() {
   var _resolvedName = _playerData.name || _playerData.username || _myClubEntry.playerName || 'TestPlayer01';
   var _resolvedReal = _myClubEntry.realName || '';
   var _resolvedClub = _clubData.id || _myClubEntry.clubId || '';
-  // Deduct balance via centralized ledger
   var ticketId = 'T' + Date.now();
-  applyBalanceChange('bet_placed', -riskAmount, ticketId, { betType: typeLabel, selections: betSlip.length });
-  dbgBanner('STEP 3: Balance deducted\nNew: '+fmtBalance(), '#030');
   var ticket = {
     id: ticketId,
     playerId:       _resolvedId,
@@ -1738,8 +1801,15 @@ function confirmBet() {
   };
   betTickets.unshift(ticket);
   saveTickets();
+  // NOW sync balance — derives from saved tickets (active bet reduces available)
+  var _bs = syncBalanceDisplays();
+  addLedgerEntry({ id:'L'+Date.now(), type:'bet_placed', ticketId:ticketId,
+    amount: -riskAmount, balanceBefore: _bs.available + riskAmount,
+    balanceAfter: _bs.available, createdAt: new Date().toISOString(),
+    betType: typeLabel, selections: betSlip.length });
+  dbgBanner('BALANCE RECALCULATED\nStarting: $'+_bs.starting.toFixed(2)+'\nOpen Risk: $'+_bs.openRisk.toFixed(2)+'\nAvailable: $'+_bs.available.toFixed(2), '#005');
   var savedCheck = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
-  dbgBanner('STEP 4: Ticket saved\nID: '+ticket.id+'\nIn storage: '+savedCheck.length+' tickets', '#006');
+  dbgBanner('STEP 4: Ticket saved\nID: '+ticket.id+'\nIn storage: '+savedCheck.length+' tickets | Balance: $'+_bs.available.toFixed(2), '#006');
   console.log('TICKET SAVED', ticket.id, 'localStorage:', localStorage.getItem('pb-tickets'));
   // Save to hostActiveBets for host dashboard
   var hostBets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
