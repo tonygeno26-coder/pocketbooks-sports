@@ -1415,7 +1415,7 @@ function bsRenderLegs() {
                 'data-cid="'+b.cellId+'" oninput="bsSingleInput(this)" onclick="event.stopPropagation()" onfocus="console.log(\'input focused\')" ' +
                 'style="width:100%">' +
             '</div>' +
-            (payout ? '<div class="single-payout">Est. Return: '+payout+'</div>' : '') +
+            (payout ? '<div class="single-payout" style="color:#00875a;font-weight:700;font-size:0.7rem">Payout: '+payout+'</div>' : '') +
           '</div>' +
         '</div>';
       }).join('');
@@ -1590,9 +1590,9 @@ function openBetConfirm() {
       // Summary card
       '<div style="background:#f8f8f8;border:1px solid #eee;border-radius:14px;padding:14px;margin-bottom:12px">' +
         '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:#888">Current Balance</span><span style="font-size:0.82rem;font-weight:800;color:#0064c8">'+fmtBalance()+'</span></div>' +
-        '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:#888">Risk</span><span style="font-size:0.82rem;font-weight:800;color:'+(insufficient?'#cc0000':'#111')+'">'+fmtDollar(bsStake)+'</span></div>' +
-        '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:#888">Est. Return</span><span style="font-size:0.82rem;font-weight:800;color:#00875a">'+fmtDollar(payout)+'</span></div>' +
-        '<div style="display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid #e8e8e8"><span style="font-size:0.82rem;font-weight:700;color:#888">To Win</span><span style="font-size:0.92rem;font-weight:900;color:#00875a">+'+fmtDollar(profit)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:0.3px">Risk</span><span style="font-size:0.82rem;font-weight:800;color:'+(insufficient?'#cc0000':'#111')+'">'+fmtDollar(bsStake)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:0.3px">Est. Payout</span><span style="font-size:0.82rem;font-weight:800;color:#00875a">'+fmtDollar(payout)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid #e8e8e8"><span style="font-size:0.82rem;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.3px">Potential Profit</span><span style="font-size:0.92rem;font-weight:900;color:#00875a">+'+fmtDollar(profit)+'</span></div>' +
         (insufficient ? '<div style="margin-top:10px;padding:8px 12px;background:#fff0f0;border:1px solid #ffcccc;border-radius:8px;font-size:0.75rem;color:#cc0000;text-align:center;font-weight:700">⚠️ Insufficient balance</div>' : '') +
       '</div>' +
       // Disclaimer
@@ -1839,7 +1839,7 @@ function bsSetStakeAll(val) {
     // Don't overwrite if this input is currently focused (let user keep cursor position)
     if (document.activeElement !== inp) inp.value = amt > 0 ? amt : '';
     var payEl = card.querySelector('.single-payout');
-    if (payEl) payEl.textContent = amt > 0 ? 'Est. Return: '+fmtDollar(amt * amToDecimal(b.odds)) : '';
+    if (payEl) payEl.textContent = amt > 0 ? 'Payout: '+fmtDollar(amt * amToDecimal(b.odds)) : '';
   });
   // Update footer button + payout
   bsSyncPlaceBtn();
@@ -1868,7 +1868,7 @@ function bsSingleInput(el) {
   var payEl = el.closest('.dkslip-card').querySelector('.single-payout');
   if (payEl) {
     var b = betSlip.find(function(x){ return x.cellId === cellId; });
-    payEl.textContent = amt > 0 && b ? 'Est. Return: '+fmtDollar(amt * amToDecimal(b.odds)) : '';
+    payEl.textContent = amt > 0 && b ? 'Payout: '+fmtDollar(amt * amToDecimal(b.odds)) : '';
   }
 }
 
@@ -2123,12 +2123,6 @@ function bsSyncPlaceBtn() {
       }
       payVal.textContent = fmtDollar(totalPay);
       payRow.style.display = 'flex';
-      // Show total entry + payout as subtitle in button
-      if (btn && bsType === 'straight') {
-        var totalEntry = Object.values(bsStakes).reduce(function(s,v){ return s+(v||0); }, 0);
-        var activeBets = betSlip.filter(function(b){ return (bsStakes[b.cellId]||0) > 0; }).length;
-        btn.title = 'Total Payout: '+fmtDollar(totalPay);
-      }
     } else { payRow.style.display = 'none'; }
   }
 }
@@ -2442,8 +2436,8 @@ function runPlaceBetHitTest() {
         style="flex:1;background:none;border:none;outline:none;font-size:1rem;font-weight:900;color:#111;pointer-events:auto;user-select:text;-webkit-user-select:text;position:relative;z-index:20;-webkit-user-select:text">
     </div>
     <div class="dkslip-payout" id="dk-payout-row" style="display:none">
-      <span>Est. Payout</span>
-      <span id="dk-payout-val"></span>
+      <span style="font-size:0.72rem;color:#888">Total Payout</span>
+      <span id="dk-payout-val" style="font-weight:800;color:#00875a"></span>
     </div>
   </div>
 </div>
