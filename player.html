@@ -1769,6 +1769,67 @@ document.addEventListener('keydown', function(e) {
 
 
 
+
+// ═══ BET DELETE REQUEST (PLAYER SIDE) ════════════════════════════════════════
+function requestBetDelete(ticketId, event) {
+  if (event) event.stopPropagation();
+  // Modal
+  var existing = document.getElementById('del-req-modal');
+  if (existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.id = 'del-req-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.6);display:flex;align-items:flex-end;justify-content:center;pointer-events:auto';
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:430px;border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom,0px));color:#111">' +
+      '<div style="width:36px;height:4px;background:#e0e0e0;border-radius:2px;margin:0 auto 20px"></div>' +
+      '<div style="font-size:1.05rem;font-weight:900;margin-bottom:6px">Request Bet Deletion?</div>' +
+      '<div style="font-size:0.82rem;color:#555;margin-bottom:20px;line-height:1.5">This will send a request to the host. <strong>Your bet is not deleted unless the host approves.</strong></div>' +
+      '<div style="background:#fff8e6;border:1px solid #f0c040;border-radius:10px;padding:10px 14px;font-size:0.72rem;color:#7a5800;margin-bottom:20px">Ticket: '+ticketId+'</div>' +
+      '<div style="display:flex;gap:10px">' +
+        '<button id="del-cancel-btn" style="flex:1;padding:14px;background:#f0f0f0;border:none;border-radius:12px;font-size:0.9rem;font-weight:700;color:#555;cursor:pointer">Cancel</button>' +
+        '<button id="del-send-btn" style="flex:2;padding:14px;background:#cc0000;border:none;border-radius:12px;font-size:0.9rem;font-weight:900;color:#fff;cursor:pointer">Send Request</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+  modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
+  var cb = document.getElementById('del-cancel-btn');
+  var sb = document.getElementById('del-send-btn');
+  if (cb) cb.addEventListener('click', function(){ modal.remove(); });
+  if (sb) sb.addEventListener('click', function(){ submitDeleteRequest(ticketId); });
+}
+
+function submitDeleteRequest(ticketId) {
+  var modal = document.getElementById('del-req-modal');
+  if (modal) modal.remove();
+  // Update ticket in betTickets
+  var idx = betTickets.findIndex(function(t){ return t.id === ticketId; });
+  if (idx === -1) { showToast('Ticket not found'); return; }
+  if (betTickets[idx].deleteRequestStatus === 'pending') { showToast('Request already sent'); return; }
+  betTickets[idx].deleteRequestStatus = 'pending';
+  betTickets[idx].deleteRequestedAt   = new Date().toISOString();
+  betTickets[idx].deleteRequestedBy   = betTickets[idx].playerId;
+  saveTickets();
+  // Mirror to hostActiveBets so host sees it
+  var hostBets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
+  var hi = hostBets.findIndex(function(t){ return t.id === ticketId; });
+  if (hi !== -1) {
+    hostBets[hi].deleteRequestStatus = 'pending';
+    hostBets[hi].deleteRequestedAt   = betTickets[idx].deleteRequestedAt;
+    hostBets[hi].deleteRequestedBy   = betTickets[idx].deleteRequestedBy;
+    localStorage.setItem('hostActiveBets', JSON.stringify(hostBets));
+  }
+  renderMyBets();
+  showToast('✅ Delete request sent to host');
+}
+// ══════════════════════════════════════════════════════════════════════════════
+
+
+// Request delete button delegation (player)
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest ? e.target.closest('[data-reqdelete]') : null;
+  if (!btn) return;
+  requestBetDelete(btn.dataset.reqdelete, e);
+});
 function renderMyBets() {
   var el = document.getElementById('mybets-section');
   if (!el) { console.warn('mybets-section not found'); return; }
@@ -1788,20 +1849,34 @@ function renderMyBets() {
         '</div>';
     }).join('');
     var morePicks = (t.selections||[]).length > 3 ? '<div style="font-size:0.68rem;color:#aaa;padding-top:4px">+'+(t.selections.length-3)+' more picks</div>' : '';
+    var isDeletePending = t.deleteRequestStatus === 'pending';
+    var isDeleteDenied  = t.deleteRequestStatus === 'denied';
+    var isVoided        = t.status === 'voided' || t.status === 'deleted';
+    var statusBadge = isDeletePending
+      ? '<span style="font-size:0.68rem;font-weight:800;color:#f59e0b;background:#fffbeb;padding:4px 10px;border-radius:20px;border:1px solid #f59e0b">DELETE REQUESTED</span>'
+      : isDeleteDenied
+        ? '<span style="font-size:0.68rem;font-weight:800;color:#cc0000;background:#fff0f0;padding:4px 10px;border-radius:20px;border:1px solid #cc0000">REQUEST DENIED</span>'
+        : isVoided
+          ? '<span style="font-size:0.68rem;font-weight:800;color:#888;background:#f5f5f5;padding:4px 10px;border-radius:20px;border:1px solid #ddd">VOIDED</span>'
+          : '<span style="font-size:0.68rem;font-weight:800;color:'+color+';background:'+(t.status==='lost'?'#fff0f0':t.status==='won'?'#f0fff4':'#f0f4ff')+';padding:4px 10px;border-radius:20px;border:1px solid '+color+'">'+t.status.toUpperCase()+'</span>';
+    var canRequestDelete = (t.status==='active'||t.status==='open') && !isDeletePending && !isVoided;
+    var deleteBtn = canRequestDelete
+      ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;text-align:right"><button data-reqdelete="'+t.id+'" style="font-size:0.72rem;font-weight:700;color:#cc0000;background:none;border:1.5px solid #cc0000;border-radius:20px;padding:5px 14px;cursor:pointer">✕ Request Delete</button></div>'
+      : isDeletePending
+        ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;font-size:0.72rem;color:#f59e0b;font-weight:700;text-align:center">⏳ Waiting for host approval…</div>'
+        : isDeleteDenied
+          ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;font-size:0.72rem;color:#cc0000;font-weight:700;text-align:center">❌ Delete request denied</div>'
+          : '';
     return '<div style="background:#fff;border-radius:14px;margin:8px 0;padding:16px;border:1px solid #e8e8e8;box-shadow:0 1px 4px rgba(0,0,0,0.06)">' +
-      // Header row
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
         '<div>' +
           '<div style="font-size:0.88rem;font-weight:900;color:#111">'+t.type+'</div>' +
           '<div style="font-size:0.62rem;color:#aaa;margin-top:2px">'+dateStr+'</div>' +
         '</div>' +
-        '<span style="font-size:0.68rem;font-weight:800;color:'+color+';background:'+(t.status==='lost'?'#fff0f0':t.status==='won'?'#f0fff4':'#f0f4ff')+';padding:4px 10px;border-radius:20px;border:1px solid '+color+'">'+t.status.toUpperCase()+'</span>' +
+        statusBadge +
       '</div>' +
-      // Picks
       '<div style="margin-bottom:10px">' + picks + morePicks + '</div>' +
-      // Ticket ID
       '<div style="font-size:0.6rem;color:#ccc;margin-bottom:10px">Ticket: '+t.id+'</div>' +
-      // Stats row
       '<div style="display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid #f0f0f0">' +
         '<div style="text-align:center">' +
           '<div style="font-size:0.6rem;color:#aaa;margin-bottom:2px">RISK</div>' +
@@ -1816,6 +1891,7 @@ function renderMyBets() {
           '<div style="font-size:0.88rem;font-weight:900;color:#0064c8">'+fmtDollar(t.estimatedPayout)+'</div>' +
         '</div>' +
       '</div>' +
+      deleteBtn +
     '</div>';
   }
   var active   = betTickets.filter(function(t){ return t.status==='active'||t.status==='open'; });

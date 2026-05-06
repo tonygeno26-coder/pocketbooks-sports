@@ -351,16 +351,99 @@ function loadHostActiveBets(){
   return active;
 }
 
+
+// ═══ BET DELETE HOST ACTIONS ══════════════════════════════════════════════════
+function hostApproveDelete(ticketId) {
+  var now = new Date().toISOString();
+  var bets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
+  var idx = bets.findIndex(function(t){ return t.id === ticketId; });
+  if (idx === -1) { alert('Bet not found'); return; }
+  bets[idx].status              = 'voided';
+  bets[idx].deleteRequestStatus = 'approved';
+  bets[idx].deleteApprovedAt    = now;
+  bets[idx].deleteApprovedBy    = 'host';
+  localStorage.setItem('hostActiveBets', JSON.stringify(bets));
+  // Mirror to pb-tickets
+  var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
+  var ti = tickets.findIndex(function(t){ return t.id === ticketId; });
+  if (ti !== -1) {
+    tickets[ti].status              = 'voided';
+    tickets[ti].deleteRequestStatus = 'approved';
+    tickets[ti].deleteApprovedAt    = now;
+    tickets[ti].deleteApprovedBy    = 'host';
+    localStorage.setItem('pb-tickets', JSON.stringify(tickets));
+  }
+  renderHostBets();
+  showToastHost('✅ Bet '+ticketId+' voided');
+}
+
+function hostDenyDelete(ticketId) {
+  var now = new Date().toISOString();
+  var bets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
+  var idx = bets.findIndex(function(t){ return t.id === ticketId; });
+  if (idx === -1) { alert('Bet not found'); return; }
+  bets[idx].deleteRequestStatus = 'denied';
+  bets[idx].deleteDeniedAt      = now;
+  bets[idx].deleteDeniedBy      = 'host';
+  localStorage.setItem('hostActiveBets', JSON.stringify(bets));
+  // Mirror to pb-tickets
+  var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
+  var ti = tickets.findIndex(function(t){ return t.id === ticketId; });
+  if (ti !== -1) {
+    tickets[ti].deleteRequestStatus = 'denied';
+    tickets[ti].deleteDeniedAt      = now;
+    tickets[ti].deleteDeniedBy      = 'host';
+    localStorage.setItem('pb-tickets', JSON.stringify(tickets));
+  }
+  renderHostBets();
+  showToastHost('❌ Delete request denied for '+ticketId);
+}
+// ══════════════════════════════════════════════════════════════════════════════
+
 function renderHostBets(){
   var active=loadHostActiveBets();
   showToastHost('HOST BETS RENDERED WITH PLAYER NAMES\n'+active.length+' bets · players: '+[...new Set(active.map(function(t){return t.playerUsername||t.playerName||'?';}))]  .join(', '));
   var el=document.getElementById('host-bets-list');
   if(!el) return;
+  // Update delete request badge
+  var delReqs = active.filter(function(t){ return t.deleteRequestStatus==='pending'; });
+  var badge = document.getElementById('del-req-badge');
+  if (badge) { badge.textContent = delReqs.length || ''; badge.style.display = delReqs.length ? 'inline' : 'none'; }
   if(!active.length){
     el.innerHTML='<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">No active bets yet</div>';
     return;
   }
-  el.innerHTML=active.map(function(t){
+  // Delete request alert section
+  var delSection = '';
+  if (delReqs.length) {
+    delSection = '<div style="margin:0 16px 8px;background:#2a1000;border:1.5px solid #cc0000;border-radius:14px;padding:14px">' +
+      '<div style="font-size:0.72rem;font-weight:900;color:#cc0000;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">⚠️ '+delReqs.length+' Delete Request'+( delReqs.length>1?'s':'')+' Pending</div>' +
+      delReqs.map(function(t){
+        var d = new Date(t.deleteRequestedAt);
+        var dt = isNaN(d) ? 'Unknown time' : d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+        var pName = (t.playerUsername||t.playerName||'Player') + (t.playerRealName?' ('+t.playerRealName+')':'');
+        return '<div style="background:#1a1a1a;border:1px solid #3a1000;border-radius:10px;padding:12px;margin-bottom:8px">' +
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">' +
+            '<div>' +
+              '<div style="font-size:0.82rem;font-weight:800;color:#fff">'+pName+'</div>' +
+              '<div style="font-size:0.62rem;color:#888;margin-top:2px">Ticket: '+t.id+'</div>' +
+              '<div style="font-size:0.62rem;color:#888">Requested: '+dt+'</div>' +
+            '</div>' +
+            '<div style="text-align:right">' +
+              '<div style="font-size:0.65rem;color:#888">'+t.type+'</div>' +
+              '<div style="font-size:0.82rem;font-weight:900;color:#cc0000">Risk: $'+parseFloat(t.riskAmount||0).toFixed(2)+'</div>' +
+              '<div style="font-size:0.75rem;font-weight:800;color:var(--green)">Payout: $'+parseFloat(t.estimatedPayout||0).toFixed(2)+'</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="display:flex;gap:8px">' +
+            '<button data-delid="'+t.id+'" data-delaction="deny" style="flex:1;padding:10px;background:#2a2a2a;border:1px solid #555;border-radius:8px;font-size:0.78rem;font-weight:700;color:#888;cursor:pointer">Deny</button>' +
+            '<button data-delid="'+t.id+'" data-delaction="approve" style="flex:2;padding:10px;background:#cc0000;border:none;border-radius:8px;font-size:0.78rem;font-weight:900;color:#fff;cursor:pointer">✓ Approve Delete</button>' +
+          '</div>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+  }
+  el.innerHTML = delSection + active.map(function(t){
     var d=new Date(t.placedAt);
     var dt=isNaN(d)?t.placedAt:d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
     var picks=(t.selections||[]).slice(0,2).map(function(s){
@@ -374,7 +457,11 @@ function renderHostBets(){
         '<div><div style="font-size:0.88rem;font-weight:800">'+t.type+'</div>'+
         '<div style="font-size:0.72rem;color:var(--cyan);font-weight:700;margin-top:1px">'+pName+pReal+'</div>'+
         '<div style="font-size:0.6rem;color:#555;margin-top:1px">'+dt+(pId?' · ID: '+pId:'')+'</div></div>'+
-        '<span style="font-size:0.65rem;font-weight:800;color:var(--cyan);background:var(--cyan-dim);padding:3px 10px;border-radius:12px;border:1px solid rgba(0,194,255,0.25)">ACTIVE</span>'+
+        (t.deleteRequestStatus==='pending'
+          ? '<span style="font-size:0.65rem;font-weight:800;color:#f59e0b;background:rgba(245,158,11,0.12);padding:3px 10px;border-radius:12px;border:1px solid #f59e0b">DELETE REQUESTED</span>'
+          : t.status==='voided'||t.status==='deleted'
+            ? '<span style="font-size:0.65rem;font-weight:800;color:#555;background:#1a1a1a;padding:3px 10px;border-radius:12px;border:1px solid #333">VOIDED</span>'
+            : '<span style="font-size:0.65rem;font-weight:800;color:var(--cyan);background:var(--cyan-dim);padding:3px 10px;border-radius:12px;border:1px solid rgba(0,194,255,0.25)">ACTIVE</span>')+
       '</div>'+
       picks+
       '<div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">'+
@@ -936,6 +1023,17 @@ if(TOKEN){
 }
 
 renderPlayers();
+
+// Delete request action delegation
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest ? e.target.closest('[data-delaction]') : null;
+  if (!btn) return;
+  var action = btn.dataset.delaction;
+  var id = btn.dataset.delid;
+  if (action === 'approve') hostApproveDelete(id);
+  else if (action === 'deny') hostDenyDelete(id);
+});
+
 </script>
 </body>
 </html>
