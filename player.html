@@ -1626,6 +1626,17 @@ function bsRenderLegs() {
 
   el.innerHTML = warningHtml + legs;
   bsSyncPlaceBtn();
+  // Wire stake-all input with all event types for reliable live updates
+  var saInp = document.getElementById('stake-all-inp');
+  if (saInp) {
+    ['keyup','change','paste'].forEach(function(evt) {
+      saInp.removeEventListener(evt, saInp._liveHandler);
+    });
+    saInp._liveHandler = function() { bsStakeAllInput(saInp); };
+    ['keyup','change','paste'].forEach(function(evt) {
+      saInp.addEventListener(evt, saInp._liveHandler);
+    });
+  }
 }
 
 
@@ -2108,35 +2119,36 @@ function bsAddSingleStake(cellId, amt, idx) {
   else bsRenderLegs();
 }
 function bsSetStakeAll(val) {
-  var amt = parseFloat(val) || 0;
-  console.log('stake all amount', amt);
-  // Update state
+  var amt = parseFloat(String(val).replace(/[^0-9.]/g,'')) || 0;
+  // Update state — all per-bet stakes set to same amount
   betSlip.forEach(function(b){ bsStakes[b.cellId] = amt; });
   bsStake = amt * betSlip.length;
-  var totalPayout = betSlip.reduce(function(s,b){ return s + amt * amToDecimal(b.odds); }, 0);
-  console.log('single stakes', JSON.stringify(bsStakes));
-  console.log('total stake', bsStake);
-  console.log('total payout', totalPayout);
-  // Update each card in-place: input value + payout text
-  document.querySelectorAll('.dkslip-card').forEach(function(card) {
-    var inp = card.querySelector('input[data-cid]');
-    if (!inp) return;
+  // Update every card in-place without rebuilding DOM
+  document.querySelectorAll('input[data-cid]').forEach(function(inp) {
+    // Never touch the stake-all input itself
+    if (inp.id === 'stake-all-inp' || !inp.dataset.cid) return;
     var b = betSlip.find(function(x){ return x.cellId === inp.dataset.cid; });
     if (!b) return;
-    // Don't overwrite if this input is currently focused (let user keep cursor position)
-    if (document.activeElement !== inp) inp.value = amt > 0 ? amt : '';
-    var payEl = card.querySelector('.single-payout');
-    if (payEl) payEl.textContent = amt > 0 ? 'Payout: '+fmtDollar(amt * amToDecimal(b.odds)) : '';
+    inp.value = amt > 0 ? amt : '';
+    // Update payout text in same card
+    var card = inp.closest('.dkslip-card') || inp.parentElement;
+    if (card) {
+      var payEl = card.querySelector('.single-payout');
+      if (payEl) payEl.textContent = amt > 0 ? 'Payout: '+fmtDollar(amt * amToDecimal(b.odds)) : '';
+    }
   });
-  // Update footer button + payout
+  // Sync button + payout row immediately
   bsSyncPlaceBtn();
 }
 
 function bsStakeAllInput(el) {
-  var val = el.value.replace(/[^0-9.]/g,'');
+  // Parse without replacing el.value (preserves cursor position)
+  var raw = el.value;
+  var val = raw.replace(/[^0-9.]/g,'');
   var parts = val.split('.');
   if (parts.length > 2) val = parts[0]+'.'+parts.slice(1).join('');
-  if (el.value !== val) el.value = val;
+  // Only replace if sanitization changed the value
+  if (raw !== val) { var pos = el.selectionStart; el.value = val; try { el.setSelectionRange(pos, pos); } catch(e){} }
   bsSetStakeAll(val);
 }
 
