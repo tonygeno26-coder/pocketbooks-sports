@@ -573,11 +573,23 @@ function checkAuthGate() {
     // Ensure lobby home content is visible
     var contentEl = document.querySelector('.content');
     if (contentEl) contentEl.style.display = '';
-    // Render clubs list with whatever is in storage
+    // Render clubs list — try pb-clubs first, then synthesize from pb-club
     var _storedClubs = JSON.parse(localStorage.getItem('pb-clubs') || '[]');
-    if (_storedClubs.length && typeof renderClubsList === 'function') {
-      userClubs = _storedClubs; renderClubsList();
+    if (!_storedClubs.length) {
+      var _pbClub = JSON.parse(localStorage.getItem('pb-club') || 'null');
+      if (_pbClub) _storedClubs = [_pbClub];
     }
+    // Ensure mock club for hosts with only pb-club-players
+    if (!_storedClubs.length && localStorage.getItem('pb-club-players')) {
+      _storedClubs = [{ id: 'local', name: 'Pocket Books Club', role: fromParam === 'host' ? 'host' : 'player', status: 'approved', code: 'LOCAL' }];
+    }
+    if (typeof renderClubsList === 'function') {
+      if (_storedClubs.length) userClubs = _storedClubs;
+      renderClubsList();
+      if (typeof updateClubsTilePreview === 'function') updateClubsTilePreview();
+    }
+    var _cntEl = document.getElementById('club-count-lbl');
+    if (_cntEl) _cntEl.textContent = _storedClubs.length + ' club' + (_storedClubs.length !== 1 ? 's' : '');
     console.log('[lobby] auth bypassed: from=' + fromParam + ' | clubs:', _storedClubs.length);
     return;
   }
