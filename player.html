@@ -855,6 +855,9 @@ function setBNav(el,tab){
   });
   const ss=document.getElementById('sport-scroll');
   const pb=document.getElementById('promo-banner');
+  // Restore back button on all non-mybets tabs
+  var _backBtn=document.querySelector('.h-left button[aria-label="Back to Lobby"]');
+  if(_backBtn) _backBtn.style.display='';
   if(tab==='home'||tab==='sportsbook'||tab==='sports'){
     const sec=document.getElementById('sportsbook-section');
     if(sec) sec.style.display='block';
@@ -884,6 +887,9 @@ function setBNav(el,tab){
     if(sec) sec.style.display='block';
     if(ss) ss.style.display='none';
     if(pb) pb.style.display='none';
+    // Hide back button — My Bets is a primary tab, not a drill-down
+    var backBtn=document.querySelector('.h-left button[aria-label="Back to Lobby"]');
+    if(backBtn) backBtn.style.display='none';
     // Also hide place-bet-wrap
     var pbw=document.getElementById('place-bet-wrap'); if(pbw) pbw.style.display='none';
     renderMyBets();
