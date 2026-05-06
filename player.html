@@ -1679,15 +1679,12 @@ function closeBetConfirm() {
 
 function confirmBet() {
   console.log("confirm bet clicked");
-  if (playerBalance < _pendingRisk) { showToast('Insufficient balance'); return; }
-  // Use canonical values set by openBetConfirm — never re-calculate
-  var payout = _pendingPayout;
-  bsStake    = _pendingRisk; // ensure consistency
+  loadBalance(); // always sync from storage before validation
+  var riskAmount = _pendingRisk;
+  var payout     = _pendingPayout;
+  bsStake        = riskAmount;
+  if (playerBalance < riskAmount) { showToast('Insufficient balance · have '+fmtBalance()); return; }
   var typeLabel = {straight:'Singles',parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[bsType] || bsType;
-  // Deduct balance
-  playerBalance = Math.round((playerBalance - bsStake) * 100) / 100;
-  saveBalance();
-  dbgBanner('STEP 3: Balance deducted\nNew balance: '+fmtBalance(), '#030');
   // Create ticket
   var _playerData = JSON.parse(localStorage.getItem('pb-player') || 'null') || {};
   var _clubData   = JSON.parse(localStorage.getItem('pb-club')   || 'null') || {};
@@ -1698,8 +1695,12 @@ function confirmBet() {
   var _resolvedName = _playerData.name || _playerData.username || _myClubEntry.playerName || 'TestPlayer01';
   var _resolvedReal = _myClubEntry.realName || '';
   var _resolvedClub = _clubData.id || _myClubEntry.clubId || '';
+  // Deduct balance via centralized ledger
+  var ticketId = 'T' + Date.now();
+  applyBalanceChange('bet_placed', -riskAmount, ticketId, { betType: typeLabel, selections: betSlip.length });
+  dbgBanner('STEP 3: Balance deducted\nNew: '+fmtBalance(), '#030');
   var ticket = {
-    id: 'T' + Date.now(),
+    id: ticketId,
     playerId:       _resolvedId,
     playerUsername: _resolvedName,
     playerRealName: _resolvedReal,
@@ -1752,15 +1753,10 @@ function confirmBet() {
   closeBetConfirm();
   closeBetSlip();
   clearSlip();
-  // Update balance display
-  // Update all balance display elements
-  ['player-balance-display','header-balance','pb-balance-header'].forEach(function(id){
-    var el = document.getElementById(id);
-    if (el) el.textContent = fmtBalance();
-  });
-  console.log('balance updated', playerBalance);
+  syncBalanceDisplays(); // redundant but safe
+  console.log('[balance] after bet placed:', playerBalance);
   renderMyBets();
-  showToast('✅ Bet placed successfully · Balance: ' + fmtBalance());
+  showToast('✅ Bet placed · Balance: ' + fmtBalance());
 }
 
 
@@ -1845,6 +1841,18 @@ document.addEventListener('click', function(e) {
   e.stopPropagation();
   requestBetDelete(btn.dataset.reqdelete, e);
 }, true);
+
+// Sync balance when host updates it (e.g. cancel approval from host dashboard)
+window.addEventListener('storage', function(e) {
+  if (e.key === 'pb-balance') {
+    loadBalance();
+    syncBalanceDisplays();
+    console.log('[balance] storage event sync:', playerBalance);
+  }
+  if (e.key === 'pb-tickets') {
+    try { betTickets = JSON.parse(e.newValue || '[]'); } catch(ex) {}
+  }
+});
 function renderMyBets() {
   var el = document.getElementById('mybets-section');
   if (!el) { console.warn('mybets-section not found'); return; }
