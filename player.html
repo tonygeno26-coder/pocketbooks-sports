@@ -252,7 +252,7 @@ input[type=number]{-moz-appearance:textfield}
     <div style="width:32px;height:32px;background:#222;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:900;color:var(--green)">RT</div>
   </div>
   <div class="h-right">
-    <div style="display:flex;flex-direction:column;align-items:flex-end;line-height:1.2"><div style="font-size:0.52rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px">Balance</div><div id="player-balance-display" style="font-size:0.92rem;font-weight:900;color:#fff;text-shadow:0 0 8px rgba(255,255,255,0.25)">$1,000.00</div></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;line-height:1.2"><div style="font-size:0.52rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px">Balance</div><div id="player-balance-display" style="font-size:0.92rem;font-weight:900;color:#fff;text-shadow:0 0 8px rgba(255,255,255,0.25)">...</div></div>
     <span class="icon-btn">🔔</span>
     <span class="icon-btn">👤</span>
   </div>
@@ -366,7 +366,19 @@ input[type=number]{-moz-appearance:textfield}
 <script>
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 console.log('player page loaded');
-try { var _storedCount = JSON.parse(localStorage.getItem('pb-tickets')||'[]').length; dbgBanner('PAGE LOADED\n'+_storedCount+' saved tickets\nBalance: '+(localStorage.getItem('pb-balance')||'1000'), '#003'); } catch(e){}
+// Sync balance on page load immediately
+(function(){
+  try {
+    var _t = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
+    var _open = _t.filter(function(t){return t.status==='active'||t.status==='open';});
+    var _start = parseFloat(localStorage.getItem('pb-balance-start')) || 1000;
+    var _risk = _open.reduce(function(s,t){return s+(parseFloat(t.riskAmount)||0);},0);
+    var _avail = Math.round((_start - _risk)*100)/100;
+    var _el = document.getElementById('player-balance-display');
+    if (_el) _el.textContent = '$'+_avail.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    dbgBanner('PAGE LOAD BALANCE\nSTARTING: $'+_start.toFixed(2)+'\nACTIVE_RISK: $'+_risk.toFixed(2)+'\nAVAILABLE: $'+_avail.toFixed(2)+'\nDISPLAYED: $'+_avail.toFixed(2)+'\nTickets: '+_t.length+' ('+_open.length+' active)', '#005');
+  } catch(e){ console.error('balance init error', e); }
+})();
 let TOKEN=localStorage.getItem('pb-sports-token')||'';
 // Balance + tickets
 var betTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
@@ -420,6 +432,8 @@ function syncBalanceDisplays() {
   return s;
 }
 var playerBalance = calcAvailableBalance().available;
+// Sync display as soon as functions are defined
+document.addEventListener('DOMContentLoaded', function(){ syncBalanceDisplays(); });
 function fmtBalance(){ return '$'+calcAvailableBalance().available.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function saveBalance(){ /* no-op: balance is derived, not stored directly */ }
 function loadBalance(){ var s = syncBalanceDisplays(); playerBalance = s.available; return playerBalance; }
