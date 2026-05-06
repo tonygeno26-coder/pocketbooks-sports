@@ -2016,6 +2016,10 @@ function bsParlayInput(el) {
   }
   console.log('parlay amount changed', amt);
   bsStake = amt;
+  // For singles: fan stake into each bsStakes[cellId] so payout calc works
+  if (bsType === 'straight') {
+    betSlip.forEach(function(b) { bsStakes[b.cellId] = amt; });
+  }
   var valid = betSlip.length >= (bsType==='parlay'?2:1) && amt > 0;
   console.log('parlay button enabled', valid);
   bsSyncPlaceBtn();
