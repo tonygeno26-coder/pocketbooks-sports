@@ -478,24 +478,54 @@ function teamAvatar(name) {
 }
 
 // LOAD GAMES
+// Sport key map for direct fallback
+var ODDS_SPORT_MAP = { mlb:'baseball_mlb', nba:'basketball_nba', nhl:'icehockey_nhl', nfl:'americanfootball_nfl', soccer:'soccer_usa_mls', ufl:'americanfootball_ufl', tennis:'tennis_atp_french_open', golf:'golf_pga_championship' };
+var ODDS_API_KEY = '1855d323dfac312abf413b5806b08f6c';
+
+async function fetchOddsDirect(sport) {
+  var key = ODDS_SPORT_MAP[sport] || 'baseball_mlb';
+  var url = 'https://api.the-odds-api.com/v4/sports/'+key+'/odds/?apiKey='+ODDS_API_KEY+'&regions=us&markets=spreads,totals,h2h&oddsFormat=american&bookmakers=draftkings';
+  console.log('[odds-direct] fetching:', key);
+  var res = await fetch(url);
+  if (!res.ok) throw new Error('Direct API error HTTP '+res.status);
+  var raw = await res.json();
+  console.log('[odds-direct] raw game count:', raw.length);
+  return (Array.isArray(raw) ? raw : []).slice(0, 20).map(function(g) {
+    return {
+      id: g.id, sport: g.sport_title || sport.toUpperCase(),
+      home: g.home_team, away: g.away_team, time: g.commence_time,
+      spreads:   ((g.bookmakers||[])[0]?.markets?.find(function(m){return m.key==='spreads';})?.outcomes||[]).map(function(o){return {team:o.name, line:o.point, odds:o.price};}),
+      totals:    ((g.bookmakers||[])[0]?.markets?.find(function(m){return m.key==='totals';})?.outcomes||[]).map(function(o){return {name:o.name, line:o.point, odds:o.price};}),
+      moneyline: ((g.bookmakers||[])[0]?.markets?.find(function(m){return m.key==='h2h';})?.outcomes||[]).map(function(o){return {team:o.name, odds:o.price};})
+    };
+  });
+}
+
 async function loadGames(sport){
   const el=document.getElementById('games-list');
   el.innerHTML='<div class="empty">Loading...</div>';
   try{
     const _sport = sport || 'mlb';
-    const _url = '/api/odds/'+_sport; // relative = Vercel proxy, no CORS
-    console.log('[odds] fetching:', _url);
-    let _res;
-    try { _res = await fetch(_url); } catch(fetchErr) { throw new Error('API unreachable: '+fetchErr.message); }
-    console.log('[odds] status:', _res.status);
-    if(!_res.ok) throw new Error('API error HTTP '+_res.status);
-    const _raw = await _res.text();
-    console.log('[odds] raw (first 200):', _raw.slice(0,200));
-    let games;
-    try { games = JSON.parse(_raw); } catch(parseErr) { throw new Error('Bad JSON: '+parseErr.message); }
-    if(!Array.isArray(games)) throw new Error('Expected array, got: '+typeof games);
-    console.log('[odds] games count:', games.length);
-    console.log('games render starting', games.length);
+    const _url = '/api/odds/'+_sport; // relative = Vercel proxy
+    console.log('[odds] fetching via backend proxy:', _url);
+    let games = [];
+    try {
+      let _res = await fetch(_url);
+      console.log('[odds] backend status:', _res.status);
+      if (_res.ok) {
+        const _raw = await _res.text();
+        console.log('[odds] raw (first 200):', _raw.slice(0,200));
+        const _parsed = JSON.parse(_raw);
+        if (Array.isArray(_parsed)) games = _parsed;
+      }
+    } catch(proxyErr) { console.warn('[odds] proxy failed:', proxyErr.message); }
+    console.log('[odds] backend games count:', games.length);
+    // Fallback: call Odds API directly if backend returned empty
+    if (!games.length) {
+      console.warn('[odds] backend returned 0 games — trying direct API fallback');
+      try { games = await fetchOddsDirect(_sport); } catch(directErr) { console.error('[odds-direct] failed:', directErr.message); }
+    }
+    console.log('[odds] final games count after fallback:', games.length);
     if(!games.length){el.innerHTML='<div class="empty">No games available right now</div>';return;}
     const icons={MLB:'⚾',NBA:'🏀',NHL:'🏒',UFL:'🏈',NFL:'🏈',SOCCER:'⚽',TENNIS:'🎾',GOLF:'⛳'};
     window.gamesCache = window.gamesCache || {};
