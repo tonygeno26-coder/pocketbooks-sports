@@ -124,8 +124,8 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .bs-bar{display:none;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:406px;background:#00ff88;border-radius:14px;padding:13px 18px;justify-content:space-between;align-items:center;z-index:9000;cursor:pointer;box-shadow:0 8px 28px rgba(0,255,136,0.35)}
 .bs-bar.show{display:flex}
 /* DK-style slip */
-.dkslip-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9998;pointer-events:none !important}
-.dkslip-overlay.show{display:block;pointer-events:auto !important}
+.dkslip-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9998}
+.dkslip-overlay.show{display:block}
 .dkslip{display:none;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;height:85vh;background:#f2f2f2;border-radius:20px 20px 0 0;z-index:100000;flex-direction:column;box-shadow:0 -8px 40px rgba(0,0,0,0.6);overflow:hidden;position:fixed}
 .dkslip.open{display:flex !important;flex-direction:column;border-radius:20px 20px 0 0;position:fixed}
 .dkslip-hdr{display:flex;align-items:center;padding:14px 16px 10px;background:#fff;border-radius:20px 20px 0 0;border-bottom:1px solid #e8e8e8;flex-shrink:0;position:relative;z-index:10}
@@ -193,8 +193,8 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .bs-game{font-size:0.68rem;color:#555}
 .bs-odds-val{font-size:1rem;font-weight:900;color:#00ff88}
 .bs-remove{background:none;border:none;color:#555;cursor:pointer;font-size:1.1rem;padding:0;line-height:1}
-.bs-overlay{display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,0.5);pointer-events:none !important}
-.bs-overlay.show{display:block;pointer-events:auto !important}
+.bs-overlay{display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,0.5)}
+.bs-overlay.show{display:block}
 .odds-b.sel{border-color:#00ff88 !important;background:rgba(0,255,136,0.12) !important;box-shadow:0 0 10px rgba(0,255,136,0.2)}
 .mkt-tab{flex-shrink:0;padding:7px 16px;border-radius:20px;border:1px solid #2a2a2a;background:transparent;color:#555;font-size:0.78rem;font-weight:700;cursor:pointer;transition:all 0.15s}
 .mkt-tab.active{border-color:#00c2ff;color:#00c2ff;background:rgba(0,194,255,0.1)}
@@ -234,14 +234,51 @@ input[type=number]::-webkit-outer-spin-button,
 input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 input[type=number]{-moz-appearance:textfield}
 .single-inp-row input,.dkslip-input-row input,.stake-all-row input{pointer-events:auto !important;user-select:text !important;-webkit-user-select:text !important;position:relative;z-index:20}
-/* Ensure all interactive elements inside slip are never blocked */
-.dkslip-tab,.dkslip-leg-rm,.dkslip-qa,.dkslip-clear,.dkslip-close,#bs-place-btn{pointer-events:auto !important;position:relative;z-index:10}
-.dkslip-scroll,.dkslip-card,.dkslip-leg,.single-card-footer{pointer-events:auto}
-/* Closed slip and overlays must never intercept clicks */
-.dkslip:not(.open){pointer-events:none !important}
-.bs-overlay:not(.show),.dkslip-overlay:not(.show){pointer-events:none !important;display:none !important}
-.dkslip-confirm{position:absolute;inset:0;background:#f2f2f2;border-radius:20px 20px 0 0;z-index:20;display:flex;flex-direction:column;transform:translateY(100%);transition:transform 0.28s cubic-bezier(0.32,0.72,0,1);pointer-events:none}
-.dkslip-confirm.show{transform:translateY(0);pointer-events:auto}
+
+/* ═══ GLOBAL OVERLAY/MODAL INTERACTION SYSTEM ═══════════════════════════════
+ * Rule: hidden = no pointer events. Period.
+ * Open state (.open / .show) = interactive. Closed state = invisible to clicks.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/* Closed: untouchable */
+.modal-bg,
+.dkslip:not(.open),
+.dkslip-overlay:not(.show),
+.bs-overlay:not(.show),
+.dkslip-confirm:not(.show),
+.numpad:not(.show),
+#del-req-modal,
+#bc-modal-overlay {
+  pointer-events: none !important;
+}
+
+/* Open/active: fully interactive */
+.modal-bg.open,
+.dkslip.open,
+.dkslip-overlay.show,
+.bs-overlay.show,
+.dkslip-confirm.show,
+.numpad.show {
+  pointer-events: auto !important;
+}
+
+/* Interactive elements inside slip always clickable */
+.dkslip.open .dkslip-tab,
+.dkslip.open .dkslip-leg-rm,
+.dkslip.open .dkslip-qa,
+.dkslip.open .dkslip-clear,
+.dkslip.open .dkslip-close,
+.dkslip.open #bs-place-btn,
+.dkslip.open input,
+.dkslip.open button {
+  pointer-events: auto !important;
+}
+
+/* Body-appended modals created by JS — handled inline, no global rule needed */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+.dkslip-confirm{position:absolute;inset:0;background:#f2f2f2;border-radius:20px 20px 0 0;z-index:20;display:flex;flex-direction:column;transform:translateY(100%);transition:transform 0.28s cubic-bezier(0.32,0.72,0,1)}
+.dkslip-confirm.show{transform:translateY(0)}
 .dkslip-confirm-scroll{flex:1;overflow-y:auto;padding:0 14px 8px;-webkit-overflow-scrolling:touch}
 .dkslip-confirm-footer{flex-shrink:0;background:#fff;border-top:1px solid #e0e0e0;padding:12px 14px calc(12px + env(safe-area-inset-bottom,0px));display:flex;gap:10px}
 </style>
@@ -1448,7 +1485,7 @@ function bsRenderLegs() {
         '<div style="width:40px;text-align:center;font-size:0.78rem;font-weight:800;color:#0064c8">'+ptsSign+teaserPts+'</div>' +
         '<div style="flex:1;text-align:right;font-size:0.82rem;font-weight:900;color:#111">'+adj+'</div>' +
         '<div style="width:28px;text-align:right">' +
-          '<button class="dkslip-leg-rm" onclick="event.stopPropagation();bsRemove(\''+b.cellId+'\')" style="pointer-events:auto;z-index:50;position:relative">✕</button>' +
+          '<button class="dkslip-leg-rm" onclick="event.stopPropagation();bsRemove(\''+b.cellId+'\')">✕</button>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -1505,7 +1542,7 @@ function bsRenderLegs() {
             '</div>' +
             '<div style="display:flex;align-items:center;gap:6px">' +
               '<span class="dkslip-leg-odds">'+fmtOdds(b.odds)+'</span>' +
-              '<button class="dkslip-leg-rm" onclick="event.stopPropagation();bsRemove(\''+b.cellId+'\')" style="pointer-events:auto;z-index:50;position:relative">✕</button>' +
+              '<button class="dkslip-leg-rm" onclick="event.stopPropagation();bsRemove(\''+b.cellId+'\')">✕</button>' +
             '</div></div>';
         }).join('') +
         (parlayPayout ? '<div style="padding:8px 14px 10px;display:flex;justify-content:space-between;font-size:0.78rem;border-top:1px solid #f0f0f0"><span style="color:#888">Est. Payout</span><span style="font-weight:900;color:#00c853">'+parlayPayout+'</span></div>' : '') +
@@ -1548,7 +1585,7 @@ function bsRenderLegs() {
               '<div class="dkslip-leg-mkt">'+market+'</div>' +
             '</div>' +
             '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">' +
-              '<button class="dkslip-leg-rm" onclick="event.stopPropagation();bsRemove(\''+b.cellId+'\')" style="pointer-events:auto;z-index:50;position:relative">✕</button>' +
+              '<button class="dkslip-leg-rm" onclick="event.stopPropagation();bsRemove(\''+b.cellId+'\')">✕</button>' +
               '<span class="dkslip-leg-odds">'+fmtOdds(b.odds)+'</span>' +
             '</div>' +
           '</div>' +
