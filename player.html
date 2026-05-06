@@ -1757,13 +1757,14 @@ function openBetConfirm() {
     var teams = (b.game||'').split(' vs ');
     var shortGame = teams.length===2 ? teams[0].split(' ').pop()+' vs '+teams[1].split(' ').pop() : (b.game||'');
     var stake = bsType==='straight' ? (bsStakes[b.cellId]||0) : null;
+    var legPayout = stake ? fmtDollar(stake * amToDecimal(b.odds)) : null;
     return '<div style="display:flex;align-items:center;padding:11px 0;border-bottom:1px solid #f0f0f0">' +
       logoHtml +
       '<div style="flex:1;min-width:0">' +
         '<div style="font-size:0.6rem;color:#aaa;margin-bottom:2px">'+shortGame+'</div>' +
-        '<div style="font-size:0.88rem;font-weight:900;color:#111;line-height:1.2;white-space:normal">'+( b.pick||'Unknown')+'</div>' +
+        '<div style="font-size:0.88rem;font-weight:900;color:#111;line-height:1.2;white-space:normal">'+(b.pick||'Unknown')+'</div>' +
         '<div style="font-size:0.65rem;color:#0064c8;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;margin-top:1px">'+(b.market||'')+'</div>' +
-        (stake ? '<div style="font-size:0.68rem;color:#555;margin-top:2px">Risk: '+fmtDollar(stake)+'</div>' : '') +
+        (stake ? '<div style="font-size:0.68rem;color:#555;margin-top:2px">Risk: '+fmtDollar(stake)+(legPayout?' → Payout: '+legPayout:'')+'</div>' : '') +
       '</div>' +
       '<div style="font-size:0.92rem;font-weight:900;color:#111;margin-left:10px;flex-shrink:0">'+fmtOdds(b.odds)+'</div>' +
     '</div>';
@@ -1801,7 +1802,7 @@ function openBetConfirm() {
       // Buttons
       '<div style="display:flex;gap:10px;padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))">' +
         '<button onclick="closeBetConfirm()" style="flex:1;padding:15px;background:#f0f0f0;border:none;border-radius:12px;color:#555;font-size:0.9rem;font-weight:700;cursor:pointer">Cancel</button>' +
-        '<button onclick="confirmBet()" style="flex:2;padding:15px;background:'+(insufficient?'#ccc':'#00c853')+';border:none;border-radius:12px;color:'+(insufficient?'#888':'#fff')+';font-size:0.95rem;font-weight:900;cursor:'+(insufficient?'not-allowed':'pointer')+';letter-spacing:0.3px">'+(insufficient?'Insufficient balance':'Confirm Bet →')+'</button>' +
+        '<button onclick="confirmBet()" style="flex:2;padding:15px;background:'+(insufficient?'#ccc':'#00c853')+';border:none;border-radius:12px;color:'+(insufficient?'#888':'#fff')+';font-size:0.95rem;font-weight:900;cursor:'+(insufficient?'not-allowed':'pointer')+';letter-spacing:0.3px">'+(insufficient?'Insufficient balance':(bsType==='straight'&&betSlip.length>1?'Confirm '+betSlip.length+' Bets →':'Confirm Bet →'))+'</button>' +
       '</div>' +
     '</div>';
 
@@ -1831,91 +1832,110 @@ function closeBetConfirm() {
   if (ov) ov.remove();
 }
 
+function _resolvePlayer() {
+  var _playerData  = JSON.parse(localStorage.getItem('pb-player') || 'null') || {};
+  var _clubData    = JSON.parse(localStorage.getItem('pb-club')   || 'null') || {};
+  var _clubPlayers = JSON.parse(localStorage.getItem('pb-club-players')||'[]');
+  var _myClubEntry = _clubPlayers.find(function(p){ return p.playerId===(_playerData.id||TOKEN||'P1001'); }) || _clubPlayers[0] || {};
+  return {
+    id:       _playerData.id   || TOKEN || _myClubEntry.playerId || 'P1001',
+    name:     _playerData.name || _playerData.username || _myClubEntry.playerName || 'TestPlayer01',
+    realName: _myClubEntry.realName || '',
+    clubId:   _clubData.id || _myClubEntry.clubId || '',
+    clubName: _clubData.name || ''
+  };
+}
+function _makeSelection(b) {
+  var teams2 = (b.game||'').split(' vs ');
+  var pck = (b.pick||'').toLowerCase();
+  var homeTeam = teams2[1] ? teams2[1].trim().toLowerCase() : '';
+  var side = pck.includes('over') ? 'over' : pck.includes('under') ? 'under' :
+    (homeTeam && pck.includes(homeTeam.split(' ').pop())) ? 'home' : 'away';
+  return { gameId: b.cellId ? b.cellId.split('-').slice(0,4).join('-') : b.game,
+    sport: b.sport||'', matchup: b.game||'', pick: b.pick||'',
+    market: b.market||'', odds: b.odds, side: side };
+}
+
 function confirmBet() {
   console.log("confirm bet clicked");
   var _avail = calcAvailableBalance().available;
   playerBalance = _avail;
   var riskAmount = _pendingRisk;
-  var payout     = _pendingPayout;
-  bsStake        = riskAmount;
+  bsStake = riskAmount;
   if (_avail < riskAmount) { showToast('Insufficient balance · have '+fmtBalance()); return; }
-  var typeLabel = {straight:'Singles',parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[bsType] || bsType;
-  // Create ticket
-  var _playerData = JSON.parse(localStorage.getItem('pb-player') || 'null') || {};
-  var _clubData   = JSON.parse(localStorage.getItem('pb-club')   || 'null') || {};
-  // Fallback: look up player from clubPlayers (for TestPlayer01 demo)
-  var _clubPlayers = JSON.parse(localStorage.getItem('pb-club-players')||'[]');
-  var _myClubEntry = _clubPlayers.find(function(p){ return p.playerId===(_playerData.id||TOKEN||'P1001'); }) || _clubPlayers[0] || {};
-  var _resolvedId   = _playerData.id   || TOKEN || _myClubEntry.playerId || 'P1001';
-  var _resolvedName = _playerData.name || _playerData.username || _myClubEntry.playerName || 'TestPlayer01';
-  var _resolvedReal = _myClubEntry.realName || '';
-  var _resolvedClub = _clubData.id || _myClubEntry.clubId || '';
-  var ticketId = 'T' + Date.now();
-  var ticket = {
-    id: ticketId,
-    playerId:       _resolvedId,
-    playerUsername: _resolvedName,
-    playerRealName: _resolvedReal,
-    playerName:     _resolvedName,
-    clubId:         _resolvedClub,
-    clubName:       _clubData.name || '',
-    type: typeLabel,
-    status: 'active',
-    source: 'player',
-    placedAt: new Date().toISOString(),
-    selections: betSlip.map(function(b){
-      var teams2 = (b.game||'').split(' vs ');
-      var p = (b.pick||'').toLowerCase();
-      var homeTeam = teams2[1] ? teams2[1].trim().toLowerCase() : '';
-      var side = p.includes('over') ? 'over' : p.includes('under') ? 'under' :
-        (homeTeam && p.includes(homeTeam.split(' ').pop())) ? 'home' : 'away';
-      return {
-        gameId: b.cellId ? b.cellId.split('-').slice(0,4).join('-') : b.game,
-        sport: b.sport || '',
-        matchup: b.game || '',
-        pick: b.pick || '',
-        market: b.market || '',
-        odds: b.odds,
-        side: side
-      };
-    }),
-    odds: betSlip.length === 1 ? fmtOdds(betSlip[0].odds) : (function(){
-      var d=betSlip.reduce(function(p,b){return p*amToDecimal(b.odds);},1);
-      var raw=Math.round((d-1)*100);
-      return isNaN(raw)?'--':(raw>0?'+'+raw:''+Math.round(-100/(d-1)));
-    })(),
-    riskAmount: bsStake,
-    estimatedPayout: Math.round(_pendingPayout * 100) / 100,
-    potentialProfit: Math.round(_pendingProfit * 100) / 100
-  };
-  betTickets.unshift(ticket);
+
+  var pl = _resolvePlayer();
+  var now = new Date().toISOString();
+  var newTickets = [];
+
+  if (bsType === 'straight') {
+    // ═ SINGLES: one ticket per leg ═
+    betSlip.forEach(function(b) {
+      var st = bsStakes[b.cellId] || 0;
+      if (!st) return;
+      var dec = amToDecimal(b.odds);
+      var tPayout = Math.round(st * dec * 100) / 100;
+      var tProfit = Math.round((tPayout - st) * 100) / 100;
+      var tid = 'T' + Date.now() + Math.floor(Math.random()*10000);
+      newTickets.push({
+        id: tid,
+        playerId: pl.id, playerUsername: pl.name, playerRealName: pl.realName,
+        playerName: pl.name, clubId: pl.clubId, clubName: pl.clubName,
+        type: 'Single', status: 'active', source: 'player', placedAt: now,
+        selections: [_makeSelection(b)],
+        odds: fmtOdds(b.odds),
+        riskAmount: st,
+        estimatedPayout: tPayout,
+        potentialProfit: tProfit
+      });
+    });
+  } else {
+    // ═ PARLAY / TEASER / RR: one combined ticket ═
+    var typeLabel = {parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[bsType] || bsType;
+    var tid = 'T' + Date.now();
+    newTickets.push({
+      id: tid,
+      playerId: pl.id, playerUsername: pl.name, playerRealName: pl.realName,
+      playerName: pl.name, clubId: pl.clubId, clubName: pl.clubName,
+      type: typeLabel, status: 'active', source: 'player', placedAt: now,
+      selections: betSlip.map(_makeSelection),
+      odds: betSlip.length === 1 ? fmtOdds(betSlip[0].odds) : (function(){
+        var d=betSlip.reduce(function(acc,b){return acc*amToDecimal(b.odds);},1);
+        var raw=Math.round((d-1)*100);
+        return isNaN(raw)?'--':(raw>0?'+'+raw:''+Math.round(-100/(d-1)));
+      })(),
+      riskAmount: _pendingRisk,
+      estimatedPayout: Math.round(_pendingPayout * 100) / 100,
+      potentialProfit: Math.round(_pendingProfit * 100) / 100
+    });
+  }
+
+  // Save tickets
+  newTickets.forEach(function(t){ betTickets.unshift(t); });
   saveTickets();
-  // NOW sync balance — derives from saved tickets (active bet reduces available)
-  var _bs = syncBalanceDisplays();
-  addLedgerEntry({ id:'L'+Date.now(), type:'bet_placed', ticketId:ticketId,
-    amount: -riskAmount, balanceBefore: _bs.available + riskAmount,
-    balanceAfter: _bs.available, createdAt: new Date().toISOString(),
-    betType: typeLabel, selections: betSlip.length });
-  dbgBanner('BALANCE RECALCULATED\nStarting: $'+_bs.starting.toFixed(2)+'\nOpen Risk: $'+_bs.openRisk.toFixed(2)+'\nAvailable: $'+_bs.available.toFixed(2), '#005');
-  var savedCheck = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
-  dbgBanner('STEP 4: Ticket saved\nID: '+ticket.id+'\nIn storage: '+savedCheck.length+' tickets | Balance: $'+_bs.available.toFixed(2), '#006');
-  console.log('TICKET SAVED', ticket.id, 'localStorage:', localStorage.getItem('pb-tickets'));
-  // Save to hostActiveBets for host dashboard
+
+  // Save to hostActiveBets
   var hostBets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
-  hostBets.unshift(ticket);
+  newTickets.forEach(function(t){ hostBets.unshift(t); });
   localStorage.setItem('hostActiveBets', JSON.stringify(hostBets));
-  var hostCheck = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
-  dbgBanner('STEP 5: hostActiveBets saved\n'+hostCheck.length+' host bets', '#040');
-  dbgBanner('TICKET PLAYER: '+ticket.playerId+'\n'+ticket.playerUsername+(ticket.playerRealName?' ('+ticket.playerRealName+')':''), '#004');
-  console.log('ticket created', ticket);
-  console.log('host active bet saved', ticket);
+
+  // Sync balance (derives from active tickets)
+  var _bs = syncBalanceDisplays();
+  addLedgerEntry({ id:'L'+Date.now(), type:'bet_placed',
+    ticketIds: newTickets.map(function(t){return t.id;}),
+    amount: -riskAmount, balanceBefore: _bs.available + riskAmount,
+    balanceAfter: _bs.available, createdAt: now,
+    betType: bsType, count: newTickets.length });
+
+  dbgBanner('CONFIRMED: '+newTickets.length+' ticket(s)\nRisk: $'+riskAmount.toFixed(2)+'\nBalance: $'+_bs.available.toFixed(2), '#020');
+  console.log('[confirmBet] tickets saved:', newTickets.length, 'balance:', _bs.available);
+
   closeBetConfirm();
   closeBetSlip();
   clearSlip();
-  syncBalanceDisplays(); // redundant but safe
-  console.log('[balance] after bet placed:', playerBalance);
+  syncBalanceDisplays();
   renderMyBets();
-  showToast('✅ Bet placed · Balance: ' + fmtBalance());
+  showToast('✅ '+newTickets.length+' bet'+(newTickets.length>1?'s':'')+' placed · Balance: ' + fmtBalance());
 }
 
 
