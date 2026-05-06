@@ -1442,7 +1442,7 @@ function bsRenderLegs() {
         '<div style="width:40px;text-align:center;font-size:0.78rem;font-weight:800;color:#0064c8">'+ptsSign+teaserPts+'</div>' +
         '<div style="flex:1;text-align:right;font-size:0.82rem;font-weight:900;color:#111">'+adj+'</div>' +
         '<div style="width:28px;text-align:right">' +
-          '<button class="dkslip-leg-rm" onclick="bsRemove('+betSlip.indexOf(b)+')">✕</button>' +
+          '<button class="dkslip-leg-rm" onclick="event.stopPropagation();bsRemove(\''+b.cellId+'\')" style="pointer-events:auto;z-index:50;position:relative">✕</button>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -1499,7 +1499,7 @@ function bsRenderLegs() {
             '</div>' +
             '<div style="display:flex;align-items:center;gap:6px">' +
               '<span class="dkslip-leg-odds">'+fmtOdds(b.odds)+'</span>' +
-              '<button class="dkslip-leg-rm" onclick="bsRemove('+i+')">✕</button>' +
+              '<button class="dkslip-leg-rm" onclick="event.stopPropagation();bsRemove(\''+b.cellId+'\')" style="pointer-events:auto;z-index:50;position:relative">✕</button>' +
             '</div></div>';
         }).join('') +
         (parlayPayout ? '<div style="padding:8px 14px 10px;display:flex;justify-content:space-between;font-size:0.78rem;border-top:1px solid #f0f0f0"><span style="color:#888">Est. Payout</span><span style="font-weight:900;color:#00c853">'+parlayPayout+'</span></div>' : '') +
@@ -1542,7 +1542,7 @@ function bsRenderLegs() {
               '<div class="dkslip-leg-mkt">'+market+'</div>' +
             '</div>' +
             '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">' +
-              '<button class="dkslip-leg-rm" onclick="bsRemove('+i+')">✕</button>' +
+              '<button class="dkslip-leg-rm" onclick="event.stopPropagation();bsRemove(\''+b.cellId+'\')" style="pointer-events:auto;z-index:50;position:relative">✕</button>' +
               '<span class="dkslip-leg-odds">'+fmtOdds(b.odds)+'</span>' +
             '</div>' +
           '</div>' +
@@ -2380,13 +2380,31 @@ function bsSyncPlaceBtn() {
 }
 
 function bsRemove(i) {
-  var b = betSlip[i];
-  var cellEl = document.getElementById('cell-' + b.cellId);
-  if (cellEl) cellEl.classList.remove('sel');
+  // i can be a numeric index OR a cellId string — support both
+  var idx = (typeof i === 'string') ? betSlip.findIndex(function(x){ return x.cellId === i; }) : i;
+  if (idx < 0 || idx >= betSlip.length) { console.warn('[bsRemove] idx out of range', i, idx); return; }
+  var b = betSlip[idx];
+  // Remove highlight from odds cell
+  ['c-'+b.cellId, 'cell-'+b.cellId].forEach(function(id){
+    var el = document.getElementById(id); if (el) el.classList.remove('sel','selected');
+  });
+  document.querySelectorAll('[data-id="'+b.cellId+'"]').forEach(function(el){
+    el.classList.remove('sel','selected'); el.dataset.selected='false';
+  });
   delete bsStakes[b.cellId];
-  betSlip.splice(i, 1);
-  bsStake = Object.values(bsStakes).reduce(function(s,v){ return s+(v||0); }, 0);
-  if (!betSlip.length) { bsStake = 0; bsStakes = {}; }
+  betSlip.splice(idx, 1);
+  // Preserve parlay stake in footer input after removal
+  var currentStakeInput = (document.getElementById('bs-stake-inp') || {}).value;
+  bsStake = bsType === 'straight'
+    ? Object.values(bsStakes).reduce(function(s,v){ return s+(v||0); }, 0)
+    : parseFloat(currentStakeInput) || bsStake;
+  if (!betSlip.length) { bsStake = 0; bsStakes = {}; rrStakes = {}; }
+  // If parlay and fewer than 2 legs, auto-switch to straight
+  if ((bsType === 'parlay' || bsType === 'teaser') && betSlip.length < 2) {
+    bsType = 'straight';
+    document.querySelectorAll('.dkslip-tab').forEach(function(t){ t.classList.remove('active'); });
+    var st = document.getElementById('bs-tab-straight'); if (st) st.classList.add('active');
+  }
   bsUpdate();
 }
 
