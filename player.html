@@ -1789,30 +1789,32 @@ function openBetConfirm() {
       '</div>' +
     '</div>';
 
-  // ── SCROLLABLE BODY (legs + summary) ──
+  // ── SCROLLABLE BODY (legs only — summary is in footer) ──
   var bodyHtml =
-    '<div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px 140px">' +
-      '<div style="background:#fafafa;border-radius:14px;padding:0 12px;margin-bottom:12px">' +
+    '<div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px 16px">' +
+      '<div style="background:#fafafa;border-radius:14px;padding:0 12px;margin-bottom:6px">' +
         legsHtml +
       '</div>' +
-      '<div style="background:#f8f8f8;border:1px solid #eee;border-radius:14px;padding:14px;margin-bottom:8px">' +
-        '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:#888">Current Balance</span><span style="font-size:0.82rem;font-weight:800;color:#0064c8">'+fmtBalance()+'</span></div>' +
-        '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:0.3px">Risk</span><span style="font-size:0.82rem;font-weight:800;color:'+(insufficient?'#cc0000':'#111')+'">'+fmtDollar(bsStake)+'</span></div>' +
-        '<div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:0.78rem;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:0.3px">Est. Payout</span><span style="font-size:0.82rem;font-weight:800;color:#00875a">'+fmtDollar(payout)+'</span></div>' +
-        '<div style="display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid #e8e8e8"><span style="font-size:0.82rem;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.3px">Potential Profit</span><span style="font-size:0.92rem;font-weight:900;color:#00875a">+'+fmtDollar(profit)+'</span></div>' +
-        (insufficient ? '<div style="margin-top:10px;padding:8px 12px;background:#fff0f0;border:1px solid #ffcccc;border-radius:8px;font-size:0.75rem;color:#cc0000;text-align:center;font-weight:700">⚠️ Insufficient balance</div>' : '') +
-      '</div>' +
-      '<div style="font-size:0.62rem;color:#bbb;text-align:center;padding-bottom:8px">Play credits only · Not real money</div>' +
+      '<div style="font-size:0.62rem;color:#bbb;text-align:center;padding-top:6px">Play credits only · Not real money</div>' +
     '</div>';
 
-  // ── STICKY FOOTER (buttons always visible) ──
+  // ── FOOTER: summary + buttons, fully visible, never scrolls away ──
+  var remainingBalance = Math.round((_avBal - bsStake) * 100) / 100;
   var footerHtml =
-    '<div style="flex-shrink:0;background:#fff;border-top:1px solid #e8e8e8;padding:12px 16px calc(14px + env(safe-area-inset-bottom,0px));box-shadow:0 -4px 16px rgba(0,0,0,0.06)">' +
+    '<div style="flex-shrink:0;background:#fff;border-top:1px solid #e8e8e8;box-shadow:0 -4px 16px rgba(0,0,0,0.08);padding:12px 16px calc(14px + env(safe-area-inset-bottom,0px))">' +
+      '<div style="background:#f8f8f8;border:1px solid #eee;border-radius:12px;padding:11px 13px;margin-bottom:10px">' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:0.75rem;color:#888">Current Balance</span><span style="font-size:0.8rem;font-weight:800;color:#0064c8">'+fmtBalance()+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:0.75rem;color:#888;font-weight:700">Risk</span><span style="font-size:0.8rem;font-weight:800;color:'+(insufficient?'#cc0000':'#111')+'">'+fmtDollar(bsStake)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:0.75rem;color:#888;font-weight:700">Total Payout</span><span style="font-size:0.8rem;font-weight:800;color:#00875a">'+fmtDollar(payout)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid #e0e0e0"><span style="font-size:0.8rem;font-weight:800;color:#111">Remaining Balance</span><span style="font-size:0.88rem;font-weight:900;color:'+(remainingBalance>=0?'#0064c8':'#cc0000')+'">'+fmtDollar(Math.max(0,remainingBalance))+'</span></div>' +
+        (insufficient?'<div style="margin-top:6px;font-size:0.72rem;color:#cc0000;font-weight:700;text-align:center">⚠️ Insufficient balance</div>':'') +
+      '</div>' +
       '<div style="display:flex;gap:10px">' +
         '<button onclick="closeBetConfirm()" style="flex:1;height:52px;background:#f0f0f0;border:none;border-radius:14px;color:#555;font-size:0.9rem;font-weight:700;cursor:pointer">Cancel</button>' +
         '<button onclick="confirmBet()" '+(insufficient?'disabled':'')+' style="flex:2;height:52px;background:'+(insufficient?'#ddd':'#00c853')+';border:none;border-radius:14px;color:'+(insufficient?'#aaa':'#fff')+';font-size:1rem;font-weight:900;cursor:'+(insufficient?'not-allowed':'pointer')+';letter-spacing:0.2px">'+confirmLabel+' →</button>' +
       '</div>' +
     '</div>';
+
 
   // Assemble: flex column sheet — header + scrollable body + sticky footer
   var existing = document.getElementById('bc-modal-overlay');
