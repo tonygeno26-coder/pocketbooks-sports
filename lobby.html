@@ -178,15 +178,25 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:#0a0
 .cf-desc{font-size:0.72rem;color:#555;margin-bottom:14px}
 .section-hdr{font-size:0.78rem;font-weight:800;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;padding:0 16px}
 </style>
-<script>if(location.search.includes("preview=1")){document.write('<style>#auth-screen{display:none!important;visibility:hidden!important;pointer-events:none!important;position:absolute!important;z-index:-9999!important}</style>')}</script>
 <script>
-// Runs before body renders — hide auth if preview mode
-if (location.search.includes('preview=1')) {
-  document.addEventListener('DOMContentLoaded', function() {
-    var a = document.getElementById('auth-screen');
-    if (a) { a.style.display = 'none'; a.style.visibility = 'hidden'; a.style.pointerEvents = 'none'; }
-  });
-}
+// ── PRE-RENDER: runs before body, before any CSS is applied to DOM ──────────
+// auth-screen CSS default is display:flex — must suppress it here with !important
+(function(){
+  var forceHome = sessionStorage.getItem('pb-force-lobby-home') === '1';
+  var hasState = !!(localStorage.getItem('pb-clubs') || localStorage.getItem('pb-club') ||
+    localStorage.getItem('pb-active-club') || localStorage.getItem('pb-player') ||
+    localStorage.getItem('pb-host') || localStorage.getItem('pb-tickets') ||
+    localStorage.getItem('pb-balance-start') || localStorage.getItem('pb-club-players') ||
+    localStorage.getItem('pb-sports-token'));
+  if (forceHome && hasState) {
+    // Inject style BEFORE body renders — overrides .auth-screen{display:flex}
+    document.write('<style id="pb-hide-auth">#auth-screen{display:none!important;visibility:hidden!important;pointer-events:none!important;position:absolute!important;z-index:-9999!important}</style>');
+    console.log('[PRE-RENDER] auth-screen suppressed before DOM builds');
+  }
+  if (location.search.includes('preview=1')) {
+    document.write('<style>#auth-screen{display:none!important;visibility:hidden!important;pointer-events:none!important;position:absolute!important;z-index:-9999!important}</style>');
+  }
+})();
 </script>
 </head>
 <body>
@@ -636,7 +646,10 @@ function checkAuthGate() {
   );
   var isAuthed = hasJWT || hasSession;
   console.log('[lobby] checkAuthGate', { hasJWT: hasJWT, hasSession: hasSession, isAuthed: isAuthed });
-  document.getElementById('auth-screen').style.display = isAuthed ? 'none' : 'flex';
+  var _authEl = document.getElementById('auth-screen');
+  if (!isAuthed) { console.trace('[AUTH SCREEN SHOWN HERE] checkAuthGate, isAuthed=false'); }
+  if (_authEl) _authEl.style.display = isAuthed ? 'none' : 'flex';
+  if (isAuthed) console.log('[AUTH] checkAuthGate: hiding auth, showing lobby');
 }
 
 // PREVIEW MODE — must run before auth gate
