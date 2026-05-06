@@ -1035,7 +1035,7 @@ function bsSetType(t) {
   bsRenderLegs();
   // Sync footer input value with current stake
   var inp = document.getElementById('bs-stake-inp');
-  if (inp) inp.value = bsStake > 0 ? bsStake : '';
+  if (inp) inp.value = ''; // never restore old stake on tab switch
   bsSyncPlaceBtn();
 }
 
@@ -1402,7 +1402,7 @@ function bsRenderLegs() {
           '<span style="font-size:0.82rem;color:#888;margin-right:3px">$</span>' +
           '<input type="text" inputmode="decimal" placeholder="0.00" id="stake-all-inp" ' +
             'style="width:80px;background:none;border:none;outline:none;font-size:0.92rem;font-weight:800;color:#111;pointer-events:auto;user-select:text;-webkit-user-select:text;position:relative;z-index:20" ' +
-            'value="'+(bsStake>0&&bsType==='straight'?bsStake:'')+'" ' +
+            'value="" ' +
             'oninput="bsStakeAllInput(this)" onfocus="console.log(&quot;stake all focused&quot;)" ' +
             'onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" ontouchstart="event.stopPropagation()">' +
         '</div></div>';
@@ -2254,7 +2254,12 @@ function bsRemove(i) {
 
 function clearSlip() {
   console.log('clear all clicked');
-  bsStakes = {}; bsStake = 0;
+  bsStakes = {}; bsStake = 0; rrStakes = {}; _pendingRisk = 0; _pendingPayout = 0; _pendingProfit = 0;
+  // Clear footer stake input DOM immediately
+  var inp = document.getElementById('bs-stake-inp');
+  if (inp) inp.value = '';
+  var saInp = document.getElementById('stake-all-inp');
+  if (saInp) saInp.value = '';
   // Remove highlights by stored cellIds first
   betSlip.forEach(function(b) {
     var byId = document.getElementById('c-' + b.cellId) || document.getElementById('cell-' + b.cellId);
@@ -2272,13 +2277,23 @@ function clearSlip() {
 }
 
 function openBetSlip() {
+  // Always reset stake state on open — no persisted amounts
+  bsStake = 0; bsStakes = {}; rrStakes = {};
+  _pendingRisk = 0; _pendingPayout = 0; _pendingProfit = 0;
   document.getElementById('bs-drawer').classList.add('open');
   var pbw = document.getElementById('place-bet-wrap');
   if (pbw) pbw.style.display = 'block';
   bsUpdate();
-  setTimeout(bsSyncPlaceBtn, 50);
+  // Clear footer input after render
+  setTimeout(function(){
+    var inp = document.getElementById('bs-stake-inp');
+    if (inp) inp.value = '';
+    var saInp = document.getElementById('stake-all-inp');
+    if (saInp) saInp.value = '';
+    bsSyncPlaceBtn();
+  }, 30);
   setTimeout(runPlaceBetHitTest, 600);
-  document.getElementById('bs-overlay').classList.add('show'); setTimeout(bsSyncPlaceBtn,30);
+  document.getElementById('bs-overlay').classList.add('show');
 }
 function closeBetSlip() {
   document.getElementById('bs-drawer').classList.remove('open');
