@@ -205,7 +205,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
     <div class="stat-lbl">Active Bets</div>
   </div>
   <div class="stat-card">
-    <div class="stat-val" style="color:var(--red);font-size:0.95rem" id="stat-active-risk">$0</div>
+    <div class="stat-val" style="color:var(--red);font-size:0.95rem" id="stat-active-risk" title="What host owes if all active bets win">$0</div>
     <div class="stat-lbl">At Risk</div>
   </div>
 </div>
@@ -332,16 +332,16 @@ function loadHostActiveBets(){
     seen[t.id]=true; return true;
   });
   var active=tickets.filter(function(t){return t.status==='active'||t.status==='open';});
-  // Sum riskAmount — try multiple field names for safety
+  // HOST EXPOSURE = potentialProfit (what host owes if player wins)
+  // NOT riskAmount (that is the player's wager, not host liability)
   var totalRisk=active.reduce(function(s,t){
-    var r=parseFloat(t.riskAmount||t.risk||t.amount||0);
-    return s+r;
+    var exposure = parseFloat(t.potentialProfit||0);
+    return s+exposure;
   },0);
-  // Debug log each ticket
   active.forEach(function(t){
-    console.log('active ticket:', t.id, t.status, 'riskAmount:', t.riskAmount);
+    console.log('active ticket:', t.id, 'playerRisk:', t.riskAmount, 'hostExposure:', t.potentialProfit);
   });
-  showToastHost('AT RISK CALC: '+active.length+' active tickets = $'+totalRisk.toFixed(2));
+  showToastHost('HOST EXPOSURE: '+active.length+' active bets = $'+totalRisk.toFixed(2)+' owed to players if all win');
   var el=document.getElementById('stat-active-bets');
   var el2=document.getElementById('stat-active-risk');
   var cnt=document.getElementById('host-bets-count');
@@ -431,8 +431,8 @@ function renderHostBets(){
             '</div>' +
             '<div style="text-align:right">' +
               '<div style="font-size:0.65rem;color:#888">'+t.type+'</div>' +
-              '<div style="font-size:0.82rem;font-weight:900;color:#cc0000">Risk: $'+parseFloat(t.riskAmount||0).toFixed(2)+'</div>' +
-              '<div style="font-size:0.75rem;font-weight:800;color:var(--green)">Payout: $'+parseFloat(t.estimatedPayout||0).toFixed(2)+'</div>' +
+              '<div style="font-size:0.82rem;font-weight:900;color:#cc0000">Player Risk: $'+parseFloat(t.riskAmount||0).toFixed(2)+'</div>' +
+              '<div style="font-size:0.75rem;font-weight:800;color:var(--green)">Host Owes: $'+parseFloat(t.potentialProfit||0).toFixed(2)+'</div>' +
             '</div>' +
           '</div>' +
           '<div style="display:flex;gap:8px">' +
@@ -465,9 +465,9 @@ function renderHostBets(){
       '</div>'+
       picks+
       '<div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">'+
-        '<div><div style="font-size:0.6rem;color:#555">RISK</div><div style="font-size:0.85rem;font-weight:800">$'+t.riskAmount.toFixed(2)+'</div></div>'+
-        '<div><div style="font-size:0.6rem;color:#555">TO WIN</div><div style="font-size:0.85rem;font-weight:800;color:var(--green)">$'+t.potentialProfit.toFixed(2)+'</div></div>'+
-        '<div><div style="font-size:0.6rem;color:#555">PAYOUT</div><div style="font-size:0.85rem;font-weight:800;color:var(--cyan)">$'+t.estimatedPayout.toFixed(2)+'</div></div>'+
+        '<div><div style="font-size:0.6rem;color:#555">PLAYER RISK</div><div style="font-size:0.85rem;font-weight:800">$'+parseFloat(t.riskAmount||0).toFixed(2)+'</div></div>'+
+        '<div><div style="font-size:0.6rem;color:#555;white-space:nowrap">HOST EXPOSURE</div><div style="font-size:0.85rem;font-weight:800;color:#ff4444">$'+parseFloat(t.potentialProfit||0).toFixed(2)+'</div></div>'+
+        '<div><div style="font-size:0.6rem;color:#555">PAYOUT</div><div style="font-size:0.85rem;font-weight:800;color:var(--cyan)">$'+parseFloat(t.estimatedPayout||0).toFixed(2)+'</div></div>'+
       '</div>'+
     '</div>';
   }).join('');
@@ -687,7 +687,7 @@ function renderPlayersTab(){
     return JSON.parse(localStorage.getItem('hostActiveBets')||'[]').filter(function(b){ return b.playerId===pid && (b.status==='active'||b.status==='open'); }).length;
   }
   function getOpenRiskAmt(pid){
-    return JSON.parse(localStorage.getItem('hostActiveBets')||'[]').filter(function(b){ return b.playerId===pid && (b.status==='active'||b.status==='open'); }).reduce(function(s,b){return s+(b.riskAmount||0);},0);
+    return JSON.parse(localStorage.getItem('hostActiveBets')||'[]').filter(function(b){ return b.playerId===pid && (b.status==='active'||b.status==='open'); }).reduce(function(s,b){return s+(b.potentialProfit||0);},0); // host exposure = what host owes if player wins
   }
   function avatarHtml(name, color){
     var abbr=(name||'?').slice(0,2).toUpperCase();
