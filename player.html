@@ -1838,12 +1838,13 @@ function submitDeleteRequest(ticketId) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 
-// Request delete button delegation (player)
+// Request delete button delegation (player) — useCapture:true fires before stopPropagation
 document.addEventListener('click', function(e) {
   var btn = e.target.closest ? e.target.closest('[data-reqdelete]') : null;
   if (!btn) return;
+  e.stopPropagation();
   requestBetDelete(btn.dataset.reqdelete, e);
-});
+}, true);
 function renderMyBets() {
   var el = document.getElementById('mybets-section');
   if (!el) { console.warn('mybets-section not found'); return; }
@@ -1875,7 +1876,7 @@ function renderMyBets() {
           : '<span style="font-size:0.68rem;font-weight:800;color:'+color+';background:'+(t.status==='lost'?'#fff0f0':t.status==='won'?'#f0fff4':'#f0f4ff')+';padding:4px 10px;border-radius:20px;border:1px solid '+color+'">'+t.status.toUpperCase()+'</span>';
     var canRequestDelete = (t.status==='active'||t.status==='open') && !isDeletePending && !isVoided;
     var deleteBtn = canRequestDelete
-      ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;text-align:right"><button data-reqdelete="'+t.id+'" style="font-size:0.72rem;font-weight:700;color:#cc0000;background:none;border:1.5px solid #cc0000;border-radius:20px;padding:5px 14px;cursor:pointer">✕ Request Delete</button></div>'
+      ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;text-align:right"><button data-reqdelete="'+t.id+'" onclick="event.stopPropagation();requestBetDelete(\''+t.id+'\',event)" style="font-size:0.72rem;font-weight:700;color:#cc0000;background:none;border:1.5px solid #cc0000;border-radius:20px;padding:5px 14px;cursor:pointer;pointer-events:auto;position:relative;z-index:50">✕ Request Delete</button></div>'
       : isDeletePending
         ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;font-size:0.72rem;color:#f59e0b;font-weight:700;text-align:center">⏳ Waiting for host approval…</div>'
         : isDeleteDenied
