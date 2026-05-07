@@ -1351,7 +1351,8 @@ function _bdHideDashboard() {
     el.style.display = 'none';
   });
   _bdPrevBodyOverflow = document.body.style.overflow;
-  document.body.style.overflow = 'hidden';
+  // Do NOT set body.overflow:hidden — it traps the iOS scroll on the (clipped)
+  // dashboard parent. #bd-root is a fixed top-level scroll container instead.
 }
 function _bdShowDashboard() {
   _bdHidden.forEach(function(h){ h.el.style.display = h.prev || ''; });
@@ -1373,7 +1374,7 @@ function showBuyDiamondsPage() {
   // body has max-width:430px;margin:0 auto so this naturally fits the column.
   var root = document.createElement('div');
   root.id = 'bd-root';
-  root.style.cssText = 'background:#0a0a0a;color:#fff;min-height:100vh;width:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:180px';
+  root.style.cssText = 'position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;height:100dvh;max-height:none;background:#0a0a0a;color:#fff;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:240px;z-index:2147483647';
   root.innerHTML = _bdRenderShell();
   document.body.appendChild(root);
   _bdWireEvents(root);
