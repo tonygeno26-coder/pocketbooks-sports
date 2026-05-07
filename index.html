@@ -1499,7 +1499,34 @@ function _bdRenderBody() {
         })()) +
       '</div>' +
       '<div style="font-size:0.72rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin:18px 0 10px">Transaction Hash</div>' +
-      '<input id="bd-tx-hash" type="text" placeholder="Paste your transaction hash here" value="' + (_bdState.txHash||'').replace(/"/g,'&quot;') + '" style="width:100%;background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;color:#fff;font-family:monospace;font-size:0.82rem;outline:none;margin-bottom:14px">';
+      '<div style="display:flex;gap:8px;margin-bottom:14px">' +
+        '<input id="bd-tx-hash" type="text" placeholder="Paste your transaction hash here" value="' + (_bdState.txHash||'').replace(/"/g,'&quot;') + '" style="flex:1;background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;color:#fff;font-family:monospace;font-size:0.82rem;outline:none">' +
+        '<button id="bd-paste-tx" type="button" style="background:#1c1c1c;border:1px solid #252525;color:#00c2ff;padding:0 14px;border-radius:12px;font-size:0.72rem;font-weight:800;cursor:pointer;white-space:nowrap">Paste TX Hash</button>' +
+      '</div>' +
+      // ── HOW TO COMPLETE PAYMENT ──
+      '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;margin-bottom:12px">' +
+        '<div style="font-size:0.7rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">How To Complete Payment</div>' +
+        '<ol style="margin:0;padding-left:18px;color:#bbb;font-size:0.78rem;line-height:1.55">' +
+          '<li>Send the exact crypto amount shown above to the wallet address or QR code.</li>' +
+          '<li>Wait for the transaction to appear as <strong style="color:#fff">Sent</strong> or <strong style="color:#fff">Confirmed</strong> in your wallet.</li>' +
+          '<li>Open the transaction details in your wallet app.</li>' +
+          '<li>Copy the <strong style="color:#fff">Transaction Hash (TXID)</strong>.</li>' +
+          '<li>Paste the TXID into the box above.</li>' +
+          '<li>Tap <strong style="color:#fff">Submit Payment</strong>.</li>' +
+        '</ol>' +
+      '</div>' +
+      '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;margin-bottom:14px">' +
+        '<div style="font-size:0.7rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Where do I find the transaction hash?</div>' +
+        '<div style="color:#bbb;font-size:0.78rem;line-height:1.55;margin-bottom:8px">Most wallets label it as:</div>' +
+        '<ul style="margin:0 0 10px 18px;padding:0;color:#bbb;font-size:0.78rem;line-height:1.55">' +
+          '<li>View Transaction</li>' +
+          '<li>Explorer</li>' +
+          '<li>TXID</li>' +
+          '<li>Transaction Hash</li>' +
+        '</ul>' +
+        '<div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Example</div>' +
+        '<div style="background:#0a0a0a;border:1px solid #252525;border-radius:8px;padding:10px 12px;font-family:monospace;font-size:0.7rem;color:#00c2ff;word-break:break-all">0x7f3c91b8e4ab2d6c5f1a9e0c3b7d8a1f5e6c9b2a4d7e8f1c6a9b3e2d4f7a8c1</div>' +
+      '</div>';
     }
   }
 
@@ -1599,6 +1626,20 @@ function _bdRenderBody() {
       return;
     }
     showToastHost('⚠️ Copy failed — select & copy manually');
+  });
+  var pasteBtn = body.querySelector('#bd-paste-tx');
+  if (pasteBtn) pasteBtn.addEventListener('click', function() {
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+      showToastHost('Paste not supported — long-press the input to paste');
+      return;
+    }
+    navigator.clipboard.readText().then(function(text) {
+      var inp = document.getElementById('bd-tx-hash');
+      var v = (text||'').trim();
+      if (inp) inp.value = v;
+      _bdState.txHash = v;
+      _bdRenderBody();
+    }).catch(function() { showToastHost('Clipboard read denied'); });
   });
   var txInput = body.querySelector('#bd-tx-hash');
   if (txInput) txInput.addEventListener('input', function() {
