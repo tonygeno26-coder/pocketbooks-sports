@@ -9,7 +9,7 @@
 <title>Pocket Books Sports</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-:root{--bg:#0f0f0f;--card:#1a1a1a;--card2:#222;--border:#2a2a2a;--green:#00ff87;--green-dim:rgba(0,255,135,0.12);--white:#fff;--gray:#666;--light:#aaa}
+:root{--bg:#0f0f0f;--card:#1a1a1a;--card2:#222;--border:#2a2a2a;--green:#00ff87;--green-dim:rgba(0,255,135,0.12);--white:#fff;--gray:#666;--light:#aaa;--red:#ff3d57;--red-dim:rgba(255,61,87,0.1);--cyan:#00c2ff;--cyan-dim:rgba(0,194,255,0.1)}
 body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(--bg);color:var(--white);max-width:430px;margin:0 auto;min-height:100vh;overflow-x:hidden;padding-bottom:80px}
 
 /* HEADER */
@@ -406,7 +406,7 @@ try {
 </div><!-- /sportsbook-section -->
 <div id="mybets-section" style="display:none;background:#f5f5f5;min-height:100vh;padding-bottom:100px"></div>
 <div id="live-section" style="display:none;padding:60px 20px;text-align:center"><div style="font-size:2rem;margin-bottom:14px">📡</div><div style="font-size:1rem;font-weight:800;color:#111;margin-bottom:8px">Live Betting</div><div style="font-size:0.82rem;color:#888">Live markets coming soon</div></div>
-<!-- RESULTS (was Rewards) -->
+<!-- RESULTS -->
 <div id="results-section" style="display:none;background:#0a0a0a;min-height:100vh;padding-bottom:100px"></div>
 <div id="predictions-section" style="display:none;padding:60px 20px;text-align:center"><div style="font-size:2rem;margin-bottom:14px">🔮</div><div style="font-size:1rem;font-weight:800;color:#111;margin-bottom:8px">Predictions</div><div style="font-size:0.82rem;color:#888">Prediction markets coming soon</div></div>
 
@@ -1080,7 +1080,7 @@ function setBNav(el,tab){
   console.log('[nav] tab:', tab);
   document.querySelectorAll('.bn').forEach(function(n){ n.classList.remove('active'); });
   el.classList.add('active');
-  ['sportsbook-section','mybets-section','predictions-section','live-section','rewards-section','results-section'].forEach(id=>{
+  ['sportsbook-section','mybets-section','predictions-section','live-section','results-section'].forEach(id=>{
     const s=document.getElementById(id); if(s) s.style.display='none';
   });
   const ss=document.getElementById('sport-scroll');
@@ -1102,11 +1102,6 @@ function setBNav(el,tab){
     if(pb) pb.style.display='none';
   } else if(tab==='predictions'){
     const sec=document.getElementById('predictions-section');
-    if(sec) sec.style.display='block';
-    if(ss) ss.style.display='none';
-    if(pb) pb.style.display='none';
-  } else if(tab==='rewards'){
-    const sec=document.getElementById('rewards-section');
     if(sec) sec.style.display='block';
     if(ss) ss.style.display='none';
     if(pb) pb.style.display='none';
@@ -3160,6 +3155,9 @@ function _resWeekAggregates(weekStart, weekEnd){
   };
 }
 function renderPlayerResults(){
+  // Layout/CSS mirrors host Settlements page (index.html renderSettlements()).
+  // Reuses the same CSS vars (--card, --border, --gray, --green, --red, --cyan)
+  // and the same chart math (Sun-first storage, Mon-first display).
   var el = document.getElementById('results-section');
   if (!el) return;
   _resSeedMockIfEmpty();
@@ -3170,15 +3168,16 @@ function renderPlayerResults(){
   var we  = new Date(ws); we.setDate(we.getDate()+7);
 
   var agg = _resWeekAggregates(ws, we);
-  var net = agg.settledPnl;
+  var net = agg.settledPnl; // player POV
 
-  var bigColor = net > 0 ? '#00ff88' : net < 0 ? '#ff3d57' : '#fff';
+  var bigColor = net > 0 ? 'var(--green)' : net < 0 ? 'var(--red)' : '#fff';
   var bigLabel = net > 0 ? '+$'+net.toFixed(2) : net < 0 ? '-$'+Math.abs(net).toFixed(2) : '$0.00';
   var bigSub   = net > 0 ? 'Up this week' : net < 0 ? 'Down this week' : 'Even';
 
   var weEnd = new Date(we.getTime()-1);
   var rangeLabel = ws.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + weEnd.toLocaleDateString('en-US',{month:'short',day:'numeric'});
 
+  // Reorder Sun-first storage → Mon-first display (matches host exactly).
   var raw = agg.dailyNets;
   var nets = [raw[1],raw[2],raw[3],raw[4],raw[5],raw[6],raw[0]];
   var dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
@@ -3187,12 +3186,12 @@ function renderPlayerResults(){
   var barsHtml = nets.map(function(v,i){
     var pct = Math.min(100, Math.abs(v)/maxAbs*100);
     var h = Math.max(2, pct * chartHeight / 100);
-    var color = v > 0 ? '#00ff88' : v < 0 ? '#ff3d57' : '#3a3a3a';
+    var color = v > 0 ? 'var(--green)' : v < 0 ? 'var(--red)' : '#3a3a3a';
     var bar = (Math.abs(v) < 0.005)
       ? '<div style="width:60%;height:2px;background:#3a3a3a;border-radius:2px"></div>'
       : '<div style="width:60%;height:'+h+'px;background:'+color+';border-radius:6px 6px 2px 2px"></div>';
     var amtTxt = (Math.abs(v) < 0.005) ? '—' : (v>0?'+':'−')+'$'+Math.abs(v).toFixed(0);
-    var amtColor = v > 0 ? '#00ff88' : v < 0 ? '#ff3d57' : '#555';
+    var amtColor = v > 0 ? 'var(--green)' : v < 0 ? 'var(--red)' : '#555';
     return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px">' +
       '<div style="font-size:0.6rem;color:'+amtColor+';font-weight:800;letter-spacing:0.2px">'+amtTxt+'</div>' +
       '<div style="display:flex;align-items:flex-end;justify-content:center;width:100%;height:'+chartHeight+'px">' + bar + '</div>' +
@@ -3203,62 +3202,69 @@ function renderPlayerResults(){
   var canForward = _resultsWeekOffset < 0;
   var weekTitle = _resultsWeekOffset===0 ? 'This Week' : _resultsWeekOffset===-1 ? 'Last Week' : 'Past Week';
 
+  // Top hero — same structure as host Settlements (week selector, big net,
+  // chart, summary strip).
   var topHtml = '<div style="padding:20px 16px 4px">' +
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
-      '<div style="font-size:1.1rem;font-weight:900;color:#fff;letter-spacing:0.3px">My Results</div>' +
-    '</div>' +
+    // Week selector — centered (host pattern)
     '<div style="display:flex;justify-content:center;align-items:center;gap:12px;margin-bottom:18px">' +
-      '<button data-results-week="prev" style="background:#1a1a1a;border:1px solid #2a2a2a;color:#fff;width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;line-height:1">‹</button>' +
+      '<button data-results-week="prev" style="background:var(--card);border:1px solid var(--border);color:#fff;width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;line-height:1">‹</button>' +
       '<div style="text-align:center;min-width:140px">' +
-        '<div style="font-size:0.58rem;color:#888;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:2px">' + weekTitle + '</div>' +
-        '<div style="font-size:0.95rem;font-weight:800;color:#fff">' + rangeLabel + '</div>' +
+        '<div style="font-size:0.58rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:2px">' + weekTitle + '</div>' +
+        '<div style="font-size:0.95rem;font-weight:800">' + rangeLabel + '</div>' +
       '</div>' +
-      '<button data-results-week="next" ' + (canForward?'':'disabled') + ' style="background:#1a1a1a;border:1px solid #2a2a2a;color:'+(canForward?'#fff':'#444')+';width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:'+(canForward?'pointer':'not-allowed')+';line-height:1">›</button>' +
+      '<button data-results-week="next" ' + (canForward?'':'disabled') + ' style="background:var(--card);border:1px solid var(--border);color:'+(canForward?'#fff':'#444')+';width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:'+(canForward?'pointer':'not-allowed')+';line-height:1">›</button>' +
     '</div>' +
+    // Big net (host pattern)
     '<div style="text-align:center;margin-bottom:22px">' +
       '<div style="font-size:2.8rem;font-weight:900;letter-spacing:-1.5px;color:'+bigColor+';line-height:1">' + bigLabel + '</div>' +
-      '<div style="font-size:0.7rem;color:#888;margin-top:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px">' + bigSub + '</div>' +
+      '<div style="font-size:0.7rem;color:var(--gray);margin-top:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px">' + bigSub + '</div>' +
     '</div>' +
-    '<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:16px;padding:18px 10px 12px;margin-bottom:14px">' +
+    // Bar chart (host pattern)
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px 10px 12px;margin-bottom:14px">' +
       '<div style="display:flex;align-items:flex-end;gap:2px">' + barsHtml + '</div>' +
     '</div>' +
-    '<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:16px;padding:14px 16px;margin-bottom:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">' +
-      '<div style="border-right:1px solid #2a2a2a">' +
-        '<div style="font-size:0.55rem;color:#888;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Wagered</div>' +
-        '<div style="font-size:0.95rem;font-weight:900;color:#fff">$'+agg.totalWagered.toFixed(2)+'</div>' +
+    // 3-card summary strip — Wagered / Won / Lost (host pattern)
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px 16px;margin-bottom:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">' +
+      '<div style="border-right:1px solid var(--border)">' +
+        '<div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Wagered</div>' +
+        '<div style="font-size:0.95rem;font-weight:900">$'+agg.totalWagered.toFixed(2)+'</div>' +
+        '<div style="font-size:0.58rem;color:var(--gray);margin-top:2px">total risk</div>' +
       '</div>' +
-      '<div style="border-right:1px solid #2a2a2a">' +
-        '<div style="font-size:0.55rem;color:#888;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Won</div>' +
-        '<div style="font-size:0.95rem;font-weight:900;color:#00ff88">$'+agg.totalWon.toFixed(2)+'</div>' +
+      '<div style="border-right:1px solid var(--border)">' +
+        '<div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Won</div>' +
+        '<div style="font-size:0.95rem;font-weight:900;color:var(--green)">$'+agg.totalWon.toFixed(2)+'</div>' +
+        '<div style="font-size:0.58rem;color:var(--gray);margin-top:2px">'+agg.winCount+' win'+(agg.winCount!==1?'s':'')+'</div>' +
       '</div>' +
       '<div>' +
-        '<div style="font-size:0.55rem;color:#888;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Lost</div>' +
-        '<div style="font-size:0.95rem;font-weight:900;color:#ff3d57">$'+agg.totalLost.toFixed(2)+'</div>' +
+        '<div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Lost</div>' +
+        '<div style="font-size:0.95rem;font-weight:900;color:var(--red)">$'+agg.totalLost.toFixed(2)+'</div>' +
+        '<div style="font-size:0.58rem;color:var(--gray);margin-top:2px">'+agg.lossCount+' loss'+(agg.lossCount!==1?'es':'')+'</div>' +
       '</div>' +
     '</div>' +
-    '<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:16px;padding:14px 16px;margin-bottom:18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">' +
-      '<div style="border-right:1px solid #2a2a2a">' +
-        '<div style="font-size:0.55rem;color:#888;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Pending</div>' +
+    // 3-card ticket-status strip — Pending / Settled / Canceled (host pattern)
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px 16px;margin-bottom:18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">' +
+      '<div style="border-right:1px solid var(--border)">' +
+        '<div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Pending</div>' +
         '<div style="font-size:0.95rem;font-weight:900;color:#f5c842">'+agg.pendingCount+'</div>' +
-        '<div style="font-size:0.55rem;color:#666;margin-top:2px">open bets</div>' +
+        '<div style="font-size:0.58rem;color:var(--gray);margin-top:2px">open bets</div>' +
       '</div>' +
-      '<div style="border-right:1px solid #2a2a2a">' +
-        '<div style="font-size:0.55rem;color:#888;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Settled</div>' +
-        '<div style="font-size:0.95rem;font-weight:900;color:#fff">'+agg.settledCount+'</div>' +
-        '<div style="font-size:0.55rem;color:#666;margin-top:2px">'+agg.winCount+'W · '+agg.lossCount+'L'+(agg.pushCount?' · '+agg.pushCount+'P':'')+'</div>' +
+      '<div style="border-right:1px solid var(--border)">' +
+        '<div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Settled</div>' +
+        '<div style="font-size:0.95rem;font-weight:900">'+agg.settledCount+'</div>' +
+        '<div style="font-size:0.58rem;color:var(--gray);margin-top:2px">'+agg.winCount+'W · '+agg.lossCount+'L'+(agg.pushCount?' · '+agg.pushCount+'P':'')+'</div>' +
       '</div>' +
       '<div>' +
-        '<div style="font-size:0.55rem;color:#888;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Canceled</div>' +
-        '<div style="font-size:0.95rem;font-weight:900;color:#888">'+agg.canceledCount+'</div>' +
-        '<div style="font-size:0.55rem;color:#666;margin-top:2px">voided</div>' +
+        '<div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Canceled</div>' +
+        '<div style="font-size:0.95rem;font-weight:900;color:var(--gray)">'+agg.canceledCount+'</div>' +
+        '<div style="font-size:0.58rem;color:var(--gray);margin-top:2px">voided</div>' +
       '</div>' +
     '</div>' +
   '</div>';
 
-  // Recent Results / Weekly History — up to 8 prior weeks with activity.
+  // Weekly History — host-style cards, up to 8 prior weeks with activity.
   var historyHtml = '<div style="padding:8px 16px 24px">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px">' +
-      '<div style="font-size:0.95rem;font-weight:900;color:#fff;letter-spacing:0.3px">Weekly History</div>' +
+      '<div style="font-size:0.95rem;font-weight:900;letter-spacing:0.3px">Weekly History</div>' +
     '</div>';
   var anyHistory = false;
   for (var k = 0; k < 8; k++) {
@@ -3270,28 +3276,29 @@ function renderPlayerResults(){
     var hWeEnd = new Date(hWe.getTime()-1);
     var hRange = hWs.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + hWeEnd.toLocaleDateString('en-US',{month:'short',day:'numeric'});
     var hNet = hAgg.settledPnl;
-    var hColor = hNet > 0 ? '#00ff88' : hNet < 0 ? '#ff3d57' : '#888';
+    var hColor = hNet > 0 ? 'var(--green)' : hNet < 0 ? 'var(--red)' : 'var(--gray)';
     var hLabel = hNet > 0 ? '+$'+hNet.toFixed(2) : hNet < 0 ? '-$'+Math.abs(hNet).toFixed(2) : '$0.00';
     var hTitle = k===0 ? 'This Week' : k===1 ? 'Last Week' : (k+' weeks ago');
     var pushTxt = hAgg.pushCount ? ' · '+hAgg.pushCount+'P' : '';
     var pendTxt = hAgg.pendingCount ? ' · '+hAgg.pendingCount+' open' : '';
     var canTxt  = hAgg.canceledCount ? ' · '+hAgg.canceledCount+' canceled' : '';
-    historyHtml += '<button data-results-jump="'+(-k)+'" style="width:100%;text-align:left;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:14px;padding:14px 16px;margin-bottom:10px;cursor:pointer;display:block;color:inherit;font-family:inherit">' +
+    var isCurrent = (k === -_resultsWeekOffset);
+    historyHtml += '<button data-results-jump="'+(-k)+'" style="width:100%;text-align:left;background:var(--card);border:1px solid '+(isCurrent?'var(--cyan)':'var(--border)')+';border-radius:14px;padding:14px 16px;margin-bottom:10px;cursor:pointer;display:block;color:inherit;font-family:inherit">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
         '<div>' +
-          '<div style="font-size:0.88rem;font-weight:800;color:#fff;margin-bottom:2px">'+hTitle+'</div>' +
-          '<div style="font-size:0.62rem;color:#888;font-weight:600">'+hRange+'</div>' +
+          '<div style="font-size:0.88rem;font-weight:800;margin-bottom:2px">'+hTitle+'</div>' +
+          '<div style="font-size:0.62rem;color:var(--gray);font-weight:600">'+hRange+'</div>' +
         '</div>' +
         '<div style="font-size:1.15rem;font-weight:900;color:'+hColor+';line-height:1">'+hLabel+'</div>' +
       '</div>' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:1px solid #2a2a2a">' +
-        '<div style="font-size:0.62rem;color:#888">'+hAgg.totalBets+' bets · '+hAgg.winCount+'W-'+hAgg.lossCount+'L'+pushTxt+pendTxt+canTxt+'</div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:1px solid var(--border)">' +
+        '<div style="font-size:0.62rem;color:var(--gray)">'+hAgg.totalBets+' bets · '+hAgg.winCount+'W-'+hAgg.lossCount+'L'+pushTxt+pendTxt+canTxt+'</div>' +
         '<div style="font-size:0.62rem;color:#666">$'+hAgg.totalWagered.toFixed(2)+' wagered</div>' +
       '</div>' +
     '</button>';
   }
   if (!anyHistory) {
-    historyHtml += '<div style="padding:24px;text-align:center;color:#888;font-size:0.78rem;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:14px">No betting history yet</div>';
+    historyHtml += '<div style="padding:24px;text-align:center;color:var(--gray);font-size:0.78rem;background:var(--card);border:1px solid var(--border);border-radius:14px">No betting history yet</div>';
   }
   historyHtml += '</div>';
 
