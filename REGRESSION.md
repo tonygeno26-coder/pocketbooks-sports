@@ -271,5 +271,24 @@ and snapshot invalidation on close/clear/success.
 
 ---
 
-*Last updated: 2026-05-06*
+## 16. RESULTS TAB (replaces Rewards)
+
+| #    | Test                                                                                       | Expected                                                              | Pass |
+| ---- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- | ---- |
+| 16.1 | Bottom nav shows "Results" (not Rewards) on far right with bar-chart icon                  | Label "Results", chart icon                                           | ☐    |
+| 16.2 | Tap Results                                                                                | Results page renders; nav highlights Results only                     | ☐    |
+| 16.3 | Fresh storage (no tickets) → open Results                                                  | Mock tickets seeded; current week shows non-zero net + chart bars     | ☐    |
+| 16.4 | Big net is green when player up, red when down, white at $0.00                             | Color matches sign                                                    | ☐    |
+| 16.5 | Mon–Sun bar chart shows daily P&L                                                          | 7 columns; bars sized by abs net; — dash on zero days                 | ☐    |
+| 16.6 | Summary strip 1: Wagered / Won / Lost                                                      | Sums match seeded mock ($350 / $264 / $175)                           | ☐    |
+| 16.7 | Summary strip 2: Pending / Settled (W·L) / Canceled                                        | Counts match ticket statuses                                          | ☐    |
+| 16.8 | Tap ‹ prev week                                                                            | Renders prior-week aggregates; › re-enables                           | ☐    |
+| 16.9 | Tap › next on current week                                                                 | Disabled (cannot go past current)                                     | ☐    |
+| 16.10| Weekly History list                                                                        | Shows ≤ 8 prior weeks with activity; cards tap to jump week           | ☐    |
+| 16.11| Place real bet → host settles win                                                          | Results page reflects new totalWon / settledPnl / day bar             | ☐    |
+| 16.12| Cancel a ticket                                                                            | Counted under Canceled, NOT in totalWagered/totalLost                 | ☐    |
+
+---
+
+*Last updated: 2026-05-07*
 *Update this file whenever a new feature or bug fix is added.*

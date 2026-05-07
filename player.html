@@ -406,7 +406,8 @@ try {
 </div><!-- /sportsbook-section -->
 <div id="mybets-section" style="display:none;background:#f5f5f5;min-height:100vh;padding-bottom:100px"></div>
 <div id="live-section" style="display:none;padding:60px 20px;text-align:center"><div style="font-size:2rem;margin-bottom:14px">📡</div><div style="font-size:1rem;font-weight:800;color:#111;margin-bottom:8px">Live Betting</div><div style="font-size:0.82rem;color:#888">Live markets coming soon</div></div>
-<div id="rewards-section" style="display:none;padding:60px 20px;text-align:center"><div style="font-size:2rem;margin-bottom:14px">🎁</div><div style="font-size:1rem;font-weight:800;color:#111;margin-bottom:8px">Rewards</div><div style="font-size:0.82rem;color:#888">Rewards program coming soon</div></div>
+<!-- RESULTS (was Rewards) -->
+<div id="results-section" style="display:none;background:#0a0a0a;min-height:100vh;padding-bottom:100px"></div>
 <div id="predictions-section" style="display:none;padding:60px 20px;text-align:center"><div style="font-size:2rem;margin-bottom:14px">🔮</div><div style="font-size:1rem;font-weight:800;color:#111;margin-bottom:8px">Predictions</div><div style="font-size:0.82rem;color:#888">Prediction markets coming soon</div></div>
 
 <!-- BET SLIP BAR -->
@@ -475,9 +476,9 @@ try {
     <div class="bn-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3c0 0-4 3.5-4 9s4 9 4 9"/><path d="M12 3c0 0 4 3.5 4 9s-4 9-4 9"/><line x1="3.5" y1="9" x2="20.5" y2="9"/><line x1="3.5" y1="15" x2="20.5" y2="15"/></svg></div>
     <span class="bn-label">Sportsbook</span>
   </button>
-  <button class="bn" id="bn-rewards" onclick="setBNav(this,'rewards')" aria-label="Rewards">
-    <div class="bn-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M12 12v9"/><path d="M8 16h8"/><path d="M9 12l-5 5M15 12l5 5"/></svg></div>
-    <span class="bn-label">Rewards</span>
+  <button class="bn" id="bn-results" onclick="setBNav(this,'results')" aria-label="Results">
+    <div class="bn-icon"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6" rx="0.5"/><rect x="12" y="8" width="3" height="10" rx="0.5"/><rect x="17" y="4" width="3" height="14" rx="0.5"/></svg></div>
+    <span class="bn-label">Results</span>
   </button>
 </nav>
 
@@ -1079,7 +1080,7 @@ function setBNav(el,tab){
   console.log('[nav] tab:', tab);
   document.querySelectorAll('.bn').forEach(function(n){ n.classList.remove('active'); });
   el.classList.add('active');
-  ['sportsbook-section','mybets-section','predictions-section','live-section','rewards-section'].forEach(id=>{
+  ['sportsbook-section','mybets-section','predictions-section','live-section','rewards-section','results-section'].forEach(id=>{
     const s=document.getElementById(id); if(s) s.style.display='none';
   });
   const ss=document.getElementById('sport-scroll');
@@ -1109,6 +1110,13 @@ function setBNav(el,tab){
     if(sec) sec.style.display='block';
     if(ss) ss.style.display='none';
     if(pb) pb.style.display='none';
+  } else if(tab==='results'){
+    const sec=document.getElementById('results-section');
+    if(sec) sec.style.display='block';
+    if(ss) ss.style.display='none';
+    if(pb) pb.style.display='none';
+    var pbw=document.getElementById('place-bet-wrap'); if(pbw) pbw.style.display='none';
+    if (typeof renderPlayerResults === 'function') renderPlayerResults();
   } else if(tab==='sportsbook_legacy'){
   } else if(tab==='mybets'||tab==='trades'){
     console.log('MY BETS CLICKED');
@@ -1127,7 +1135,6 @@ function setBNav(el,tab){
     if(ss) ss.style.display='flex';
     if(pb) pb.style.display='flex';
     if(tab==='search') showToast('🔍 Search coming soon');
-    if(tab==='rewards') showToast('🎁 Rewards coming soon');
   }
 }
 
@@ -3063,6 +3070,255 @@ function runPlaceBetHitTest() {
     dbgBanner('HIT TEST: null at '+Math.round(x)+','+Math.round(y)+'\nButton rect: '+JSON.stringify({t:Math.round(r.top),l:Math.round(r.left),w:Math.round(r.width),h:Math.round(r.height)}), '#550');
   }
 }
+
+// ═══ PLAYER RESULTS PAGE ═══════════════════════════════════════════════════
+// Mirrors host Settlements UX: week selector + big net + Mon-Sun chart +
+// summary strip + recent results history. Player POV (positive = player up).
+// Source of truth: localStorage['pb-tickets'] (this player's own tickets).
+var _resultsWeekOffset = 0; // 0 = current, -1 = last week, etc.
+function _resSundayMidnight(d){
+  var x = new Date(d); x.setHours(0,0,0,0);
+  x.setDate(x.getDate() - x.getDay()); // back to Sunday
+  return x;
+}
+function _resGetTickets(){
+  try { return JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(_e){ return []; }
+}
+// Seed mock tickets for current week if no tickets exist (acceptance criterion).
+function _resSeedMockIfEmpty(){
+  var existing = _resGetTickets();
+  if (existing.length) return;
+  var now = new Date();
+  var ws  = _resSundayMidnight(now);
+  function dayTs(dayIdx, hour){ var d = new Date(ws); d.setDate(d.getDate()+dayIdx); d.setHours(hour||14,0,0,0); return d.toISOString(); }
+  var mock = [
+    { id:'MOCK-W1', type:'Single',  status:'won',    placedAt:dayTs(1,13), riskAmount:50,  potentialProfit:45,  estimatedPayout:95,  odds:'-110', selections:[{label:'Lakers ML'}] },
+    { id:'MOCK-W2', type:'Single',  status:'lost',   placedAt:dayTs(2,19), riskAmount:75,  potentialProfit:68,  estimatedPayout:143, odds:'-110', selections:[{label:'Yankees -1.5'}] },
+    { id:'MOCK-W3', type:'Parlay',  status:'won',    placedAt:dayTs(3,12), riskAmount:25,  potentialProfit:165, estimatedPayout:190, odds:'+660', selections:[{label:'Leg A'},{label:'Leg B'},{label:'Leg C'}] },
+    { id:'MOCK-W4', type:'Single',  status:'lost',   placedAt:dayTs(4,21), riskAmount:100, potentialProfit:91,  estimatedPayout:191, odds:'-110', selections:[{label:'Cowboys -3.5'}] },
+    { id:'MOCK-W5', type:'Single',  status:'won',    placedAt:dayTs(5,17), riskAmount:60,  potentialProfit:54,  estimatedPayout:114, odds:'-110', selections:[{label:'Over 8.5'}] },
+    { id:'MOCK-W6', type:'Single',  status:'active', placedAt:dayTs(6,11), riskAmount:40,  potentialProfit:36,  estimatedPayout:76,  odds:'-110', selections:[{label:'Celtics +6.5'}] },
+    { id:'MOCK-W7', type:'Single',  status:'canceled',placedAt:dayTs(2,15), riskAmount:30,  potentialProfit:27,  estimatedPayout:57,  odds:'-110', selections:[{label:'Voided market'}] },
+    { id:'MOCK-P1', type:'Single',  status:'won',    placedAt:(function(){var d=new Date(ws);d.setDate(d.getDate()-7+2);d.setHours(14);return d.toISOString();})(), riskAmount:80, potentialProfit:73, estimatedPayout:153, odds:'-110', selections:[{label:'Bucks ML'}] },
+    { id:'MOCK-P2', type:'Single',  status:'lost',   placedAt:(function(){var d=new Date(ws);d.setDate(d.getDate()-7+5);d.setHours(20);return d.toISOString();})(), riskAmount:120,potentialProfit:109,estimatedPayout:229, odds:'-110', selections:[{label:'Eagles -7'}] },
+    { id:'MOCK-P3', type:'Parlay',  status:'won',    placedAt:(function(){var d=new Date(ws);d.setDate(d.getDate()-7+6);d.setHours(18);return d.toISOString();})(), riskAmount:25, potentialProfit:240,estimatedPayout:265, odds:'+960', selections:[{label:'L1'},{label:'L2'},{label:'L3'},{label:'L4'}] }
+  ];
+  try { localStorage.setItem('pb-tickets', JSON.stringify(mock)); } catch(_e){}
+  betTickets = mock;
+}
+function _resWeekAggregates(weekStart, weekEnd){
+  var bets = _resGetTickets();
+  var wsT = weekStart.getTime(), weT = weekEnd.getTime();
+  var totalWagered=0, totalWon=0, totalLost=0;
+  var pendingCount=0, settledCount=0, canceledCount=0;
+  var winCount=0, lossCount=0, pushCount=0;
+  var totalBets=0;
+  var dayNets = [0,0,0,0,0,0,0]; // 0 = Sunday (storage order)
+  var settledPnl = 0;
+  bets.forEach(function(t){
+    var ts = new Date(t.placedAt).getTime();
+    if (isNaN(ts) || ts < wsT || ts >= weT) return;
+    totalBets++;
+    var risk   = parseFloat(t.riskAmount)||0;
+    var profit = parseFloat(t.potentialProfit)||0;
+    var s = (t.status||'').toLowerCase();
+    var dayIdx = Math.floor((ts - wsT) / 86400000);
+    if (dayIdx < 0 || dayIdx > 6) dayIdx = 0;
+    if (s === 'won') {
+      totalWagered += risk; totalWon += profit;
+      settledCount++; winCount++;
+      settledPnl += profit;
+      dayNets[dayIdx] += profit;
+    } else if (s === 'lost') {
+      totalWagered += risk; totalLost += risk;
+      settledCount++; lossCount++;
+      settledPnl -= risk;
+      dayNets[dayIdx] -= risk;
+    } else if (s === 'push' || s === 'pushed') {
+      totalWagered += risk;
+      settledCount++; pushCount++;
+    } else if (s === 'canceled' || s === 'voided' || s === 'deleted') {
+      canceledCount++;
+    } else { // active / open / pending
+      totalWagered += risk;
+      pendingCount++;
+    }
+  });
+  return {
+    totalBets:    totalBets,
+    totalWagered: Math.round(totalWagered*100)/100,
+    totalWon:     Math.round(totalWon*100)/100,
+    totalLost:    Math.round(totalLost*100)/100,
+    settledPnl:   Math.round(settledPnl*100)/100,
+    pendingCount: pendingCount,
+    settledCount: settledCount,
+    canceledCount:canceledCount,
+    winCount:     winCount,
+    lossCount:    lossCount,
+    pushCount:    pushCount,
+    dailyNets:    dayNets.map(function(v){ return Math.round(v*100)/100; })
+  };
+}
+function renderPlayerResults(){
+  var el = document.getElementById('results-section');
+  if (!el) return;
+  _resSeedMockIfEmpty();
+
+  var now = new Date();
+  var ws  = _resSundayMidnight(now);
+  ws.setDate(ws.getDate() + _resultsWeekOffset*7);
+  var we  = new Date(ws); we.setDate(we.getDate()+7);
+
+  var agg = _resWeekAggregates(ws, we);
+  var net = agg.settledPnl;
+
+  var bigColor = net > 0 ? '#00ff88' : net < 0 ? '#ff3d57' : '#fff';
+  var bigLabel = net > 0 ? '+$'+net.toFixed(2) : net < 0 ? '-$'+Math.abs(net).toFixed(2) : '$0.00';
+  var bigSub   = net > 0 ? 'Up this week' : net < 0 ? 'Down this week' : 'Even';
+
+  var weEnd = new Date(we.getTime()-1);
+  var rangeLabel = ws.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + weEnd.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+
+  var raw = agg.dailyNets;
+  var nets = [raw[1],raw[2],raw[3],raw[4],raw[5],raw[6],raw[0]];
+  var dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  var maxAbs = Math.max.apply(null, nets.map(function(v){ return Math.abs(v); })) || 1;
+  var chartHeight = 100;
+  var barsHtml = nets.map(function(v,i){
+    var pct = Math.min(100, Math.abs(v)/maxAbs*100);
+    var h = Math.max(2, pct * chartHeight / 100);
+    var color = v > 0 ? '#00ff88' : v < 0 ? '#ff3d57' : '#3a3a3a';
+    var bar = (Math.abs(v) < 0.005)
+      ? '<div style="width:60%;height:2px;background:#3a3a3a;border-radius:2px"></div>'
+      : '<div style="width:60%;height:'+h+'px;background:'+color+';border-radius:6px 6px 2px 2px"></div>';
+    var amtTxt = (Math.abs(v) < 0.005) ? '—' : (v>0?'+':'−')+'$'+Math.abs(v).toFixed(0);
+    var amtColor = v > 0 ? '#00ff88' : v < 0 ? '#ff3d57' : '#555';
+    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px">' +
+      '<div style="font-size:0.6rem;color:'+amtColor+';font-weight:800;letter-spacing:0.2px">'+amtTxt+'</div>' +
+      '<div style="display:flex;align-items:flex-end;justify-content:center;width:100%;height:'+chartHeight+'px">' + bar + '</div>' +
+      '<div style="font-size:0.62rem;color:#777;font-weight:700;text-transform:uppercase;letter-spacing:0.4px">' + dayLabels[i] + '</div>' +
+    '</div>';
+  }).join('');
+
+  var canForward = _resultsWeekOffset < 0;
+  var weekTitle = _resultsWeekOffset===0 ? 'This Week' : _resultsWeekOffset===-1 ? 'Last Week' : 'Past Week';
+
+  var topHtml = '<div style="padding:20px 16px 4px">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
+      '<div style="font-size:1.1rem;font-weight:900;color:#fff;letter-spacing:0.3px">My Results</div>' +
+    '</div>' +
+    '<div style="display:flex;justify-content:center;align-items:center;gap:12px;margin-bottom:18px">' +
+      '<button data-results-week="prev" style="background:#1a1a1a;border:1px solid #2a2a2a;color:#fff;width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;line-height:1">‹</button>' +
+      '<div style="text-align:center;min-width:140px">' +
+        '<div style="font-size:0.58rem;color:#888;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:2px">' + weekTitle + '</div>' +
+        '<div style="font-size:0.95rem;font-weight:800;color:#fff">' + rangeLabel + '</div>' +
+      '</div>' +
+      '<button data-results-week="next" ' + (canForward?'':'disabled') + ' style="background:#1a1a1a;border:1px solid #2a2a2a;color:'+(canForward?'#fff':'#444')+';width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:'+(canForward?'pointer':'not-allowed')+';line-height:1">›</button>' +
+    '</div>' +
+    '<div style="text-align:center;margin-bottom:22px">' +
+      '<div style="font-size:2.8rem;font-weight:900;letter-spacing:-1.5px;color:'+bigColor+';line-height:1">' + bigLabel + '</div>' +
+      '<div style="font-size:0.7rem;color:#888;margin-top:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px">' + bigSub + '</div>' +
+    '</div>' +
+    '<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:16px;padding:18px 10px 12px;margin-bottom:14px">' +
+      '<div style="display:flex;align-items:flex-end;gap:2px">' + barsHtml + '</div>' +
+    '</div>' +
+    '<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:16px;padding:14px 16px;margin-bottom:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">' +
+      '<div style="border-right:1px solid #2a2a2a">' +
+        '<div style="font-size:0.55rem;color:#888;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Wagered</div>' +
+        '<div style="font-size:0.95rem;font-weight:900;color:#fff">$'+agg.totalWagered.toFixed(2)+'</div>' +
+      '</div>' +
+      '<div style="border-right:1px solid #2a2a2a">' +
+        '<div style="font-size:0.55rem;color:#888;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Won</div>' +
+        '<div style="font-size:0.95rem;font-weight:900;color:#00ff88">$'+agg.totalWon.toFixed(2)+'</div>' +
+      '</div>' +
+      '<div>' +
+        '<div style="font-size:0.55rem;color:#888;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Lost</div>' +
+        '<div style="font-size:0.95rem;font-weight:900;color:#ff3d57">$'+agg.totalLost.toFixed(2)+'</div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:16px;padding:14px 16px;margin-bottom:18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">' +
+      '<div style="border-right:1px solid #2a2a2a">' +
+        '<div style="font-size:0.55rem;color:#888;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Pending</div>' +
+        '<div style="font-size:0.95rem;font-weight:900;color:#f5c842">'+agg.pendingCount+'</div>' +
+        '<div style="font-size:0.55rem;color:#666;margin-top:2px">open bets</div>' +
+      '</div>' +
+      '<div style="border-right:1px solid #2a2a2a">' +
+        '<div style="font-size:0.55rem;color:#888;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Settled</div>' +
+        '<div style="font-size:0.95rem;font-weight:900;color:#fff">'+agg.settledCount+'</div>' +
+        '<div style="font-size:0.55rem;color:#666;margin-top:2px">'+agg.winCount+'W · '+agg.lossCount+'L'+(agg.pushCount?' · '+agg.pushCount+'P':'')+'</div>' +
+      '</div>' +
+      '<div>' +
+        '<div style="font-size:0.55rem;color:#888;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Canceled</div>' +
+        '<div style="font-size:0.95rem;font-weight:900;color:#888">'+agg.canceledCount+'</div>' +
+        '<div style="font-size:0.55rem;color:#666;margin-top:2px">voided</div>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+
+  // Recent Results / Weekly History — up to 8 prior weeks with activity.
+  var historyHtml = '<div style="padding:8px 16px 24px">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px">' +
+      '<div style="font-size:0.95rem;font-weight:900;color:#fff;letter-spacing:0.3px">Weekly History</div>' +
+    '</div>';
+  var anyHistory = false;
+  for (var k = 0; k < 8; k++) {
+    var hWs = _resSundayMidnight(now); hWs.setDate(hWs.getDate() - k*7);
+    var hWe = new Date(hWs); hWe.setDate(hWe.getDate()+7);
+    var hAgg = _resWeekAggregates(hWs, hWe);
+    if (!hAgg.totalBets) continue;
+    anyHistory = true;
+    var hWeEnd = new Date(hWe.getTime()-1);
+    var hRange = hWs.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + hWeEnd.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    var hNet = hAgg.settledPnl;
+    var hColor = hNet > 0 ? '#00ff88' : hNet < 0 ? '#ff3d57' : '#888';
+    var hLabel = hNet > 0 ? '+$'+hNet.toFixed(2) : hNet < 0 ? '-$'+Math.abs(hNet).toFixed(2) : '$0.00';
+    var hTitle = k===0 ? 'This Week' : k===1 ? 'Last Week' : (k+' weeks ago');
+    var pushTxt = hAgg.pushCount ? ' · '+hAgg.pushCount+'P' : '';
+    var pendTxt = hAgg.pendingCount ? ' · '+hAgg.pendingCount+' open' : '';
+    var canTxt  = hAgg.canceledCount ? ' · '+hAgg.canceledCount+' canceled' : '';
+    historyHtml += '<button data-results-jump="'+(-k)+'" style="width:100%;text-align:left;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:14px;padding:14px 16px;margin-bottom:10px;cursor:pointer;display:block;color:inherit;font-family:inherit">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+        '<div>' +
+          '<div style="font-size:0.88rem;font-weight:800;color:#fff;margin-bottom:2px">'+hTitle+'</div>' +
+          '<div style="font-size:0.62rem;color:#888;font-weight:600">'+hRange+'</div>' +
+        '</div>' +
+        '<div style="font-size:1.15rem;font-weight:900;color:'+hColor+';line-height:1">'+hLabel+'</div>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:1px solid #2a2a2a">' +
+        '<div style="font-size:0.62rem;color:#888">'+hAgg.totalBets+' bets · '+hAgg.winCount+'W-'+hAgg.lossCount+'L'+pushTxt+pendTxt+canTxt+'</div>' +
+        '<div style="font-size:0.62rem;color:#666">$'+hAgg.totalWagered.toFixed(2)+' wagered</div>' +
+      '</div>' +
+    '</button>';
+  }
+  if (!anyHistory) {
+    historyHtml += '<div style="padding:24px;text-align:center;color:#888;font-size:0.78rem;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:14px">No betting history yet</div>';
+  }
+  historyHtml += '</div>';
+
+  el.innerHTML = topHtml + historyHtml;
+  _wireResultsButtons(el);
+}
+function _wireResultsButtons(el){
+  Array.prototype.forEach.call(el.querySelectorAll('[data-results-week]'), function(btn){
+    btn.addEventListener('click', function(){
+      if (btn.disabled) return;
+      _resultsWeekOffset += (btn.dataset.resultsWeek === 'next' ? 1 : -1);
+      if (_resultsWeekOffset > 0) _resultsWeekOffset = 0;
+      renderPlayerResults();
+    });
+  });
+  Array.prototype.forEach.call(el.querySelectorAll('[data-results-jump]'), function(btn){
+    btn.addEventListener('click', function(){
+      var k = parseInt(btn.dataset.resultsJump,10);
+      if (isNaN(k)) return;
+      _resultsWeekOffset = k;
+      renderPlayerResults();
+      var sec = document.getElementById('results-section');
+      if (sec && sec.scrollIntoView) sec.scrollIntoView({behavior:'smooth', block:'start'});
+    });
+  });
+}
+// ═══ END PLAYER RESULTS PAGE ═══════════════════════════════════════════════
 // ─────────────────────────────────────────────────────────────────────────────
 
 </script>
