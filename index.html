@@ -1202,18 +1202,82 @@ function _amountDueCrypto(usd, cryptoId) {
   return Math.round(v * Math.pow(10,dp)) / Math.pow(10,dp);
 }
 
-function _getDiamondWallets() {
-  // Admin-configurable; falls back to placeholder addresses for dev.
+// ═══ WALLET POOL (manual rotation) ═════════════════════════════════════════════════════════════
+// Owner-managed receive addresses, NOT auto-generated. Pool is keyed by
+// network ('ERC-20' | 'BTC'); ETH/USDT-ERC20/USDC-ERC20 share the same pool.
+// Each wallet entry: { address, network, usageCount, maxUsageCount, active }.
+// At purchase-creation time we pick the first active+available address from
+// the matching network and lock it onto the request (never rotated mid-order).
+// On verified approval, usageCount is incremented; when it reaches
+// maxUsageCount the wallet is auto-deactivated.
+var DEFAULT_DIAMOND_WALLETS = [
+  { address: '0x61F74cD55bA283269eb86a2AA7a882B2e1a9225F', network: 'ERC-20', usageCount: 0, maxUsageCount: 50, active: true },
+  { address: 'bc1qu6um0h9qdy8nn6w3m2t4x3ava8lp6tm96erwc4', network: 'BTC',    usageCount: 0, maxUsageCount: 3,  active: true },
+];
+function _loadDiamondWallets() {
   try {
-    var stored = JSON.parse(localStorage.getItem('pb-diamond-wallets') || 'null');
-    if (stored && typeof stored === 'object') return stored;
+    var s = JSON.parse(localStorage.getItem('pb-diamond-wallets') || 'null');
+    if (Array.isArray(s) && s.length) return s;
   } catch(_e) {}
-  return {
-    usdt: 'TXyz...placeholder...USDT-TRC20',
-    usdc: '0x000...placeholder...USDC-ERC20',
-    btc:  'bc1q...placeholder...BTC',
-    eth:  '0x000...placeholder...ETH',
-  };
+  // Seed defaults on first run
+  saveDiamondWallets(DEFAULT_DIAMOND_WALLETS.map(function(w){ return Object.assign({}, w); }));
+  return _loadDiamondWallets();
+}
+function saveDiamondWallets(arr) {
+  localStorage.setItem('pb-diamond-wallets', JSON.stringify(arr || []));
+}
+// Map a CRYPTO_METHODS.id → wallet pool network key.
+function _networkForCrypto(cryptoId) {
+  if (cryptoId === 'btc') return 'BTC';
+  // eth, usdt, usdc all use ERC-20 pool
+  return 'ERC-20';
+}
+// Pick the first active wallet on the requested network with capacity left.
+function _pickAvailableWallet(network) {
+  var pool = _loadDiamondWallets();
+  for (var i=0; i<pool.length; i++) {
+    var w = pool[i];
+    if (!w || !w.active) continue;
+    if (String(w.network) !== String(network)) continue;
+    if ((parseInt(w.usageCount,10)||0) >= (parseInt(w.maxUsageCount,10)||0)) continue;
+    return w;
+  }
+  return null;
+}
+// Increment usageCount on approval; deactivate if cap hit.
+function _incrementWalletUsage(address) {
+  var pool = _loadDiamondWallets();
+  var changed = false;
+  for (var i=0; i<pool.length; i++) {
+    if (pool[i] && pool[i].address === address) {
+      pool[i].usageCount = (parseInt(pool[i].usageCount,10)||0) + 1;
+      if (pool[i].usageCount >= (parseInt(pool[i].maxUsageCount,10)||0)) {
+        pool[i].active = false;
+      }
+      changed = true; break;
+    }
+  }
+  if (changed) saveDiamondWallets(pool);
+}
+// QR image src — uses public api.qrserver.com (no extra JS bundle). If offline
+// or blocked, the address text + copy button still work for manual entry.
+function _qrImgSrc(text, size) {
+  size = size || 200;
+  return 'https://api.qrserver.com/v1/create-qr-code/?size='+size+'x'+size+'&data='+encodeURIComponent(text||'');
+}
+function _networkWarning(cryptoId) {
+  if (cryptoId === 'btc') return 'Only send Bitcoin (BTC) to this address.';
+  return 'Only send assets on the Ethereum/ERC-20 network to this address.';
+}
+// Back-compat shim for any older code paths still calling the map version.
+function _getDiamondWallets() {
+  var pool = _loadDiamondWallets();
+  function findActive(net) {
+    var w = pool.find(function(x){ return x && x.active && x.network === net; });
+    return w ? w.address : '';
+  }
+  var ercAddr = findActive('ERC-20');
+  return { eth: ercAddr, usdt: ercAddr, usdc: ercAddr, btc: findActive('BTC') };
 }
 
 function getDiamondBalance() {
@@ -1391,16 +1455,27 @@ function _bdRenderBody() {
   // Wallet + tx hash (only after method picked)
   var walletHtml = '';
   if (_bdState.selectedCrypto) {
-    var addr = _getDiamondWallets()[_bdState.selectedCrypto] || '';
     var method = CRYPTO_METHODS.find(function(m){ return m.id === _bdState.selectedCrypto; });
-    walletHtml =
+    var net = _networkForCrypto(_bdState.selectedCrypto);
+    var picked = _pickAvailableWallet(net);
+    if (!picked) {
+      walletHtml = '<div style="background:rgba(255,61,87,0.08);border:1px solid rgba(255,61,87,0.3);border-radius:12px;padding:16px;color:#ff8e9c;font-size:0.85rem;font-weight:700;text-align:center;margin-bottom:14px">Payment temporarily unavailable. Please try again later.</div>';
+    } else {
+      var addr = picked.address;
+      walletHtml =
       '<div style="font-size:0.72rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Send Payment To</div>' +
       '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;margin-bottom:14px">' +
         '<div style="font-size:0.65rem;color:#777;margin-bottom:8px;font-weight:700">' + (method ? method.label + ' · ' + method.network : '') + '</div>' +
+        // QR
+        '<div style="background:#fff;padding:10px;border-radius:10px;display:flex;justify-content:center;margin-bottom:12px">' +
+          '<img alt="Wallet QR" src="' + _qrImgSrc(addr, 220) + '" style="width:200px;height:200px;display:block" onerror="this.style.display=\'none\'">' +
+        '</div>' +
         '<div style="display:flex;align-items:center;gap:8px">' +
           '<input id="bd-wallet-addr" type="text" readonly value="' + addr.replace(/"/g,'&quot;') + '" style="flex:1;background:#0a0a0a;border:1px solid #252525;border-radius:8px;padding:10px 12px;color:#00c2ff;font-family:monospace;font-size:0.78rem;outline:none">' +
-          '<button id="bd-copy-addr" style="background:#00c2ff;border:none;color:#0a0a0a;padding:10px 14px;border-radius:8px;font-size:0.75rem;font-weight:900;cursor:pointer;white-space:nowrap">Copy</button>' +
+          '<button id="bd-copy-addr" data-bd-addr="' + addr.replace(/"/g,'&quot;') + '" style="background:#00c2ff;border:none;color:#0a0a0a;padding:10px 14px;border-radius:8px;font-size:0.75rem;font-weight:900;cursor:pointer;white-space:nowrap">Copy</button>' +
         '</div>' +
+        // Network warning
+        '<div style="margin-top:10px;font-size:0.68rem;color:#f5c842;background:rgba(245,200,66,0.08);border:1px solid rgba(245,200,66,0.25);border-radius:8px;padding:8px 10px;line-height:1.4">⚠️ ' + _networkWarning(_bdState.selectedCrypto) + '</div>' +
         ((function(){
           var diamonds = _effectiveDiamonds();
           if (!diamonds) return '';
@@ -1425,6 +1500,7 @@ function _bdRenderBody() {
       '</div>' +
       '<div style="font-size:0.72rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin:18px 0 10px">Transaction Hash</div>' +
       '<input id="bd-tx-hash" type="text" placeholder="Paste your transaction hash here" value="' + (_bdState.txHash||'').replace(/"/g,'&quot;') + '" style="width:100%;background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;color:#fff;font-family:monospace;font-size:0.82rem;outline:none;margin-bottom:14px">';
+    }
   }
 
   // Submit button — enable when (preset OR custom>0) AND payment method picked.
@@ -1505,17 +1581,24 @@ function _bdRenderBody() {
   var copyBtn = body.querySelector('#bd-copy-addr');
   if (copyBtn) copyBtn.addEventListener('click', function() {
     var input = body.querySelector('#bd-wallet-addr');
-    if (!input) return;
+    var addr = (copyBtn.dataset && copyBtn.dataset.bdAddr) || (input && input.value) || '';
+    function flashCopied() {
+      var orig = copyBtn.textContent;
+      copyBtn.textContent = 'Copied';
+      copyBtn.style.background = '#00ff88';
+      setTimeout(function(){
+        copyBtn.textContent = orig || 'Copy';
+        copyBtn.style.background = '#00c2ff';
+      }, 1400);
+    }
     var ok = false;
-    try {
-      input.select();
-      ok = document.execCommand && document.execCommand('copy');
-    } catch(_e) { ok = false; }
-    if (!ok && navigator.clipboard) {
-      navigator.clipboard.writeText(input.value).then(function(){ showToastHost('✅ Address copied'); });
+    try { if (input) input.select(); ok = document.execCommand && document.execCommand('copy'); } catch(_e) { ok = false; }
+    if (ok) { flashCopied(); return; }
+    if (navigator.clipboard && addr) {
+      navigator.clipboard.writeText(addr).then(flashCopied, function(){ showToastHost('⚠️ Copy failed'); });
       return;
     }
-    showToastHost(ok ? '✅ Address copied' : '⚠️ Copy failed — select & copy manually');
+    showToastHost('⚠️ Copy failed — select & copy manually');
   });
   var txInput = body.querySelector('#bd-tx-hash');
   if (txInput) txInput.addEventListener('input', function() {
@@ -1550,8 +1633,10 @@ function submitDiamondPurchase() {
   if (!tx || tx.length < 6) { showToastHost('Enter your transaction hash'); return; }
 
   var host = _resolveHost();
-  var wallets = _getDiamondWallets();
   var method = CRYPTO_METHODS.find(function(c){ return c.id===_bdState.selectedCrypto; });
+  var net = _networkForCrypto(_bdState.selectedCrypto);
+  var picked = _pickAvailableWallet(net);
+  if (!picked) { showToastHost('Payment temporarily unavailable. Please try again later.'); return; }
   var fiat = _diamondsToUsd(diamonds); // 1:1
   var req = {
     id:               'D' + Date.now() + Math.floor(Math.random()*10000),
@@ -1561,7 +1646,8 @@ function submitDiamondPurchase() {
     fiatPrice:        fiat,
     cryptoSymbol:     method ? method.symbol : _bdState.selectedCrypto.toUpperCase(),
     network:          method ? method.network : '',
-    walletAddress:    wallets[_bdState.selectedCrypto] || '',
+    walletAddress:    picked.address, // LOCKED at creation
+    walletNetwork:    picked.network,
     amountDueCrypto:  _amountDueCrypto(fiat, _bdState.selectedCrypto),
     txHash:           tx,
     status:           'pending',
@@ -1632,6 +1718,7 @@ function verifyDiamondPayment(requestId) {
     arr2[j].approvedAt = new Date().toISOString();
     saveDiamondRequests(arr2);
     setDiamondBalance(getDiamondBalance() + (parseInt(arr2[j].diamondAmount,10) || 0));
+    _incrementWalletUsage(arr2[j].walletAddress);
     if (typeof _bdRenderBody === 'function' && document.getElementById('bd-root')) _bdRenderBody();
     return true;
   }
@@ -1655,6 +1742,7 @@ function approveDiamondRequest(requestId) {
   arr[i].approvedAt  = new Date().toISOString();
   saveDiamondRequests(arr);
   setDiamondBalance(getDiamondBalance() + (parseInt(arr[i].diamondAmount||arr[i].packageAmount,10) || 0));
+  _incrementWalletUsage(arr[i].walletAddress);
   return true;
 }
 function rejectDiamondRequest(requestId, reason) {
