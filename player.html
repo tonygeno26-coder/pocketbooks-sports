@@ -631,11 +631,12 @@ try {
 function fmtBalance(){ return _fmtCurrency(calcAvailableBalance().available); }
 
 function showPlayerSettings() {
+  console.log('[PROFILE OPEN] showPlayerSettings invoked');
   var existing = document.getElementById('ps-overlay'); if (existing) existing.remove();
   var s = loadPlayerSettings();
   var ov = document.createElement('div');
   ov.id = 'ps-overlay';
-  ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.85);display:flex;align-items:flex-end;justify-content:center';
+  ov.style.cssText = 'position:fixed!important;top:0!important;left:0!important;right:0!important;bottom:0!important;width:100vw!important;height:100vh!important;z-index:2147483647!important;background:rgba(0,0,0,0.85)!important;display:flex!important;align-items:flex-end!important;justify-content:center!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important';
   function chip(group, val, label, current) {
     var on = current === val;
     return '<button data-pset-'+group+'="'+val+'" style="flex:1;padding:10px;background:'+(on?'#00c2ff':'#1c1c1c')+';border:1px solid '+(on?'#00c2ff':'#252525')+';color:'+(on?'#000':'#bbb')+';border-radius:10px;font-size:0.78rem;font-weight:800;cursor:pointer">'+label+'</button>';
@@ -672,7 +673,8 @@ function showPlayerSettings() {
       '<button id="ps-save" style="width:100%;padding:14px;background:#00c2ff;border:none;color:#000;border-radius:12px;font-size:0.92rem;font-weight:900;cursor:pointer">Save</button>' +
     '</div>' +
   '</div>';
-  document.body.appendChild(ov);
+  (document.documentElement || document.body).appendChild(ov);
+  console.log('[PROFILE OPEN] modal mounted; rect=', ov.getBoundingClientRect && ov.getBoundingClientRect());
   ov.addEventListener('click', function(e){ if (e.target===ov) ov.remove(); });
   ov.querySelector('#ps-close').addEventListener('click', function(){ ov.remove(); });
   // chip wiring
