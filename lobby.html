@@ -550,6 +550,21 @@ try {
 // AUTH
 let authMode = 'login';
 
+// Capture-phase delegate: catches Create Account / Sign In clicks even if a
+// parent overlay tries to swallow the event. Runs once at parse.
+(function(){
+  if (window.__pbAuthDelegateInstalled) return;
+  window.__pbAuthDelegateInstalled = true;
+  document.addEventListener('click', function(e) {
+    var t = e.target && e.target.closest && e.target.closest('.auth-tab,[data-auth-tab],#tab-login,#tab-signup');
+    if (!t) return;
+    console.log('[AUTH CLICK TARGET]', t, t.className, t.id);
+    var mode = (t.id === 'tab-signup' || t.dataset.authTab === 'signup') ? 'signup' : 'login';
+    e.preventDefault(); e.stopPropagation();
+    if (typeof setAuthTab === 'function') setAuthTab(mode);
+  }, true);
+})();
+
 function setAuthTab(mode) {
   authMode = mode;
   document.getElementById('tab-login').classList.toggle('active', mode==='login');
