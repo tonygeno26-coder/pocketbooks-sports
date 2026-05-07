@@ -1256,26 +1256,75 @@ var _bdState = {
   txHash:          '',
 };
 
+// Track current screen so other code can branch on it.
+var currentScreen = 'host-dashboard';
+// Selectors of dashboard chrome to hide while Buy Diamonds is full-screen.
+var _BD_HIDE_SELECTORS = ['.hdr', '.club-bar', '.alert-card', '.settlement',
+  '.stats-grid', '.sec-hdr', '#sharp-alerts',
+  '#players-section', '#settlements-section', '#bets-section', '.bnav'];
+var _bdHidden = []; // [{el, prevDisplay}]
+var _bdPrevBodyOverflow = '';
+
+function _bdHideDashboard() {
+  _bdHidden = [];
+  // Hide explicit selectors
+  _BD_HIDE_SELECTORS.forEach(function(sel) {
+    var nodes = document.querySelectorAll(sel);
+    Array.prototype.forEach.call(nodes, function(el) {
+      _bdHidden.push({ el: el, prev: el.style.display });
+      el.style.display = 'none';
+    });
+  });
+  // Hide every direct child of body that isn't bd-root or a modal/script.
+  // Cheap belt-and-suspenders for any home content not in the selector list.
+  Array.prototype.forEach.call(document.body.children, function(el) {
+    if (!el || el.id === 'bd-root') return;
+    if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE') return;
+    if (el.id && /^modal-/.test(el.id)) return; // leave modals alone
+    if (_bdHidden.some(function(h){ return h.el === el; })) return;
+    if (el.style.display === 'none') return; // already hidden
+    _bdHidden.push({ el: el, prev: el.style.display });
+    el.style.display = 'none';
+  });
+  _bdPrevBodyOverflow = document.body.style.overflow;
+  document.body.style.overflow = 'hidden';
+}
+function _bdShowDashboard() {
+  _bdHidden.forEach(function(h){ h.el.style.display = h.prev || ''; });
+  _bdHidden = [];
+  document.body.style.overflow = _bdPrevBodyOverflow || '';
+}
+
 function showBuyDiamondsPage() {
   console.log('[buy-diamonds] open');
   // Reset transient state every open
   _bdState = { selectedPackage: null, customAmount: '', selectedCrypto: null, txHash: '' };
-  var existing = document.getElementById('bd-overlay');
+  // Remove any prior root
+  var existing = document.getElementById('bd-root');
   if (existing) existing.remove();
-
-  var overlay = document.createElement('div');
-  overlay.id = 'bd-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#0a0a0a;color:#fff;overflow-y:auto;-webkit-overflow-scrolling:touch;max-width:430px;left:50%;transform:translateX(-50%)';
-
-  overlay.innerHTML = _bdRenderShell();
-  document.body.appendChild(overlay);
-  _bdWireEvents(overlay);
+  // Hide host dashboard structurally so this is a true page swap, not an overlay
+  _bdHideDashboard();
+  currentScreen = 'buy-diamonds';
+  // Render in-flow as a normal page section (not a fixed overlay).
+  // body has max-width:430px;margin:0 auto so this naturally fits the column.
+  var root = document.createElement('div');
+  root.id = 'bd-root';
+  root.style.cssText = 'background:#0a0a0a;color:#fff;min-height:100vh;width:100%';
+  root.innerHTML = _bdRenderShell();
+  document.body.appendChild(root);
+  _bdWireEvents(root);
   _bdRenderBody();
+  window.scrollTo(0, 0);
 }
 
 function closeBuyDiamondsPage() {
-  var ov = document.getElementById('bd-overlay');
-  if (ov) ov.remove();
+  var root = document.getElementById('bd-root');
+  if (root) root.remove();
+  // Also clean up any legacy overlay if one is still around
+  var legacy = document.getElementById('bd-overlay');
+  if (legacy) legacy.remove();
+  _bdShowDashboard();
+  currentScreen = 'host-dashboard';
 }
 
 function _bdRenderShell() {
@@ -1583,7 +1632,7 @@ function verifyDiamondPayment(requestId) {
     arr2[j].approvedAt = new Date().toISOString();
     saveDiamondRequests(arr2);
     setDiamondBalance(getDiamondBalance() + (parseInt(arr2[j].diamondAmount,10) || 0));
-    if (typeof _bdRenderBody === 'function' && document.getElementById('bd-overlay')) _bdRenderBody();
+    if (typeof _bdRenderBody === 'function' && document.getElementById('bd-root')) _bdRenderBody();
     return true;
   }
   try {
