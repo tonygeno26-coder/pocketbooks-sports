@@ -224,6 +224,18 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
 // ── PRE-RENDER: runs before body, before any CSS is applied to DOM ──────────
 // auth-screen CSS default is display:flex — must suppress it here with !important
 (function(){
+  // Hard override: ?screen=signin|signup forces auth screen regardless of state.
+  try {
+    var _qs = new URLSearchParams(location.search);
+    var _screen = _qs.get('screen');
+    if (_screen === 'signin' || _screen === 'signup') {
+      sessionStorage.removeItem('pb-force-lobby-home');
+      // Hide lobby content and force auth-screen visible.
+      document.write('<style id="pb-force-auth">.content{display:none!important}#auth-screen{display:flex!important;visibility:visible!important;z-index:500!important}</style>');
+      window.__pbForceAuth = _screen;
+      return;
+    }
+  } catch(_e){}
   var forceHome = sessionStorage.getItem('pb-force-lobby-home') === '1';
   // Strict gate: only a real auth token + a canonical user record counts as a session.
   var hasToken = !!localStorage.getItem('pb-sports-token');
@@ -672,6 +684,13 @@ function showLobbyContent() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 function checkAuthGate() {
+  // Hard override applied pre-render — honor it and skip session/auto-route logic.
+  if (window.__pbForceAuth) {
+    var ae = document.getElementById('auth-screen');
+    if (ae) ae.style.display = 'flex';
+    if (typeof setAuthTab === 'function') setAuthTab(window.__pbForceAuth === 'signup' ? 'signup' : 'login');
+    return;
+  }
   // Bypass auth if coming from player/host dashboard via ?from= param
   var fromParam = new URLSearchParams(window.location.search).get('from');
   if (fromParam === 'player' || fromParam === 'host') {
