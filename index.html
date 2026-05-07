@@ -892,7 +892,9 @@ function openPlayerSettings(pid, _p){
       +' style="width:100%;background:#252525;border:1px solid #333;border-radius:8px;padding:8px 10px;color:#fff;font-size:0.85rem;outline:none;margin-bottom:8px">'
       +'<textarea id="ps-notes" placeholder="Notes..." data-pid="'+pid+'"'
       +' oninput="var pl=loadClubPlayers();var px=pl.find(function(x){return x.playerId===this.dataset.pid;});if(px){px.notes=this.value;saveClubPlayers(pl);}"'
-      +' style="width:100%;background:#252525;border:1px solid #333;border-radius:8px;padding:8px 10px;color:#fff;font-size:0.82rem;outline:none;resize:none;height:60px">'+( p.notes||'')+'</textarea>'
+      +' style="width:100%;background:#252525;border:1px solid #333;border-radius:8px;padding:8px 10px;color:#fff;font-size:0.82rem;outline:none;resize:none;height:60px;margin-bottom:8px">'+( p.notes||'')+'</textarea>'
+      +'<input type="text" id="ps-signal" placeholder="Signal username / phone" value="'+(p.signalContact||'').replace(/"/g,'&quot;')+'" data-pid="'+pid+'"'
+      +' style="width:100%;background:#252525;border:1px solid #333;border-radius:8px;padding:8px 10px;color:#fff;font-size:0.82rem;outline:none">'
     +'</div>'
     // Credit limit
     +'<div style="background:#1a1a1a;border-radius:12px;padding:14px;margin-bottom:12px">'
@@ -1175,9 +1177,11 @@ function savePlayerProfile(pid){
   var realNameInp = document.getElementById('ps-realname');
   var notesInp    = document.getElementById('ps-notes');
   var creditInp   = document.getElementById('ps-credit');
+  var signalInp   = document.getElementById('ps-signal');
   var realName = realNameInp ? realNameInp.value : '';
   var notes    = notesInp    ? notesInp.value    : '';
   var credit   = creditInp   ? parseFloat(creditInp.value)||0 : 0;
+  var signal   = signalInp   ? signalInp.value.trim() : '';
   console.log('values:', {realName:realName, notes:notes, credit:credit});
   // Load players from localStorage (do not use stale in-memory ref)
   var players = JSON.parse(localStorage.getItem('pb-club-players')||'[]');
@@ -1188,7 +1192,7 @@ function savePlayerProfile(pid){
     console.warn('Player not found:', pid, 'players:', players);
     return;
   }
-  players[idx] = Object.assign({}, players[idx], { realName:realName, notes:notes });
+  players[idx] = Object.assign({}, players[idx], { realName:realName, notes:notes, signalContact:signal });
   localStorage.setItem('pb-club-players', JSON.stringify(players));
   showToastHost('LOCALSTORAGE SAVED\nrealName: '+realName);
   // Save limits
@@ -2172,12 +2176,67 @@ var _settleFilter = 'all'; // 'all' | 'owed' | 'owes'
 // Key: playerId, value: { paid: <number> } against the latest settlement amount.
 function _loadSettlePayments(){ try { return JSON.parse(localStorage.getItem('pb-settlement-payments')||'{}'); } catch(_e){ return {}; } }
 function _saveSettlePayments(o){ localStorage.setItem('pb-settlement-payments', JSON.stringify(o||{})); }
+// ══ SIGNAL RECEIPTS ═══════════════════════════════════════════════════════════════════════════════
+function loadSignalReceipts(){ try { return JSON.parse(localStorage.getItem('pb-signal-receipts')||'[]'); } catch(_e){ return []; } }
+function saveSignalReceipts(a){ localStorage.setItem('pb-signal-receipts', JSON.stringify(a||[])); }
+function _signalContactFor(playerId) {
+  var p = (loadClubPlayers()||[]).find(function(x){ return (x.playerId||x.id) === playerId; });
+  return p && p.signalContact ? String(p.signalContact).trim() : '';
+}
+function generateSignalReceipt(opts) {
+  // opts: { playerId, playerName, clubName, amount, previousBalance, newBalance, status }
+  var contact = _signalContactFor(opts.playerId);
+  var receipt = {
+    id:              'R' + Date.now() + Math.floor(Math.random()*10000),
+    brand:           'PocketBooks Sports',
+    clubName:        opts.clubName || 'PocketBooks Sports',
+    playerId:        opts.playerId,
+    playerName:      opts.playerName,
+    amount:          parseFloat(opts.amount)||0,
+    previousBalance: parseFloat(opts.previousBalance)||0,
+    newBalance:      parseFloat(opts.newBalance)||0,
+    status:          opts.status || 'partial',
+    signalContact:   contact || null,
+    deliveryStatus:  contact ? 'pending_signal_send' : 'no_signal_contact',
+    createdAt:       new Date().toISOString(),
+  };
+  var arr = loadSignalReceipts();
+  arr.unshift(receipt);
+  saveSignalReceipts(arr);
+  // TODO: hook real Signal bot/API here. For now, log + leave as pending.
+  console.log('[signal] receipt generated', receipt);
+  return receipt;
+}
+// ═══════════════════════════════════════════════════════════════════════════════
+
 function recordSettlementPayment(playerId, amount) {
   var p = _loadSettlePayments();
   p[playerId] = p[playerId] || { paid: 0 };
-  p[playerId].paid = Math.round(((parseFloat(p[playerId].paid)||0) + (parseFloat(amount)||0))*100)/100;
-  if (p[playerId].paid < 0) p[playerId].paid = 0;
+  var prevPaid = parseFloat(p[playerId].paid)||0;
+  var newPaid  = Math.round((prevPaid + (parseFloat(amount)||0))*100)/100;
+  if (newPaid < 0) newPaid = 0;
+  p[playerId].paid = newPaid;
   _saveSettlePayments(p);
+  // Generate Signal receipt against current week's preview (post-payment).
+  try {
+    var preview = _currentWeekPreview(_settleWeekOffset||0);
+    var row     = preview.rows.find(function(r){ return r.playerId === playerId; });
+    if (row) {
+      var prevBal = Math.round(((row.priorCarryover + row.weeklyNet) - prevPaid)*100)/100;
+      var newBal  = row.endingBalance;
+      var status  = (Math.abs(newBal) < 0.005) ? 'settled' : 'partial';
+      var clubObj; try { clubObj = JSON.parse(localStorage.getItem('pb-club')||'null'); } catch(_e){}
+      generateSignalReceipt({
+        playerId:        playerId,
+        playerName:      row.playerName,
+        clubName:        (clubObj && clubObj.name) || 'PocketBooks Sports',
+        amount:          parseFloat(amount)||0,
+        previousBalance: prevBal,
+        newBalance:      newBal,
+        status:          status,
+      });
+    }
+  } catch(e) { console.warn('[signal] receipt skip', e.message); }
 }
 function resetSettlementPayments(playerId) {
   var p = _loadSettlePayments();
