@@ -74,6 +74,29 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .mc-time{font-size:0.7rem;color:#555}
 .mc-more{font-size:0.72rem;color:var(--green);font-weight:700;cursor:pointer;text-shadow:0 0 6px rgba(0,255,135,0.3)}
 
+/* ══ LIGHT MODE (bet slip + sportsbook chrome) ══ */
+body.pb-light{background:#f4f6fb;color:#111}
+body.pb-light .h-top,body.pb-light .topbar,body.pb-light .h-wrap{background:#fff;color:#111;border-bottom:1px solid #e8e8e8}
+body.pb-light .top-tabs,body.pb-light .sport-tabs,body.pb-light .filter-pills{background:#fff;border-bottom:1px solid #eee}
+body.pb-light .market-card,body.pb-light .game-card{background:#fff;border:1px solid #e8e8e8;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+body.pb-light .odds-box{background:#f4f6fb;border:1px solid #e8e8e8;color:#111}
+body.pb-light .odds-box.sel,body.pb-light .odds-box.selected{background:#e7f9ee;border-color:#00c853;box-shadow:0 0 0 2px rgba(0,200,83,0.18);color:#00875a}
+body.pb-light .bnav,body.pb-light .bottom-nav{background:#fff;border-top:1px solid #eee}
+/* DK-style slip already light-styled internally; tighten edges + soften overlay */
+body.pb-light .dkslip-overlay{background:rgba(20,30,50,0.4)}
+body.pb-light .dkslip{background:#fff;color:#111}
+body.pb-light .dkslip-tabs{background:#f4f6fb;border-bottom:1px solid #e8e8e8}
+body.pb-light .dkslip-tab{color:#555}
+body.pb-light .dkslip-tab.active{color:#111;border-bottom-color:#00c853}
+body.pb-light .dkslip-card,body.pb-light .leg{background:#fff;border:1px solid #e8e8e8;box-shadow:0 1px 2px rgba(0,0,0,0.03);color:#111}
+body.pb-light .dkslip-input,body.pb-light input[type="text"],body.pb-light input[type="number"]{background:#f4f6fb;border:1px solid #d8dee8;color:#111}
+body.pb-light .dkslip-input:focus,body.pb-light input:focus{border-color:#00c853;outline:none}
+body.pb-light .dkslip-place,body.pb-light .place-bet,body.pb-light [data-action="place-bet"]{background:#00c853;color:#0a1f12;font-weight:900;border:none}
+body.pb-light .dkslip-cancel,body.pb-light .secondary-btn{background:#fff;border:1px solid #e8e8e8;color:#111}
+body.pb-light .divider,body.pb-light .leg-sep{background:#eef0f4}
+body.pb-light .pos-odds,body.pb-light .odds-pos{color:#00875a;font-weight:800}
+body.pb-light .neg-odds,body.pb-light .odds-neg{color:#cc0000;font-weight:800}
+body.pb-light .stake-input{background:#fff;border:1px solid #d8dee8;color:#111}
 /* BET SLIP BAR */
 .slip-bar{display:none;position:fixed;bottom:72px;left:50%;transform:translateX(-50%);width:calc(100% - 32px);max-width:398px;background:var(--green);border-radius:14px;padding:13px 18px;justify-content:space-between;align-items:center;z-index:50;cursor:pointer;box-shadow:0 8px 32px rgba(0,255,135,0.3)}
 .slip-bar.show{display:flex}
@@ -538,9 +561,11 @@ function _fmtCurrency(usd) {
 function applyPlayerTheme() {
   var s = loadPlayerSettings();
   if (s.theme === 'light') {
+    document.body.classList.add('pb-light');
     document.body.style.background = '#f4f6fb';
     document.body.style.color      = '#111';
   } else {
+    document.body.classList.remove('pb-light');
     document.body.style.background = '';
     document.body.style.color      = '';
   }
