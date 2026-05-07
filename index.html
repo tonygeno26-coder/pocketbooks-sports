@@ -560,34 +560,105 @@ function renderHostBets(){
       }).join('') +
     '</div>';
   }
-  el.innerHTML = delSection + active.map(function(t){
-    var d=new Date(t.placedAt);
-    var dt=isNaN(d)?t.placedAt:d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
-    var picks=(t.selections||[]).slice(0,2).map(function(s){
-      return '<div style="font-size:0.75rem;color:#888">'+s.pick+' <span style="color:var(--cyan)">'+((s.odds>0?'+':'')+s.odds)+'</span></div>';
-    }).join('');
-    var pName = t.playerUsername || t.playerName || 'Player';
-    var pReal = t.playerRealName ? ' ('+t.playerRealName+')' : '';
-    var pId   = t.playerId || '';
-    return '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;margin:8px 16px;padding:14px">'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
-        '<div><div style="font-size:0.88rem;font-weight:800">'+t.type+'</div>'+
-        '<div style="font-size:0.72rem;color:var(--cyan);font-weight:700;margin-top:1px">'+pName+pReal+'</div>'+
-        '<div style="font-size:0.6rem;color:#555;margin-top:1px">'+dt+(pId?' · ID: '+pId:'')+'</div></div>'+
-        (t.deleteRequestStatus==='pending'
-          ? '<span style="font-size:0.65rem;font-weight:800;color:#f59e0b;background:rgba(245,158,11,0.12);padding:3px 10px;border-radius:12px;border:1px solid #f59e0b">DELETE REQUESTED</span>'
-          : t.status==='voided'||t.status==='deleted'
-            ? '<span style="font-size:0.65rem;font-weight:800;color:#555;background:#1a1a1a;padding:3px 10px;border-radius:12px;border:1px solid #333">VOIDED</span>'
-            : '<span style="font-size:0.65rem;font-weight:800;color:var(--cyan);background:var(--cyan-dim);padding:3px 10px;border-radius:12px;border:1px solid rgba(0,194,255,0.25)">ACTIVE</span>')+
-      '</div>'+
-      picks+
-      '<div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">'+
-        '<div><div style="font-size:0.6rem;color:#555">PLAYER RISK</div><div style="font-size:0.85rem;font-weight:800">$'+parseFloat(t.riskAmount||0).toFixed(2)+'</div></div>'+
-        '<div><div style="font-size:0.6rem;color:#555;white-space:nowrap">HOST EXPOSURE</div><div style="font-size:0.85rem;font-weight:800;color:#ff4444">$'+parseFloat(t.potentialProfit||0).toFixed(2)+'</div></div>'+
-        '<div><div style="font-size:0.6rem;color:#555">PAYOUT</div><div style="font-size:0.85rem;font-weight:800;color:var(--cyan)">$'+parseFloat(t.estimatedPayout||0).toFixed(2)+'</div></div>'+
-      '</div>'+
+  // ══ GROUP BY PLAYER ══
+  // Persist expanded set across re-renders.
+  if (!window._hostBetsExpanded) window._hostBetsExpanded = {};
+  var groups = {};
+  active.forEach(function(t) {
+    var pid = t.playerId || (t.playerUsername||t.playerName||'unknown');
+    if (!groups[pid]) {
+      groups[pid] = {
+        playerId:    t.playerId || '',
+        playerName:  t.playerUsername || t.playerName || 'Player',
+        playerReal:  t.playerRealName || '',
+        bets:        [],
+        risk:        0,
+        exposure:    0,
+        payout:      0,
+      };
+    }
+    var g = groups[pid];
+    g.bets.push(t);
+    g.risk     += parseFloat(t.riskAmount||0);
+    g.exposure += parseFloat(t.potentialProfit||0);
+    g.payout   += parseFloat(t.estimatedPayout||0);
+  });
+  var groupArr = Object.keys(groups).map(function(k){ return groups[k]; })
+    .sort(function(a,b){ return b.exposure - a.exposure; });
+
+  function fmt$(n){ return '$'+(parseFloat(n)||0).toFixed(2); }
+
+  var groupsHtml = groupArr.map(function(g) {
+    var key = g.playerId || g.playerName;
+    var open = !!window._hostBetsExpanded[key];
+    var initials = (g.playerName||'?').split(/\s+/).map(function(w){return (w[0]||'').toUpperCase();}).slice(0,2).join('') || '?';
+    var betsHtml = '';
+    if (open) {
+      betsHtml = '<div style="border-top:1px solid var(--border);padding:8px 14px 4px;background:#0c0c0c">' +
+        g.bets.map(function(t) {
+          var d=new Date(t.placedAt);
+          var dt=isNaN(d)?t.placedAt:d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+          var sel0 = (t.selections && t.selections[0]) || {};
+          var picks = (t.selections||[]).map(function(s){
+            var od = (s.odds && (s.odds[0]==='+'||s.odds[0]==='-')) ? s.odds : (parseFloat(s.odds)>0?'+':'')+s.odds;
+            return '<div style="font-size:0.72rem;color:#bbb;padding:2px 0"><span style="font-weight:700">'+s.pick+'</span> <span style="color:var(--cyan);font-weight:700">'+od+'</span><span style="color:#555"> · '+(s.market||'')+'</span></div>';
+          }).join('');
+          var statusBadge = t.deleteRequestStatus==='pending'
+            ? '<span style="font-size:0.55rem;font-weight:800;color:#f59e0b;background:rgba(245,158,11,0.12);padding:2px 8px;border-radius:10px;border:1px solid #f59e0b">DEL?</span>'
+            : (t.status==='voided'||t.status==='deleted')
+              ? '<span style="font-size:0.55rem;font-weight:800;color:#555;background:#1a1a1a;padding:2px 8px;border-radius:10px;border:1px solid #333">VOID</span>'
+              : '<span style="font-size:0.55rem;font-weight:800;color:var(--cyan);background:var(--cyan-dim);padding:2px 8px;border-radius:10px;border:1px solid rgba(0,194,255,0.25)">ACTIVE</span>';
+          return '<div style="background:#141414;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+              '<div style="font-size:0.78rem;font-weight:800">'+t.type+'</div>' +
+              statusBadge +
+            '</div>' +
+            picks +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:6px;border-top:1px solid #222;font-size:0.65rem;color:#777">' +
+              '<span>'+dt+'</span>' +
+            '</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px">' +
+              '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Player Risk</div><div style="font-size:0.78rem;font-weight:800">'+fmt$(t.riskAmount)+'</div></div>' +
+              '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Host Exp.</div><div style="font-size:0.78rem;font-weight:800;color:#ff6b6b">'+fmt$(t.potentialProfit)+'</div></div>' +
+              '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Payout</div><div style="font-size:0.78rem;font-weight:800;color:var(--cyan)">'+fmt$(t.estimatedPayout)+'</div></div>' +
+            '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>';
+    }
+    return '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;margin:8px 16px;overflow:hidden">' +
+      '<div data-host-group="'+key+'" style="padding:14px;cursor:pointer;display:flex;align-items:center;gap:12px;user-select:none">' +
+        '<div style="width:38px;height:38px;border-radius:50%;background:rgba(0,194,255,0.12);color:var(--cyan);display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:900;border:1.5px solid var(--cyan);flex-shrink:0">'+initials+'</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">' +
+            '<span style="font-size:0.92rem;font-weight:900">'+g.playerName+'</span>' +
+            (g.playerReal?'<span style="font-size:0.65rem;color:var(--gray)">('+g.playerReal+')</span>':'') +
+          '</div>' +
+          '<div style="font-size:0.6rem;color:#666;font-family:monospace">' + (g.playerId?'ID: '+g.playerId+' · ':'') + g.bets.length+' bet'+(g.bets.length!==1?'s':'')+'</div>' +
+        '</div>' +
+        '<div style="text-align:right">' +
+          '<div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Exposure</div>' +
+          '<div style="font-size:0.95rem;font-weight:900;color:#ff6b6b">'+fmt$(g.exposure)+'</div>' +
+        '</div>' +
+        '<div style="font-size:0.85rem;color:var(--gray);transition:transform 0.15s;'+(open?'transform:rotate(90deg)':'')+'">›</div>' +
+      '</div>' +
+      '<div style="display:'+(open?'grid':'none')+';grid-template-columns:1fr 1fr;gap:6px;padding:0 14px 12px;font-size:0.65rem;color:#777">' +
+        '<div><span style="color:#555">Total Risk: </span><span style="color:#fff;font-weight:700">'+fmt$(g.risk)+'</span></div>' +
+        '<div><span style="color:#555">Total Payout: </span><span style="color:var(--cyan);font-weight:700">'+fmt$(g.payout)+'</span></div>' +
+      '</div>' +
+      betsHtml +
     '</div>';
   }).join('');
+
+  el.innerHTML = delSection + groupsHtml;
+  // Wire collapse toggles
+  Array.prototype.forEach.call(el.querySelectorAll('[data-host-group]'), function(hd) {
+    hd.addEventListener('click', function() {
+      var k = hd.dataset.hostGroup;
+      window._hostBetsExpanded[k] = !window._hostBetsExpanded[k];
+      renderHostBets();
+    });
+  });
 }
 
 const SECTIONS=['home-content','bets-section','players-section','settlements-section'];
