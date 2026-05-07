@@ -545,11 +545,14 @@ function applyPlayerTheme() {
     document.body.style.color      = '';
   }
 }
-// Apply theme on load
-if (typeof window !== 'undefined') {
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', applyPlayerTheme);
-  else applyPlayerTheme();
-}
+// Apply theme on load (guarded for non-browser test sandboxes)
+try {
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading' && typeof document.addEventListener === 'function') {
+      document.addEventListener('DOMContentLoaded', applyPlayerTheme);
+    } else { applyPlayerTheme(); }
+  }
+} catch(_e) {}
 // ═══════════════════════════════════════════════════════════════════════════════
 function fmtBalance(){ return _fmtCurrency(calcAvailableBalance().available); }
 
