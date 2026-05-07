@@ -609,6 +609,13 @@ function setBN(el,tab){
   document.querySelectorAll('.bn').forEach(function(b){b.classList.remove('active');});
   el.classList.add('active');
   SECTIONS.forEach(function(id){var s=document.getElementById(id);if(s)s.style.display='none';});
+  // Tabs that aren't sport-specific and aren't club-scoped on this dashboard:
+  // hide club-bar (Select Club / Copy Code / + Club) and the sport pill row.
+  var clubBar    = document.querySelector('.club-bar');
+  var sportRow   = document.querySelector('.sport-filter');
+  var hideChrome = (tab === 'settlements' || tab === 'bets' || tab === 'players');
+  if (clubBar)  clubBar.style.display  = hideChrome ? 'none' : '';
+  if (sportRow) sportRow.style.display = hideChrome ? 'none' : '';
   if(tab==='bets'){
     var s=document.getElementById('bets-section');
     if(s)s.style.display='block';
