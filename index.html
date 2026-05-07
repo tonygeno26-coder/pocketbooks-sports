@@ -469,12 +469,16 @@ function hostApproveDelete(ticketId) {
     tickets[ti].cancellationReason  = 'host approved deletion request';
     localStorage.setItem('pb-tickets', JSON.stringify(tickets));
   }
-  // Refund player balance
+  // Refund player balance — balance is DERIVED from pb-tickets in player.html.
+  // Marking ticket status='canceled' removes its riskAmount from openRisk,
+  // which automatically restores the wager to availableBalance. No direct write needed.
+  // Bump pb-tickets-version so player tab refreshes immediately (BUG #2).
+  try {
+    var _v = parseInt(localStorage.getItem('pb-tickets-version') || '0', 10) || 0;
+    localStorage.setItem('pb-tickets-version', String(_v + 1));
+  } catch(_e) {}
   if (refundAmount > 0) {
-    var currentBalance = parseFloat(localStorage.getItem('pb-balance') || '1000');
-    var newBalance = Math.round((currentBalance + refundAmount) * 100) / 100;
-    localStorage.setItem('pb-balance', String(newBalance));
-    showToastHost('✅ Bet '+ticketId+' canceled · $'+refundAmount.toFixed(2)+' refunded · new balance: $'+newBalance.toFixed(2));
+    showToastHost('✅ Bet '+ticketId+' canceled · $'+refundAmount.toFixed(2)+' refunded to player balance');
   } else {
     showToastHost('✅ Bet '+ticketId+' canceled (no refund — risk amount was $0)');
   }
@@ -500,6 +504,11 @@ function hostDenyDelete(ticketId) {
     tickets[ti].deleteDeniedBy      = 'host';
     localStorage.setItem('pb-tickets', JSON.stringify(tickets));
   }
+  // Bump version so player tab refreshes immediately (BUG #2).
+  try {
+    var _v = parseInt(localStorage.getItem('pb-tickets-version') || '0', 10) || 0;
+    localStorage.setItem('pb-tickets-version', String(_v + 1));
+  } catch(_e) {}
   renderHostBets();
   renderHostStats();
   showToastHost('❌ Delete request denied for '+ticketId);

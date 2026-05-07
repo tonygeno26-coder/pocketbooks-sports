@@ -424,7 +424,15 @@ console.log('player page loaded');
 let TOKEN=localStorage.getItem('pb-sports-token')||'';
 // Balance + tickets
 var betTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
-function saveTickets(){ localStorage.setItem('pb-tickets', JSON.stringify(betTickets)); }
+function saveTickets(){
+  localStorage.setItem('pb-tickets', JSON.stringify(betTickets));
+  // Bump shared version so other player tabs / host actions can detect changes
+  // (BUG #2 — same-tab refresh after host approve/deny/cancel).
+  try {
+    var _v = parseInt(localStorage.getItem('pb-tickets-version') || '0', 10) || 0;
+    localStorage.setItem('pb-tickets-version', String(_v + 1));
+  } catch(_e) {}
+}
 
 // ═══ CENTRALIZED BALANCE ENGINE ══════════════════════════════════════════════
 // availableBalance = startingBalance - openRisk + settledWinnings + refunds
@@ -445,6 +453,33 @@ function _getStartingBalance() {
   return parseFloat(localStorage.getItem('pb-balance-start')) || _BASE_BALANCE;
 }
 function calcAvailableBalance() {
+  // ── BALANCE FORMULA ───────────────────────────────────────────────────────
+  //   available = starting − openRisk + settledGains + refunds
+  //
+  //
+  // ACCOUNTING MODEL:
+  //   The starting balance is the player's untouched bankroll. We do NOT
+  //   subtract wagers at placement time. Instead we hold them in `openRisk`
+  //   for active tickets, then explicitly subtract on loss / explicitly add
+  //   profit on win. Pushes and cancels need NO separate accounting because
+  //   their tickets are simply excluded from `openRisk`, which restores the
+  //   wager to `available` automatically.
+  //
+  // openRisk:     wagers currently locked in active/open tickets.
+  // settledGains: PROFIT (not payout) from won tickets. The wager itself
+  //               comes back via openRisk exclusion when status flips to won.
+  // settledLosses: wagers from lost tickets. Subtracted explicitly because
+  //               the player permanently loses that money.
+  // refunds:      reserved for cases where neither openRisk-exclusion NOR
+  //               settledLosses applies. Currently UNUSED — push and
+  //               canceled both rely on openRisk exclusion. Kept in the
+  //               return object for forward-compat with future statuses
+  //               (e.g. partial cashout, voided-after-loss with comp).
+  //
+  // BUG #8 (fixed): the previous formula counted `canceled` AND `push` in
+  // both `refunds` and (implicitly via openRisk exclusion), inflating the
+  // available balance by the wager amount on every cancel/push.
+  // ─────────────────────────────────────────────────────────────────────────
   var starting = _getStartingBalance();
   var tickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]');
   var openRisk = tickets
@@ -453,12 +488,20 @@ function calcAvailableBalance() {
   var settledGains = tickets
     .filter(function(t){ return t.status==='won'; })
     .reduce(function(s,t){ return s + (parseFloat(t.potentialProfit)||0); }, 0);
-  var refunds = tickets
-    .filter(function(t){ return t.status==='canceled' || t.status==='push'; })
-    .reduce(function(s,t){ return s + (parseFloat(t.refundAmount||t.riskAmount)||0); }, 0);
-  // settled losses: risk already excluded from starting (never returned)
-  var available = Math.round((starting - openRisk + settledGains + refunds) * 100) / 100;
-  return { starting: starting, openRisk: openRisk, settledGains: settledGains, refunds: refunds, available: available };
+  var settledLosses = tickets
+    .filter(function(t){ return t.status==='lost'; })
+    .reduce(function(s,t){ return s + (parseFloat(t.riskAmount)||0); }, 0);
+  // refunds bucket intentionally empty under the openRisk-exclusion model.
+  var refunds = 0;
+  var available = Math.round((starting - openRisk - settledLosses + settledGains + refunds) * 100) / 100;
+  return {
+    starting:      starting,
+    openRisk:      openRisk,
+    settledGains:  settledGains,
+    settledLosses: settledLosses,
+    refunds:       refunds,
+    available:     available
+  };
 }
 function syncBalanceDisplays() {
   var s = calcAvailableBalance();
@@ -721,7 +764,10 @@ function updBar(){
 }
 function openSlip(){document.getElementById('modal-slip').classList.add('open');renderLegs();updPayout();}
 function closeSlip(){document.getElementById('modal-slip').classList.remove('open');}
-function clearSlip(){slip=[];document.querySelectorAll('.odds-box.sel').forEach(c=>c.classList.remove('sel'));updBar();renderLegs();document.getElementById('risk-inp').value='';document.getElementById('pbox').style.display='none';document.getElementById('place-btn').disabled=true;}
+// NOTE: legacy clearSlip() removed (BUG #6). Canonical definition lives near line 2499
+// (operates on betSlip/bsStakes/bsStake — the dkslip data model). The old one
+// referenced obsolete vars (slip, risk-inp, pbox, place-btn) and was being
+// silently overwritten by the canonical one at parse time.
 
 function renderLegs(){
   const el=document.getElementById('sl-legs');
@@ -2039,17 +2085,47 @@ document.addEventListener('click', function(e) {
   requestBetDelete(btn.dataset.reqdelete, e);
 }, true);
 
-// Sync balance when host updates it (e.g. cancel approval from host dashboard)
+// ═══ TICKET-VERSION REFRESH (BUG #2) ═════════════════════════════════════════
+// Host actions (approve/deny/cancel) mutate pb-tickets + pb-tickets-version.
+// 'storage' event covers cross-tab. For same-tab (rare — host dashboard opened
+// in the same window, or future inline iframe), we also poll while My Bets is
+// visible. The poll is cheap: read one int from localStorage every 3s.
+var _lastTicketsVersion = parseInt(localStorage.getItem('pb-tickets-version') || '0', 10) || 0;
+function _refreshFromStorage(reason) {
+  try { betTickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]'); } catch(ex) {}
+  syncBalanceDisplays();
+  var sec = document.getElementById('mybets-section');
+  if (sec && sec.style.display !== 'none') {
+    renderMyBets();
+  }
+  console.log('[tickets] refresh (' + reason + '): ' + betTickets.length + ' tickets, balance ' + playerBalance);
+}
 window.addEventListener('storage', function(e) {
   if (e.key === 'pb-balance') {
+    // Legacy key — still listen so any straggler writers don't desync displays.
     loadBalance();
     syncBalanceDisplays();
-    console.log('[balance] storage event sync:', playerBalance);
+    console.log('[balance] legacy pb-balance storage event:', playerBalance);
   }
-  if (e.key === 'pb-tickets') {
-    try { betTickets = JSON.parse(e.newValue || '[]'); } catch(ex) {}
+  if (e.key === 'pb-tickets' || e.key === 'pb-tickets-version') {
+    var v = parseInt(localStorage.getItem('pb-tickets-version') || '0', 10) || 0;
+    if (v !== _lastTicketsVersion) {
+      _lastTicketsVersion = v;
+      _refreshFromStorage('storage-event');
+    }
   }
 });
+// Same-tab poll (covers writes from inline iframes/popups within this tab).
+// Only does work when something actually changed, and only re-renders DOM
+// when My Bets is currently visible.
+setInterval(function() {
+  var v = parseInt(localStorage.getItem('pb-tickets-version') || '0', 10) || 0;
+  if (v !== _lastTicketsVersion) {
+    _lastTicketsVersion = v;
+    _refreshFromStorage('poll');
+  }
+}, 3000);
+// ══════════════════════════════════════════════════════════════════════════════
 function renderMyBets() {
   var el = document.getElementById('mybets-section');
   if (!el) { console.warn('mybets-section not found'); return; }
