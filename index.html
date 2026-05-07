@@ -1178,11 +1178,27 @@ var DIAMOND_PACKAGES = [
   { amount: 10000, label: '10,000 Diamonds', usd: 100 },
 ];
 var CRYPTO_METHODS = [
-  { id: 'usdt', label: 'USDT', network: 'TRC-20',          icon: 'Ⓜ️' },
-  { id: 'usdc', label: 'USDC', network: 'ERC-20',          icon: 'Ⓐ️' },
-  { id: 'btc',  label: 'BTC',  network: 'Bitcoin',         icon: '₿'    },
-  { id: 'eth',  label: 'ETH',  network: 'Ethereum (ERC-20)', icon: 'Ξ'   },
+  // priceUsd updated by spot-price plug; static fallback for offline dev.
+  { id: 'usdt', symbol: 'USDT', label: 'USDT', network: 'TRC-20',     icon: 'Ⓜ️', priceUsd: 1     },
+  { id: 'usdc', symbol: 'USDC', label: 'USDC', network: 'ERC-20',     icon: 'Ⓐ️', priceUsd: 1     },
+  { id: 'btc',  symbol: 'BTC',  label: 'BTC',  network: 'Bitcoin',    icon: '₿',    priceUsd: 65000 },
+  { id: 'eth',  symbol: 'ETH',  label: 'ETH',  network: 'Ethereum',   icon: 'Ξ',    priceUsd: 3200  },
 ];
+// Min confirmations per network before auto-credit
+var CONFIRMATION_THRESHOLDS = { usdt: 19, usdc: 12, btc: 2, eth: 12 };
+// Pluggable scanner registry. Real impls (Etherscan/BlockCypher/NOWPayments)
+// register here later. Each fn signature:
+//   async (req) => { exists, toAddress, amountCrypto, network, confirmations }
+var DIAMOND_SCANNERS = {};
+function registerDiamondScanner(cryptoId, fn) { DIAMOND_SCANNERS[cryptoId] = fn; }
+function _amountDueCrypto(usd, cryptoId) {
+  var m = CRYPTO_METHODS.find(function(c){ return c.id===cryptoId; });
+  if (!m || !m.priceUsd) return null;
+  var v = usd / m.priceUsd;
+  // 6 dp for stables, 8 for BTC, 6 for ETH
+  var dp = (cryptoId==='btc') ? 8 : 6;
+  return Math.round(v * Math.pow(10,dp)) / Math.pow(10,dp);
+}
 
 function _getDiamondWallets() {
   // Admin-configurable; falls back to placeholder addresses for dev.
@@ -1426,47 +1442,118 @@ function submitDiamondPurchase() {
 
   var host = _resolveHost();
   var wallets = _getDiamondWallets();
+  var pkg = DIAMOND_PACKAGES.find(function(p){ return p.amount===_bdState.selectedPackage; });
+  var method = CRYPTO_METHODS.find(function(c){ return c.id===_bdState.selectedCrypto; });
+  var fiat = pkg ? pkg.usd : 0;
   var req = {
-    id:             'D' + Date.now() + Math.floor(Math.random()*10000),
-    hostId:         host.id,
-    hostName:       host.name,
-    packageAmount:  _bdState.selectedPackage,
-    cryptoMethod:   _bdState.selectedCrypto,
-    walletAddress:  wallets[_bdState.selectedCrypto] || '',
-    txHash:         tx,
-    status:         'pending',
-    createdAt:      new Date().toISOString(),
+    id:               'D' + Date.now() + Math.floor(Math.random()*10000),
+    hostId:           host.id,
+    hostName:         host.name,
+    diamondAmount:    _bdState.selectedPackage,
+    fiatPrice:        fiat,
+    cryptoSymbol:     method ? method.symbol : _bdState.selectedCrypto.toUpperCase(),
+    network:          method ? method.network : '',
+    walletAddress:    wallets[_bdState.selectedCrypto] || '',
+    amountDueCrypto:  _amountDueCrypto(fiat, _bdState.selectedCrypto),
+    txHash:           tx,
+    status:           'pending',
+    confirmations:    0,
+    createdAt:        new Date().toISOString(),
+    approvedAt:       null,
+    // legacy aliases for back-compat with earlier admin tooling
+    packageAmount:    _bdState.selectedPackage,
+    cryptoMethod:     _bdState.selectedCrypto,
   };
   var arr = loadDiamondRequests();
   arr.unshift(req);
   saveDiamondRequests(arr);
   console.log('[buy-diamonds] submitted', req);
-  showToastHost('✅ Payment submitted · awaiting admin approval');
-  // Reset state and re-render to show in history
+  showToastHost('✅ Payment submitted · verifying on-chain');
   _bdState = { selectedPackage: null, selectedCrypto: null, txHash: '' };
   _bdRenderBody();
+  // Kick off async verification (non-blocking)
+  verifyDiamondPayment(req.id);
 }
 
-// Admin/master uses this to approve a request and credit diamonds.
-// Exposed so admin.html (or a master tool) can call it.
+// Pluggable on-chain verification. If no scanner registered for the crypto,
+// the request stays 'pending' for manual admin review (preserves original UX).
+function verifyDiamondPayment(requestId) {
+  var arr = loadDiamondRequests();
+  var i = arr.findIndex(function(r){ return r.id===requestId; });
+  if (i === -1) return Promise.resolve(false);
+  var req = arr[i];
+  if (req.status === 'approved' || req.status === 'rejected') return Promise.resolve(false);
+  var scanner = DIAMOND_SCANNERS[req.cryptoMethod];
+  if (typeof scanner !== 'function') {
+    console.log('[scanner] no verifier for', req.cryptoMethod, '— leaving pending for admin');
+    return Promise.resolve(false);
+  }
+  // mark confirming while we check
+  arr[i].status = 'confirming';
+  saveDiamondRequests(arr);
+  function _apply(res) {
+    var arr2 = loadDiamondRequests();
+    var j = arr2.findIndex(function(r){ return r.id===requestId; });
+    if (j === -1) return false;
+    if (!res || !res.exists) {
+      arr2[j].status = 'rejected';
+      arr2[j].rejectReason = 'tx not found';
+      saveDiamondRequests(arr2);
+      return false;
+    }
+    var addrOk   = String(res.toAddress||'').toLowerCase() === String(arr2[j].walletAddress||'').toLowerCase();
+    var netOk    = !res.network || String(res.network) === String(arr2[j].network);
+    var amtOk    = arr2[j].amountDueCrypto == null ||
+                   (Math.abs((res.amountCrypto||0) - arr2[j].amountDueCrypto) / arr2[j].amountDueCrypto) <= 0.01; // ±1%
+    var confs    = parseInt(res.confirmations||0, 10) || 0;
+    var threshold = CONFIRMATION_THRESHOLDS[arr2[j].cryptoMethod] || 6;
+    arr2[j].confirmations = confs;
+    if (!addrOk || !netOk || !amtOk) {
+      arr2[j].status = 'rejected';
+      arr2[j].rejectReason = !addrOk ? 'wrong address' : !netOk ? 'wrong network' : 'amount mismatch';
+      saveDiamondRequests(arr2);
+      return false;
+    }
+    if (confs < threshold) {
+      arr2[j].status = 'confirming';
+      saveDiamondRequests(arr2);
+      return false;
+    }
+    // verified → approve + credit
+    arr2[j].status = 'approved';
+    arr2[j].approvedAt = new Date().toISOString();
+    saveDiamondRequests(arr2);
+    setDiamondBalance(getDiamondBalance() + (parseInt(arr2[j].diamondAmount,10) || 0));
+    if (typeof _bdRenderBody === 'function' && document.getElementById('bd-overlay')) _bdRenderBody();
+    return true;
+  }
+  try {
+    var out = scanner(req);
+    if (out && typeof out.then === 'function') {
+      return out.then(_apply).catch(function(e){ console.warn('[scanner] error', e && e.message); return false; });
+    }
+    return _apply(out);
+  } catch (e) { console.warn('[scanner] sync error', e.message); return false; }
+}
+
+// Admin/master manual approval (back-compat). Bypasses scanner; requires
+// pending or confirming status. Credits diamonds on approval.
 function approveDiamondRequest(requestId) {
   var arr = loadDiamondRequests();
   var i = arr.findIndex(function(r){ return r.id === requestId; });
   if (i === -1) return false;
-  if (arr[i].status !== 'pending') return false;
+  if (arr[i].status === 'approved' || arr[i].status === 'rejected') return false;
   arr[i].status      = 'approved';
   arr[i].approvedAt  = new Date().toISOString();
   saveDiamondRequests(arr);
-  // Credit diamonds NOW (not before).
-  var current = getDiamondBalance();
-  setDiamondBalance(current + (parseInt(arr[i].packageAmount,10) || 0));
+  setDiamondBalance(getDiamondBalance() + (parseInt(arr[i].diamondAmount||arr[i].packageAmount,10) || 0));
   return true;
 }
 function rejectDiamondRequest(requestId, reason) {
   var arr = loadDiamondRequests();
   var i = arr.findIndex(function(r){ return r.id === requestId; });
   if (i === -1) return false;
-  if (arr[i].status !== 'pending') return false;
+  if (arr[i].status === 'approved' || arr[i].status === 'rejected') return false;
   arr[i].status     = 'rejected';
   arr[i].rejectedAt = new Date().toISOString();
   if (reason) arr[i].rejectReason = String(reason);
