@@ -970,6 +970,17 @@ async function requestJoin(clubId, code, name) {
     const newClub = {id:clubId, code, name, role:'player', status:'pending', balance:0};
     userClubs.unshift(newClub);
     localStorage.setItem('pb-clubs', JSON.stringify(userClubs));
+    // Mirror to host-visible join requests so approval flow works locally.
+    try {
+      var jr = JSON.parse(localStorage.getItem('pb-join-requests')||'[]');
+      var pl = JSON.parse(localStorage.getItem('pb-player')||'null')||{};
+      var pid = pl.id || pl.username || ('P'+Date.now());
+      var pname = pl.username || pl.name || name || pid;
+      if (!jr.some(function(x){ return x.playerId === pid && x.clubId === clubId; })) {
+        jr.unshift({ playerId:pid, playerName:pname, clubId:clubId, clubName:name, code:code, requestedAt:new Date().toISOString() });
+        localStorage.setItem('pb-join-requests', JSON.stringify(jr));
+      }
+    } catch(_e){}
     renderClubsList();
     closeModal('modal-join');
     document.getElementById('pending-club-name').textContent = name;

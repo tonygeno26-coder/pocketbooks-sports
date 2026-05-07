@@ -526,6 +526,15 @@ var _BASE_BALANCE = 1000; // default starting balance
   }
 })();
 function _getStartingBalance() {
+  // Prefer per-player limit (set on host approval) when available.
+  try {
+    var pl = JSON.parse(localStorage.getItem('pb-player')||'null')||{};
+    var pid = pl.id || pl.username;
+    if (pid) {
+      var per = parseFloat(localStorage.getItem('pb-balance-start:'+pid));
+      if (!isNaN(per) && per > 0) return per;
+    }
+  } catch(_e){}
   return parseFloat(localStorage.getItem('pb-balance-start')) || _BASE_BALANCE;
 }
 function calcAvailableBalance() {

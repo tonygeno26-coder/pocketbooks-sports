@@ -900,6 +900,13 @@ function approveRequest(req){
   var credit=parseFloat(creditInput)||0;
   lim.creditLimit=credit;
   saveHostPlayerLimits(req.playerId,lim);
+  // Seed per-player balance-start so player.html sees the assigned limit immediately.
+  if (credit > 0) localStorage.setItem('pb-balance-start:'+req.playerId, String(credit));
+  // Bump tickets version so player tab refreshes balance/limit on next poll.
+  try {
+    var v = parseInt(localStorage.getItem('pb-tickets-version')||'0',10)||0;
+    localStorage.setItem('pb-tickets-version', String(v+1));
+  } catch(_e){}
   renderPlayersTab();
   showToastHost('Approved: '+req.playerName+' · Credit: $'+credit);
 }
