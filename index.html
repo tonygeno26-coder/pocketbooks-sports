@@ -1921,31 +1921,46 @@ function resetSettlementPayments(playerId) {
 // Idempotent: only seeds when no club players exist yet.
 function seedMockSettlementPlayers() {
   var existing = loadClubPlayers();
-  if (existing.length) return false;
-  var players = [
-    { playerId:'TP01', playerName:'TestPlayer01', realName:'TestPlayer01', clubId:'demo', status:'approved' },
-    { playerId:'TP02', playerName:'TestPlayer02', realName:'TestPlayer02', clubId:'demo', status:'approved' },
-    { playerId:'TP03', playerName:'TestPlayer03', realName:'TestPlayer03', clubId:'demo', status:'approved' },
-    { playerId:'TP04', playerName:'TestPlayer04', realName:'TestPlayer04', clubId:'demo', status:'approved' },
+  if (existing.length) return false; // never overwrite real data
+  // Mock players + target weekly nets. "Player owes host" = lost (positive).
+  // "Host owes player" = won (negative net).
+  var mock = [
+    { id:'TP01',  name:'TestPlayer01', net: 150,    note:'Lost weekly action'  },
+    { id:'JD01',  name:'JohnDoe',      net: 200,    note:'Big losing parlay'   },
+    { id:'BS01',  name:'BallerSteve',  net:-120,    note:'Hit a juicy SGP'     },
+    { id:'CT01',  name:'ClutchTom',    net: 85.10,  note:'Bad late fades'      },
+    { id:'MW01',  name:'MVPWes',       net:-56,     note:'Won late ML'         },
+    { id:'RG01',  name:'RickyG',       net: 35,     note:'Slow week'           },
   ];
+  var players = mock.map(function(m){
+    return { playerId:m.id, playerName:m.name, realName:m.name, clubId:'demo', status:'approved' };
+  });
   saveClubPlayers(players);
-  // Set credit limits
   var lims = {};
   players.forEach(function(p){ lims[p.playerId] = { creditLimit: 1000 }; });
   localStorage.setItem('pb-player-limits', JSON.stringify(lims));
-  // Build tickets in the current week to hit the target net positions:
-  // TP01: -$250 (player owes host) → lost ticket riskAmount 250
-  // TP02: +$125 (host owes player) → won ticket potentialProfit 125
-  // TP03: -$80                       → lost ticket riskAmount 80
-  // TP04: $0                          → won 60 + lost 60 (or no tickets)
+  // Build tickets to hit each target net within the current week.
   var now = new Date().toISOString();
-  var tix = [
-    { id:'MK1', playerId:'TP01', playerName:'TestPlayer01', placedAt:now, status:'lost', riskAmount:250, potentialProfit:227, type:'Single', selections:[{pick:'Mock Loss',odds:'-110',market:'ml',game:'A vs B'}] },
-    { id:'MK2', playerId:'TP02', playerName:'TestPlayer02', placedAt:now, status:'won',  riskAmount:100, potentialProfit:125, type:'Single', selections:[{pick:'Mock Win',odds:'+125',market:'ml',game:'A vs B'}] },
-    { id:'MK3', playerId:'TP03', playerName:'TestPlayer03', placedAt:now, status:'lost', riskAmount:80,  potentialProfit:73,  type:'Single', selections:[{pick:'Mock Loss 2',odds:'-110',market:'ml',game:'C vs D'}] },
-    { id:'MK4', playerId:'TP04', playerName:'TestPlayer04', placedAt:now, status:'won',  riskAmount:60,  potentialProfit:60,  type:'Single', selections:[{pick:'Mock Even W',odds:'+100',market:'ml',game:'E vs F'}] },
-    { id:'MK5', playerId:'TP04', playerName:'TestPlayer04', placedAt:now, status:'lost', riskAmount:60,  potentialProfit:54,  type:'Single', selections:[{pick:'Mock Even L',odds:'-110',market:'ml',game:'E vs F'}] },
-  ];
+  var tix = [];
+  mock.forEach(function(m, i) {
+    if (m.net > 0) {
+      // player owes host → lost ticket of riskAmount = net
+      tix.push({
+        id:'MK'+(i+1), playerId:m.id, playerName:m.name, placedAt:now,
+        status:'lost', riskAmount:m.net,
+        potentialProfit: Math.round(m.net*0.9*100)/100,
+        type:'Single', selections:[{pick:'Mock Bet',odds:'-110',market:'moneyline',game:'A vs B'}],
+      });
+    } else if (m.net < 0) {
+      // host owes player → won ticket of potentialProfit = |net|
+      tix.push({
+        id:'MK'+(i+1), playerId:m.id, playerName:m.name, placedAt:now,
+        status:'won', riskAmount:Math.abs(m.net),
+        potentialProfit: Math.abs(m.net),
+        type:'Single', selections:[{pick:'Mock Bet',odds:'+100',market:'moneyline',game:'A vs B'}],
+      });
+    }
+  });
   var existingBets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
   localStorage.setItem('hostActiveBets', JSON.stringify(tix.concat(existingBets)));
   return true;
@@ -2273,32 +2288,55 @@ function _wireSettlementsButtons(el) {
 }
 
 function _showPlayerSettlementDetail(playerId) {
-  var preview = _currentWeekPreview();
+  var preview = _currentWeekPreview(_settleWeekOffset||0);
   var row = preview.rows.find(function(r){ return r.playerId === playerId; });
   if (!row) { showToastHost('Player not found'); return; }
+  var payments = _loadSettlePayments();
+  var paid = (payments[playerId] && parseFloat(payments[playerId].paid)) || 0;
+  var origAbs = Math.abs(row.net);
+  var remaining = Math.max(0, Math.round((origAbs - paid)*100)/100);
+  var direction = row.net > 0 ? 'player-owes' : row.net < 0 ? 'host-owes' : 'even';
+  var status = remaining < 0.005 ? 'settled' : (paid > 0 ? 'partial' : (direction==='even'?'settled':'unpaid'));
+  var netColor = direction === 'player-owes' ? '#00ff88' : direction === 'host-owes' ? '#ff3d57' : 'var(--gray)';
+  var netLabel = direction === 'player-owes' ? '+$'+origAbs.toFixed(2)
+               : direction === 'host-owes'   ? '-$'+origAbs.toFixed(2)
+               : '$0.00';
+  var initials = (row.playerName||'?').split(/\s+/).map(function(w){return (w[0]||'').toUpperCase();}).slice(0,2).join('') || '?';
+
   var bets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]')
     .filter(function(t){
       var ts = new Date(t.placedAt).getTime();
       return t.playerId === playerId && ts >= preview.weekStart.getTime() && ts < preview.weekEnd.getTime();
     });
+
   var existing = document.getElementById('settle-detail');
   if (existing) existing.remove();
   var ov = document.createElement('div');
   ov.id = 'settle-detail';
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:2147483647;display:flex;align-items:flex-end;justify-content:center';
-  ov.innerHTML = '<div style="background:var(--card);width:100%;max-width:430px;max-height:80vh;border-radius:20px 20px 0 0;display:flex;flex-direction:column">' +
+  ov.innerHTML = '<div style="background:var(--card);width:100%;max-width:430px;max-height:88vh;border-radius:20px 20px 0 0;display:flex;flex-direction:column">' +
     '<div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">' +
-      '<div><div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px">Player Detail</div><div style="font-size:1rem;font-weight:900">' + row.playerName + '</div></div>' +
+      '<div style="display:flex;align-items:center;gap:12px">' +
+        '<div style="width:40px;height:40px;border-radius:50%;background:rgba(0,194,255,0.12);color:var(--cyan);display:flex;align-items:center;justify-content:center;font-size:0.85rem;font-weight:900;border:1.5px solid var(--cyan)">'+initials+'</div>' +
+        '<div><div style="font-size:0.95rem;font-weight:900">'+row.playerName+'</div>' +
+          '<div style="font-size:0.62rem;color:var(--gray);font-family:monospace">ID: '+row.playerId+'</div>' +
+        '</div>' +
+      '</div>' +
       '<button id="sd-close" style="background:#1c1c1c;border:1px solid var(--border);color:#fff;width:34px;height:34px;border-radius:50%;font-size:1rem;cursor:pointer">✕</button>' +
     '</div>' +
-    '<div style="padding:14px 16px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:0.7rem;color:var(--gray)">' +
-      '<div>Limit<br><span style="color:#fff;font-weight:800;font-size:0.85rem">$'+row.startingLimit.toFixed(2)+'</span></div>' +
-      '<div>Balance<br><span style="color:#fff;font-weight:800;font-size:0.85rem">$'+row.currentBalance.toFixed(2)+'</span></div>' +
-      '<div>Won<br><span style="color:var(--green);font-weight:800;font-size:0.85rem">$'+row.won.toFixed(2)+'</span></div>' +
-      '<div>Lost<br><span style="color:var(--red);font-weight:800;font-size:0.85rem">$'+row.lost.toFixed(2)+'</span></div>' +
+    '<div style="padding:16px;border-bottom:1px solid var(--border)">' +
+      '<div style="text-align:center;margin-bottom:14px">' +
+        '<div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Weekly Net</div>' +
+        '<div style="font-size:1.8rem;font-weight:900;color:'+netColor+';line-height:1">'+netLabel+'</div>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">' +
+        '<div style="background:#0a0a0a;border:1px solid var(--border);border-radius:10px;padding:10px 8px"><div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Paid</div><div style="font-size:0.85rem;font-weight:800;color:#00c2ff">$'+paid.toFixed(2)+'</div></div>' +
+        '<div style="background:#0a0a0a;border:1px solid var(--border);border-radius:10px;padding:10px 8px"><div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Remaining</div><div style="font-size:0.85rem;font-weight:800;color:'+netColor+'">$'+remaining.toFixed(2)+'</div></div>' +
+        '<div style="background:#0a0a0a;border:1px solid var(--border);border-radius:10px;padding:10px 8px"><div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Status</div><div style="font-size:0.78rem;font-weight:800;color:#fff;text-transform:uppercase;letter-spacing:0.4px">'+status+'</div></div>' +
+      '</div>' +
     '</div>' +
     '<div style="flex:1;overflow-y:auto;padding:14px 16px">' +
-      '<div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Tickets this week (' + bets.length + ')</div>' +
+      '<div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Recent tickets (' + bets.length + ')</div>' +
       (bets.length ? bets.map(function(t){
         var c = t.status==='won'?'var(--green)':t.status==='lost'?'var(--red)':'var(--gray)';
         var pick = (t.selections&&t.selections[0]&&t.selections[0].pick) || t.type || '—';
@@ -2307,11 +2345,13 @@ function _showPlayerSettlementDetail(playerId) {
           '<div style="font-size:0.7rem;font-weight:800;color:'+c+'">'+t.status.toUpperCase()+'</div>' +
         '</div>';
       }).join('') : '<div style="padding:20px;text-align:center;color:var(--gray);font-size:0.78rem">No tickets this week</div>') +
+      '<div style="margin-top:18px;font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Settlement history</div>' +
+      '<div style="padding:14px;background:#0a0a0a;border:1px dashed var(--border);border-radius:10px;color:var(--gray);font-size:0.72rem;text-align:center">Past settlements appear here once weekly closes accumulate.</div>' +
     '</div>' +
   '</div>';
   document.body.appendChild(ov);
   ov.addEventListener('click', function(e){ if (e.target === ov) ov.remove(); });
-  var c = ov.querySelector('#sd-close'); if (c) c.addEventListener('click', function(){ ov.remove(); });
+  var cb = ov.querySelector('#sd-close'); if (cb) cb.addEventListener('click', function(){ ov.remove(); });
 }
 // Run check on host dashboard load + seed demo data once
 seedMockSettlementPlayers();
