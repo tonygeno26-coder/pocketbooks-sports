@@ -225,11 +225,10 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
 // auth-screen CSS default is display:flex — must suppress it here with !important
 (function(){
   var forceHome = sessionStorage.getItem('pb-force-lobby-home') === '1';
-  var hasState = !!(localStorage.getItem('pb-clubs') || localStorage.getItem('pb-club') ||
-    localStorage.getItem('pb-active-club') || localStorage.getItem('pb-player') ||
-    localStorage.getItem('pb-host') || localStorage.getItem('pb-tickets') ||
-    localStorage.getItem('pb-balance-start') || localStorage.getItem('pb-club-players') ||
-    localStorage.getItem('pb-sports-token'));
+  // Strict gate: only a real auth token + a canonical user record counts as a session.
+  var hasToken = !!localStorage.getItem('pb-sports-token');
+  var hasUser  = !!(localStorage.getItem('pb-player') || localStorage.getItem('pb-host'));
+  var hasState = hasToken && hasUser;
   if (forceHome && hasState) {
     // Inject style BEFORE body renders — overrides .auth-screen{display:flex}
     document.write('<style id="pb-hide-auth">#auth-screen{display:none!important;visibility:hidden!important;pointer-events:none!important;position:absolute!important;z-index:-9999!important}</style>');
@@ -647,17 +646,10 @@ function returnToLobby() {
 
 // ═══ LOBBY NAVIGATION HELPERS ════════════════════════════════════════════════
 function hasAnyPocketBooksState() {
-  return Boolean(
-    localStorage.getItem('pb-player') ||
-    localStorage.getItem('pb-host') ||
-    localStorage.getItem('pb-active-club') ||
-    localStorage.getItem('pb-clubs') ||
-    localStorage.getItem('pb-club') ||
-    localStorage.getItem('pb-club-players') ||
-    localStorage.getItem('pb-tickets') ||
-    localStorage.getItem('pb-balance-start') ||
-    localStorage.getItem('pb-sports-token')
-  );
+  // Strict: require token AND a user record. Mock/dev artifacts alone don’t count.
+  var hasToken = !!localStorage.getItem('pb-sports-token');
+  var hasUser  = !!(localStorage.getItem('pb-player') || localStorage.getItem('pb-host'));
+  return hasToken && hasUser;
 }
 function hideAuthScreen() {
   var el = document.getElementById('auth-screen');
