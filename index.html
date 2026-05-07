@@ -1921,7 +1921,21 @@ function resetSettlementPayments(playerId) {
 // Idempotent: only seeds when no club players exist yet.
 function seedMockSettlementPlayers() {
   var existing = loadClubPlayers();
-  if (existing.length) return false; // never overwrite real data
+  // Force re-seed when current state is degenerate: empty, or all players have
+  // zero weekly net (orphan stubs from earlier dev seeds). Never touch a
+  // population that already shows real activity.
+  function _hasRealActivity() {
+    if (!existing.length) return false;
+    var now = new Date();
+    var ws = _sundayMidnight(now);
+    var we = new Date(ws); we.setDate(we.getDate()+7);
+    return existing.some(function(p) {
+      var pid = p.playerId || p.id;
+      var w = _calcWeekForPlayer(pid, ws, we);
+      return (w.won + w.lost) > 0;
+    });
+  }
+  if (_hasRealActivity()) return false; // real data — leave alone
   // Mock players + target weekly nets. "Player owes host" = lost (positive).
   // "Host owes player" = won (negative net).
   var mock = [
@@ -1935,7 +1949,13 @@ function seedMockSettlementPlayers() {
   var players = mock.map(function(m){
     return { playerId:m.id, playerName:m.name, realName:m.name, clubId:'demo', status:'approved' };
   });
+  // Replace orphan stubs (no activity) but keep any pre-existing players we
+  // didn't seed if the array was non-empty (defensive).
   saveClubPlayers(players);
+  // Clear stale mock tickets from previous seed runs so we don't double-stack.
+  var allBets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
+  allBets = allBets.filter(function(t){ return !/^MK\d+$/.test(t.id||''); });
+  localStorage.setItem('hostActiveBets', JSON.stringify(allBets));
   var lims = {};
   players.forEach(function(p){ lims[p.playerId] = { creditLimit: 1000 }; });
   localStorage.setItem('pb-player-limits', JSON.stringify(lims));
