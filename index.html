@@ -440,7 +440,73 @@ function loadHostActiveBets(){
 
 
 // ═══ BET DELETE HOST ACTIONS ══════════════════════════════════════════════════
+// ══ CLUB STAFF / PERMISSIONS ════════════════════════════════════════════════════════════
+// Staff record: { userId, name, role, status, addedAt }
+// Roles: 'owner' | 'full' | 'partial' | 'view'
+// Capability matrix per role:
+var STAFF_CAPS = {
+  owner:   { cancelBet:1, gradeBet:1, editLimits:1, addPlayer:1, manageStaff:1, settle:1, viewClub:1 },
+  full:    { cancelBet:1, gradeBet:1, editLimits:1, addPlayer:1, manageStaff:0, settle:1, viewClub:1 },
+  partial: { cancelBet:0, gradeBet:0, editLimits:1, addPlayer:0, manageStaff:0, settle:1, viewClub:1 },
+  view:    { cancelBet:0, gradeBet:0, editLimits:0, addPlayer:0, manageStaff:0, settle:0, viewClub:1 },
+};
+function loadClubStaff(){ try { return JSON.parse(localStorage.getItem('pb-club-staff')||'[]'); } catch(_e){ return []; } }
+function saveClubStaff(a){ localStorage.setItem('pb-club-staff', JSON.stringify(a||[])); }
+function _resolveCurrentUser() {
+  try { var h = JSON.parse(localStorage.getItem('pb-host')||'null')||{}; return { id: h.id||h.hostId||'OWNER', name: h.name||h.username||h.hostName||'Owner' }; }
+  catch(_e) { return { id:'OWNER', name:'Owner' }; }
+}
+// Seed an owner row on first load so the dashboard isn't locked out.
+(function _seedOwner(){
+  var staff = loadClubStaff();
+  if (staff.some(function(s){ return s.role==='owner' && s.status!=='removed'; })) return;
+  var u = _resolveCurrentUser();
+  staff.push({ userId:u.id, name:u.name, role:'owner', status:'active', addedAt:new Date().toISOString() });
+  saveClubStaff(staff);
+})();
+function getCurrentRole() {
+  var u = _resolveCurrentUser();
+  var staff = loadClubStaff();
+  var match = staff.find(function(s){ return s.userId===u.id && s.status==='active'; });
+  return match ? match.role : 'owner'; // default owner if not registered (single-user dev)
+}
+function can(action) {
+  var role = getCurrentRole();
+  return !!(STAFF_CAPS[role] && STAFF_CAPS[role][action]);
+}
+function _denyToast(action) {
+  var role = getCurrentRole();
+  if (typeof showToastHost === 'function') showToastHost('⚠️ ' + action + ' not allowed for role: ' + role);
+}
+function addClubStaff(userId, name, role) {
+  if (!can('manageStaff')) { _denyToast('Manage staff'); return false; }
+  if (!STAFF_CAPS[role]) { showToastHost('Invalid role'); return false; }
+  var staff = loadClubStaff();
+  if (staff.some(function(s){ return s.userId===userId && s.status!=='removed'; })) { showToastHost('Already on staff'); return false; }
+  staff.push({ userId:userId, name:name||userId, role:role, status:'active', addedAt:new Date().toISOString() });
+  saveClubStaff(staff);
+  return true;
+}
+function updateClubStaffRole(userId, role) {
+  if (!can('manageStaff')) { _denyToast('Change role'); return false; }
+  if (!STAFF_CAPS[role]) return false;
+  var staff = loadClubStaff();
+  var s = staff.find(function(x){ return x.userId===userId; });
+  if (!s || s.role==='owner') return false;
+  s.role = role; saveClubStaff(staff); return true;
+}
+function removeClubStaff(userId) {
+  if (!can('manageStaff')) { _denyToast('Remove staff'); return false; }
+  var staff = loadClubStaff();
+  var s = staff.find(function(x){ return x.userId===userId; });
+  if (!s || s.role==='owner') return false;
+  s.status = 'removed';
+  saveClubStaff(staff); return true;
+}
+// ═══════════════════════════════════════════════════════════════════════════════
+
 function hostApproveDelete(ticketId) {
+  if (!can('cancelBet')) { _denyToast('Cancel bet'); return false; }
   var now = new Date().toISOString();
   var bets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
   var idx = bets.findIndex(function(t){ return t.id === ticketId; });
@@ -489,6 +555,7 @@ function hostApproveDelete(ticketId) {
 }
 
 function hostDenyDelete(ticketId) {
+  if (!can('cancelBet')) { _denyToast('Deny delete request'); return false; }
   var now = new Date().toISOString();
   var bets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
   var idx = bets.findIndex(function(t){ return t.id === ticketId; });
@@ -1011,10 +1078,93 @@ function renderPlayersTab(){
       html+=filtered.map(playerRow).join('');
     }
   }
+  // ══ COHOSTS / STAFF section ══
+  html += _renderClubStaffPanel();
   html+='</div><div style="height:80px"></div>';
   el.style.background='#0a0a0a';
   el.style.minHeight='100vh';
   el.innerHTML=html;
+  _wireClubStaffPanel(el);
+}
+
+function _renderClubStaffPanel() {
+  var staff = loadClubStaff().filter(function(s){ return s.status !== 'removed'; });
+  var role  = getCurrentRole();
+  var canManage = can('manageStaff');
+  var roleColors = { owner:'#f5c842', full:'#00ff88', partial:'#00c2ff', view:'#888' };
+  var html = '<div style="margin:16px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+      '<div><div style="font-size:0.95rem;font-weight:900">Cohosts / Staff</div>' +
+        '<div style="font-size:0.62rem;color:var(--gray)">Your role: <span style="color:'+(roleColors[role]||'#888')+';font-weight:800;text-transform:uppercase">'+role+'</span></div>' +
+      '</div>' +
+    '</div>';
+  // Staff list
+  if (!staff.length) {
+    html += '<div style="padding:14px;text-align:center;color:var(--gray);font-size:0.78rem">No staff yet</div>';
+  } else {
+    html += staff.map(function(s) {
+      var rc = roleColors[s.role] || '#888';
+      var initials = (s.name||'?').split(/\s+/).map(function(w){return (w[0]||'').toUpperCase();}).slice(0,2).join('') || '?';
+      var canEdit = canManage && s.role !== 'owner';
+      return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">' +
+        '<div style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.06);color:'+rc+';display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:900;border:1.5px solid '+rc+';flex-shrink:0">'+initials+'</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:0.82rem;font-weight:800">'+s.name+'</div>' +
+          '<div style="font-size:0.6rem;color:var(--gray);font-family:monospace">'+s.userId+'</div>' +
+        '</div>' +
+        (canEdit ?
+          '<select data-staff-role="'+s.userId+'" style="background:#0a0a0a;border:1px solid var(--border);color:#fff;border-radius:8px;padding:5px 8px;font-size:0.7rem;font-weight:700">' +
+            ['full','partial','view'].map(function(r){ return '<option value="'+r+'" '+(s.role===r?'selected':'')+'>'+r+'</option>'; }).join('') +
+          '</select>'
+          : '<span style="font-size:0.6rem;font-weight:800;color:'+rc+';background:rgba(255,255,255,0.04);padding:3px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:0.4px">'+s.role+'</span>'
+        ) +
+        (canEdit ? '<button data-staff-remove="'+s.userId+'" style="background:transparent;border:1px solid #cc0000;color:#ff6b6b;width:28px;height:28px;border-radius:50%;font-size:0.85rem;cursor:pointer" title="Remove">✕</button>' : '') +
+      '</div>';
+    }).join('');
+  }
+  // Add staff form (owner only)
+  if (canManage) {
+    html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">' +
+      '<div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Add Staff</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">' +
+        '<input id="add-staff-id"   placeholder="Username / ID" style="background:#0a0a0a;border:1px solid var(--border);color:#fff;border-radius:8px;padding:8px 10px;font-size:0.78rem;outline:none">' +
+        '<input id="add-staff-name" placeholder="Display name"  style="background:#0a0a0a;border:1px solid var(--border);color:#fff;border-radius:8px;padding:8px 10px;font-size:0.78rem;outline:none">' +
+      '</div>' +
+      '<div style="display:flex;gap:6px">' +
+        '<select id="add-staff-role" style="flex:1;background:#0a0a0a;border:1px solid var(--border);color:#fff;border-radius:8px;padding:8px 10px;font-size:0.78rem;font-weight:700">' +
+          '<option value="full">Full Access</option><option value="partial">Partial Access</option><option value="view">View Only</option>' +
+        '</select>' +
+        '<button id="add-staff-btn" style="background:var(--cyan);border:none;color:#000;padding:8px 14px;border-radius:8px;font-size:0.78rem;font-weight:900;cursor:pointer">+ Add</button>' +
+      '</div>' +
+    '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+function _wireClubStaffPanel(scope) {
+  var addBtn = scope.querySelector('#add-staff-btn');
+  if (addBtn) addBtn.addEventListener('click', function() {
+    var idEl = scope.querySelector('#add-staff-id');
+    var nmEl = scope.querySelector('#add-staff-name');
+    var rEl  = scope.querySelector('#add-staff-role');
+    if (!idEl || !idEl.value.trim()) { showToastHost('Enter username or ID'); return; }
+    if (addClubStaff(idEl.value.trim(), (nmEl&&nmEl.value.trim())||idEl.value.trim(), rEl.value)) {
+      showToastHost('✅ Staff added');
+      renderPlayersTab();
+    }
+  });
+  Array.prototype.forEach.call(scope.querySelectorAll('[data-staff-role]'), function(sel) {
+    sel.addEventListener('change', function() {
+      if (updateClubStaffRole(sel.dataset.staffRole, sel.value)) showToastHost('✅ Role updated');
+      else renderPlayersTab();
+    });
+  });
+  Array.prototype.forEach.call(scope.querySelectorAll('[data-staff-remove]'), function(btn) {
+    btn.addEventListener('click', function() {
+      if (!confirm('Remove this staff member?')) return;
+      if (removeClubStaff(btn.dataset.staffRemove)) { showToastHost('Staff removed'); renderPlayersTab(); }
+    });
+  });
 }
 
 
@@ -1073,6 +1223,7 @@ function openLimits(playerId, playerName) {
 }
 
 async function saveLimits() {
+  if (!can('editLimits')) { _denyToast('Edit limits'); return false; }
   if (!editingLimitsFor || !currentClub) return;
   const data = {
     max_bet: parseFloat(document.getElementById('lim-maxbet').value)||100,
