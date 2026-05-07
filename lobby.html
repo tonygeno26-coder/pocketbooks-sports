@@ -593,15 +593,20 @@ async function submitAuth() {
     localStorage.setItem('pb-dev-email', email);
     // NOTE: pb-dev-pass kept for dev only; do not rely on it for prod auth.
     localStorage.setItem('pb-dev-pass', pass);
-    // Seed a minimal pb-player so role/profile survives refresh even if
-    // /api/auth/me hasn't returned yet.
+    // Seed a minimal canonical record for whichever role applies, so role/
+    // profile survives refresh even if /api/auth/me hasn't returned yet.
     try {
-      localStorage.setItem('pb-player', JSON.stringify({
-        id:       data.userId || data.id || data.user && data.user.id || null,
+      var _role = (data.role || (data.user && data.user.role) || 'player');
+      var _rec  = {
+        id:       data.userId || data.id || (data.user && data.user.id) || null,
         username: (authMode==='signup' ? document.getElementById('a-name').value.trim() : email.split('@')[0]),
         email:    email,
-        role:     (data.role || (data.user && data.user.role) || 'player'),
-      }));
+        role:     _role,
+      };
+      localStorage.setItem('pb-player', JSON.stringify(_rec));
+      if (_role === 'host' || _role === 'owner') {
+        localStorage.setItem('pb-host', JSON.stringify(_rec));
+      }
     } catch(_e){}
 
     // Hide auth, show lobby
@@ -823,22 +828,38 @@ async function loadUser() {
   } catch(e) {}
 }
 
-// Auto-route after sign-in: approved player with a player-role club → player.html;
-// host with a host-role club → index.html. Otherwise stay on lobby.
+// Auto-route after sign-in: approved player with one player-role club → player.html;
+// host with one host-role club → index.html. Otherwise stay on lobby.
 function _maybeAutoRoute() {
-  // Skip if user came back via explicit ?from= bypass
   var fromParam = new URLSearchParams(window.location.search).get('from');
   if (fromParam === 'player' || fromParam === 'host') return;
   var clubs = userClubs || [];
-  if (!clubs.length) return; // stay on lobby
-  var player = JSON.parse(localStorage.getItem('pb-player')||'null')||{};
-  if (player.role === 'host') return; // host stays on lobby to pick club
+  if (!clubs.length) return;
+  var hostClubs = clubs.filter(function(c){ return c.role==='host' && c.status==='approved'; });
+  if (hostClubs.length === 1) {
+    try { localStorage.setItem('pb-active-club', JSON.stringify(hostClubs[0])); } catch(_e){}
+    window.location.href = 'index.html?from=lobby';
+    return;
+  }
   var approvedPlayerClubs = clubs.filter(function(c){ return c.role==='player' && c.status==='approved'; });
   if (approvedPlayerClubs.length === 1) {
     try { localStorage.setItem('pb-active-club', JSON.stringify(approvedPlayerClubs[0])); } catch(_e){}
     window.location.href = 'player.html?from=lobby';
   }
 }
+
+// ══ SIGN OUT ══ Clears token + dev creds + per-user session keys, returns to auth.
+function signOut() {
+  try {
+    ['pb-sports-token','pb-dev-email','pb-dev-pass','pb-player','pb-host',
+     'pb-active-club','pb-clubs','pb-club','pb-user-clubs']
+      .forEach(function(k){ localStorage.removeItem(k); });
+  } catch(_e){}
+  TOKEN = '';
+  userClubs = [];
+  try { window.location.href = 'lobby.html'; } catch(_e){}
+}
+window.signOut = signOut;
 
 async function loadMyClubs() {
   if (!TOKEN) return;
