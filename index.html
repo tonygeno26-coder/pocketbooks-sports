@@ -2284,13 +2284,16 @@ function renderSettlements() {
       status:       Math.abs(c) < 0.005 ? 'settled' : 'unpaid',
     };
   });
+  // Master Balance List rule: a row stays until remainingBalance = 0 AND
+  // status = 'settled'. Otherwise it persists across weeks (unpaid carryover
+  // is shown even if the player has no current-week activity).
   var masterRows = Object.values(masterMap)
     .filter(function(m) {
+      var fullySettled = (Math.abs(m.balance) < 0.005) && (m.status === 'settled');
+      if (fullySettled) return false;
       if (_settleFilter === 'owed') return m.balance > 0;
       if (_settleFilter === 'owes') return m.balance < 0;
-      // all: hide fully settled rows with zero balance and zero paid? spec says
-      // "do not show fully settled players unless filter is All" → show on all.
-      return true;
+      return true; // all
     })
     .sort(function(a,b){ return Math.abs(b.balance) - Math.abs(a.balance); });
 
