@@ -1898,11 +1898,28 @@ function checkWeeklySettlement() {
   try { runWeeklySettlement(); } catch(e) { console.warn('[settle] error', e.message); }
 }
 
-// Live preview of the current (in-progress) week — used for the summary card
-// before Sunday close. Mirrors the runWeeklySettlement math but reads only.
-function _currentWeekPreview() {
+// Active week offset (0 = current, -1 = last week, etc.) for the selector.
+var _settleWeekOffset = 0;
+// Per-day net (won-lost across all players) for the active week.
+function _dailyNetsForWeek(weekStart, weekEnd) {
+  var bets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
+  var days = [0,0,0,0,0,0,0]; // index by (date - weekStart) day count
+  bets.forEach(function(t){
+    var ts = new Date(t.placedAt).getTime();
+    if (isNaN(ts) || ts < weekStart.getTime() || ts >= weekEnd.getTime()) return;
+    var dayIdx = Math.floor((ts - weekStart.getTime()) / 86400000);
+    if (dayIdx < 0 || dayIdx > 6) return;
+    if (t.status === 'won')  days[dayIdx] -= parseFloat(t.potentialProfit)||0; // host loss when player wins
+    if (t.status === 'lost') days[dayIdx] += parseFloat(t.riskAmount)||0;       // host gain when player loses
+  });
+  return days.map(function(v){ return Math.round(v*100)/100; });
+}
+// Live preview of an arbitrary week. weekOffset 0=current week.
+function _currentWeekPreview(weekOffset) {
+  weekOffset = weekOffset || 0;
   var now       = new Date();
   var weekStart = _sundayMidnight(now);
+  weekStart.setDate(weekStart.getDate() + weekOffset*7);
   var weekEnd   = new Date(weekStart); weekEnd.setDate(weekEnd.getDate()+7);
   var players   = loadClubPlayers();
   var rows = players.map(function(p) {
@@ -1932,7 +1949,8 @@ function _currentWeekPreview() {
     return t;
   }, { hostOwes:0, playerOwes:0 });
   totals.netPosition = Math.round((totals.playerOwes - totals.hostOwes)*100)/100;
-  return { weekStart: weekStart, weekEnd: weekEnd, rows: rows, totals: totals };
+  return { weekStart: weekStart, weekEnd: weekEnd, rows: rows, totals: totals,
+           dailyNets: _dailyNetsForWeek(weekStart, weekEnd) };
 }
 
 function renderSettlements() {
@@ -1940,32 +1958,68 @@ function renderSettlements() {
   if (!el) return;
   checkWeeklySettlement();
   var all = loadSettlements();
-  var preview = _currentWeekPreview();
+  var preview = _currentWeekPreview(_settleWeekOffset);
 
-  // Current week summary card
   var owingHostCount  = preview.rows.filter(function(r){ return r.playerOwesHost > 0; }).length;
   var owedByHostCount = preview.rows.filter(function(r){ return r.hostOwesPlayer > 0; }).length;
   var netPos = preview.totals.netPosition;
-  var netColor = netPos > 0 ? 'var(--green)' : netPos < 0 ? 'var(--red)' : 'var(--gray)';
-  var netLabel = netPos > 0 ? '+$'+netPos.toFixed(2) : '-$'+Math.abs(netPos).toFixed(2);
+  // Big number at top: positive = host owed (green), negative = host owes (red)
+  var bigColor = netPos > 0 ? 'var(--green)' : netPos < 0 ? 'var(--red)' : '#fff';
+  var bigLabel = netPos > 0 ? '+$'+netPos.toFixed(2) : netPos < 0 ? '-$'+Math.abs(netPos).toFixed(2) : '$0.00';
+  var bigSub   = netPos > 0 ? 'Players owe host overall' : netPos < 0 ? 'Host owes players overall' : 'Even';
 
-  var summaryHtml = '<div style="padding:16px 16px 0">' +
-    '<div style="font-size:0.7rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Current Week</div>' +
-    '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:14px">' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">' +
-        '<div><div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Players</div><div style="font-size:1.05rem;font-weight:900">' + preview.rows.length + '</div></div>' +
-        '<div><div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Net Position</div><div style="font-size:1.05rem;font-weight:900;color:'+netColor+'">' + netLabel + '</div></div>' +
+  // Week range string "Mar 9 – Mar 16"
+  var ws = preview.weekStart, we = new Date(preview.weekEnd.getTime()-1);
+  var rangeLabel = ws.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + we.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+
+  // Bar chart — 7 bars, scaled to max abs value
+  var nets = preview.dailyNets || [0,0,0,0,0,0,0];
+  var dayLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var maxAbs = Math.max.apply(null, nets.map(function(v){ return Math.abs(v); })) || 1;
+  var chartHeight = 110;
+  var barsHtml = nets.map(function(v, i) {
+    var pct = Math.min(100, Math.abs(v)/maxAbs*100);
+    var h = Math.max(2, pct * chartHeight / 100);
+    var color = v > 0 ? 'var(--green)' : v < 0 ? 'var(--red)' : '#3a3a3a';
+    var bar = (Math.abs(v) < 0.005)
+      ? '<div style="width:100%;height:2px;background:#3a3a3a;border-radius:2px"></div>'
+      : '<div style="width:100%;height:'+h+'px;background:'+color+';border-radius:6px 6px 2px 2px"></div>';
+    var amt = (Math.abs(v) < 0.005) ? '' : (v>0?'+':'−')+'$'+Math.abs(v).toFixed(0);
+    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">' +
+      '<div style="flex:1;display:flex;align-items:flex-end;width:60%;min-height:'+chartHeight+'px">' + bar + '</div>' +
+      '<div style="font-size:0.55rem;color:var(--gray);font-weight:700">' + amt + '</div>' +
+      '<div style="font-size:0.62rem;color:#777;font-weight:700">' + dayLabels[i] + '</div>' +
+    '</div>';
+  }).join('');
+
+  // Top section: week selector + big net + chart
+  var canForward = _settleWeekOffset < 0;
+  var topHtml = '<div style="padding:18px 16px 8px">' +
+    // Week selector
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
+      '<button data-settle-week="prev" style="background:var(--card);border:1px solid var(--border);color:#fff;width:34px;height:34px;border-radius:50%;font-size:1rem;cursor:pointer">‹</button>' +
+      '<div style="text-align:center">' +
+        '<div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">' + (_settleWeekOffset===0?'This Week':_settleWeekOffset===-1?'Last Week':'Past Week') + '</div>' +
+        '<div style="font-size:0.92rem;font-weight:800">' + rangeLabel + '</div>' +
       '</div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-top:10px;border-top:1px solid var(--border)">' +
-        '<div><div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Owe Host</div><div style="font-size:0.9rem;font-weight:800;color:var(--red)">$' + preview.totals.playerOwes.toFixed(2) + '</div><div style="font-size:0.6rem;color:var(--gray)">'+owingHostCount+' player'+(owingHostCount!==1?'s':'')+'</div></div>' +
-        '<div><div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px">Host Owes</div><div style="font-size:0.9rem;font-weight:800;color:var(--green)">$' + preview.totals.hostOwes.toFixed(2) + '</div><div style="font-size:0.6rem;color:var(--gray)">'+owedByHostCount+' player'+(owedByHostCount!==1?'s':'')+'</div></div>' +
-      '</div>' +
+      '<button data-settle-week="next" ' + (canForward?'':'disabled') + ' style="background:var(--card);border:1px solid var(--border);color:'+(canForward?'#fff':'#444')+';width:34px;height:34px;border-radius:50%;font-size:1rem;cursor:'+(canForward?'pointer':'not-allowed')+'">›</button>' +
+    '</div>' +
+    // Big net
+    '<div style="text-align:center;margin-bottom:6px">' +
+      '<div style="font-size:2.4rem;font-weight:900;letter-spacing:-1px;color:'+bigColor+';line-height:1">' + bigLabel + '</div>' +
+      '<div style="font-size:0.7rem;color:var(--gray);margin-top:6px;font-weight:700">' + bigSub + '</div>' +
+    '</div>' +
+    // Bar chart
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 12px 10px;margin-top:16px;margin-bottom:16px">' +
+      '<div style="display:flex;align-items:flex-end;gap:4px;height:'+(chartHeight+30)+'px">' + barsHtml + '</div>' +
     '</div>' +
   '</div>';
 
-  // Current week player rows (live, before close)
+  var summaryHtml = topHtml;
+
+  // Player Settlements section
   var liveRowsHtml = '<div style="padding:0 16px 8px">' +
-    '<div style="font-size:0.7rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Players — In Progress</div>';
+    '<div style="font-size:0.95rem;font-weight:900;margin-bottom:12px">Player Settlements</div>';
   if (!preview.rows.length) {
     liveRowsHtml += '<div style="padding:24px;text-align:center;color:var(--gray);font-size:0.78rem;background:var(--card);border:1px solid var(--border);border-radius:14px">No players yet</div>';
   } else {
@@ -1997,13 +2051,21 @@ function renderSettlements() {
   }
   liveRowsHtml += '</div>';
 
+  // Bottom summary card
+  var bottomHtml = '<div style="padding:8px 16px 16px">' +
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)"><span style="font-size:0.75rem;color:var(--gray)">Players owing host</span><span style="font-size:0.85rem;font-weight:800;color:var(--green)">$'+preview.totals.playerOwes.toFixed(2)+' · '+owingHostCount+'</span></div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)"><span style="font-size:0.75rem;color:var(--gray)">Host owing players</span><span style="font-size:0.85rem;font-weight:800;color:var(--red)">$'+preview.totals.hostOwes.toFixed(2)+' · '+owedByHostCount+'</span></div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0 4px"><span style="font-size:0.85rem;font-weight:800">Net Position</span><span style="font-size:1rem;font-weight:900;color:'+bigColor+'">'+bigLabel+'</span></div>' +
+    '</div>' +
+  '</div>';
+
   if (!all.length) {
-    el.innerHTML = summaryHtml + liveRowsHtml +
-      '<div style="padding:24px 20px;text-align:center;color:#555;font-size:0.78rem">No closed weeks yet. The first close runs Sunday at midnight.</div>';
+    el.innerHTML = summaryHtml + liveRowsHtml + bottomHtml;
     _wireSettlementsButtons(el);
     return;
   }
-  var html = summaryHtml + liveRowsHtml + '<div style="padding:8px 16px 8px">' +
+  var html = summaryHtml + liveRowsHtml + bottomHtml + '<div style="padding:8px 16px 8px">' +
     '<div style="font-size:0.7rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Past Settlements</div>';
   all.forEach(function(s) {
     var ws = new Date(s.weekStart), we = new Date(s.weekEnd);
@@ -2054,6 +2116,14 @@ function renderSettlements() {
 }
 
 function _wireSettlementsButtons(el) {
+  Array.prototype.forEach.call(el.querySelectorAll('[data-settle-week]'), function(btn) {
+    btn.addEventListener('click', function() {
+      if (btn.disabled) return;
+      _settleWeekOffset += (btn.dataset.settleWeek === 'next' ? 1 : -1);
+      if (_settleWeekOffset > 0) _settleWeekOffset = 0;
+      renderSettlements();
+    });
+  });
   Array.prototype.forEach.call(el.querySelectorAll('[data-settle-mark]'), function(btn) {
     btn.addEventListener('click', function() {
       var parts = btn.dataset.settleMark.split('|');
