@@ -2247,58 +2247,95 @@ function renderSettlements() {
     '<button data-settle-save style="width:100%;background:var(--green);border:none;color:#000;padding:16px;border-radius:14px;font-size:0.95rem;font-weight:900;cursor:pointer;letter-spacing:0.3px">Save Settlements</button>' +
   '</div>';
 
-  if (!all.length) {
-    el.innerHTML = summaryHtml + liveRowsHtml + bottomHtml;
-    _wireSettlementsButtons(el);
-    return;
-  }
-  var html = summaryHtml + liveRowsHtml + bottomHtml + '<div style="padding:8px 16px 8px">' +
-    '<div style="font-size:0.7rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Past Settlements</div>';
-  all.forEach(function(s) {
-    var ws = new Date(s.weekStart), we = new Date(s.weekEnd);
-    var range = ws.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + we.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-    html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;margin-bottom:14px;overflow:hidden">' +
-      '<div style="padding:12px 14px;background:rgba(0,194,255,0.05);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">' +
-        '<div style="font-size:0.85rem;font-weight:900">Week of ' + range + '</div>' +
-        '<div style="font-size:0.65rem;color:var(--gray)">' + s.players.length + ' player' + (s.players.length!==1?'s':'') + '</div>' +
-      '</div>';
-    if (!s.players.length) {
-      html += '<div style="padding:18px;text-align:center;color:var(--gray);font-size:0.78rem">No players this week</div>';
-    } else {
-      s.players.forEach(function(r){
-        var statusColor = { paid:'#00ff88', settled:'#888', unpaid:'#f5c842' }[r.status] || '#888';
-        var statusBg    = { paid:'rgba(0,255,136,0.1)', settled:'rgba(255,255,255,0.04)', unpaid:'rgba(245,200,66,0.1)' }[r.status] || 'rgba(255,255,255,0.04)';
-        var owesLine = r.hostOwesPlayer > 0
-          ? '<span style="color:var(--green);font-weight:800">Host owes $'+r.hostOwesPlayer.toFixed(2)+'</span>'
-          : r.playerOwesHost > 0
-            ? '<span style="color:var(--red);font-weight:800">Player owes $'+r.playerOwesHost.toFixed(2)+'</span>'
-            : '<span style="color:var(--gray)">Even</span>';
-        html += '<div style="padding:12px 14px;border-bottom:1px solid var(--border)">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
-            '<div style="font-size:0.88rem;font-weight:800">' + r.playerName + '</div>' +
-            '<div style="font-size:0.6rem;font-weight:800;color:'+statusColor+';background:'+statusBg+';padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:0.4px">' + r.status + '</div>' +
-          '</div>' +
-          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:0.7rem;color:var(--gray);margin-bottom:8px">' +
-            '<div>Limit<br><span style="color:#fff;font-weight:800">$'+r.startingLimit.toFixed(2)+'</span></div>' +
-            '<div>Won<br><span style="color:var(--green);font-weight:800">$'+r.won.toFixed(2)+'</span></div>' +
-            '<div>Lost<br><span style="color:var(--red);font-weight:800">$'+r.lost.toFixed(2)+'</span></div>' +
-          '</div>' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.75rem">' +
-            owesLine +
-            (r.status==='unpaid' ?
-              '<div style="display:flex;gap:6px">' +
-                '<button data-settle-mark="'+s.id+'|'+r.playerId+'" data-settle-status="paid" style="background:var(--green);border:none;color:#000;padding:5px 12px;border-radius:8px;font-size:0.65rem;font-weight:800;cursor:pointer">Mark Paid</button>' +
-                '<button data-settle-mark="'+s.id+'|'+r.playerId+'" data-settle-status="settled" style="background:transparent;border:1px solid var(--border);color:var(--gray);padding:4px 10px;border-radius:8px;font-size:0.65rem;font-weight:800;cursor:pointer">Mark Settled</button>' +
-              '</div>'
-              : '') +
-          '</div>' +
-        '</div>';
-      });
-    }
-    html += '</div>';
+  // ══ MASTER BALANCE LIST ══
+  // Combine prior carryover + current week endingBalance per player.
+  // Fully settled players hidden unless filter === 'all'.
+  var carryIn = _loadCarryover();
+  var rowMap = {};
+  preview.rows.forEach(function(r){ rowMap[r.playerId] = r; });
+  // Latest activity timestamp per player
+  var allBets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
+  var lastActivity = {};
+  allBets.forEach(function(t){
+    var ts = new Date(t.placedAt).getTime(); if (isNaN(ts)) return;
+    if (!lastActivity[t.playerId] || ts > lastActivity[t.playerId]) lastActivity[t.playerId] = ts;
   });
-  html += '</div>';
-  el.innerHTML = html;
+  // Build master rows: union of (preview rows) and (carryover-only players).
+  var masterMap = {};
+  preview.rows.forEach(function(r) {
+    masterMap[r.playerId] = {
+      playerId:      r.playerId,
+      playerName:    r.playerName,
+      balance:       r.endingBalance,
+      paid:          r.paymentsThisWeek,
+      lastActivity:  lastActivity[r.playerId] || null,
+      status:        r.status,
+    };
+  });
+  Object.keys(carryIn).forEach(function(pid){
+    if (masterMap[pid]) return; // already covered by current-week preview
+    var c = parseFloat(carryIn[pid])||0;
+    masterMap[pid] = {
+      playerId:     pid,
+      playerName:   pid,
+      balance:      c,
+      paid:         0,
+      lastActivity: lastActivity[pid] || null,
+      status:       Math.abs(c) < 0.005 ? 'settled' : 'unpaid',
+    };
+  });
+  var masterRows = Object.values(masterMap)
+    .filter(function(m) {
+      if (_settleFilter === 'owed') return m.balance > 0;
+      if (_settleFilter === 'owes') return m.balance < 0;
+      // all: hide fully settled rows with zero balance and zero paid? spec says
+      // "do not show fully settled players unless filter is All" → show on all.
+      return true;
+    })
+    .sort(function(a,b){ return Math.abs(b.balance) - Math.abs(a.balance); });
+
+  var masterHtml = '<div style="padding:8px 16px 16px">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px">' +
+      '<div style="font-size:0.95rem;font-weight:900;letter-spacing:0.3px">MASTER BALANCE LIST</div>' +
+    '</div>';
+  if (!masterRows.length) {
+    masterHtml += '<div style="padding:24px;text-align:center;color:var(--gray);font-size:0.78rem;background:var(--card);border:1px solid var(--border);border-radius:14px">No outstanding balances</div>';
+  } else {
+    masterRows.forEach(function(m) {
+      var dir = m.balance > 0 ? 'player-owes' : m.balance < 0 ? 'host-owes' : 'even';
+      var amtColor = dir === 'player-owes' ? '#00ff88' : dir === 'host-owes' ? '#ff3d57' : 'var(--gray)';
+      var amtLabel = (Math.abs(m.balance) < 0.005) ? '$0.00' : (dir === 'player-owes' ? '+$' : '-$') + Math.abs(m.balance).toFixed(2);
+      var owesLabel = dir === 'player-owes' ? 'Player owes host' : dir === 'host-owes' ? 'Host owes player' : 'Settled';
+      var status = m.status || (Math.abs(m.balance) < 0.005 ? 'settled' : (m.paid > 0 ? 'partial' : 'unpaid'));
+      var statusColor = { paid:'#00ff88', settled:'#888', unpaid:'#f5c842', partial:'#00c2ff' }[status] || '#888';
+      var statusBg    = { paid:'rgba(0,255,136,0.1)', settled:'rgba(255,255,255,0.04)', unpaid:'rgba(245,200,66,0.1)', partial:'rgba(0,194,255,0.1)' }[status] || 'rgba(255,255,255,0.04)';
+      var initials = (m.playerName||'?').split(/\s+/).map(function(w){return (w[0]||'').toUpperCase();}).slice(0,2).join('') || '?';
+      var avatarBg    = dir === 'player-owes' ? 'rgba(0,255,136,0.15)' : dir === 'host-owes' ? 'rgba(255,61,87,0.15)' : 'rgba(255,255,255,0.06)';
+      var avatarColor = dir === 'player-owes' ? '#00ff88' : dir === 'host-owes' ? '#ff3d57' : '#888';
+      var dateStr = m.lastActivity ? new Date(m.lastActivity).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
+      masterHtml += '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between">' +
+          '<div style="display:flex;align-items:center;gap:12px">' +
+            '<div style="width:38px;height:38px;border-radius:50%;background:'+avatarBg+';color:'+avatarColor+';display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:900;border:1.5px solid '+avatarColor+';flex-shrink:0">'+initials+'</div>' +
+            '<div>' +
+              '<div style="font-size:0.92rem;font-weight:800;margin-bottom:2px">'+m.playerName+'</div>' +
+              '<div style="font-size:0.62rem;color:var(--gray)">'+owesLabel+' · '+dateStr+'</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="text-align:right">' +
+            '<div style="font-size:1.1rem;font-weight:900;color:'+amtColor+';line-height:1">'+amtLabel+'</div>' +
+            '<div style="font-size:0.55rem;font-weight:800;color:'+statusColor+';background:'+statusBg+';padding:3px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:0.4px;display:inline-block;margin-top:6px">'+status+'</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="display:flex;justify-content:flex-end;margin-top:10px">' +
+          '<button data-settle-view="'+m.playerId+'" style="background:transparent;border:1px solid var(--border);color:var(--cyan);padding:5px 14px;border-radius:8px;font-size:0.7rem;font-weight:700;cursor:pointer">View</button>' +
+        '</div>' +
+      '</div>';
+    });
+  }
+  masterHtml += '</div>';
+
+  el.innerHTML = summaryHtml + liveRowsHtml + bottomHtml + masterHtml;
   _wireSettlementsButtons(el);
 }
 
