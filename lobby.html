@@ -1037,7 +1037,82 @@ function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 function closeAllModals() { document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remove('open')); }
 document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')}));
-function setBN(el,tab){ document.querySelectorAll('.bn').forEach(n=>n.classList.remove('active')); el.classList.add('active'); }
+function setBN(el,tab){
+  document.querySelectorAll('.bn').forEach(n=>n.classList.remove('active'));
+  el.classList.add('active');
+  if (tab === 'profile') showPlayerSettings();
+}
+
+// ══ SHARED PROFILE SETTINGS (mirror of player.html showPlayerSettings) ══
+var CURRENCY_RATES = { USD:1, EUR:0.92, GBP:0.79, CAD:1.36, AUD:1.51, MXN:17.20 };
+var CURRENCY_SYMBOLS = { USD:'$', EUR:'€', GBP:'£', CAD:'CA$', AUD:'A$', MXN:'MX$' };
+function loadPlayerSettings() {
+  try { return Object.assign({theme:'dark',currency:'USD',signalContact:''}, JSON.parse(localStorage.getItem('pb-player-settings')||'{}')); }
+  catch(_e) { return { theme:'dark', currency:'USD', signalContact:'' }; }
+}
+function savePlayerSettings(s) { localStorage.setItem('pb-player-settings', JSON.stringify(s||{})); }
+function applyPlayerTheme() {
+  var s = loadPlayerSettings();
+  if (s.theme === 'light') document.body.classList.add('theme-light');
+  else document.body.classList.remove('theme-light');
+}
+try { if (typeof document!=='undefined') { if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',applyPlayerTheme); else applyPlayerTheme(); } } catch(_e){}
+
+function showPlayerSettings() {
+  var existing = document.getElementById('ps-overlay'); if (existing) existing.remove();
+  var s = loadPlayerSettings();
+  var ov = document.createElement('div');
+  ov.id = 'ps-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.85);display:flex;align-items:flex-end;justify-content:center';
+  function chip(group, val, label, current) {
+    var on = current === val;
+    return '<button data-pset-'+group+'="'+val+'" style="flex:1;padding:10px;background:'+(on?'#00c2ff':'#1c1c1c')+';border:1px solid '+(on?'#00c2ff':'#252525')+';color:'+(on?'#000':'#bbb')+';border-radius:10px;font-size:0.78rem;font-weight:800;cursor:pointer">'+label+'</button>';
+  }
+  ov.innerHTML = '<div style="background:#0a0a0a;color:#fff;width:100%;max-width:430px;max-height:90vh;border-radius:20px 20px 0 0;display:flex;flex-direction:column;border:1px solid #252525">' +
+    '<div style="padding:14px 16px;border-bottom:1px solid #252525;display:flex;justify-content:space-between;align-items:center">' +
+      '<div><div style="font-size:0.62rem;color:#888;text-transform:uppercase;letter-spacing:0.5px">Profile</div><div style="font-size:1rem;font-weight:900">Settings</div></div>' +
+      '<button id="ps-close" style="background:#1c1c1c;border:1px solid #252525;color:#fff;width:34px;height:34px;border-radius:50%;font-size:1rem;cursor:pointer">✕</button>' +
+    '</div>' +
+    '<div style="flex:1;overflow-y:auto;padding:16px">' +
+      '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;margin-bottom:12px">' +
+        '<div style="font-size:0.62rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Signal Contact</div>' +
+        '<input id="ps-signal" placeholder="Signal username / phone" value="'+(s.signalContact||'').replace(/"/g,'&quot;')+'" style="width:100%;background:#0a0a0a;border:1px solid #252525;border-radius:10px;padding:10px 12px;color:#fff;font-size:0.85rem;outline:none">' +
+        '<div style="font-size:0.62rem;color:#666;margin-top:6px">Used to deliver settlement receipts.</div>' +
+      '</div>' +
+      '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;margin-bottom:12px">' +
+        '<div style="font-size:0.62rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Appearance</div>' +
+        '<div style="display:flex;gap:8px">' + chip('theme','dark','🌑 Dark', s.theme) + chip('theme','light','☀️ Light', s.theme) + '</div>' +
+      '</div>' +
+      '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px">' +
+        '<div style="font-size:0.62rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Display Currency</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">' +
+          ['USD','EUR','GBP','CAD','AUD','MXN'].map(function(c){ return chip('currency', c, c, s.currency); }).join('') +
+        '</div>' +
+        '<div style="font-size:0.62rem;color:#666;margin-top:8px">Bets/balances stored in USD. Display only.</div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="padding:12px 16px 18px;border-top:1px solid #252525">' +
+      '<button id="ps-save" style="width:100%;padding:14px;background:#00c2ff;border:none;color:#000;border-radius:12px;font-size:0.92rem;font-weight:900;cursor:pointer">Save</button>' +
+    '</div>' +
+  '</div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click', function(e){ if (e.target===ov) ov.remove(); });
+  ov.querySelector('#ps-close').addEventListener('click', function(){ ov.remove(); });
+  Array.prototype.forEach.call(ov.querySelectorAll('[data-pset-theme]'), function(b){
+    b.addEventListener('click', function() { s.theme = b.dataset.psetTheme; savePlayerSettings(s); applyPlayerTheme(); showPlayerSettings(); });
+  });
+  Array.prototype.forEach.call(ov.querySelectorAll('[data-pset-currency]'), function(b){
+    b.addEventListener('click', function() { s.currency = b.dataset.psetCurrency; savePlayerSettings(s); showPlayerSettings(); });
+  });
+  ov.querySelector('#ps-save').addEventListener('click', function() {
+    var sigEl = ov.querySelector('#ps-signal');
+    if (sigEl) s.signalContact = sigEl.value.trim();
+    savePlayerSettings(s);
+    applyPlayerTheme();
+    if (typeof showToast==='function') showToast('✅ Settings saved');
+    ov.remove();
+  });
+}
 
 async function apiCall(method, path, body) {
   const r = await fetch(API+path, {method, headers:{'Content-Type':'application/json',...(TOKEN?{'Authorization':'Bearer '+TOKEN}:{})}, body:body?JSON.stringify(body):undefined});
