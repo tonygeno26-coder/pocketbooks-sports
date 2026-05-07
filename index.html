@@ -98,8 +98,61 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .bn-lbl{font-size:0.57rem;color:#444;font-weight:600;transition:color 0.2s}
 .bn.active .bn-lbl{color:var(--cyan)}
 .bn.active .bn-ico svg{stroke:var(--cyan);filter:drop-shadow(0 0 4px rgba(0,194,255,0.5))}
+
+/* ═══ GLOBAL LIGHT THEME ═══ — toggle via body.theme-light */
+body.theme-light{background:#f4f6fb!important;color:#111!important}
+body.theme-light :root,body.theme-light{
+  --bg:#f4f6fb;--card:#fff;--card2:#fff;--border:#e6e9ef;
+  --green:#00c853;--green-dim:rgba(0,200,83,0.10);
+  --red:#cc0000;--red-dim:rgba(204,0,0,0.08);
+  --cyan:#0064c8;--cyan-dim:rgba(0,100,200,0.08);
+  --gold:#b88a00;--gold-dim:rgba(184,138,0,0.08);
+  --white:#111;--gray:#666;--light:#888;
+}
+/* Generic surfaces */
+body.theme-light header,body.theme-light .hdr,body.theme-light .h-top,body.theme-light .topbar,body.theme-light .h-wrap,body.theme-light .header,body.theme-light .top-tabs,body.theme-light .sport-tabs,body.theme-light .filter-pills,body.theme-light .club-bar,body.theme-light .sport-filter,body.theme-light .bnav,body.theme-light .bottom-nav{background:#fff!important;color:#111!important;border-color:#e6e9ef!important}
+body.theme-light .card,body.theme-light .market-card,body.theme-light .game-card,body.theme-light .alert-card,body.theme-light .settle-card,body.theme-light .stat-card,body.theme-light .ticket-card,body.theme-light .player-card,body.theme-light .leg{background:#fff!important;color:#111!important;border:1px solid #e6e9ef!important;box-shadow:0 1px 3px rgba(15,30,55,0.04)!important}
+body.theme-light input[type=text],body.theme-light input[type=number],body.theme-light input[type=email],body.theme-light input[type=password],body.theme-light input[type=tel],body.theme-light input[type=search],body.theme-light textarea,body.theme-light select{background:#fff!important;border:1px solid #d8dee8!important;color:#111!important}
+body.theme-light input:focus,body.theme-light textarea:focus,body.theme-light select:focus{border-color:#00c853!important;outline:none!important}
+body.theme-light button{color:inherit}
+body.theme-light .bn-lbl,body.theme-light .bn-ico svg{color:#666!important;stroke:#666!important}
+body.theme-light .bn.active .bn-lbl{color:#0064c8!important}
+body.theme-light .bn.active .bn-ico svg{stroke:#0064c8!important;filter:drop-shadow(0 0 4px rgba(0,100,200,0.25))!important}
+/* Odds + selected */
+body.theme-light .odds-box{background:#f4f6fb!important;border:1px solid #e6e9ef!important;color:#111!important}
+body.theme-light .odds-box.sel,body.theme-light .odds-box.selected,body.theme-light .selected{background:#e7f9ee!important;border-color:#00c853!important;box-shadow:0 0 0 2px rgba(0,200,83,0.20)!important;color:#00875a!important}
+body.theme-light .pos,body.theme-light .pos-odds,body.theme-light .green{color:#00875a!important}
+body.theme-light .neg,body.theme-light .neg-odds,body.theme-light .red{color:#cc0000!important}
+/* Modals/sheets */
+body.theme-light .modal,body.theme-light .modal-bg,body.theme-light .sheet,body.theme-light .overlay-card,body.theme-light .dkslip,body.theme-light #bd-root{background:#fff!important;color:#111!important;border-color:#e6e9ef!important}
+body.theme-light .modal-bg{background:rgba(20,30,55,0.45)!important}
+/* Primary/secondary action buttons */
+body.theme-light .btn-primary,body.theme-light .place-bet,body.theme-light [data-action=place-bet],body.theme-light .dkslip-place,body.theme-light .green-btn{background:#00c853!important;color:#0a1f12!important;border:none!important;font-weight:900!important}
+body.theme-light .btn-secondary,body.theme-light .dkslip-cancel,body.theme-light .secondary-btn,body.theme-light .gray-btn{background:#fff!important;border:1px solid #e6e9ef!important;color:#111!important}
+/* Bottom nav */
+body.theme-light .bnav,body.theme-light .bn{color:#666!important}
+/* Dark inline-style fallbacks: many components use inline style="background:#0a0a0a" etc. Dial them to white via attribute selectors. */
+body.theme-light [style*="background:#0a0a0a"],body.theme-light [style*="background:#111"],body.theme-light [style*="background:#141414"],body.theme-light [style*="background:#1c1c1c"],body.theme-light [style*="background:#1a1a1a"],body.theme-light [style*="background:#252525"]{background:#fff!important;color:#111!important;border-color:#e6e9ef!important}
+body.theme-light [style*="border:1px solid #252525"],body.theme-light [style*="border:1px solid #333"],body.theme-light [style*="border:1px solid #222"],body.theme-light [style*="border:1px solid #2a2a2a"]{border-color:#e6e9ef!important}
+body.theme-light [style*="color:#fff"],body.theme-light [style*="color:#FFF"]{color:#111!important}
+body.theme-light [style*="color:#888"],body.theme-light [style*="color:#777"],body.theme-light [style*="color:#666"],body.theme-light [style*="color:#555"]{color:#666!important}
+body.theme-light [style*="color:#00c2ff"]{color:#0064c8!important}
+body.theme-light [style*="color:#ff3d57"],body.theme-light [style*="color:#ff6b6b"],body.theme-light [style*="color:#ff4444"]{color:#cc0000!important}
+body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
+
 </style>
-</head>
+
+<script>
+(function(){
+  // GLOBAL LIGHT APPLY
+try {
+    var s=JSON.parse(localStorage.getItem('pb-player-settings')||'{}');
+    if (s && s.theme==='light') document.documentElement.classList.add('theme-light');
+  } catch(_e){}
+  function syncBody(){ if (!document.body) return; if (document.documentElement.classList.contains('theme-light')) document.body.classList.add('theme-light'); }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',syncBody); else syncBody();
+})();
+</script></head>
 <body>
 
 <!-- HOST HEADER -->
