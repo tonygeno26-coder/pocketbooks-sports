@@ -1159,6 +1159,12 @@ var bsStake = 0;
 var _pendingRisk   = 0;
 var _pendingPayout = 0;
 var _pendingProfit = 0;
+// BUG #5 fix: full immutable snapshot of bet-slip state captured at the moment
+// the confirm modal opens. confirmBet reads ONLY from this snapshot so any
+// late mutations to bsStakes / bsStake / betSlip / bsType / rrStakes / teaserPts
+// (from re-renders, async events, paste handlers, etc.) cannot corrupt the
+// ticket(s) ultimately written. See REGRESSION.md §15.
+var _pendingSnapshot = null;
 
 // ── MODULE-LEVEL helpers (used by confirm, renderLegs, syncBtn) ──
 function nCr(n, r) {
@@ -1796,6 +1802,41 @@ function openBetConfirm() {
   _pendingProfit = toWin;
   var typeLabel = {straight:'Singles',parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[bsType] || bsType;
 
+  // ═══ BUG #5 SNAPSHOT ══════════════════════════════════════════════════════════════════════
+  // Freeze every input that confirmBet will read. Each entry is a fresh
+  // copy (deep where it matters) so subsequent mutations to live globals
+  // (bsStakes, betSlip, bsType, rrStakes, teaserPts) cannot leak in.
+  // Object.freeze is best-effort — if a future change introduces a nested
+  // mutable field, that field stays mutable, but our consumers all do
+  // primitive reads or one-shot iterations.
+  _pendingSnapshot = Object.freeze({
+    type:        bsType,
+    legs:        betSlip.map(function(b){
+      // shallow copy each leg — leg fields (cellId, pick, odds, market,
+      // game, sport, time) are primitives in current code.
+      var copy = {}; for (var k in b) if (Object.prototype.hasOwnProperty.call(b,k)) copy[k] = b[k];
+      return Object.freeze(copy);
+    }),
+    // shallow per-cellId stake map; values are numbers
+    stakes:      (function(){
+      var out = {};
+      Object.keys(bsStakes||{}).forEach(function(k){ out[k] = parseFloat(bsStakes[k])||0; });
+      return Object.freeze(out);
+    })(),
+    rrStakes:    (function(){
+      var out = {};
+      Object.keys(rrStakes||{}).forEach(function(k){ out[k] = parseFloat(rrStakes[k])||0; });
+      return Object.freeze(out);
+    })(),
+    teaserPts:   teaserPts,
+    risk:        risk,
+    payout:      payout,
+    profit:      toWin,
+    capturedAt:  new Date().toISOString(),
+  });
+  console.log('[snapshot] captured', _pendingSnapshot);
+  // ══════════════════════════════════════════════════════════════════════════════
+
   // Build DK-style light modal content
   var legsHtml = betSlip.map(function(b) {
     var logo = (bsTeamLogo(b.pick, b.game)||'').replace('/500-dark/','/500/');
@@ -1894,6 +1935,8 @@ function closeBetConfirm() {
   // Also clean up any legacy overlay
   var ov = document.getElementById('bc-modal-overlay');
   if (ov) ov.remove();
+  // BUG #5: invalidate snapshot so a stale confirm cannot fire after close.
+  _pendingSnapshot = null;
 }
 
 function _resolvePlayer() {
@@ -1922,20 +1965,31 @@ function _makeSelection(b) {
 
 function confirmBet() {
   console.log("confirm bet clicked");
+  // BUG #5: read EVERYTHING from the snapshot captured at openBetConfirm time.
+  // Live globals (bsStakes, bsStake, betSlip, bsType, rrStakes, teaserPts) are
+  // not consulted here — they may have been mutated by re-renders or async UI
+  // events between modal-open and modal-confirm.
+  var snap = _pendingSnapshot;
+  if (!snap) {
+    showToast('Bet expired · reopen confirmation');
+    console.warn('[confirmBet] no snapshot — aborting');
+    return;
+  }
+
   var _avail = calcAvailableBalance().available;
   playerBalance = _avail;
-  var riskAmount = _pendingRisk;
-  bsStake = riskAmount;
+  var riskAmount = snap.risk;
+  bsStake = riskAmount; // keep live var in sync for any UI reading it post-confirm
   if (_avail < riskAmount) { showToast('Insufficient balance · have '+fmtBalance()); return; }
 
   var pl = _resolvePlayer();
   var now = new Date().toISOString();
   var newTickets = [];
 
-  if (bsType === 'straight') {
-    // ═ SINGLES: one ticket per leg ═
-    betSlip.forEach(function(b) {
-      var st = bsStakes[b.cellId] || 0;
+  if (snap.type === 'straight') {
+    // ═ SINGLES: one ticket per leg, using snapshotted per-leg stakes ═
+    snap.legs.forEach(function(b) {
+      var st = snap.stakes[b.cellId] || 0;
       if (!st) return;
       var dec = amToDecimal(b.odds);
       var tPayout = Math.round(st * dec * 100) / 100;
@@ -1955,22 +2009,22 @@ function confirmBet() {
     });
   } else {
     // ═ PARLAY / TEASER / RR: one combined ticket ═
-    var typeLabel = {parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[bsType] || bsType;
+    var typeLabel = {parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[snap.type] || snap.type;
     var tid = 'T' + Date.now();
     newTickets.push({
       id: tid,
       playerId: pl.id, playerUsername: pl.name, playerRealName: pl.realName,
       playerName: pl.name, clubId: pl.clubId, clubName: pl.clubName,
       type: typeLabel, status: 'active', source: 'player', placedAt: now,
-      selections: betSlip.map(_makeSelection),
-      odds: betSlip.length === 1 ? fmtOdds(betSlip[0].odds) : (function(){
-        var d=betSlip.reduce(function(acc,b){return acc*amToDecimal(b.odds);},1);
+      selections: snap.legs.map(_makeSelection),
+      odds: snap.legs.length === 1 ? fmtOdds(snap.legs[0].odds) : (function(){
+        var d=snap.legs.reduce(function(acc,b){return acc*amToDecimal(b.odds);},1);
         var raw=Math.round((d-1)*100);
         return isNaN(raw)?'--':(raw>0?'+'+raw:''+Math.round(-100/(d-1)));
       })(),
-      riskAmount: _pendingRisk,
-      estimatedPayout: Math.round(_pendingPayout * 100) / 100,
-      potentialProfit: Math.round(_pendingProfit * 100) / 100
+      riskAmount: snap.risk,
+      estimatedPayout: Math.round(snap.payout * 100) / 100,
+      potentialProfit: Math.round(snap.profit * 100) / 100
     });
   }
 
@@ -1989,10 +2043,10 @@ function confirmBet() {
     ticketIds: newTickets.map(function(t){return t.id;}),
     amount: -riskAmount, balanceBefore: _bs.available + riskAmount,
     balanceAfter: _bs.available, createdAt: now,
-    betType: bsType, count: newTickets.length });
+    betType: snap.type, count: newTickets.length });
 
   dbgBanner('CONFIRMED: '+newTickets.length+' ticket(s)\nRisk: $'+riskAmount.toFixed(2)+'\nBalance: $'+_bs.available.toFixed(2), '#020');
-  console.log('[confirmBet] tickets saved:', newTickets.length, 'balance:', _bs.available);
+  console.log('[confirmBet] tickets saved:', newTickets.length, 'balance:', _bs.available, 'snapshotAt:', snap.capturedAt);
 
   closeBetConfirm();
   closeBetSlip();
@@ -2574,7 +2628,7 @@ function bsRemove(i) {
 
 function clearSlip() {
   console.log('clear all clicked');
-  bsStakes = {}; bsStake = 0; rrStakes = {}; _pendingRisk = 0; _pendingPayout = 0; _pendingProfit = 0;
+  bsStakes = {}; bsStake = 0; rrStakes = {}; _pendingRisk = 0; _pendingPayout = 0; _pendingProfit = 0; _pendingSnapshot = null;
   // Clear footer stake input DOM immediately
   var inp = document.getElementById('bs-stake-inp');
   if (inp) inp.value = '';
@@ -2599,7 +2653,7 @@ function clearSlip() {
 function openBetSlip() {
   // Always reset stake state on open — no persisted amounts
   bsStake = 0; bsStakes = {}; rrStakes = {};
-  _pendingRisk = 0; _pendingPayout = 0; _pendingProfit = 0;
+  _pendingRisk = 0; _pendingPayout = 0; _pendingProfit = 0; _pendingSnapshot = null;
   var drawer = document.getElementById('bs-drawer');
   if (drawer) { drawer.classList.add('open'); drawer.style.pointerEvents = 'auto'; }
   var ov = document.getElementById('bs-overlay');

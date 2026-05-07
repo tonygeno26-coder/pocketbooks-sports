@@ -229,6 +229,31 @@ Run this checklist before every deployment. All items must pass.
 
 ---
 
+## 15. CONFIRM SNAPSHOT (BUG #5 — stake immutability)
+
+`openBetConfirm` captures a frozen snapshot of `bsType`, `betSlip`, `bsStakes`,
+`rrStakes`, `teaserPts`, plus computed `risk`/`payout`/`profit`. `confirmBet`
+reads ONLY from this snapshot — live globals are not consulted. The snapshot is
+cleared by `closeBetConfirm`, `clearSlip`, and after a successful confirm.
+
+| #    | Test                                                                                       | Expected                                                            | Pass |
+|------|--------------------------------------------------------------------------------------------|---------------------------------------------------------------------|------|
+| 15.1 | Add 1 pick, $50, open Confirm, paste "9999" into stake input, click Confirm               | Ticket riskAmount = $50 (NOT $9999); balance debit = $50            | ☐    |
+| 15.2 | Add 2 picks (singles, $40 each), open Confirm, edit one Stake All to $200, click Confirm | Two tickets each riskAmount $40 (snapshot frozen, not $200/leg)     | ☐    |
+| 15.3 | Add 3 picks, switch to Parlay, $100, open Confirm, switch tab to Singles in slip background, click Confirm | Single Parlay ticket created (not 3 singles); riskAmount $100        | ☐    |
+| 15.4 | Open RR Confirm with $10 by-2s, open browser console: `rrStakes[2]=99999; rrStakes[3]=500`, click Confirm | RR ticket riskAmount = $30 (3 combos × $10 snapshot)                | ☐    |
+| 15.5 | Open Teaser Confirm with 6-pt, change pill to 7-pt in slip background, click Confirm     | Ticket placed under 6-pt teaser odds (snapshot)                     | ☐    |
+| 15.6 | Open Confirm, click Cancel, then console: `confirmBet()`                                  | Toast "Bet expired · reopen confirmation"; no ticket written         | ☐    |
+| 15.7 | Open Confirm, hit Confirm successfully, check `_pendingSnapshot` in console               | `null` after success                                                | ☐    |
+| 15.8 | Open Confirm, modify slip in background (add leg), click Confirm                          | Only original snapshot legs ticketed (phantom leg ignored)          | ☐    |
+| 15.9 | Sequential opens: open with $25, close, change to $75, open, confirm                      | Ticket riskAmount = $75 (latest snapshot wins)                      | ☐    |
+
+**Automated coverage:** `/tmp/pb-snapshot-regression.mjs` — 36/36 tests pass
+including frozenness, late-mutation isolation, multi-cycle snapshot independence,
+and snapshot invalidation on close/clear/success.
+
+---
+
 ## Quick Smoke Test (run before every deploy)
 
 ```
