@@ -1171,12 +1171,14 @@ document.addEventListener('click', function(e) {
 //   pb-diamond-purchase-requests      — array of request objects
 //   pb-diamond-wallets (optional)     — admin-configurable receive addresses
 // ═══════════════════════════════════════════════════════════════════════════════
+// 1 diamond = $1 USD. Packages are presets; custom amount also supported.
 var DIAMOND_PACKAGES = [
-  { amount: 1000,  label: '1,000 Diamonds',  usd: 10  },
-  { amount: 2500,  label: '2,500 Diamonds',  usd: 25  },
-  { amount: 5000,  label: '5,000 Diamonds',  usd: 50  },
-  { amount: 10000, label: '10,000 Diamonds', usd: 100 },
+  { amount: 100  },
+  { amount: 500  },
+  { amount: 1000 },
+  { amount: 2500 },
 ];
+function _diamondsToUsd(n) { var v = parseInt(n,10)||0; return v; } // 1:1
 var CRYPTO_METHODS = [
   // priceUsd updated by spot-price plug; static fallback for offline dev.
   { id: 'usdt', symbol: 'USDT', label: 'USDT', network: 'TRC-20',     icon: 'Ⓜ️', priceUsd: 1     },
@@ -1248,7 +1250,8 @@ function saveDiamondRequests(arr) {
 
 // Buy Diamonds page state (kept on the overlay element via dataset).
 var _bdState = {
-  selectedPackage: null, // amount
+  selectedPackage: null, // preset amount (int) OR null when using custom
+  customAmount:    '',   // raw input string
   selectedCrypto:  null, // id
   txHash:          '',
 };
@@ -1256,7 +1259,7 @@ var _bdState = {
 function showBuyDiamondsPage() {
   console.log('[buy-diamonds] open');
   // Reset transient state every open
-  _bdState = { selectedPackage: null, selectedCrypto: null, txHash: '' };
+  _bdState = { selectedPackage: null, customAmount: '', selectedCrypto: null, txHash: '' };
   var existing = document.getElementById('bd-overlay');
   if (existing) existing.remove();
 
@@ -1307,17 +1310,19 @@ function _bdRenderBody() {
       '<div style="font-size:2.2rem;opacity:0.6">💎</div>' +
     '</div>';
 
-  // Packages
+  // Packages (1 diamond = $1; no USD subtitle per spec)
   var pkgHtml = '<div style="font-size:0.72rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Select Package</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px">' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">' +
     DIAMOND_PACKAGES.map(function(p) {
-      var sel = _bdState.selectedPackage === p.amount;
-      return '<button data-bd-pkg="' + p.amount + '" style="text-align:left;background:' + (sel ? 'rgba(0,194,255,0.15)' : '#141414') + ';border:1.5px solid ' + (sel ? '#00c2ff' : '#252525') + ';border-radius:14px;padding:14px;color:#fff;cursor:pointer;transition:all 0.15s ease">' +
-        '<div style="font-size:1.1rem;font-weight:900;color:' + (sel ? '#00c2ff' : '#fff') + ';margin-bottom:4px">💎 ' + p.amount.toLocaleString('en-US') + '</div>' +
-        '<div style="font-size:0.72rem;color:#888;font-weight:700">$' + p.usd + ' USD</div>' +
+      var sel = _bdState.selectedPackage === p.amount && !_bdState.customAmount;
+      return '<button data-bd-pkg="' + p.amount + '" style="text-align:center;background:' + (sel ? 'rgba(0,194,255,0.15)' : '#141414') + ';border:1.5px solid ' + (sel ? '#00c2ff' : '#252525') + ';border-radius:14px;padding:18px 14px;color:#fff;cursor:pointer;transition:all 0.15s ease">' +
+        '<div style="font-size:1.15rem;font-weight:900;color:' + (sel ? '#00c2ff' : '#fff') + '">💎 ' + p.amount.toLocaleString('en-US') + ' diamonds</div>' +
       '</button>';
     }).join('') +
-    '</div>';
+    '</div>' +
+    // Custom amount input
+    '<div style="font-size:0.72rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Custom Amount</div>' +
+    '<input id="bd-custom-amount" type="number" min="1" step="1" inputmode="numeric" placeholder="Enter diamonds" value="' + (_bdState.customAmount||'').toString().replace(/"/g,'&quot;') + '" style="width:100%;background:#141414;border:1.5px solid ' + (_bdState.customAmount?'#00c2ff':'#252525') + ';border-radius:14px;padding:14px;color:#fff;font-size:0.95rem;font-weight:800;outline:none;margin-bottom:22px">';
 
   // Crypto methods
   var methodHtml = '<div style="font-size:0.72rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Payment Method</div>' +
@@ -1347,28 +1352,36 @@ function _bdRenderBody() {
           '<input id="bd-wallet-addr" type="text" readonly value="' + addr.replace(/"/g,'&quot;') + '" style="flex:1;background:#0a0a0a;border:1px solid #252525;border-radius:8px;padding:10px 12px;color:#00c2ff;font-family:monospace;font-size:0.78rem;outline:none">' +
           '<button id="bd-copy-addr" style="background:#00c2ff;border:none;color:#0a0a0a;padding:10px 14px;border-radius:8px;font-size:0.75rem;font-weight:900;cursor:pointer;white-space:nowrap">Copy</button>' +
         '</div>' +
-        (_bdState.selectedPackage ? (function(){
-          var pkg = DIAMOND_PACKAGES.find(function(p){return p.amount===_bdState.selectedPackage;}) || {};
-          var due = _amountDueCrypto(pkg.usd, _bdState.selectedCrypto);
+        ((function(){
+          var diamonds = _effectiveDiamonds();
+          if (!diamonds) return '';
+          var usd = _diamondsToUsd(diamonds);
+          var due = _amountDueCrypto(usd, _bdState.selectedCrypto);
           var dueStr = (due == null) ? '?' : due.toString();
           return '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #252525">' +
             '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
-              '<span style="font-size:0.7rem;color:#888;font-weight:700">USD Price</span>' +
-              '<span style="font-size:0.85rem;font-weight:900;color:#fff">$' + (pkg.usd||0) + '.00</span>' +
+              '<span style="font-size:0.7rem;color:#888;font-weight:700">Diamonds</span>' +
+              '<span style="font-size:0.85rem;font-weight:900;color:#fff">💎 ' + diamonds.toLocaleString('en-US') + '</span>' +
+            '</div>' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+              '<span style="font-size:0.7rem;color:#888;font-weight:700">Amount Due</span>' +
+              '<span style="font-size:0.85rem;font-weight:900;color:#fff">$' + usd.toLocaleString('en-US') + '</span>' +
             '</div>' +
             '<div style="display:flex;justify-content:space-between;align-items:center">' +
               '<span style="font-size:0.7rem;color:#888;font-weight:700">Send Exactly</span>' +
               '<span style="font-size:0.95rem;font-weight:900;color:#00c2ff;font-family:monospace">' + dueStr + ' ' + (method?method.symbol:'') + '</span>' +
             '</div>' +
           '</div>';
-        })() : '') +
+        })()) +
       '</div>' +
       '<div style="font-size:0.72rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin:18px 0 10px">Transaction Hash</div>' +
       '<input id="bd-tx-hash" type="text" placeholder="Paste your transaction hash here" value="' + (_bdState.txHash||'').replace(/"/g,'&quot;') + '" style="width:100%;background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;color:#fff;font-family:monospace;font-size:0.82rem;outline:none;margin-bottom:14px">';
   }
 
-  // Submit button
-  var canSubmit = !!(_bdState.selectedPackage && _bdState.selectedCrypto && _bdState.txHash && _bdState.txHash.trim().length >= 6);
+  // Submit button — enable when (preset OR custom>0) AND payment method picked.
+  // Note: scanner verification still requires txHash; submit button enables
+  // before tx hash to allow user to see wallet. Final submit click validates tx.
+  var canSubmit = !!(_effectiveDiamonds() && _bdState.selectedCrypto && _bdState.txHash && _bdState.txHash.trim().length >= 6);
   var submitHtml =
     '<button id="bd-submit" ' + (canSubmit ? '' : 'disabled') + ' style="width:100%;background:' + (canSubmit ? '#00c2ff' : '#1c1c1c') + ';border:none;color:' + (canSubmit ? '#0a0a0a' : '#555') + ';padding:16px;border-radius:14px;font-size:0.95rem;font-weight:900;cursor:' + (canSubmit ? 'pointer' : 'not-allowed') + ';margin-top:8px;letter-spacing:0.3px">Submit Payment</button>';
 
@@ -1419,8 +1432,20 @@ function _bdRenderBody() {
   Array.prototype.forEach.call(body.querySelectorAll('[data-bd-pkg]'), function(btn) {
     btn.addEventListener('click', function() {
       _bdState.selectedPackage = parseInt(btn.dataset.bdPkg, 10);
+      _bdState.customAmount = ''; // preset clears custom
       _bdRenderBody();
     });
+  });
+  var customInp = body.querySelector('#bd-custom-amount');
+  if (customInp) customInp.addEventListener('input', function() {
+    _bdState.customAmount = customInp.value.replace(/[^0-9]/g,'');
+    if (_bdState.customAmount) _bdState.selectedPackage = null; // custom clears preset
+
+    customInp.value = _bdState.customAmount;
+    _bdRenderBody();
+    // restore focus + caret to end
+    var newInp = document.getElementById('bd-custom-amount');
+    if (newInp) { newInp.focus(); var v = newInp.value; newInp.value=''; newInp.value=v; }
   });
   Array.prototype.forEach.call(body.querySelectorAll('[data-bd-crypto]'), function(btn) {
     btn.addEventListener('click', function() {
@@ -1447,7 +1472,7 @@ function _bdRenderBody() {
   if (txInput) txInput.addEventListener('input', function() {
     _bdState.txHash = txInput.value;
     var submitBtn = body.querySelector('#bd-submit');
-    var ok = !!(_bdState.selectedPackage && _bdState.selectedCrypto && _bdState.txHash && _bdState.txHash.trim().length >= 6);
+    var ok = !!(_effectiveDiamonds() && _bdState.selectedCrypto && _bdState.txHash && _bdState.txHash.trim().length >= 6);
     if (submitBtn) {
       submitBtn.disabled = !ok;
       submitBtn.style.background = ok ? '#00c2ff' : '#1c1c1c';
@@ -1459,22 +1484,31 @@ function _bdRenderBody() {
   if (submitBtn) submitBtn.addEventListener('click', submitDiamondPurchase);
 }
 
+// Effective diamond count: custom wins if non-empty, else preset, else 0.
+function _effectiveDiamonds() {
+  if (_bdState.customAmount) {
+    var v = parseInt(_bdState.customAmount, 10);
+    return (v > 0) ? v : 0;
+  }
+  return _bdState.selectedPackage || 0;
+}
+
 function submitDiamondPurchase() {
-  if (!_bdState.selectedPackage) { showToastHost('Select a package'); return; }
+  var diamonds = _effectiveDiamonds();
+  if (!diamonds) { showToastHost('Select a package or enter diamonds'); return; }
   if (!_bdState.selectedCrypto)  { showToastHost('Select a payment method'); return; }
   var tx = (_bdState.txHash||'').trim();
   if (!tx || tx.length < 6) { showToastHost('Enter your transaction hash'); return; }
 
   var host = _resolveHost();
   var wallets = _getDiamondWallets();
-  var pkg = DIAMOND_PACKAGES.find(function(p){ return p.amount===_bdState.selectedPackage; });
   var method = CRYPTO_METHODS.find(function(c){ return c.id===_bdState.selectedCrypto; });
-  var fiat = pkg ? pkg.usd : 0;
+  var fiat = _diamondsToUsd(diamonds); // 1:1
   var req = {
     id:               'D' + Date.now() + Math.floor(Math.random()*10000),
     hostId:           host.id,
     hostName:         host.name,
-    diamondAmount:    _bdState.selectedPackage,
+    diamondAmount:    diamonds,
     fiatPrice:        fiat,
     cryptoSymbol:     method ? method.symbol : _bdState.selectedCrypto.toUpperCase(),
     network:          method ? method.network : '',
@@ -1485,8 +1519,8 @@ function submitDiamondPurchase() {
     confirmations:    0,
     createdAt:        new Date().toISOString(),
     approvedAt:       null,
-    // legacy aliases for back-compat with earlier admin tooling
-    packageAmount:    _bdState.selectedPackage,
+    // legacy aliases
+    packageAmount:    diamonds,
     cryptoMethod:     _bdState.selectedCrypto,
   };
   var arr = loadDiamondRequests();
@@ -1494,7 +1528,7 @@ function submitDiamondPurchase() {
   saveDiamondRequests(arr);
   console.log('[buy-diamonds] submitted', req);
   showToastHost('✅ Payment submitted · verifying on-chain');
-  _bdState = { selectedPackage: null, selectedCrypto: null, txHash: '' };
+  _bdState = { selectedPackage: null, customAmount: '', selectedCrypto: null, txHash: '' };
   _bdRenderBody();
   // Kick off async verification (non-blocking)
   verifyDiamondPayment(req.id);
