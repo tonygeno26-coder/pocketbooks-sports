@@ -120,7 +120,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 </div>
 
 <!-- CLUB BAR -->
-<div class="club-bar">
+<div class="club-bar" style="display:none">
   <div class="club-select-wrap">
     <select class="club-select" id="club-select" onchange="switchClub(this.value)">
       <option value="">— Select Club —</option>
@@ -213,7 +213,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 </div>
 
 <!-- SPORT FILTER -->
-<div class="sport-filter">
+<div class="sport-filter" style="display:none">
   <div class="sf-pill active" onclick="setSport(this,'mlb')">⚾ MLB</div>
   <div class="sf-pill" onclick="setSport(this,'nba')">🏀 NBA</div>
   <div class="sf-pill" onclick="setSport(this,'nhl')">🏒 NHL</div>
@@ -609,13 +609,12 @@ function setBN(el,tab){
   document.querySelectorAll('.bn').forEach(function(b){b.classList.remove('active');});
   el.classList.add('active');
   SECTIONS.forEach(function(id){var s=document.getElementById(id);if(s)s.style.display='none';});
-  // Tabs that aren't sport-specific and aren't club-scoped on this dashboard:
-  // hide club-bar (Select Club / Copy Code / + Club) and the sport pill row.
+  // Host dashboard never shows club selection or sport filter — those belong
+  // in the lobby. Force-hide on every tab.
   var clubBar    = document.querySelector('.club-bar');
   var sportRow   = document.querySelector('.sport-filter');
-  var hideChrome = (tab === 'settlements' || tab === 'bets' || tab === 'players');
-  if (clubBar)  clubBar.style.display  = hideChrome ? 'none' : '';
-  if (sportRow) sportRow.style.display = hideChrome ? 'none' : '';
+  if (clubBar)  clubBar.style.display  = 'none';
+  if (sportRow) sportRow.style.display = 'none';
   if(tab==='bets'){
     var s=document.getElementById('bets-section');
     if(s)s.style.display='block';
