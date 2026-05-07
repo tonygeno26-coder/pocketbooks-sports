@@ -608,6 +608,7 @@ function renderHostBets(){
             : (t.status==='voided'||t.status==='deleted')
               ? '<span style="font-size:0.55rem;font-weight:800;color:#555;background:#1a1a1a;padding:2px 8px;border-radius:10px;border:1px solid #333">VOID</span>'
               : '<span style="font-size:0.55rem;font-weight:800;color:var(--cyan);background:var(--cyan-dim);padding:2px 8px;border-radius:10px;border:1px solid rgba(0,194,255,0.25)">ACTIVE</span>';
+          var canCancel = (t.status === 'active' || t.status === 'open');
           return '<div style="background:#141414;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">' +
             '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
               '<div style="font-size:0.78rem;font-weight:800">'+t.type+'</div>' +
@@ -622,6 +623,7 @@ function renderHostBets(){
               '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Host Exp.</div><div style="font-size:0.78rem;font-weight:800;color:#ff6b6b">'+fmt$(t.potentialProfit)+'</div></div>' +
               '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Payout</div><div style="font-size:0.78rem;font-weight:800;color:var(--cyan)">'+fmt$(t.estimatedPayout)+'</div></div>' +
             '</div>' +
+            (canCancel ? '<button data-host-cancel="'+t.id+'" style="width:100%;margin-top:10px;padding:8px;background:transparent;border:1px solid #cc0000;border-radius:8px;color:#ff6b6b;font-size:0.7rem;font-weight:800;cursor:pointer;letter-spacing:0.3px">Cancel Bet</button>' : '') +
           '</div>';
         }).join('') +
       '</div>';
@@ -656,6 +658,17 @@ function renderHostBets(){
     hd.addEventListener('click', function() {
       var k = hd.dataset.hostGroup;
       window._hostBetsExpanded[k] = !window._hostBetsExpanded[k];
+      renderHostBets();
+    });
+  });
+  // Wire host cancel buttons (reuse hostApproveDelete — same canonical flow:
+  // status='canceled', refund via openRisk exclusion, version bump).
+  Array.prototype.forEach.call(el.querySelectorAll('[data-host-cancel]'), function(btn) {
+    btn.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      var tid = btn.dataset.hostCancel;
+      if (!confirm('Cancel this bet?')) return;
+      hostApproveDelete(tid);
       renderHostBets();
     });
   });
