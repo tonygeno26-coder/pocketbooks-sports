@@ -1830,30 +1830,52 @@ function _calcWeekForPlayer(playerId, weekStart, weekEnd) {
   return { won: Math.round(won*100)/100, lost: Math.round(lost*100)/100 };
 }
 // Run the close: build a settlement for the just-ended week and reset balances.
+// Carryover store: { <playerId>: <priorCarryover number> }.
+// Positive = player owes host coming into this week.
+// Negative = host owes player coming into this week.
+function _loadCarryover(){ try { return JSON.parse(localStorage.getItem('pb-settlement-carryover')||'{}'); } catch(_e){ return {}; } }
+function _saveCarryover(o){ localStorage.setItem('pb-settlement-carryover', JSON.stringify(o||{})); }
+function getPriorCarryover(pid) { var c = _loadCarryover(); return parseFloat(c[pid])||0; }
+
 function runWeeklySettlement(now) {
   now = now || new Date();
   var thisSunday = _sundayMidnight(now);
   var lastClose  = localStorage.getItem('pb-settlement-last-close');
   if (lastClose && new Date(lastClose).getTime() >= thisSunday.getTime()) return null; // already closed
-  var weekEnd   = thisSunday;                          // 00:00 this Sunday
+  var weekEnd   = thisSunday;
   var weekStart = new Date(weekEnd); weekStart.setDate(weekStart.getDate()-7);
   var players   = loadClubPlayers();
+  var payments  = _loadSettlePayments();
+  var carryIn   = _loadCarryover();
   var rows = players.map(function(p){
     var pid = p.playerId || p.id;
     var lim = getHostPlayerLimits(pid) || {};
     var startingLimit = parseFloat(lim.creditLimit)||0;
     var w = _calcWeekForPlayer(pid, weekStart, weekEnd);
-    var net = w.won - w.lost; // + = player up (host owes), - = host up (player owes)
+    // Sign convention for accounting (player-owes-host POV):
+    //   weeklyNet positive  = player owes host (player lost net)
+    //   weeklyNet negative  = host owes player (player won net)
+    var weeklyNet         = Math.round((w.lost - w.won)*100)/100;
+    var priorCarryover    = Math.round(((parseFloat(carryIn[pid])||0))*100)/100;
+    var paymentsThisWeek  = Math.round(((payments[pid] && parseFloat(payments[pid].paid))||0)*100)/100;
+    var endingBalance     = Math.round((priorCarryover + weeklyNet - paymentsThisWeek)*100)/100;
+    var status = (Math.abs(endingBalance) < 0.005) ? 'settled' : (paymentsThisWeek > 0 ? 'partial' : 'unpaid');
     return {
-      playerId:       pid,
-      playerName:     p.realName || p.playerName || p.name || pid,
-      startingLimit:  startingLimit,
-      won:            w.won,
-      lost:           w.lost,
-      net:            Math.round(net*100)/100,
-      hostOwesPlayer: net > 0 ? Math.round(net*100)/100 : 0,
-      playerOwesHost: net < 0 ? Math.round(-net*100)/100 : 0,
-      status:         (Math.abs(net) < 0.005) ? 'settled' : 'unpaid',
+      playerId:         pid,
+      playerName:       p.realName || p.playerName || p.name || pid,
+      startingLimit:    startingLimit,
+      won:              w.won,
+      lost:             w.lost,
+      // Player-POV (kept for chart sign continuity: + = host owes player)
+      net:              Math.round((w.won - w.lost)*100)/100,
+      // Accounting fields (host-POV)
+      weeklyNet:        weeklyNet,
+      priorCarryover:   priorCarryover,
+      paymentsThisWeek: paymentsThisWeek,
+      endingBalance:    endingBalance,
+      hostOwesPlayer:   weeklyNet < 0 ? Math.round(-weeklyNet*100)/100 : 0,
+      playerOwesHost:   weeklyNet > 0 ? Math.round( weeklyNet*100)/100 : 0,
+      status:           status,
     };
   });
   var record = {
@@ -1866,13 +1888,17 @@ function runWeeklySettlement(now) {
   var all = loadSettlements();
   all.unshift(record);
   saveSettlements(all);
-  // Reset player available balance to their set limit (per-player pb-balance-start:<pid>)
+  // Roll endingBalance forward into next week's priorCarryover.
+  var nextCarry = {};
+  rows.forEach(function(r){ if (Math.abs(r.endingBalance) >= 0.005) nextCarry[r.playerId] = r.endingBalance; });
+  _saveCarryover(nextCarry);
+  // Reset weeklyNet by clearing this-week's payment ledger; player ledgers and
+  // tickets remain untouched (history). New week starts fresh.
+  _saveSettlePayments({});
+  // Reset player available balance to their set limit
   rows.forEach(function(r){
-    if (r.startingLimit > 0) {
-      localStorage.setItem('pb-balance-start:'+r.playerId, String(r.startingLimit));
-    }
+    if (r.startingLimit > 0) localStorage.setItem('pb-balance-start:'+r.playerId, String(r.startingLimit));
   });
-  // Bump pb-tickets-version so player tabs refresh balances
   try {
     var v = parseInt(localStorage.getItem('pb-tickets-version')||'0',10)||0;
     localStorage.setItem('pb-tickets-version', String(v+1));
@@ -2007,25 +2033,36 @@ function _currentWeekPreview(weekOffset) {
   weekStart.setDate(weekStart.getDate() + weekOffset*7);
   var weekEnd   = new Date(weekStart); weekEnd.setDate(weekEnd.getDate()+7);
   var players   = loadClubPlayers();
+  var payments  = _loadSettlePayments();
+  var carryIn   = _loadCarryover();
   var rows = players.map(function(p) {
     var pid = p.playerId || p.id;
     var lim = getHostPlayerLimits(pid) || {};
     var startingLimit = parseFloat(lim.creditLimit)||0;
     var w = _calcWeekForPlayer(pid, weekStart, weekEnd);
-    var net = w.won - w.lost;
-    var bal = (typeof calcAvailableBalance === 'function' && false) ? 0
-            : (parseFloat(localStorage.getItem('pb-balance-start:'+pid)) || startingLimit) + net;
+    var weeklyNet         = Math.round((w.lost - w.won)*100)/100; // host-POV
+    var netPlayerPov      = Math.round((w.won - w.lost)*100)/100; // chart sign
+    var priorCarryover    = Math.round(((parseFloat(carryIn[pid])||0))*100)/100;
+    var paymentsThisWeek  = Math.round(((payments[pid] && parseFloat(payments[pid].paid))||0)*100)/100;
+    var endingBalance     = Math.round((priorCarryover + weeklyNet - paymentsThisWeek)*100)/100;
+    var bal = (parseFloat(localStorage.getItem('pb-balance-start:'+pid)) || startingLimit) + netPlayerPov;
+    var status = (Math.abs(endingBalance) < 0.005) ? 'settled' : (paymentsThisWeek > 0 ? 'partial' : 'unpaid');
     return {
-      playerId:       pid,
-      playerName:     p.realName || p.playerName || p.name || pid,
-      startingLimit:  startingLimit,
-      currentBalance: Math.round(bal*100)/100,
-      won:            w.won,
-      lost:           w.lost,
-      net:            Math.round(net*100)/100,
-      hostOwesPlayer: net > 0 ? Math.round(net*100)/100 : 0,
-      playerOwesHost: net < 0 ? Math.round(-net*100)/100 : 0,
-      status:         (Math.abs(net) < 0.005) ? 'settled' : 'unpaid',
+      playerId:         pid,
+      playerName:       p.realName || p.playerName || p.name || pid,
+      startingLimit:    startingLimit,
+      currentBalance:   Math.round(bal*100)/100,
+      won:              w.won,
+      lost:             w.lost,
+      net:              netPlayerPov, // chart-friendly sign (+ = host owes)
+      // Accounting fields
+      weeklyNet:        weeklyNet,
+      priorCarryover:   priorCarryover,
+      paymentsThisWeek: paymentsThisWeek,
+      endingBalance:    endingBalance,
+      hostOwesPlayer:   endingBalance < 0 ? Math.round(-endingBalance*100)/100 : 0,
+      playerOwesHost:   endingBalance > 0 ? Math.round( endingBalance*100)/100 : 0,
+      status:           status,
     };
   });
   var totals = rows.reduce(function(t,r){
@@ -2130,17 +2167,15 @@ function renderSettlements() {
     liveRowsHtml += '<div style="padding:24px;text-align:center;color:var(--gray);font-size:0.78rem;background:var(--card);border:1px solid var(--border);border-radius:14px">No players yet</div>';
   } else {
     preview.rows.forEach(function(r) {
-      var paid = (payments[r.playerId] && parseFloat(payments[r.playerId].paid)) || 0;
-      var origAbsAmt = Math.abs(r.net);
-      var remaining = Math.max(0, Math.round((origAbsAmt - paid)*100)/100);
-      // Sign of remaining matches original direction; if zero, settled.
-      var direction = r.net > 0 ? 'host-owes' : r.net < 0 ? 'player-owes' : 'even';
-      var status;
-      if (remaining < 0.005) status = 'settled';
-      else if (paid > 0)     status = 'partial';
-      else                   status = direction === 'even' ? 'settled' : 'unpaid';
-      var amountColor = direction === 'player-owes' ? 'var(--green)'
-                      : direction === 'host-owes'   ? 'var(--red)'
+      // Use endingBalance (priorCarryover + weeklyNet − paymentsThisWeek)
+      // as the card's source of truth so carryover-aware totals show.
+      var paid       = r.paymentsThisWeek;
+      var ending     = r.endingBalance;     // host-POV: + = player owes host
+      var remaining  = Math.abs(ending);
+      var direction  = ending > 0 ? 'player-owes' : ending < 0 ? 'host-owes' : 'even';
+      var status     = r.status;
+      var amountColor = direction === 'player-owes' ? '#00ff88'
+                      : direction === 'host-owes'   ? '#ff3d57'
                       : 'var(--gray)';
       var amountLabel = (remaining < 0.005)
         ? '$0.00'
