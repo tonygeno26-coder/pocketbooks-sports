@@ -1036,7 +1036,7 @@ if (_hPreview) {
   if (_hState === 'highRisk') {
     setTimeout(() => {
       G.players = G.players.map(p => ({...p, winRate: p.winRate + 15, sharp: 'sharp'}));
-      renderPlayers();
+      renderPlayersTab();
 loadHostActiveBets();
 // Show sharp alert only if real sharp players exist
 (function(){
@@ -1047,7 +1047,7 @@ loadHostActiveBets();
     }, 500);
   }
 }
-renderPlayers();
+renderPlayersTab();
 if(TOKEN) loadClubs();
   }
 }
@@ -1063,8 +1063,8 @@ async function loadClubMembers(clubId) {
       sharp: parseFloat(m.win_rate)>=60?'sharp':parseFloat(m.win_rate)>=52?'watch':'square',
       membershipId: m.id
     }));
-    renderPlayers();
-  } catch(e) { renderPlayers(); }
+    renderPlayersTab();
+  } catch(e) { renderPlayersTab(); }
 }
 
 function copyCode() {
@@ -1127,7 +1127,7 @@ let G={players:[]};
 function addPlayerToG(name,colors){
   G.players.push({id:Date.now(),name,avatar:name.slice(0,2),color:colors[G.players.length%5],winRate:0,bets:0,balance:0,sharp:'square'});
   closeAddPlayer();
-  renderPlayers();
+  renderPlayersTab();
 }
 
 // Load real data if logged in
@@ -1141,14 +1141,14 @@ if(TOKEN){
         balance:parseFloat(p.balance)||0,
         sharp:parseFloat(p.win_rate)>=60?'sharp':parseFloat(p.win_rate)>=52?'watch':'square'
       }));
-      renderPlayers();
+      renderPlayersTab();
     }
   }).catch(()=>{});
   // Stats calculated locally from localStorage — no API call needed
   renderHostStats();
 }
 
-renderPlayers();
+renderPlayersTab();
 
 // Delete request action delegation
 document.addEventListener('click', function(e) {
@@ -1347,9 +1347,21 @@ function _bdRenderBody() {
           '<input id="bd-wallet-addr" type="text" readonly value="' + addr.replace(/"/g,'&quot;') + '" style="flex:1;background:#0a0a0a;border:1px solid #252525;border-radius:8px;padding:10px 12px;color:#00c2ff;font-family:monospace;font-size:0.78rem;outline:none">' +
           '<button id="bd-copy-addr" style="background:#00c2ff;border:none;color:#0a0a0a;padding:10px 14px;border-radius:8px;font-size:0.75rem;font-weight:900;cursor:pointer;white-space:nowrap">Copy</button>' +
         '</div>' +
-        (_bdState.selectedPackage ?
-          '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #252525;font-size:0.72rem;color:#888">Send <span style="color:#fff;font-weight:800">$' + (DIAMOND_PACKAGES.find(function(p){return p.amount===_bdState.selectedPackage;})||{}).usd + ' USD</span> worth of ' + (method ? method.label : '') + '</div>'
-          : '') +
+        (_bdState.selectedPackage ? (function(){
+          var pkg = DIAMOND_PACKAGES.find(function(p){return p.amount===_bdState.selectedPackage;}) || {};
+          var due = _amountDueCrypto(pkg.usd, _bdState.selectedCrypto);
+          var dueStr = (due == null) ? '?' : due.toString();
+          return '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #252525">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+              '<span style="font-size:0.7rem;color:#888;font-weight:700">USD Price</span>' +
+              '<span style="font-size:0.85rem;font-weight:900;color:#fff">$' + (pkg.usd||0) + '.00</span>' +
+            '</div>' +
+            '<div style="display:flex;justify-content:space-between;align-items:center">' +
+              '<span style="font-size:0.7rem;color:#888;font-weight:700">Send Exactly</span>' +
+              '<span style="font-size:0.95rem;font-weight:900;color:#00c2ff;font-family:monospace">' + dueStr + ' ' + (method?method.symbol:'') + '</span>' +
+            '</div>' +
+          '</div>';
+        })() : '') +
       '</div>' +
       '<div style="font-size:0.72rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin:18px 0 10px">Transaction Hash</div>' +
       '<input id="bd-tx-hash" type="text" placeholder="Paste your transaction hash here" value="' + (_bdState.txHash||'').replace(/"/g,'&quot;') + '" style="width:100%;background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;color:#fff;font-family:monospace;font-size:0.82rem;outline:none;margin-bottom:14px">';
@@ -1366,23 +1378,36 @@ function _bdRenderBody() {
       '⚠️ Diamonds are platform credits only. Diamonds cannot be withdrawn, redeemed for cash, or transferred outside PocketBooks Sports.' +
     '</div>';
 
-  // Recent requests history
+  // Recent requests history (with confirmations progress bar for confirming)
   var historyHtml = '';
   if (requests.length) {
     historyHtml = '<div style="margin-top:24px">' +
       '<div style="font-size:0.72rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Recent Requests</div>' +
       requests.slice(0, 5).map(function(r) {
-        var statusColor = r.status==='approved' ? '#00ff88' : r.status==='rejected' ? '#ff3d57' : '#f5c842';
-        var statusBg    = r.status==='approved' ? 'rgba(0,255,136,0.1)' : r.status==='rejected' ? 'rgba(255,61,87,0.1)' : 'rgba(245,200,66,0.1)';
+        var sc = { approved:'#00ff88', rejected:'#ff3d57', confirming:'#00c2ff', pending:'#f5c842' };
+        var sb = { approved:'rgba(0,255,136,0.1)', rejected:'rgba(255,61,87,0.1)', confirming:'rgba(0,194,255,0.1)', pending:'rgba(245,200,66,0.1)' };
+        var statusColor = sc[r.status] || '#888';
+        var statusBg    = sb[r.status] || 'rgba(255,255,255,0.05)';
         var d = new Date(r.createdAt);
         var dt = isNaN(d) ? r.createdAt : d.toLocaleDateString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+        var thresh = (typeof CONFIRMATION_THRESHOLDS!=='undefined' ? CONFIRMATION_THRESHOLDS[r.cryptoMethod||r.cryptoSymbol&&r.cryptoSymbol.toLowerCase()] : 6) || 6;
+        var confs = parseInt(r.confirmations||0,10) || 0;
+        var progressPct = Math.min(100, Math.round(confs/thresh*100));
+        var progressHtml = (r.status==='confirming') ?
+          '<div style="margin-top:8px">' +
+            '<div style="display:flex;justify-content:space-between;font-size:0.62rem;color:#888;margin-bottom:4px"><span>Confirmations</span><span style="color:#00c2ff;font-weight:800">'+confs+' / '+thresh+'</span></div>' +
+            '<div style="height:4px;background:#252525;border-radius:2px;overflow:hidden"><div style="width:'+progressPct+'%;height:100%;background:#00c2ff;transition:width 0.3s ease"></div></div>' +
+          '</div>' : '';
+        var amtDue = (r.amountDueCrypto != null) ? (' · ' + r.amountDueCrypto + ' ' + (r.cryptoSymbol || (r.cryptoMethod||'').toUpperCase())) : '';
         return '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:12px 14px;margin-bottom:8px">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
-            '<div style="font-size:0.88rem;font-weight:900">💎 ' + (r.packageAmount||0).toLocaleString('en-US') + '</div>' +
+            '<div style="font-size:0.88rem;font-weight:900">💎 ' + ((r.diamondAmount||r.packageAmount||0)).toLocaleString('en-US') + '</div>' +
             '<div style="font-size:0.65rem;font-weight:800;color:' + statusColor + ';background:' + statusBg + ';padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:0.4px">' + r.status + '</div>' +
           '</div>' +
-          '<div style="font-size:0.68rem;color:#777;font-family:monospace;margin-bottom:3px">' + (r.cryptoMethod||'').toUpperCase() + ' · ' + dt + '</div>' +
+          '<div style="font-size:0.68rem;color:#777;font-family:monospace;margin-bottom:3px">' + ((r.cryptoSymbol||r.cryptoMethod||'').toUpperCase()) + amtDue + ' · ' + dt + '</div>' +
           (r.txHash ? '<div style="font-size:0.62rem;color:#555;font-family:monospace;word-break:break-all">' + r.txHash + '</div>' : '') +
+          progressHtml +
+          (r.rejectReason ? '<div style="font-size:0.65rem;color:#ff3d57;margin-top:4px">⚠️ ' + r.rejectReason + '</div>' : '') +
         '</div>';
       }).join('') +
     '</div>';
