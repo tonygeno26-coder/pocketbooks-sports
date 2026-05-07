@@ -1926,6 +1926,7 @@ function checkWeeklySettlement() {
 
 // Active week offset (0 = current, -1 = last week, etc.) for the selector.
 var _settleWeekOffset = 0;
+var _settleFilter = 'all'; // 'all' | 'owed' | 'owes'
 // Per-player settlement payments accumulator (current week, mock-friendly).
 // Key: playerId, value: { paid: <number> } against the latest settlement amount.
 function _loadSettlePayments(){ try { return JSON.parse(localStorage.getItem('pb-settlement-payments')||'{}'); } catch(_e){ return {}; } }
@@ -2161,16 +2162,29 @@ function renderSettlements() {
 
   // Player Settlements section (simplified card layout, partial settlement)
   var payments = _loadSettlePayments();
+  function _filterChip(key, label) {
+    var on = _settleFilter === key;
+    return '<button data-settle-filter="'+key+'" style="background:'+(on?'var(--cyan)':'transparent')+';border:1px solid '+(on?'var(--cyan)':'var(--border)')+';color:'+(on?'#000':'var(--gray)')+';padding:5px 11px;border-radius:20px;font-size:0.65rem;font-weight:800;cursor:pointer;letter-spacing:0.3px">'+label+'</button>';
+  }
   var liveRowsHtml = '<div style="padding:0 16px 8px">' +
-    '<div style="font-size:0.95rem;font-weight:900;margin-bottom:12px">Player Settlements</div>';
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px">' +
+      '<div style="font-size:0.95rem;font-weight:900">Player Settlements</div>' +
+      '<div style="display:flex;gap:6px">' + _filterChip('all','All') + _filterChip('owed','Owed') + _filterChip('owes','Owes') + '</div>' +
+    '</div>';
   if (!preview.rows.length) {
     liveRowsHtml += '<div style="padding:24px;text-align:center;color:var(--gray);font-size:0.78rem;background:var(--card);border:1px solid var(--border);border-radius:14px">No players yet</div>';
   } else {
-    preview.rows.forEach(function(r) {
-      // Use endingBalance (priorCarryover + weeklyNet − paymentsThisWeek)
-      // as the card's source of truth so carryover-aware totals show.
+    var visibleRows = preview.rows.filter(function(r) {
+      if (_settleFilter === 'owed') return r.endingBalance > 0;
+      if (_settleFilter === 'owes') return r.endingBalance < 0;
+      return true; // 'all' — includes settled
+    });
+    if (!visibleRows.length) {
+      liveRowsHtml += '<div style="padding:24px;text-align:center;color:var(--gray);font-size:0.78rem;background:var(--card);border:1px solid var(--border);border-radius:14px">No players match this filter</div>';
+    }
+    visibleRows.forEach(function(r) {
       var paid       = r.paymentsThisWeek;
-      var ending     = r.endingBalance;     // host-POV: + = player owes host
+      var ending     = r.endingBalance;
       var remaining  = Math.abs(ending);
       var direction  = ending > 0 ? 'player-owes' : ending < 0 ? 'host-owes' : 'even';
       var status     = r.status;
@@ -2289,6 +2303,12 @@ function renderSettlements() {
 }
 
 function _wireSettlementsButtons(el) {
+  Array.prototype.forEach.call(el.querySelectorAll('[data-settle-filter]'), function(btn) {
+    btn.addEventListener('click', function() {
+      _settleFilter = btn.dataset.settleFilter;
+      renderSettlements();
+    });
+  });
   Array.prototype.forEach.call(el.querySelectorAll('[data-settle-week]'), function(btn) {
     btn.addEventListener('click', function() {
       if (btn.disabled) return;
