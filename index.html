@@ -2022,46 +2022,66 @@ function renderSettlements() {
   var ws = preview.weekStart, we = new Date(preview.weekEnd.getTime()-1);
   var rangeLabel = ws.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + we.toLocaleDateString('en-US',{month:'short',day:'numeric'});
 
-  // Bar chart — 7 bars, scaled to max abs value
-  var nets = preview.dailyNets || [0,0,0,0,0,0,0];
-  var dayLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  // Reorder daily nets Sun-first → Mon-first to match mockup (Mon Tue Wed Thu Fri Sat Sun)
+  var rawNets = preview.dailyNets || [0,0,0,0,0,0,0];
+  var nets = [rawNets[1],rawNets[2],rawNets[3],rawNets[4],rawNets[5],rawNets[6],rawNets[0]];
+  var dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   var maxAbs = Math.max.apply(null, nets.map(function(v){ return Math.abs(v); })) || 1;
-  var chartHeight = 110;
+  var chartHeight = 100;
   var barsHtml = nets.map(function(v, i) {
     var pct = Math.min(100, Math.abs(v)/maxAbs*100);
     var h = Math.max(2, pct * chartHeight / 100);
-    var color = v > 0 ? 'var(--green)' : v < 0 ? 'var(--red)' : '#3a3a3a';
+    var color = v > 0 ? '#00ff88' : v < 0 ? '#ff3d57' : '#3a3a3a';
     var bar = (Math.abs(v) < 0.005)
-      ? '<div style="width:100%;height:2px;background:#3a3a3a;border-radius:2px"></div>'
-      : '<div style="width:100%;height:'+h+'px;background:'+color+';border-radius:6px 6px 2px 2px"></div>';
-    var amt = (Math.abs(v) < 0.005) ? '' : (v>0?'+':'−')+'$'+Math.abs(v).toFixed(0);
-    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">' +
-      '<div style="flex:1;display:flex;align-items:flex-end;width:60%;min-height:'+chartHeight+'px">' + bar + '</div>' +
-      '<div style="font-size:0.55rem;color:var(--gray);font-weight:700">' + amt + '</div>' +
-      '<div style="font-size:0.62rem;color:#777;font-weight:700">' + dayLabels[i] + '</div>' +
+      ? '<div style="width:60%;height:2px;background:#3a3a3a;border-radius:2px"></div>'
+      : '<div style="width:60%;height:'+h+'px;background:'+color+';border-radius:6px 6px 2px 2px"></div>';
+    var amtTxt = (Math.abs(v) < 0.005) ? '—' : (v>0?'+':'−')+'$'+Math.abs(v).toFixed(0);
+    var amtColor = v > 0 ? '#00ff88' : v < 0 ? '#ff3d57' : '#555';
+    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px">' +
+      '<div style="font-size:0.6rem;color:'+amtColor+';font-weight:800;letter-spacing:0.2px">'+amtTxt+'</div>' +
+      '<div style="display:flex;align-items:flex-end;justify-content:center;width:100%;height:'+chartHeight+'px">' + bar + '</div>' +
+      '<div style="font-size:0.62rem;color:#777;font-weight:700;text-transform:uppercase;letter-spacing:0.4px">' + dayLabels[i] + '</div>' +
     '</div>';
   }).join('');
 
-  // Top section: week selector + big net + chart
+  // Top hero: centered week selector + big net + chart + summary strip
   var canForward = _settleWeekOffset < 0;
-  var topHtml = '<div style="padding:18px 16px 8px">' +
-    // Week selector
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
-      '<button data-settle-week="prev" style="background:var(--card);border:1px solid var(--border);color:#fff;width:34px;height:34px;border-radius:50%;font-size:1rem;cursor:pointer">‹</button>' +
-      '<div style="text-align:center">' +
-        '<div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">' + (_settleWeekOffset===0?'This Week':_settleWeekOffset===-1?'Last Week':'Past Week') + '</div>' +
-        '<div style="font-size:0.92rem;font-weight:800">' + rangeLabel + '</div>' +
+  var topHtml = '<div style="padding:20px 16px 4px">' +
+    // Week selector — centered
+    '<div style="display:flex;justify-content:center;align-items:center;gap:12px;margin-bottom:18px">' +
+      '<button data-settle-week="prev" style="background:var(--card);border:1px solid var(--border);color:#fff;width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;line-height:1">‹</button>' +
+      '<div style="text-align:center;min-width:140px">' +
+        '<div style="font-size:0.58rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:2px">' + (_settleWeekOffset===0?'This Week':_settleWeekOffset===-1?'Last Week':'Past Week') + '</div>' +
+        '<div style="font-size:0.95rem;font-weight:800">' + rangeLabel + '</div>' +
       '</div>' +
-      '<button data-settle-week="next" ' + (canForward?'':'disabled') + ' style="background:var(--card);border:1px solid var(--border);color:'+(canForward?'#fff':'#444')+';width:34px;height:34px;border-radius:50%;font-size:1rem;cursor:'+(canForward?'pointer':'not-allowed')+'">›</button>' +
+      '<button data-settle-week="next" ' + (canForward?'':'disabled') + ' style="background:var(--card);border:1px solid var(--border);color:'+(canForward?'#fff':'#444')+';width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:'+(canForward?'pointer':'not-allowed')+';line-height:1">›</button>' +
     '</div>' +
     // Big net
-    '<div style="text-align:center;margin-bottom:6px">' +
-      '<div style="font-size:2.4rem;font-weight:900;letter-spacing:-1px;color:'+bigColor+';line-height:1">' + bigLabel + '</div>' +
-      '<div style="font-size:0.7rem;color:var(--gray);margin-top:6px;font-weight:700">' + bigSub + '</div>' +
+    '<div style="text-align:center;margin-bottom:22px">' +
+      '<div style="font-size:2.8rem;font-weight:900;letter-spacing:-1.5px;color:'+bigColor+';line-height:1">' + bigLabel + '</div>' +
+      '<div style="font-size:0.7rem;color:var(--gray);margin-top:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px">' + bigSub + '</div>' +
     '</div>' +
     // Bar chart
-    '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 12px 10px;margin-top:16px;margin-bottom:16px">' +
-      '<div style="display:flex;align-items:flex-end;gap:4px;height:'+(chartHeight+30)+'px">' + barsHtml + '</div>' +
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px 10px 12px;margin-bottom:14px">' +
+      '<div style="display:flex;align-items:flex-end;gap:2px">' + barsHtml + '</div>' +
+    '</div>' +
+    // Summary strip directly under chart
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px 16px;margin-bottom:18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">' +
+      '<div style="border-right:1px solid var(--border)">' +
+        '<div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Owe Host</div>' +
+        '<div style="font-size:0.95rem;font-weight:900;color:#00ff88">$'+preview.totals.playerOwes.toFixed(2)+'</div>' +
+        '<div style="font-size:0.58rem;color:var(--gray);margin-top:2px">'+owingHostCount+' player'+(owingHostCount!==1?'s':'')+'</div>' +
+      '</div>' +
+      '<div style="border-right:1px solid var(--border)">' +
+        '<div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Host Owes</div>' +
+        '<div style="font-size:0.95rem;font-weight:900;color:#ff3d57">$'+preview.totals.hostOwes.toFixed(2)+'</div>' +
+        '<div style="font-size:0.58rem;color:var(--gray);margin-top:2px">'+owedByHostCount+' player'+(owedByHostCount!==1?'s':'')+'</div>' +
+      '</div>' +
+      '<div>' +
+        '<div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Net</div>' +
+        '<div style="font-size:0.95rem;font-weight:900;color:'+bigColor+'">'+bigLabel+'</div>' +
+        '<div style="font-size:0.58rem;color:var(--gray);margin-top:2px">position</div>' +
+      '</div>' +
     '</div>' +
   '</div>';
 
@@ -2096,14 +2116,21 @@ function renderSettlements() {
       var statusColor = { paid:'#00ff88', settled:'#888', unpaid:'#f5c842', partial:'#00c2ff' }[status] || '#888';
       var statusBg    = { paid:'rgba(0,255,136,0.1)', settled:'rgba(255,255,255,0.04)', unpaid:'rgba(245,200,66,0.1)', partial:'rgba(0,194,255,0.1)' }[status] || 'rgba(255,255,255,0.04)';
 
+      // Avatar initials from player name
+      var initials = (r.playerName||'?').split(/\s+/).map(function(w){return (w[0]||'').toUpperCase();}).slice(0,2).join('') || '?';
+      var avatarBg = direction === 'player-owes' ? 'rgba(0,255,136,0.15)' : direction === 'host-owes' ? 'rgba(255,61,87,0.15)' : 'rgba(255,255,255,0.06)';
+      var avatarColor = direction === 'player-owes' ? '#00ff88' : direction === 'host-owes' ? '#ff3d57' : '#888';
       liveRowsHtml += '<div data-settle-card="'+r.playerId+'" style="background:var(--card);border:1px solid var(--border);border-radius:14px;margin-bottom:10px;padding:14px">' +
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">' +
-          '<div>' +
-            '<div style="font-size:0.95rem;font-weight:800;margin-bottom:2px">' + r.playerName + '</div>' +
-            '<div style="font-size:0.65rem;color:var(--gray);font-weight:700">' + owesLabel + '</div>' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
+          '<div style="display:flex;align-items:center;gap:12px">' +
+            '<div style="width:38px;height:38px;border-radius:50%;background:'+avatarBg+';color:'+avatarColor+';display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:900;border:1.5px solid '+avatarColor+';flex-shrink:0">'+initials+'</div>' +
+            '<div>' +
+              '<div style="font-size:0.92rem;font-weight:800;margin-bottom:2px">' + r.playerName + '</div>' +
+              '<div style="font-size:0.62rem;color:var(--gray);font-weight:700">' + owesLabel + '</div>' +
+            '</div>' +
           '</div>' +
           '<div style="text-align:right">' +
-            '<div data-settle-amount="'+r.playerId+'" style="font-size:1.1rem;font-weight:900;color:'+amountColor+';line-height:1">'+amountLabel+'</div>' +
+            '<div data-settle-amount="'+r.playerId+'" style="font-size:1.15rem;font-weight:900;color:'+amountColor+';line-height:1">'+amountLabel+'</div>' +
             '<div data-settle-status="'+r.playerId+'" style="font-size:0.55rem;font-weight:800;color:'+statusColor+';background:'+statusBg+';padding:3px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:0.4px;display:inline-block;margin-top:6px">'+status+'</div>' +
           '</div>' +
         '</div>' +
@@ -2126,13 +2153,14 @@ function renderSettlements() {
   }
   liveRowsHtml += '</div>';
 
-  // Bottom summary card
-  var bottomHtml = '<div style="padding:8px 16px 16px">' +
-    '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)"><span style="font-size:0.75rem;color:var(--gray)">Players owing host</span><span style="font-size:0.85rem;font-weight:800;color:var(--green)">$'+preview.totals.playerOwes.toFixed(2)+' · '+owingHostCount+'</span></div>' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)"><span style="font-size:0.75rem;color:var(--gray)">Host owing players</span><span style="font-size:0.85rem;font-weight:800;color:var(--red)">$'+preview.totals.hostOwes.toFixed(2)+' · '+owedByHostCount+'</span></div>' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0 4px"><span style="font-size:0.85rem;font-weight:800">Net Position</span><span style="font-size:1rem;font-weight:900;color:'+bigColor+'">'+bigLabel+'</span></div>' +
+  // Bottom summary card + Save Settlements button
+  var bottomHtml = '<div style="padding:12px 16px 24px">' +
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:14px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)"><span style="font-size:0.78rem;color:var(--gray)">Total to collect from players</span><span style="font-size:0.92rem;font-weight:800;color:#00ff88">$'+preview.totals.playerOwes.toFixed(2)+'</span></div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)"><span style="font-size:0.78rem;color:var(--gray)">Total to pay players</span><span style="font-size:0.92rem;font-weight:800;color:#ff3d57">$'+preview.totals.hostOwes.toFixed(2)+'</span></div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0 4px"><span style="font-size:0.88rem;font-weight:900">Net Position</span><span style="font-size:1.1rem;font-weight:900;color:'+bigColor+'">'+bigLabel+'</span></div>' +
     '</div>' +
+    '<button data-settle-save style="width:100%;background:var(--green);border:none;color:#000;padding:16px;border-radius:14px;font-size:0.95rem;font-weight:900;cursor:pointer;letter-spacing:0.3px">Save Settlements</button>' +
   '</div>';
 
   if (!all.length) {
@@ -2224,6 +2252,13 @@ function _wireSettlementsButtons(el) {
     inp.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') { e.preventDefault(); applySettle(inp.dataset.settleInput, el); }
     });
+  });
+  // Save Settlements: persist current payments snapshot (already saved per-confirm;
+  // this triggers a manual close into pb-settlements list).
+  var saveBtn = el.querySelector('[data-settle-save]');
+  if (saveBtn) saveBtn.addEventListener('click', function() {
+    try { runWeeklySettlement(); showToastHost('✅ Settlements saved'); renderSettlements(); }
+    catch(e) { showToastHost('Save failed: ' + e.message); }
   });
   Array.prototype.forEach.call(el.querySelectorAll('[data-settle-mark]'), function(btn) {
     btn.addEventListener('click', function() {
