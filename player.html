@@ -345,6 +345,49 @@ body.theme-light [style*="color:#00c2ff"]{color:#0064c8!important}
 body.theme-light [style*="color:#ff3d57"],body.theme-light [style*="color:#ff6b6b"],body.theme-light [style*="color:#ff4444"]{color:#cc0000!important}
 body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
 
+/* ═══ RESPONSIVE DESKTOP (>=1100px) ════════════════════════════════════════════════════ */
+@media (min-width:1100px){
+  /* Wider main column. Reserve right gutter for persistent bet slip. */
+  body{max-width:1080px;padding-right:360px;padding-bottom:40px}
+  /* Bottom nav anchored to the content column (left of the docked slip).
+     Body is max-width:1080px centered with padding-right:360px reserving the
+     slip rail, so the content column is 720px wide aligned to body's left
+     edge. Pin the nav to that same column instead of the viewport center so
+     it doesn't bleed under the docked slip. */
+  .bnav{max-width:720px;width:720px;left:calc(50vw - 540px);right:auto;transform:none;margin:0}
+  /* Header sticks to body width — already block-level inside body */
+  .header{padding:16px 24px}
+  /* Sportsbook content: padding bump */
+  #sportsbook-section, #mybets-section, #live-section, #predictions-section, #results-section{padding-left:8px;padding-right:8px}
+  /* Games list: multi-column grid on desktop. Cards already block-level
+     with their own max-width via inline styles — wrap them in a 2-up grid. */
+  #games-list{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;padding:0 16px}
+  #games-list > *{margin:0!important}
+  /* Market card hover */
+  .market-card{transition:transform 0.12s,box-shadow 0.15s}
+  .market-card:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,0,0,0.7)}
+  /* Persistent right-side bet slip on desktop. The existing modal markup
+     is reused — we just unhide it, dock it, and disable the overlay scrim. */
+  .modal-bg#modal-slip{display:flex!important;position:fixed!important;top:80px!important;right:24px!important;left:auto!important;bottom:24px!important;width:320px!important;height:auto!important;background:transparent!important;z-index:60!important;align-items:stretch!important;justify-content:flex-start!important;pointer-events:none!important}
+  .modal-bg#modal-slip .modal{width:320px!important;max-width:320px!important;max-height:none!important;border-radius:18px!important;box-shadow:0 12px 36px rgba(0,0,0,0.6)!important;border:1px solid var(--border)!important;pointer-events:auto!important;overflow-y:auto!important}
+  .modal-bg#modal-slip .mclose{display:none!important}
+  /* Hide the floating slip-bar pill on desktop — the docked panel replaces it */
+  .slip-bar, .slip-bar.show{display:none!important}
+  /* Bet slip drawer & dkslip stay mobile-only too */
+  .bs-drawer, .dkslip{left:auto!important;right:24px!important;transform:none!important;max-width:520px!important}
+  /* Modals (non-slip): center vertically and cap width */
+  .modal-bg:not(#modal-slip){align-items:center!important}
+  .modal-bg:not(#modal-slip) .modal{max-width:560px!important;border-radius:20px!important}
+  /* Profile/settings overlay tweaks */
+  #ps-overlay{align-items:center!important}
+  #ps-overlay > div{max-width:560px!important;border-radius:20px!important}
+  /* Bottom-nav hover */
+  .bn:hover{opacity:0.85}
+  /* Pills + sport tabs hover */
+  .pill:not(.active):hover{border-color:#444;color:#bbb}
+  .sport-tab:not(.active):hover{opacity:0.9;color:#bbb}
+}
+
 </style>
 
 <script>
