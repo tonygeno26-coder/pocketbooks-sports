@@ -663,6 +663,12 @@ function showPlayerSettings() {
         '<input id="ps-signal" placeholder="Signal username / phone" value="'+(s.signalContact||'').replace(/"/g,'&quot;')+'" style="width:100%;background:#0a0a0a;border:1px solid #252525;border-radius:10px;padding:10px 12px;color:#fff;font-size:0.85rem;outline:none">' +
         '<div style="font-size:0.62rem;color:#666;margin-top:6px">Used to deliver settlement receipts.</div>' +
       '</div>' +
+      // Email
+      '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;margin-bottom:12px">' +
+        '<div style="font-size:0.62rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Email</div>' +
+        '<input id="ps-email" placeholder="you@example.com" value="'+(((JSON.parse(localStorage.getItem("pb-player")||"{}")||{}).email||localStorage.getItem("pb-dev-email")||"").replace(/"/g,"&quot;"))+'" style="width:100%;background:#0a0a0a;border:1px solid #252525;border-radius:10px;padding:10px 12px;color:#fff;font-size:0.85rem;outline:none">' +
+        '<div style="font-size:0.62rem;color:#666;margin-top:6px">Backup contact — either Signal or email is enough.</div>' +
+      '</div>' +
       // Theme
       '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;margin-bottom:12px">' +
         '<div style="font-size:0.62rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Appearance</div>' +
@@ -698,6 +704,16 @@ function showPlayerSettings() {
     var sigEl = ov.querySelector('#ps-signal');
     if (sigEl) s.signalContact = sigEl.value.trim();
     savePlayerSettings(s);
+    // Sync email + signalContact onto pb-player record (read by host receipts).
+    try {
+      var emEl = ov.querySelector('#ps-email');
+      var newEmail = emEl ? emEl.value.trim() : '';
+      var pl = JSON.parse(localStorage.getItem('pb-player')||'{}') || {};
+      pl.email         = newEmail;
+      pl.signalContact = s.signalContact || '';
+      localStorage.setItem('pb-player', JSON.stringify(pl));
+      if (newEmail) localStorage.setItem('pb-dev-email', newEmail);
+    } catch(_e){}
     applyPlayerTheme();
     if (typeof syncBalanceDisplays === 'function') syncBalanceDisplays();
     showToast('✅ Settings saved');

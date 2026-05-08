@@ -436,6 +436,8 @@ try {
       <!-- SIGNUP FIELDS -->
       <div id="signup-fields">
         <input id="a-name" class="auth-inp" placeholder="Display name" autocomplete="name">
+        <input id="a-signal" class="auth-inp" placeholder="Signal username or phone (optional)" autocomplete="tel">
+        <div id="signup-contact-hint" style="font-size:0.62rem;color:#666;margin:-6px 0 10px;padding:0 4px">Provide Signal, email, or both — at least one is required.</div>
       </div>
 
       <!-- SHARED FIELDS -->
@@ -589,9 +591,18 @@ async function submitAuth() {
   const btn = document.getElementById('auth-submit-btn');
   const email = document.getElementById('a-email').value.trim();
   const pass = document.getElementById('a-pass').value;
+  const signalEl = document.getElementById('a-signal');
+  const signalContact = signalEl ? signalEl.value.trim() : '';
   document.getElementById('auth-error').style.display = 'none';
 
-  if (!email || !pass) { showAuthError('Please fill in all fields'); return; }
+  // Login still requires email (existing dev login). Signup requires password
+  // plus at least one contact (signal OR email).
+  if (authMode === 'login') {
+    if (!email || !pass) { showAuthError('Please enter email and password'); return; }
+  } else {
+    if (!pass) { showAuthError('Please enter a password'); return; }
+    if (!email && !signalContact) { showAuthError('Provide Signal username/phone or email — at least one is required'); return; }
+  }
 
   btn.disabled = true;
   btn.textContent = 'Loading...';
@@ -607,7 +618,12 @@ async function submitAuth() {
       if (pass !== pass2) { showAuthError('Passwords do not match'); btn.disabled=false; btn.textContent='Create My Account →'; return; }
       if (!ageCheck) { showAuthError('You must confirm you are 21+'); btn.disabled=false; btn.textContent='Create My Account →'; return; }
       if (!termsCheck) { showAuthError('You must accept the Terms of Service'); btn.disabled=false; btn.textContent='Create My Account →'; return; }
-      data = await apiCall('POST', '/api/auth/signup', { name, email, password: pass, role: 'user' });
+      // Backend signup still keyed off email; pass a synthetic placeholder if
+      // user only gave Signal so the existing /api/auth/signup contract holds.
+      // signalContact is persisted locally in pb-player-settings (existing
+      // Signal profile field) so the host receipts pipeline picks it up.
+      var signupEmail = email || ('signal+'+signalContact.replace(/[^a-zA-Z0-9]/g,'').toLowerCase()+'@pocketbooks.local');
+      data = await apiCall('POST', '/api/auth/signup', { name, email: signupEmail, password: pass, role: 'user', signalContact: signalContact || null });
     } else {
       data = await apiCall('POST', '/api/auth/login', { email, password: pass });
     }
@@ -616,18 +632,31 @@ async function submitAuth() {
 
     TOKEN = data.token;
     localStorage.setItem('pb-sports-token', TOKEN);
-    localStorage.setItem('pb-dev-email', email);
+    if (email) localStorage.setItem('pb-dev-email', email);
     // NOTE: pb-dev-pass kept for dev only; do not rely on it for prod auth.
     localStorage.setItem('pb-dev-pass', pass);
+    // Persist Signal contact into the existing player-settings field so the
+    // profile modal + host receipts pipeline see it (signup path only).
+    if (authMode==='signup' && signalContact) {
+      try {
+        var _ps = JSON.parse(localStorage.getItem('pb-player-settings')||'{}');
+        _ps.signalContact = signalContact;
+        localStorage.setItem('pb-player-settings', JSON.stringify(_ps));
+      } catch(_e){}
+    }
     // Seed a minimal canonical record for whichever role applies, so role/
     // profile survives refresh even if /api/auth/me hasn't returned yet.
     try {
       var _role = (data.role || (data.user && data.user.role) || 'player');
+      var _uname = (authMode==='signup'
+        ? document.getElementById('a-name').value.trim()
+        : (email ? email.split('@')[0] : 'user'));
       var _rec  = {
-        id:       data.userId || data.id || (data.user && data.user.id) || null,
-        username: (authMode==='signup' ? document.getElementById('a-name').value.trim() : email.split('@')[0]),
-        email:    email,
-        role:     _role,
+        id:            data.userId || data.id || (data.user && data.user.id) || null,
+        username:      _uname,
+        email:         email || '',
+        signalContact: (authMode==='signup' ? signalContact : '') || '',
+        role:          _role,
       };
       localStorage.setItem('pb-player', JSON.stringify(_rec));
       if (_role === 'host' || _role === 'owner') {
@@ -1183,6 +1212,11 @@ function showPlayerSettings() {
         '<div style="font-size:0.62rem;color:#666;margin-top:6px">Used to deliver settlement receipts.</div>' +
       '</div>' +
       '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;margin-bottom:12px">' +
+        '<div style="font-size:0.62rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Email</div>' +
+        '<input id="ps-email" placeholder="you@example.com" value="'+(((JSON.parse(localStorage.getItem("pb-player")||"{}")||{}).email||localStorage.getItem("pb-dev-email")||"").replace(/"/g,"&quot;"))+'" style="width:100%;background:#0a0a0a;border:1px solid #252525;border-radius:10px;padding:10px 12px;color:#fff;font-size:0.85rem;outline:none">' +
+        '<div style="font-size:0.62rem;color:#666;margin-top:6px">Backup contact — either Signal or email is enough.</div>' +
+      '</div>' +
+      '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;margin-bottom:12px">' +
         '<div style="font-size:0.62rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Appearance</div>' +
         '<div style="display:flex;gap:8px">' + chip('theme','dark','🌑 Dark', s.theme) + chip('theme','light','☀️ Light', s.theme) + '</div>' +
       '</div>' +
@@ -1214,6 +1248,16 @@ function showPlayerSettings() {
     var sigEl = ov.querySelector('#ps-signal');
     if (sigEl) s.signalContact = sigEl.value.trim();
     savePlayerSettings(s);
+    // Sync email + signalContact onto pb-player record so other surfaces read it.
+    try {
+      var emEl = ov.querySelector('#ps-email');
+      var newEmail = emEl ? emEl.value.trim() : '';
+      var pl = JSON.parse(localStorage.getItem('pb-player')||'{}') || {};
+      pl.email         = newEmail;
+      pl.signalContact = s.signalContact || '';
+      localStorage.setItem('pb-player', JSON.stringify(pl));
+      if (newEmail) localStorage.setItem('pb-dev-email', newEmail);
+    } catch(_e){}
     applyPlayerTheme();
     if (typeof showToast==='function') showToast('✅ Settings saved');
     ov.remove();
