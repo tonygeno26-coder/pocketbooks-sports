@@ -346,6 +346,35 @@ body.theme-light [style*="color:#ff3d57"],body.theme-light [style*="color:#ff6b6
 body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
 
 /* ═══ RESPONSIVE DESKTOP (>=1100px) ════════════════════════════════════════════════════ */
+@media (max-width:480px){
+  /* Card content must never overflow the viewport. The legacy mc-cols /
+     mc-team-row grid is 1fr 90 90 90, but `1fr` defaults to min-width:auto
+     (= min-content) so a long team name + 52px jersey forces the team
+     track wider than 1fr; the row then overflows the card and the right
+     odds buttons get clipped by .market-card{overflow:hidden}. Switch the
+     team track to minmax(0,1fr) and the odds tracks to minmax(0,90px) so
+     they shrink instead of overflowing. */
+  .market-card{margin:0 12px 12px;max-width:calc(100vw - 24px)}
+  .market-card .mc-cols,
+  .market-card .mc-team-row{
+    grid-template-columns: minmax(0,1fr) minmax(0,90px) minmax(0,90px) minmax(0,90px);
+    gap:5px;
+    padding:0 12px;
+  }
+  .market-card .mc-team{min-width:0;gap:8px}
+  .market-card .mc-team > div{min-width:0}
+  .market-card .mc-name,
+  .market-card .mc-city{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .market-card .mc-jersey{width:44px;height:44px;flex-shrink:0}
+  .market-card .odds-box,
+  .market-card .mkt-odds-box{min-width:0;max-width:100%;padding-left:2px;padding-right:2px}
+  .market-card .odds-box .odds-num{font-size:0.88rem}
+  .market-card .odds-box .odds-line{font-size:0.6rem}
+  .market-card .mc-header,
+  .market-card .mc-footer{padding-left:12px;padding-right:12px}
+  .market-card .mc-divider{margin:0 12px}
+}
+
 @media (min-width:1100px){
   /* Default desktop: full-width content column, no slip rail reserved. */
   body{max-width:1080px;padding-bottom:40px}
