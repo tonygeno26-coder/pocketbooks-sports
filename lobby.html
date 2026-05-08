@@ -460,6 +460,11 @@ try {
       </div>
 
       <button class="auth-submit" id="auth-submit-btn" onclick="submitAuth()">Sign In →</button>
+      <div id="auth-recovery-links" style="display:flex;justify-content:center;gap:14px;margin-top:14px;font-size:0.72rem">
+        <span class="auth-recover-link" style="color:var(--cyan);cursor:pointer" onclick="openRecovery('username')">Forgot Username</span>
+        <span style="color:#333">·</span>
+        <span class="auth-recover-link" style="color:var(--cyan);cursor:pointer" onclick="openRecovery('password')">Forgot Password</span>
+      </div>
       <div class="auth-footer" id="auth-footer-text">Don't have an account? <span style="color:var(--cyan);cursor:pointer" onclick="setAuthTab('signup')">Create one free</span></div>
     </div>
   </div>
@@ -585,6 +590,199 @@ function showAuthError(msg) {
   const el = document.getElementById('auth-error');
   el.textContent = msg;
   el.style.display = 'block';
+}
+
+// ═══ ACCOUNT RECOVERY (MVP / local) ══════════════════════════════════
+// No real backend wired yet. Looks up the locally-stored account
+// (pb-player + pb-host) by username / email / Signal contact, generates
+// a mock reset token, and persists the request to
+// pb-password-recovery-requests so future backend can drain it.
+function _recLoadRequests(){
+  try { return JSON.parse(localStorage.getItem('pb-password-recovery-requests')||'[]'); }
+  catch(_e){ return []; }
+}
+function _recSaveRequests(arr){
+  try { localStorage.setItem('pb-password-recovery-requests', JSON.stringify(arr||[])); } catch(_e){}
+}
+function _recCollectAccounts(){
+  // Build the local account roster from existing storage. No new keys.
+  var out = [];
+  function add(rec, source){
+    if (!rec) return;
+    var uname = (rec.username || rec.name || '').trim();
+    var email = (rec.email || '').trim();
+    var sig   = (rec.signalContact || '').trim();
+    if (!uname && !email && !sig) return;
+    out.push({ source:source, username:uname, email:email, signalContact:sig, role:rec.role||'player' });
+  }
+  try { add(JSON.parse(localStorage.getItem('pb-player')||'null'), 'pb-player'); } catch(_e){}
+  try { add(JSON.parse(localStorage.getItem('pb-host')  ||'null'), 'pb-host');   } catch(_e){}
+  // Settings file may carry signalContact even if pb-player.signalContact missing.
+  try {
+    var ps = JSON.parse(localStorage.getItem('pb-player-settings')||'null');
+    if (ps && ps.signalContact && !out.some(function(a){ return a.signalContact === ps.signalContact; })) {
+      // Attach to first account if present; else create a stub.
+      if (out.length) out[0].signalContact = out[0].signalContact || ps.signalContact;
+    }
+  } catch(_e){}
+  // Dev email fallback
+  try {
+    var devEmail = (localStorage.getItem('pb-dev-email')||'').trim();
+    if (devEmail && out.length && !out[0].email) out[0].email = devEmail;
+  } catch(_e){}
+  return out;
+}
+function _recNorm(s){ return (s||'').toString().trim().toLowerCase(); }
+function _recFindAccount(query){
+  // query: { username?, email?, signal? } — any combination. AND-match what's set.
+  var accounts = _recCollectAccounts();
+  var q = {
+    username: _recNorm(query.username),
+    email:    _recNorm(query.email),
+    signal:   _recNorm(query.signal),
+  };
+  if (!q.username && !q.email && !q.signal) return null;
+  return accounts.find(function(a){
+    if (q.username && _recNorm(a.username) !== q.username) return false;
+    if (q.email    && _recNorm(a.email)    !== q.email)    return false;
+    if (q.signal   && _recNorm(a.signalContact) !== q.signal) return false;
+    return true;
+  }) || null;
+}
+function _recMaskUsername(uname){
+  uname = (uname||'').toString();
+  if (uname.length <= 2) return uname.replace(/./g,'*');
+  if (uname.length <= 4) return uname.slice(0,1) + '***' + uname.slice(-1);
+  return uname.slice(0,2) + '***' + uname.slice(-2);
+}
+function _recMaskContact(s){
+  s = (s||'').toString();
+  if (!s) return '';
+  if (s.indexOf('@') > -1) {
+    var parts = s.split('@');
+    var local = parts[0]||'', dom = parts[1]||'';
+    var ml = local.length <= 2 ? local.replace(/./g,'*') : local.slice(0,1)+'***'+local.slice(-1);
+    return ml + '@' + dom;
+  }
+  // phone / signal handle
+  if (s.length <= 4) return '***'+s.slice(-2);
+  return s.slice(0,2) + '***' + s.slice(-2);
+}
+function _recGenToken(){
+  return 'PBR-' + Date.now().toString(36).toUpperCase() + '-' +
+         Math.random().toString(36).slice(2,8).toUpperCase();
+}
+function _recRecordRequest(kind, query, account){
+  var req = {
+    id:        _recGenToken(),
+    kind:      kind, // 'password' | 'username'
+    requestedAt: new Date().toISOString(),
+    query:     { username: query.username||'', email: query.email||'', signal: query.signal||'' },
+    matched:   !!account,
+    accountUsername: account ? account.username : null,
+    accountEmail:    account ? account.email    : null,
+    accountSignal:   account ? account.signalContact : null,
+    deliveryStatus:  account ? 'pending_local_send' : 'no_match',
+  };
+  var arr = _recLoadRequests();
+  arr.push(req);
+  _recSaveRequests(arr);
+  return req;
+}
+function openRecovery(kind){
+  // kind: 'password' | 'username'
+  kind = (kind === 'username') ? 'username' : 'password';
+  var existing = document.getElementById('rec-overlay');
+  if (existing) existing.remove();
+  var ov = document.createElement('div');
+  ov.id = 'rec-overlay';
+  ov.style.cssText = 'position:fixed!important;top:0!important;left:0!important;right:0!important;bottom:0!important;width:100vw!important;height:100vh!important;z-index:2147483647!important;background:rgba(0,0,0,0.85)!important;display:flex!important;align-items:flex-end!important;justify-content:center!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important';
+  var title = kind === 'password' ? 'Recover Password' : 'Recover Username';
+  var sub   = kind === 'password'
+    ? 'Enter your username, email, or Signal contact. We\'ll send reset instructions to the contact on file.'
+    : 'Enter your email or Signal contact. We\'ll show a hint of the matching username.';
+  var pwUsernameRow = kind === 'password'
+    ? '<input id="rec-username" class="auth-inp" placeholder="Username (optional)" autocomplete="username" style="margin-bottom:10px">'
+    : '';
+  ov.innerHTML =
+    '<div style="background:#0a0a0a;color:#fff;width:100%;max-width:430px;max-height:90vh;border-radius:20px 20px 0 0;display:flex;flex-direction:column;border:1px solid #252525">' +
+      '<div style="padding:14px 16px;border-bottom:1px solid #252525;display:flex;justify-content:space-between;align-items:center">' +
+        '<div><div style="font-size:0.62rem;color:#888;text-transform:uppercase;letter-spacing:0.5px">Recovery</div><div style="font-size:1rem;font-weight:900">'+title+'</div></div>' +
+        '<button id="rec-close" style="background:#1c1c1c;border:1px solid #252525;color:#fff;width:34px;height:34px;border-radius:50%;font-size:1rem;cursor:pointer">✕</button>' +
+      '</div>' +
+      '<div style="flex:1;overflow-y:auto;padding:16px">' +
+        '<div style="font-size:0.78rem;color:#aaa;line-height:1.5;margin-bottom:14px">'+sub+'</div>' +
+        pwUsernameRow +
+        '<input id="rec-email"  class="auth-inp" placeholder="Email" type="email" autocomplete="email" style="margin-bottom:10px">' +
+        '<input id="rec-signal" class="auth-inp" placeholder="Signal username or phone" autocomplete="tel">' +
+        '<div id="rec-result" style="display:none;margin-top:14px;padding:12px 14px;border-radius:10px;font-size:0.78rem;line-height:1.55"></div>' +
+      '</div>' +
+      '<div style="padding:12px 16px 18px;border-top:1px solid #252525">' +
+        '<button id="rec-submit" class="auth-submit" style="width:100%">'+(kind==='password'?'Send Reset Instructions':'Show Username Hint')+'</button>' +
+      '</div>' +
+    '</div>';
+  (document.documentElement || document.body).appendChild(ov);
+  ov.addEventListener('click', function(e){ if (e.target===ov) ov.remove(); });
+  ov.querySelector('#rec-close').addEventListener('click', function(){ ov.remove(); });
+  ov.querySelector('#rec-submit').addEventListener('click', function(){
+    var unameEl = ov.querySelector('#rec-username');
+    var emEl    = ov.querySelector('#rec-email');
+    var sigEl   = ov.querySelector('#rec-signal');
+    var query = {
+      username: unameEl ? unameEl.value.trim() : '',
+      email:    emEl    ? emEl.value.trim()    : '',
+      signal:   sigEl   ? sigEl.value.trim()   : '',
+    };
+    var resEl = ov.querySelector('#rec-result');
+    function show(html, ok){
+      resEl.style.display = 'block';
+      resEl.style.background = ok ? 'rgba(0,255,136,0.08)' : 'rgba(255,61,87,0.08)';
+      resEl.style.border     = '1px solid ' + (ok ? 'rgba(0,255,136,0.25)' : 'rgba(255,61,87,0.25)');
+      resEl.style.color      = ok ? '#9affc7' : '#ffb1bd';
+      resEl.innerHTML = html;
+    }
+    if (kind === 'password') {
+      // At least one of username/email/signal must be provided.
+      if (!query.username && !query.email && !query.signal) {
+        show('Enter a username, email, or Signal contact to look up your account.', false);
+        return;
+      }
+      var acct = _recFindAccount(query);
+      var req  = _recRecordRequest('password', query, acct);
+      if (!acct) {
+        // Generic recovery error — do not leak existence info.
+        show('If the information matches an account, recovery instructions will be sent to the Signal/email on file. Reference: <strong>'+req.id+'</strong>', false);
+        return;
+      }
+      var via = [];
+      if (acct.signalContact) via.push('Signal '+_recMaskContact(acct.signalContact));
+      if (acct.email)         via.push('email '+_recMaskContact(acct.email));
+      var viaTxt = via.length ? via.join(' and ') : 'the contact on file';
+      show(
+        'Reset instructions queued for <strong>'+_recMaskUsername(acct.username||acct.email||acct.signalContact)+'</strong> via '+viaTxt+'.<br>' +
+        'Mock reset token: <code style="color:#fff">'+req.id+'</code><br>' +
+        '<span style="color:#888;font-size:0.7rem">No external send wired yet — request saved to pb-password-recovery-requests.</span>',
+        true
+      );
+    } else {
+      // username recovery: must provide email or signal
+      if (!query.email && !query.signal) {
+        show('Enter your email or Signal contact to recover your username.', false);
+        return;
+      }
+      var acct2 = _recFindAccount(query);
+      var req2  = _recRecordRequest('username', query, acct2);
+      if (!acct2 || !acct2.username) {
+        show('If the information matches an account, the username hint will be sent to the contact on file. Reference: <strong>'+req2.id+'</strong>', false);
+        return;
+      }
+      show(
+        'Username hint: <strong style="color:#fff;font-size:1rem">'+_recMaskUsername(acct2.username)+'</strong><br>' +
+        '<span style="color:#888;font-size:0.7rem">Reference: '+req2.id+' · saved to pb-password-recovery-requests.</span>',
+        true
+      );
+    }
+  });
 }
 
 async function submitAuth() {
