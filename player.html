@@ -2333,14 +2333,31 @@ function _resolvePlayer() {
   };
 }
 function _makeSelection(b) {
+  // Parse 'Away Team vs Home Team' into structured pieces so the grader
+  // can match against SportsDataIO games (which key by AwayTeamName /
+  // HomeTeamName, not by Odds API ids).
   var teams2 = (b.game||'').split(' vs ');
+  var awayTeam = (teams2[0] || '').trim();
+  var homeTeam = (teams2[1] || '').trim();
   var pck = (b.pick||'').toLowerCase();
-  var homeTeam = teams2[1] ? teams2[1].trim().toLowerCase() : '';
+  var homeLower = homeTeam.toLowerCase();
   var side = pck.includes('over') ? 'over' : pck.includes('under') ? 'under' :
-    (homeTeam && pck.includes(homeTeam.split(' ').pop())) ? 'home' : 'away';
-  return { gameId: b.cellId ? b.cellId.split('-').slice(0,4).join('-') : b.game,
-    sport: b.sport||'', matchup: b.game||'', pick: b.pick||'',
-    market: b.market||'', odds: b.odds, side: side };
+    (homeLower && pck.includes(homeLower.split(' ').pop())) ? 'home' : 'away';
+  // YYYY-MM-DD (UTC) of the moment the bet was placed — used by the grader
+  // to look up the right /scores/json/GamesByDate/<date> bucket.
+  var placedDate = new Date().toISOString().slice(0,10);
+  return {
+    gameId:     b.cellId ? b.cellId.split('-').slice(0,4).join('-') : b.game,
+    sport:      b.sport||'',
+    matchup:    b.game||'',
+    awayTeam:   awayTeam,
+    homeTeam:   homeTeam,
+    placedDate: placedDate,
+    pick:       b.pick||'',
+    market:     b.market||'',
+    odds:       b.odds,
+    side:       side
+  };
 }
 
 function confirmBet() {

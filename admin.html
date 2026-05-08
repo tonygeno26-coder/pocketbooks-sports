@@ -194,6 +194,7 @@ try {
     <div class="ntab" onclick="setSection('payments')">Payments</div>
     <div class="ntab" onclick="setSection('bets')">Bets</div>
     <div class="ntab" onclick="setSection('risk')">Risk / Flags</div>
+    <div class="ntab" onclick="setSection('tools')">Tools</div>
     <div class="ntab" onclick="setSection('settings')">Settings</div>
   </div>
 
@@ -244,6 +245,30 @@ try {
     <div class="sec-title">Sharp Players</div>
     <div style="font-size:0.72rem;color:var(--gray);margin-bottom:12px">Players with 60%+ win rate across all clubs</div>
     <div id="sharp-list"><div class="loading">Loading...</div></div>
+  </div>
+
+  <!-- TOOLS — dev/admin grading helpers -->
+  <div class="section" id="sec-tools">
+    <div class="sec-title">Bet Grading (Test)</div>
+    <div style="font-size:0.72rem;color:var(--gray);line-height:1.55;margin-bottom:12px">
+      Pulls real MLB scores from SportsDataIO and grades any open
+      <strong style="color:#fff">single moneyline</strong> ticket whose game is
+      <strong style="color:#fff">Final</strong>. Parlays / teasers / spreads / totals
+      are skipped. Tickets are tagged with <code style="color:var(--cyan)">gradedAt</code>
+      so re-running the tool can't double-grade.
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <button id="grade-test-btn" onclick="gradeOpenTickets()"
+        style="padding:11px 18px;background:var(--purple);color:#fff;border:none;border-radius:10px;font-size:0.82rem;font-weight:900;cursor:pointer">
+        Grade Test Bets
+      </button>
+      <button onclick="clearGradeLog()"
+        style="padding:11px 14px;background:var(--card2);color:var(--gray);border:1px solid var(--border);border-radius:10px;font-size:0.78rem;font-weight:700;cursor:pointer">
+        Clear Log
+      </button>
+    </div>
+    <div id="grade-summary" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:0.78rem"></div>
+    <pre id="grade-log" style="background:#000;border:1px solid var(--border);border-radius:10px;padding:12px;font-size:0.7rem;color:#9affc7;white-space:pre-wrap;word-break:break-word;max-height:480px;overflow:auto;font-family:ui-monospace,monospace"></pre>
   </div>
 
   <!-- SETTINGS -->
@@ -342,13 +367,262 @@ function setSection(s) {
   document.querySelectorAll('.ntab').forEach(t=>t.classList.remove('active'));
   document.getElementById('sec-'+s).classList.add('active');
   const tabs = document.querySelectorAll('.ntab');
-  const map = {overview:0,users:1,clubs:2,payments:3,bets:4,risk:5,settings:6};
+  const map = {overview:0,users:1,clubs:2,payments:3,bets:4,risk:5,tools:6,settings:7};
   if(map[s]!==undefined) tabs[map[s]]?.classList.add('active');
   if(s==='users') loadUsers();
   if(s==='clubs') loadClubs();
   if(s==='payments') loadPayments();
   if(s==='bets') loadBets();
   if(s==='risk') loadSharp();
+}
+
+// ═══ BET GRADING (TEST) ════════════════════════════════════════════════════════════════
+// MLB only, straight bets only, moneyline only, completed/Final games only.
+// Pulls /api/sportsdataio/mlb?path=scores/json/GamesByDate/<date> (cached
+// 120s by the proxy) and grades each open ticket whose placedDate matches.
+// Sets t.status to 'won' or 'lost', stamps t.gradedAt, writes a ledger
+// entry, and saves both pb-tickets and hostActiveBets back. The player's
+// available balance is derived (calcAvailableBalance reads pb-tickets), so
+// flipping status updates it automatically; no balance write is needed.
+var _GRADE_RUNNING = false;
+var _SDIO_DATE_FMT_MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+function _sdioDate(isoYmd) {
+  // 'YYYY-MM-DD' -> 'YYYY-MMM-DD' (uppercase month abbrev) per SportsDataIO.
+  var parts = (isoYmd||'').split('-');
+  if (parts.length !== 3) return null;
+  var m = parseInt(parts[1],10);
+  if (!m || m < 1 || m > 12) return null;
+  return parts[0] + '-' + _SDIO_DATE_FMT_MONTHS[m-1] + '-' + parts[2];
+}
+function _normTeam(s) {
+  return (s||'').toString().toLowerCase().replace(/\s+/g,' ').trim();
+}
+function _isMoneylineTicket(t) {
+  if (!t) return false;
+  if (t.type !== 'Single') return false;
+  if (!Array.isArray(t.selections) || t.selections.length !== 1) return false;
+  var s = t.selections[0];
+  if ((s.sport||'').toUpperCase() !== 'MLB') return false;
+  var m = (s.market||'').toLowerCase();
+  return m === 'moneyline' || m === 'ml' || m === 'to win' || m.includes('moneyline');
+}
+function _ticketStillOpen(t) {
+  if (!t || t.gradedAt) return false;
+  return t.status === 'active' || t.status === 'open';
+}
+function gLog(msg, color) {
+  var pre = document.getElementById('grade-log');
+  if (!pre) { console.log('[grade]', msg); return; }
+  var stamp = new Date().toISOString().slice(11,19);
+  var line = '[' + stamp + '] ' + msg + '\n';
+  pre.textContent += line;
+  pre.scrollTop = pre.scrollHeight;
+  console.log('[grade]', msg);
+}
+function clearGradeLog() {
+  var pre = document.getElementById('grade-log');
+  if (pre) pre.textContent = '';
+  var sum = document.getElementById('grade-summary');
+  if (sum) { sum.style.display = 'none'; sum.innerHTML = ''; }
+}
+async function _fetchMlbGamesForDate(isoYmd) {
+  var d = _sdioDate(isoYmd);
+  if (!d) throw new Error('bad date: '+isoYmd);
+  var url = '/api/sportsdataio/mlb?path=' + encodeURIComponent('scores/json/GamesByDate/' + d);
+  gLog('fetch ' + url);
+  var r = await fetch(url);
+  var raw = await r.text();
+  if (!r.ok) {
+    var msg = 'sportsdataio HTTP ' + r.status + ': ' + raw.slice(0,160);
+    throw new Error(msg);
+  }
+  var games;
+  try { games = JSON.parse(raw); }
+  catch(e) { throw new Error('bad sportsdataio JSON: ' + e.message); }
+  if (!Array.isArray(games)) throw new Error('expected array, got ' + typeof games);
+  gLog('  -> ' + games.length + ' games for ' + d);
+  return games;
+}
+function _findGame(games, sel) {
+  // Match a ticket selection's away/home team names to a SportsDataIO game.
+  // SDIO games carry AwayTeamName/HomeTeamName (full names) plus AwayTeam/
+  // HomeTeam (3-letter). Compare normalized full names first, then fall back
+  // to lastWord (e.g. 'Dodgers' from 'Los Angeles Dodgers').
+  var awayN = _normTeam(sel.awayTeam);
+  var homeN = _normTeam(sel.homeTeam);
+  if (!awayN || !homeN) return null;
+  function pieces(g) {
+    return {
+      away: _normTeam(g.AwayTeamName || g.awayTeamName || ''),
+      home: _normTeam(g.HomeTeamName || g.homeTeamName || '')
+    };
+  }
+  var byFull = games.find(function(g){
+    var p = pieces(g);
+    return p.away === awayN && p.home === homeN;
+  });
+  if (byFull) return byFull;
+  var awayLast = awayN.split(' ').pop();
+  var homeLast = homeN.split(' ').pop();
+  return games.find(function(g){
+    var p = pieces(g);
+    return p.away.endsWith(awayLast) && p.home.endsWith(homeLast);
+  }) || null;
+}
+function _gameIsFinal(g) {
+  var s = (g.Status || g.status || '').toString();
+  return s === 'Final' || s === 'F/OT' || s === 'F/SO' || /^final/i.test(s);
+}
+function _gameWinnerSide(g) {
+  // Returns 'away' | 'home' | null (tie/incomplete).
+  var aR = parseFloat(g.AwayTeamRuns); var hR = parseFloat(g.HomeTeamRuns);
+  if (!isFinite(aR) || !isFinite(hR)) return null;
+  if (aR === hR) return null;
+  return aR > hR ? 'away' : 'home';
+}
+function _appendLedger(entry) {
+  try {
+    var ledger = JSON.parse(localStorage.getItem('pb-ledger')||'[]');
+    ledger.push(entry);
+    localStorage.setItem('pb-ledger', JSON.stringify(ledger));
+  } catch(_e){}
+}
+function _bumpTicketsVersion() {
+  try {
+    var v = parseInt(localStorage.getItem('pb-tickets-version')||'0',10) || 0;
+    localStorage.setItem('pb-tickets-version', String(v+1));
+  } catch(_e){}
+}
+async function gradeOpenTickets() {
+  if (_GRADE_RUNNING) { gLog('grading already in progress'); return; }
+  _GRADE_RUNNING = true;
+  var btn = document.getElementById('grade-test-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Grading...'; }
+  var summary = { scanned:0, eligible:0, skippedType:0, skippedAlreadyGraded:0,
+    notFound:0, notFinal:0, ties:0, won:0, lost:0, errors:0 };
+  try {
+    var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
+    var hostBets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
+    var hostBetIdx = {};
+    hostBets.forEach(function(t,i){ hostBetIdx[t.id] = i; });
+
+    summary.scanned = tickets.length;
+    gLog('scan: ' + tickets.length + ' ticket(s) in pb-tickets');
+
+    // Bucket eligible tickets by placedDate so we batch sportsdataio calls.
+    var byDate = {};
+    tickets.forEach(function(t){
+      if (!_ticketStillOpen(t)) {
+        if (t && t.gradedAt) summary.skippedAlreadyGraded++;
+        return;
+      }
+      if (!_isMoneylineTicket(t)) { summary.skippedType++; return; }
+      var sel = t.selections[0];
+      var date = sel.placedDate || (t.placedAt||'').slice(0,10);
+      if (!date) { gLog('  ! ticket ' + t.id + ' has no placedDate, skipping'); summary.errors++; return; }
+      (byDate[date] = byDate[date] || []).push(t);
+      summary.eligible++;
+    });
+
+    var dates = Object.keys(byDate).sort();
+    if (!dates.length) {
+      gLog('no eligible tickets (need: open, Single MLB Moneyline, no gradedAt)');
+    }
+    for (var i = 0; i < dates.length; i++) {
+      var date = dates[i];
+      var batch = byDate[date];
+      gLog('--- ' + date + ' (' + batch.length + ' ticket(s)) ---');
+      var games;
+      try { games = await _fetchMlbGamesForDate(date); }
+      catch(e) { gLog('  ! sportsdataio fetch failed: ' + e.message); summary.errors += batch.length; continue; }
+      for (var j = 0; j < batch.length; j++) {
+        var t = batch[j];
+        var sel = t.selections[0];
+        var g = _findGame(games, sel);
+        if (!g) {
+          gLog('  ? ticket ' + t.id + ' game not in feed (' + sel.matchup + ')');
+          summary.notFound++; continue;
+        }
+        if (!_gameIsFinal(g)) {
+          gLog('  . ticket ' + t.id + ' ' + sel.matchup + ' — status=' + (g.Status||'?') + ' (not Final, skip)');
+          summary.notFinal++; continue;
+        }
+        var winner = _gameWinnerSide(g);
+        if (!winner) {
+          gLog('  ? ticket ' + t.id + ' ' + sel.matchup + ' — no winner (tie or missing runs)');
+          summary.ties++; continue;
+        }
+        // Compare to ticket side. _makeSelection sets sel.side to 'away'|'home'
+        // for moneyline picks based on the team in the pick label.
+        var pickedSide = sel.side === 'home' ? 'home' : 'away';
+        var win = (pickedSide === winner);
+        var newStatus = win ? 'won' : 'lost';
+        t.status = newStatus;
+        t.gradedAt = new Date().toISOString();
+        t.gradedBy = 'admin-grade-test';
+        t.finalScore = {
+          away: g.AwayTeamName || sel.awayTeam,
+          home: g.HomeTeamName || sel.homeTeam,
+          awayRuns: parseFloat(g.AwayTeamRuns),
+          homeRuns: parseFloat(g.HomeTeamRuns),
+          status: g.Status || 'Final'
+        };
+        if (win) summary.won++; else summary.lost++;
+        // Mirror to hostActiveBets if present
+        if (hostBetIdx[t.id] !== undefined) {
+          hostBets[hostBetIdx[t.id]] = Object.assign({}, hostBets[hostBetIdx[t.id]], {
+            status: newStatus, gradedAt: t.gradedAt, gradedBy: t.gradedBy, finalScore: t.finalScore
+          });
+        }
+        _appendLedger({
+          id: 'L' + Date.now() + '-' + j,
+          type: 'grade-' + newStatus,
+          ticketId: t.id,
+          playerId: t.playerId || null,
+          amount: win ? (parseFloat(t.potentialProfit)||0) : -(parseFloat(t.riskAmount)||0),
+          at: t.gradedAt,
+          source: 'admin-grade-test',
+          finalScore: t.finalScore
+        });
+        var scoreStr = (g.AwayTeamRuns||0) + '-' + (g.HomeTeamRuns||0);
+        gLog('  ' + (win?'✓':'✕') + ' ticket ' + t.id + ' ' + sel.matchup + ' ' + scoreStr +
+          ' — picked ' + pickedSide + ', winner ' + winner + ' → ' + newStatus.toUpperCase());
+      }
+    }
+
+    // Persist back
+    localStorage.setItem('pb-tickets', JSON.stringify(tickets));
+    localStorage.setItem('hostActiveBets', JSON.stringify(hostBets));
+    _bumpTicketsVersion();
+
+    // Summary card
+    var sum = document.getElementById('grade-summary');
+    if (sum) {
+      sum.style.display = 'block';
+      sum.innerHTML =
+        '<div style="font-weight:900;margin-bottom:8px;color:#fff">Run summary</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:0.72rem">' +
+          '<div>scanned: <strong style="color:#fff">'+summary.scanned+'</strong></div>' +
+          '<div>eligible: <strong style="color:var(--cyan)">'+summary.eligible+'</strong></div>' +
+          '<div>won: <strong style="color:var(--green)">'+summary.won+'</strong></div>' +
+          '<div>lost: <strong style="color:var(--red)">'+summary.lost+'</strong></div>' +
+          '<div>not final: <strong>'+summary.notFinal+'</strong></div>' +
+          '<div>not in feed: <strong>'+summary.notFound+'</strong></div>' +
+          '<div>ties / no runs: <strong>'+summary.ties+'</strong></div>' +
+          '<div>skipped type: <strong>'+summary.skippedType+'</strong></div>' +
+          '<div>already graded: <strong>'+summary.skippedAlreadyGraded+'</strong></div>' +
+          '<div>errors: <strong style="color:var(--red)">'+summary.errors+'</strong></div>' +
+        '</div>';
+    }
+    gLog('done. won=' + summary.won + ' lost=' + summary.lost + ' notFinal=' + summary.notFinal +
+         ' notFound=' + summary.notFound + ' alreadyGraded=' + summary.skippedAlreadyGraded);
+  } catch(e) {
+    gLog('FATAL: ' + (e && e.message || e));
+    console.error('[grade] fatal', e);
+  } finally {
+    _GRADE_RUNNING = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Grade Test Bets'; }
+  }
 }
 
 // OVERVIEW
