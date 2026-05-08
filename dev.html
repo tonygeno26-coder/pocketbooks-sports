@@ -6,22 +6,50 @@
 <title>Dev Preview — Pocketbooks Sports</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,Arial,sans-serif;background:#050505;color:#fff;padding:20px}
-.header{display:flex;align-items:center;gap:12px;margin-bottom:24px;padding:16px 20px;background:#111;border-radius:14px;border:1px solid #222}
+body{font-family:-apple-system,Arial,sans-serif;background:#050505;color:#fff;padding:18px;min-height:100vh}
+.header{display:flex;align-items:center;gap:12px;margin-bottom:18px;padding:12px 16px;background:#111;border-radius:14px;border:1px solid #222;flex-wrap:wrap}
 .badge{background:linear-gradient(135deg,#4c1d95,#7c3aed);color:#fff;font-size:0.58rem;font-weight:900;padding:3px 8px;border-radius:6px;letter-spacing:0.5px;text-transform:uppercase}
 .title{font-size:1rem;font-weight:900;color:#00c2ff}
 .sub{font-size:0.72rem;color:#555;margin-top:2px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-a.screen-link{display:flex;flex-direction:column;background:#111;border:1px solid #222;border-radius:14px;padding:16px;text-decoration:none;transition:border-color 0.15s}
-a.screen-link:hover{border-color:#00c2ff}
-.sl-icon{font-size:1.6rem;margin-bottom:8px}
-.sl-name{font-size:0.88rem;font-weight:800;color:#fff;margin-bottom:3px}
-.sl-url{font-size:0.6rem;color:#555;font-family:monospace;word-break:break-all}
-.sl-role{font-size:0.58rem;font-weight:700;padding:2px 7px;border-radius:5px;display:inline-block;margin-top:4px}
+a.live-link{margin-left:auto;padding:7px 16px;background:rgba(0,194,255,0.12);border:1px solid #00c2ff;color:#00c2ff;border-radius:20px;font-size:0.72rem;font-weight:800;text-decoration:none}
+
+/* ── Controls bar ─────────────────────────────────────────────────────────── */
+.ctrl{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#111;border:1px solid #222;border-radius:12px;margin-bottom:14px;flex-wrap:wrap}
+.ctrl-group{display:flex;gap:6px;align-items:center}
+.ctrl-label{font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.6px;font-weight:800;margin-right:4px}
+.vp-btn{padding:7px 14px;background:#1c1c1c;border:1px solid #2a2a2a;color:#bbb;border-radius:8px;font-size:0.78rem;font-weight:800;cursor:pointer;font-family:inherit;transition:all 0.12s;display:flex;align-items:center;gap:6px}
+.vp-btn:hover{border-color:#444;color:#fff}
+.vp-btn.active{background:#00c2ff;border-color:#00c2ff;color:#000}
+.vp-btn .vp-w{font-size:0.62rem;color:inherit;opacity:0.7;font-weight:700}
+.mode-badge{margin-left:auto;padding:6px 14px;border-radius:20px;font-size:0.7rem;font-weight:900;letter-spacing:0.5px;text-transform:uppercase;background:rgba(0,194,255,0.12);color:#00c2ff;border:1px solid rgba(0,194,255,0.3)}
+.mode-badge.tablet{background:rgba(245,200,66,0.12);color:#f5c842;border-color:rgba(245,200,66,0.3)}
+.mode-badge.mobile{background:rgba(0,255,136,0.12);color:#00ff88;border-color:rgba(0,255,136,0.3)}
+.url-input{flex:1;min-width:240px;padding:7px 12px;background:#0a0a0a;border:1px solid #2a2a2a;color:#fff;border-radius:8px;font-size:0.78rem;font-family:monospace;outline:none}
+.url-input:focus{border-color:#00c2ff}
+.go-btn{padding:7px 14px;background:rgba(0,194,255,0.12);border:1px solid #00c2ff;color:#00c2ff;border-radius:8px;font-size:0.78rem;font-weight:800;cursor:pointer;font-family:inherit}
+.go-btn:hover{background:rgba(0,194,255,0.2)}
+
+/* ── Screens grid (compact) ────────────────────────────────────────────────── */
+.screens{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-bottom:14px}
+.screen-link{display:flex;flex-direction:column;background:#111;border:1px solid #222;border-radius:10px;padding:10px 12px;cursor:pointer;transition:border-color 0.12s;text-align:left;font-family:inherit;color:inherit;text-decoration:none}
+.screen-link:hover{border-color:#00c2ff}
+.screen-link.active{border-color:#00c2ff;background:rgba(0,194,255,0.05)}
+.sl-icon{font-size:1.05rem;margin-bottom:4px}
+.sl-name{font-size:0.78rem;font-weight:800;color:#fff;margin-bottom:2px}
+.sl-url{font-size:0.55rem;color:#555;font-family:monospace;word-break:break-all;line-height:1.3}
+.sl-role{font-size:0.52rem;font-weight:700;padding:2px 6px;border-radius:4px;display:inline-block;margin-top:4px;align-self:flex-start}
 .role-lobby{background:rgba(0,255,136,0.1);color:#00ff88;border:1px solid rgba(0,255,136,0.2)}
 .role-player{background:rgba(0,194,255,0.1);color:#00c2ff;border:1px solid rgba(0,194,255,0.2)}
 .role-host{background:rgba(245,200,66,0.1);color:#f5c842;border:1px solid rgba(245,200,66,0.2)}
 .role-auth{background:rgba(124,58,237,0.1);color:#a78bfa;border:1px solid rgba(124,58,237,0.2)}
+.role-admin{background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.2)}
+.role-live{background:rgba(255,255,255,0.05);color:#888;border:1px solid #333}
+
+/* ── Preview stage ────────────────────────────────────────────────────────── */
+.stage{background:#0a0a0a;border:1px solid #1a1a1a;border-radius:14px;padding:18px;text-align:center;min-height:600px}
+.stage-meta{font-size:0.62rem;color:#555;font-family:monospace;margin-bottom:10px;text-align:center}
+.frame-wrap{position:relative;background:#000;border-radius:18px;box-shadow:0 8px 28px rgba(0,0,0,0.6);overflow:hidden;border:1px solid #222;display:inline-block;max-width:100%;vertical-align:top}
+#preview-frame{display:block;width:100%;height:100%;border:0;background:#000}
 </style>
 </head>
 <body>
@@ -32,97 +60,134 @@ a.screen-link:hover{border-color:#00c2ff}
   </div>
   <div>
     <div class="title">Pocketbooks Sports</div>
-    <div class="sub">Click any screen to open it directly</div>
+    <div class="sub">Click a screen, then switch viewport size</div>
   </div>
-  <a href="lobby.html" style="margin-left:auto;padding:7px 16px;background:rgba(0,194,255,0.12);border:1px solid #00c2ff;color:#00c2ff;border-radius:20px;font-size:0.72rem;font-weight:800;text-decoration:none">Live App →</a>
+  <a class="live-link" href="lobby.html">Live App →</a>
 </div>
 
-<div class="grid">
-
-  <a class="screen-link" href="lobby.html?preview=1&screen=signin" target="_blank">
-    <div class="sl-icon">🔐</div>
-    <div class="sl-name">Welcome / Sign In</div>
-    <div class="sl-url">lobby.html?preview=1&screen=signin</div>
-    <span class="sl-role role-auth">Auth</span>
-  </a>
-
-  <a class="screen-link" href="lobby.html?preview=1&screen=signup" target="_blank">
-    <div class="sl-icon">✍️</div>
-    <div class="sl-name">Sign Up</div>
-    <div class="sl-url">lobby.html?preview=1&screen=signup</div>
-    <span class="sl-role role-auth">Auth</span>
-  </a>
-
-  <a class="screen-link" href="lobby.html?preview=1&screen=home" target="_blank">
-    <div class="sl-icon">🏠</div>
-    <div class="sl-name">Home Lobby</div>
-    <div class="sl-url">lobby.html?preview=1&screen=home</div>
-    <span class="sl-role role-lobby">Lobby</span>
-  </a>
-
-  <a class="screen-link" href="lobby.html?preview=1&screen=join" target="_blank">
-    <div class="sl-icon">🔍</div>
-    <div class="sl-name">Join Club</div>
-    <div class="sl-url">lobby.html?preview=1&screen=join</div>
-    <span class="sl-role role-lobby">Lobby</span>
-  </a>
-
-  <a class="screen-link" href="lobby.html?preview=1&screen=create" target="_blank">
-    <div class="sl-icon">🏆</div>
-    <div class="sl-name">Create Club</div>
-    <div class="sl-url">lobby.html?preview=1&screen=create</div>
-    <span class="sl-role role-lobby">Lobby</span>
-  </a>
-
-  <a class="screen-link" href="lobby.html?preview=1&screen=myclubs" target="_blank">
-    <div class="sl-icon">🃏</div>
-    <div class="sl-name">My Clubs</div>
-    <div class="sl-url">lobby.html?preview=1&screen=myclubs</div>
-    <span class="sl-role role-lobby">Lobby</span>
-  </a>
-
-  <a class="screen-link" href="lobby.html?preview=1&screen=pending" target="_blank">
-    <div class="sl-icon">⏳</div>
-    <div class="sl-name">Pending Approval</div>
-    <div class="sl-url">lobby.html?preview=1&screen=pending</div>
-    <span class="sl-role role-lobby">Lobby</span>
-  </a>
-
-  <a class="screen-link" href="player.html?preview=1&role=player" target="_blank">
-    <div class="sl-icon">📈</div>
-    <div class="sl-name">Player Dashboard</div>
-    <div class="sl-url">player.html?preview=1&role=player</div>
-    <span class="sl-role role-player">Player</span>
-  </a>
-
-  <a class="screen-link" href="index.html?preview=1&role=host" target="_blank">
-    <div class="sl-icon">👑</div>
-    <div class="sl-name">Host Dashboard</div>
-    <div class="sl-url">index.html?preview=1&role=host</div>
-    <span class="sl-role role-host">Host</span>
-  </a>
-
-  <a class="screen-link" href="player.html?preview=1&screen=profile&role=player" target="_blank">
-    <div class="sl-icon">👤</div>
-    <div class="sl-name">Player Profile</div>
-    <div class="sl-url">player.html?preview=1&screen=profile</div>
-    <span class="sl-role role-player">Player</span>
-  </a>
-
-  <a class="screen-link" href="admin.html" target="_blank">
-    <div class="sl-icon">⚡</div>
-    <div class="sl-name">Admin Panel</div>
-    <div class="sl-url">admin.html</div>
-    <span class="sl-role" style="background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.2)">Admin</span>
-  </a>
-
-  <a class="screen-link" href="lobby.html" target="_blank">
-    <div class="sl-icon">🚀</div>
-    <div class="sl-name">Live App</div>
-    <div class="sl-url">lobby.html (real)</div>
-    <span class="sl-role" style="background:rgba(255,255,255,0.05);color:#888;border:1px solid #333">Live</span>
-  </a>
-
+<!-- Viewport / URL controls -->
+<div class="ctrl">
+  <div class="ctrl-group">
+    <span class="ctrl-label">Viewport</span>
+    <button class="vp-btn active" data-vp="desktop"><span>🖥️</span><span>Desktop</span><span class="vp-w">1440</span></button>
+    <button class="vp-btn"        data-vp="tablet" ><span>📱</span><span>Tablet</span><span class="vp-w">820</span></button>
+    <button class="vp-btn"        data-vp="mobile" ><span>📞</span><span>Mobile</span><span class="vp-w">430</span></button>
+  </div>
+  <input id="url-input" class="url-input" type="text" value="lobby.html?screen=signin" spellcheck="false">
+  <button id="go-btn" class="go-btn">Go →</button>
+  <div class="mode-badge" id="mode-badge">DESKTOP</div>
 </div>
+
+<!-- Screen quick-pick (loads into preview iframe instead of new window) -->
+<div class="screens" id="screens"></div>
+
+<!-- Stage / iframe -->
+<div class="stage">
+  <div class="stage-meta" id="stage-meta">1440 × 900 · lobby.html?screen=signin</div>
+  <div class="frame-wrap" id="frame-wrap">
+    <iframe id="preview-frame" src="about:blank"></iframe>
+  </div>
+</div>
+
+<script>
+// ── Viewport presets ────────────────────────────────────────────────────────
+var VP = {
+  desktop: { w: 1440, h: 900, label: 'DESKTOP', cls: 'desktop' },
+  tablet:  { w: 820,  h: 900, label: 'TABLET',  cls: 'tablet'  },
+  mobile:  { w: 430,  h: 900, label: 'MOBILE',  cls: 'mobile'  },
+};
+var SCREENS = [
+  { url:'lobby.html?screen=signin',   name:'Welcome / Sign In', icon:'🔐', role:'auth'   },
+  { url:'lobby.html?screen=signup',   name:'Sign Up',           icon:'✍️', role:'auth'   },
+  { url:'lobby.html?screen=home',     name:'Home Lobby',        icon:'🏠', role:'lobby'  },
+  { url:'lobby.html?screen=join',     name:'Join Club',         icon:'🔍', role:'lobby'  },
+  { url:'lobby.html?screen=create',   name:'Create Club',       icon:'🏆', role:'lobby'  },
+  { url:'lobby.html?screen=myclubs',  name:'My Clubs',          icon:'🃏', role:'lobby'  },
+  { url:'lobby.html?screen=pending',  name:'Pending Approval',  icon:'⏳', role:'lobby'  },
+  { url:'player.html',                name:'Player Dashboard',  icon:'📈', role:'player' },
+  { url:'index.html',                 name:'Host Dashboard',    icon:'👑', role:'host'   },
+  { url:'admin.html',                 name:'Admin Panel',       icon:'⚡', role:'admin'  },
+  { url:'lobby.html',                 name:'Live Lobby',        icon:'🚀', role:'live'   },
+];
+
+var currentVp = 'desktop';
+var currentUrl = 'lobby.html?screen=signin';
+
+function setViewport(key) {
+  if (!VP[key]) return;
+  currentVp = key;
+  var v = VP[key];
+  var wrap = document.getElementById('frame-wrap');
+  // Cap to available stage width so the frame never overflows on smaller screens.
+  var stage = document.querySelector('.stage');
+  var stageInner = stage.clientWidth - 36; // padding + border slack
+  var w = Math.min(v.w, Math.max(320, stageInner));
+  // Maintain proportional height when we had to shrink horizontally.
+  var h = (w < v.w) ? Math.round(v.h * (w / v.w)) : v.h;
+  // Use setProperty with priority to beat any inherited flex sizing.
+  wrap.style.setProperty('width',  w + 'px', 'important');
+  wrap.style.setProperty('height', h + 'px', 'important');
+  var badge = document.getElementById('mode-badge');
+  badge.className = 'mode-badge ' + v.cls;
+  badge.textContent = v.label;
+  document.querySelectorAll('.vp-btn').forEach(function(b){
+    b.classList.toggle('active', b.dataset.vp === key);
+  });
+  document.getElementById('stage-meta').textContent = v.w + ' × ' + v.h + ' · ' + currentUrl;
+}
+
+function loadUrl(url) {
+  if (!url) return;
+  currentUrl = url;
+  document.getElementById('preview-frame').src = url;
+  document.getElementById('url-input').value = url;
+  document.getElementById('stage-meta').textContent =
+    VP[currentVp].w + ' × ' + VP[currentVp].h + ' · ' + url;
+  document.querySelectorAll('.screen-link').forEach(function(el){
+    el.classList.toggle('active', el.dataset.url === url);
+  });
+}
+
+// Build screens grid
+(function(){
+  var grid = document.getElementById('screens');
+  SCREENS.forEach(function(s){
+    var btn = document.createElement('button');
+    btn.className = 'screen-link';
+    btn.dataset.url = s.url;
+    btn.innerHTML =
+      '<div class="sl-icon">' + s.icon + '</div>' +
+      '<div class="sl-name">' + s.name + '</div>' +
+      '<div class="sl-url">' + s.url + '</div>' +
+      '<span class="sl-role role-' + s.role + '">' + s.role + '</span>';
+    btn.addEventListener('click', function(){ loadUrl(s.url); });
+    grid.appendChild(btn);
+  });
+})();
+
+// Wire viewport buttons
+document.querySelectorAll('.vp-btn').forEach(function(b){
+  b.addEventListener('click', function(){ setViewport(b.dataset.vp); });
+});
+
+// URL input + Go
+document.getElementById('go-btn').addEventListener('click', function(){
+  loadUrl(document.getElementById('url-input').value.trim());
+});
+document.getElementById('url-input').addEventListener('keydown', function(e){
+  if (e.key === 'Enter') loadUrl(this.value.trim());
+});
+
+// Re-cap stage width on actual window resizes (debounced).
+var _vpResizeT = null;
+window.addEventListener('resize', function(){
+  clearTimeout(_vpResizeT);
+  _vpResizeT = setTimeout(function(){ setViewport(currentVp); }, 120);
+});
+
+// Initial state
+setViewport('desktop');
+loadUrl(currentUrl);
+</script>
 </body>
 </html>

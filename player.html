@@ -394,8 +394,9 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
   }
   /* Backdrop scrim is mobile-only; suppress on desktop. */
   body.has-slip-items #bs-overlay{display:none!important}
-  /* Drawer's own close X is redundant on desktop — panel disappears when
-     last leg is removed. Keep it visible (still works). */
+  /* Hide the drawer's close X on desktop — the panel auto-hides when the
+     last leg is removed. Clear button still works for explicit clear. */
+  body.has-slip-items #bs-drawer .dkslip-close{display:none!important}
   /* Mobile bs-drawer/dkslip override (kept for safety — only takes effect on
      non-DK call sites that still position absolutely with transform). */
   .dkslip{left:auto!important;right:24px!important;transform:none!important;max-width:520px!important}
@@ -1690,9 +1691,19 @@ function bsUpdate() {
   bsRenderLegs();
   // Desktop: reflect slip emptiness on <body> so the @media (>=1100px) rule
   // can dock/undock the right-side panel without any markup changes.
+  // On desktop we also add/remove .open on the drawer so the existing
+  // pointer-events / interactivity rules (.dkslip.open ...) apply to the
+  // docked panel — same state path as mobile, just different layout.
   try {
     var hasItems = (betSlip && betSlip.length > 0) || (typeof slip !== 'undefined' && slip && slip.length > 0);
     document.body.classList.toggle('has-slip-items', !!hasItems);
+    var isDesktop = (typeof window.matchMedia === 'function') && window.matchMedia('(min-width:1100px)').matches;
+    if (isDesktop) {
+      var drw = document.getElementById('bs-drawer');
+      var ovr = document.getElementById('bs-overlay');
+      if (drw) drw.classList.toggle('open', !!hasItems);
+      if (ovr) ovr.classList.toggle('show', !!hasItems);
+    }
   } catch(_e){}
 }
 
