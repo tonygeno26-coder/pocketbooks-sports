@@ -72,7 +72,8 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .mc-divider{height:1px;background:linear-gradient(90deg,transparent,#2a2a2a,transparent);margin:0 16px}
 .mc-footer{padding:10px 16px;display:flex;justify-content:space-between;align-items:center}
 .mc-time{font-size:0.7rem;color:#555}
-.mc-more{font-size:0.72rem;color:var(--green);font-weight:700;cursor:pointer;text-shadow:0 0 6px rgba(0,255,135,0.3)}
+.mc-more,.more-btn{display:none!important}
+@keyframes pbLivePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(0.85)}}
 
 /* ══ LIGHT MODE (bet slip + sportsbook chrome) ══ */
 body.theme-light{background:#f4f6fb;color:#111}
@@ -386,8 +387,8 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
      width can't hold a card at its safe minimum (380px). When the slip docks
      it removes ~360px of right space; cards then collapse to one column
      instead of clipping their odds buttons. */
-  #games-list{display:grid;grid-template-columns:repeat(auto-fit, minmax(380px, 1fr));gap:14px;padding:0 16px;transition:padding-right 0.18s ease}
-  #games-list > *{margin:0!important;min-width:0}
+  #games-list,#live-games-list{display:grid;grid-template-columns:repeat(auto-fit, minmax(380px, 1fr));gap:14px;padding:0 16px;transition:padding-right 0.18s ease}
+  #games-list > *,#live-games-list > *{margin:0!important;min-width:0}
   .market-card{transition:transform 0.12s,box-shadow 0.15s;min-width:0}
   .market-card:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,0,0,0.7)}
   /* Card internals: let the team-name column shrink while keeping each odds
@@ -521,7 +522,14 @@ try {
 <div id="games-list"><div class="empty">Loading games...</div></div>
 </div><!-- /sportsbook-section -->
 <div id="mybets-section" style="display:none;background:#f5f5f5;min-height:100vh;padding-bottom:100px"></div>
-<div id="live-section" style="display:none;padding:60px 20px;text-align:center"><div style="font-size:2rem;margin-bottom:14px">📡</div><div style="font-size:1rem;font-weight:800;color:#111;margin-bottom:8px">Live Betting</div><div style="font-size:0.82rem;color:#888">Live markets coming soon</div></div>
+<div id="live-section" style="display:none;background:#0a0a0a;min-height:100vh;padding:14px 0 100px">
+  <div style="display:flex;align-items:center;gap:8px;padding:0 16px 14px">
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff3d57;box-shadow:0 0 8px rgba(255,61,87,0.7);animation:pbLivePulse 1.4s ease-in-out infinite"></span>
+    <span style="font-size:1rem;font-weight:900;letter-spacing:0.3px;color:#fff">Live & In-Game</span>
+    <span id="live-count" style="margin-left:auto;font-size:0.62rem;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:0.5px"></span>
+  </div>
+  <div id="live-games-list"><div class="empty">Loading...</div></div>
+</div>
 <!-- RESULTS -->
 <div id="results-section" style="display:none;background:#0a0a0a;min-height:100vh;padding-bottom:100px"></div>
 <div id="predictions-section" style="display:none;padding:60px 20px;text-align:center"><div style="font-size:2rem;margin-bottom:14px">🔮</div><div style="font-size:1rem;font-weight:800;color:#111;margin-bottom:8px">Predictions</div><div style="font-size:0.82rem;color:#888">Prediction markets coming soon</div></div>
@@ -959,13 +967,24 @@ function teamAvatar(name) {
 }
 
 // LOAD GAMES
-async function loadGames(sport){
-  const el=document.getElementById('games-list');
+//   loadGames(sport)                              — default flow into #games-list
+//   loadGames(sport, { targetId, liveOnly, mode }) — used by Live tab
+//
+// liveOnly:true filters to games flagged live by upstream. If no game is
+// flagged but cards exist, the first 2 are tagged _mockLive=true and
+// rendered as live placeholders so the tab demos correctly until
+// SportsDataIO live data is wired (existing odds-card layout reused).
+async function loadGames(sport, opts){
+  opts = opts || {};
+  const _targetId = opts.targetId || 'games-list';
+  const _liveOnly = !!opts.liveOnly;
+  const el=document.getElementById(_targetId);
+  if (!el) return;
   el.innerHTML='<div class="empty">Loading...</div>';
   try{
     const _sport = sport || 'mlb';
     const _url = '/api/odds/'+_sport; // backend proxy only — never call Odds API directly from client
-    console.log('[odds] fetching:', _url);
+    console.log('[odds] fetching:', _url, _liveOnly?'(live)':'');
     let _res;
     try { _res = await fetch(_url); } catch(fetchErr) { throw new Error('Backend unreachable: '+fetchErr.message); }
     console.log('[odds] status:', _res.status);
@@ -984,10 +1003,31 @@ async function loadGames(sport){
     if(!Array.isArray(games)) throw new Error('Expected array, got: '+typeof games);
     console.log('[odds] games count:', games.length);
     if(!games.length){
-      // Could be ODDS_API_KEY missing on backend — log clearly
       console.warn('[odds] empty response — check ODDS_API_KEY is set in Railway env vars');
-      el.innerHTML='<div class="empty">No games available right now.<br><span style="font-size:0.75rem;color:#888">If this persists, check backend ODDS_API_KEY config.</span></div>';
+      if (_liveOnly) {
+        el.innerHTML='<div class="empty" style="padding:60px 20px;text-align:center;color:#888">No live games right now.</div>';
+      } else {
+        el.innerHTML='<div class="empty">No games available right now.<br><span style="font-size:0.75rem;color:#888">If this persists, check backend ODDS_API_KEY config.</span></div>';
+      }
       return;
+    }
+    // Live filter (used by Live tab). Predicate accepts any of the common
+    // upstream live-flag shapes; if none match but the tab is live-only,
+    // mark the first 2 games as mock-live so the placeholder is testable.
+    if (_liveOnly) {
+      const _isLive = function(g){
+        if (!g) return false;
+        if (g.live === true || g.in_play === true || g._mockLive === true) return true;
+        const s = (g.status || g.state || '').toString().toLowerCase();
+        return s === 'live' || s === 'in_play' || s === 'inprogress' || s === 'in_progress';
+      };
+      let liveGames = games.filter(_isLive);
+      if (!liveGames.length) {
+        liveGames = games.slice(0, 2).map(function(g){ g._mockLive = true; return g; });
+      }
+      games = liveGames;
+      const cnt = document.getElementById('live-count');
+      if (cnt) cnt.textContent = games.length + (games.length===1?' game':' games');
     }
     const icons={MLB:'⚾',NBA:'🏀',NHL:'🏒',UFL:'🏈',NFL:'🏈',SOCCER:'⚽',TENNIS:'🎾',GOLF:'⛳'};
     window.gamesCache = window.gamesCache || {};
@@ -1029,7 +1069,7 @@ async function loadGames(sport){
       }
 
       return`<div class="market-card" style="margin-bottom:14px">
-        <div class="mc-header"><span style="font-size:0.9rem">${icon}</span><span class="mc-sport">${sp}</span></div>
+        <div class="mc-header"><span style="font-size:0.9rem">${icon}</span><span class="mc-sport">${sp}</span>${(_liveOnly||g._mockLive||g.live||g.in_play)?'<span style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:rgba(255,61,87,0.12);border:1px solid rgba(255,61,87,0.35);color:#ff3d57;font-size:0.55rem;font-weight:900;letter-spacing:0.5px;text-transform:uppercase;padding:2px 7px;border-radius:6px"><span style="width:6px;height:6px;border-radius:50%;background:#ff3d57;animation:pbLivePulse 1.4s ease-in-out infinite"></span>Live</span>':''}</div>
         <div class="mc-cols"><div></div><div class="mc-col-label">Run Line</div><div class="mc-col-label">Total</div><div class="mc-col-label">To Win</div></div>
         <div class="mc-team-row">
           <div class="mc-team">${teamAvatar(aw)}<div><div class="mc-city">${awC}</div><div class="mc-name">${awN}</div></div></div>
@@ -1044,7 +1084,7 @@ async function loadGames(sport){
           ${cell(g.id+'-un',un?'U '+un.line:null,un?un.odds:null,'Total',un?'Under '+un.line:null)}
           ${cell(g.id+'-ml-hw',null,hwML?hwML.odds:null,'Moneyline',hw+' To Win')}
         </div>
-        <div class="mc-footer"><span class="mc-time">${time}</span><button class="more-btn" data-game-id="${g.id}">More ›</button></div>
+        <div class="mc-footer"><span class="mc-time">${time}</span></div>
       </div>`;
       } catch(cardErr) { console.error('card render error:', cardErr, g); return '<div style="padding:10px;color:#f55">Card error: '+g.away+' vs '+g.home+'</div>'; }
     }).join('');
@@ -1237,6 +1277,7 @@ function setBNav(el,tab){
     if(sec) sec.style.display='block';
     if(ss) ss.style.display='none';
     if(pb) pb.style.display='none';
+    if (typeof loadGames === 'function') loadGames('mlb', { targetId:'live-games-list', liveOnly:true });
   } else if(tab==='predictions'){
     const sec=document.getElementById('predictions-section');
     if(sec) sec.style.display='block';
@@ -1639,15 +1680,16 @@ function setTeaserPts(pts) {
 }
 
 
-// More button delegation
+// More button removed from card footers — keep delegation as a defensive
+// no-op so any stale rendered card from a long-lived tab still resolves
+// the openMarkets path if data-game-id ever resurfaces. (Inert if the
+// button isn't in the DOM.)
 document.addEventListener('click', function(e) {
   var more = e.target.closest ? e.target.closest('.more-btn') : null;
   if (!more) return;
   var gameId = more.dataset.gameId || more.getAttribute('data-game-id');
-  console.log('More clicked', gameId);
   var game = window.gamesCache && window.gamesCache[gameId];
-  if (game) { openMarkets(game); }
-  else { console.warn('Game not in cache:', gameId); }
+  if (game && typeof openMarkets === 'function') openMarkets(game);
 }, true);
 
 
