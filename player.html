@@ -353,11 +353,26 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
   .bnav{max-width:1080px;width:1080px;left:calc(50vw - 540px);right:auto;transform:none;margin:0}
   .header{padding:16px 24px}
   #sportsbook-section, #mybets-section, #live-section, #predictions-section, #results-section{padding-left:8px;padding-right:8px}
-  /* Games list: 2-up grid on desktop. */
-  #games-list{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;padding:0 16px;transition:padding-right 0.18s ease}
-  #games-list > *{margin:0!important}
-  .market-card{transition:transform 0.12s,box-shadow 0.15s}
+  /* Games list: auto-fit grid that wraps to 1 column whenever the available
+     width can't hold a card at its safe minimum (380px). When the slip docks
+     it removes ~360px of right space; cards then collapse to one column
+     instead of clipping their odds buttons. */
+  #games-list{display:grid;grid-template-columns:repeat(auto-fit, minmax(380px, 1fr));gap:14px;padding:0 16px;transition:padding-right 0.18s ease}
+  #games-list > *{margin:0!important;min-width:0}
+  .market-card{transition:transform 0.12s,box-shadow 0.15s;min-width:0}
   .market-card:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,0,0,0.7)}
+  /* Card internals: let the team-name column shrink while keeping each odds
+     button readable. Odds boxes never shrink below 70px and never overflow. */
+  .market-card .mc-cols,
+  .market-card .mc-team-row{
+    grid-template-columns: minmax(0, 1fr) minmax(70px, 90px) minmax(70px, 90px) minmax(70px, 90px);
+    padding:0 14px;
+  }
+  .market-card .mc-team{min-width:0}
+  .market-card .mc-name,
+  .market-card .mc-city{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .market-card .odds-box,
+  .market-card .mkt-odds-box{flex-shrink:0;min-width:0;max-width:100%}
   /* Hide both legacy and DK floating bars on desktop — docked panel will
      replace them when items exist. */
   .slip-bar, .slip-bar.show, .bs-bar, .bs-bar.show{display:none!important}
