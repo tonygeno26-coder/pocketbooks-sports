@@ -1517,34 +1517,55 @@ if (urlCode) { document.getElementById('join-code').value = urlCode.toUpperCase(
 
 // Init
 const isPreview = new URLSearchParams(window.location.search).get('preview') === '1';
-if (isPreview) {
-  // DevPreview mode: skip auth, show mock logged-in state
-  document.getElementById('auth-screen').style.display = 'none';
-  // Load mock data
-  document.getElementById('u-name').textContent = _mockData.name;
-  document.getElementById('u-id').textContent = 'ID: ' + _mockData.id;
-  document.getElementById('w-diamonds').textContent = _mockData.diamonds.toLocaleString();
-  userClubs = _mockData.clubs;
-  if (userClubs.length) { setActiveClub(userClubs[0]); renderClubsList(); updateClubsTilePreview(); }
-  document.getElementById('club-count-lbl').textContent = userClubs.length + ' clubs';
-
-  // Route: hide all, show correct preview section
-  function renderPreviewScreen(screen) {
-    const FULL_SCREENS = ['join','create','myclubs','pending','requests','messages','settings'];
-    if (FULL_SCREENS.includes(screen)) {
-      const ps = document.getElementById('preview-screen');
-      const tpl = document.getElementById('tpl-' + screen);
-      if (ps && tpl) {
-        ps.innerHTML = '';
-        ps.appendChild(tpl.content.cloneNode(true));
-        ps.style.display = 'block';
-        const content = document.querySelector('.content');
-        if (content) content.style.display = 'none';
-      }
+const _isAuthScreen = (_screen === 'signin' || _screen === 'signup');
+if (isPreview && !_isAuthScreen) {
+  // DevPreview mode (non-auth): force hide auth, render preview, never run auth gate.
+  console.log('[preview]', { screen: _screen, preview: true });
+  // 1) Force hide auth-screen up front (style + inline display).
+  (function forceHideAuth(){
+    var ae = document.getElementById('auth-screen');
+    if (ae) ae.style.display = 'none';
+    if (!document.getElementById('pb-preview-hide-auth')) {
+      var st = document.createElement('style');
+      st.id = 'pb-preview-hide-auth';
+      st.textContent = '#auth-screen{display:none!important;visibility:hidden!important;pointer-events:none!important;z-index:-9999!important}';
+      document.head.appendChild(st);
     }
-    // home/signin/signup: main lobby visible (auth already hidden)
-  }
-  renderPreviewScreen(_screen);
+  })();
+  // 2) Render the designed preview screen FIRST so a later mock-data error
+  //    can't leave the tile blank.
+  (function renderPreviewScreen(screen){
+    const FULL_SCREENS = ['join','create','myclubs','pending','requests','messages','settings'];
+    if (!FULL_SCREENS.includes(screen)) return; // home stays on main lobby
+    const ps  = document.getElementById('preview-screen');
+    const tpl = document.getElementById('tpl-' + screen);
+    if (!ps || !tpl) { console.warn('[preview] template missing for', screen); return; }
+    ps.innerHTML = '';
+    ps.appendChild(tpl.content.cloneNode(true));
+    ps.style.display = 'block';
+    const content = document.querySelector('.content');
+    if (content) content.style.display = 'none';
+  })(_screen);
+  // 3) Best-effort mock data — wrapped so a single null DOM lookup can't
+  //    break the preview render or accidentally fall through to auth.
+  try {
+    var _set = function(id, val){ var el = document.getElementById(id); if (el) el.textContent = val; };
+    _set('u-name', _mockData.name);
+    _set('u-id', 'ID: ' + _mockData.id);
+    _set('w-diamonds', _mockData.diamonds.toLocaleString());
+    userClubs = _mockData.clubs || [];
+    if (userClubs.length) {
+      try { setActiveClub(userClubs[0]); } catch(_e){}
+      try { renderClubsList(); } catch(_e){}
+      try { updateClubsTilePreview(); } catch(_e){}
+    }
+    _set('club-count-lbl', userClubs.length + ' clubs');
+  } catch(e) { console.warn('[preview] mock-data step failed (non-fatal):', e && e.message); }
+} else if (isPreview && _isAuthScreen) {
+  // Preview of the auth screens: show auth, do not render lobby preview.
+  var _ae = document.getElementById('auth-screen');
+  if (_ae) _ae.style.display = 'flex';
+  setTimeout(function(){ if (typeof setAuthTab === 'function') setAuthTab(_screen === 'signup' ? 'signup' : 'login'); }, 100);
 } else {
   checkAuthGate();
   loadUser();
