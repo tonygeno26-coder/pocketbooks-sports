@@ -3540,6 +3540,190 @@ function _wireResultsButtons(el){
 // ═══ END PLAYER RESULTS PAGE ═══════════════════════════════════════════════
 // ─────────────────────────────────────────────────────────────────────────────
 
+
+// ══════════ TEST-ONLY: Simulate Grade Results ═════════════════════════════
+// Visible only in test/preview mode (?testmode=1 or ?preview=1). Walks the
+// active/open tickets in localStorage['pb-tickets'], rolls a random outcome
+// per leg, evaluates the ticket as a whole, flips status, and updates the
+// ledger / balance / open-risk via the existing balance pipeline. Writes
+// per-ticket console debug per spec rule 5. No live API calls; no
+// production paths touched.
+(function(){
+  function _isTestMode() {
+    try {
+      var qs = new URLSearchParams(location.search);
+      return qs.get('testmode') === '1' || qs.get('preview') === '1';
+    } catch(_e) { return false; }
+  }
+  if (!_isTestMode()) return;
+
+  // Roll a leg outcome. Default mix: 45% win, 45% lose, 10% push.
+  function _rollLeg() {
+    var r = Math.random();
+    if (r < 0.45) return 'win';
+    if (r < 0.90) return 'lose';
+    return 'push';
+  }
+
+  // Combine leg outcomes for the whole ticket.
+  // - Single: leg outcome IS ticket outcome
+  // - Parlay/Teaser/RR: any LOSS = lose, any WIN with no loss & at least one win = won, any push only = push
+  function _combine(legOutcomes, ticketType) {
+    if (!legOutcomes.length) return 'push';
+    if (legOutcomes.includes('lose')) return 'lost';
+    if (legOutcomes.every(function(o){ return o === 'push'; })) return 'pushed';
+    // mixed win + push -> still won (push legs reduce parlay payout in real
+    // books, but for math test we treat push-leg as 1.0 multiplier and grade
+    // ticket as won so the payout-math path runs)
+    return 'won';
+  }
+
+  function simulateGradeResults() {
+    try {
+      var raw = localStorage.getItem('pb-tickets') || '[]';
+      var tickets;
+      try { tickets = JSON.parse(raw); } catch(_e) { tickets = []; }
+      if (!Array.isArray(tickets) || !tickets.length) {
+        try { showToast && showToast('No tickets to grade'); } catch(_e){}
+        console.log('[simulate grade] no tickets');
+        return;
+      }
+      var graded = 0;
+      var bsBefore = (typeof calcAvailableBalance === 'function') ? calcAvailableBalance() : null;
+      var balanceBefore = bsBefore ? bsBefore.available : null;
+      // Running balance the simulator advances as it flips each ticket so the
+      // per-ticket [ticket graded] block reports a meaningful before/after.
+      var runningBalance = (balanceBefore != null) ? balanceBefore : 0;
+
+      tickets.forEach(function(t){
+        if (t.status !== 'active' && t.status !== 'open') return;
+        var legs = Array.isArray(t.selections) ? t.selections : [];
+        var legOutcomes = legs.length ? legs.map(_rollLeg) : [_rollLeg()];
+
+        // Annotate per-leg outcome on the selection so settled view can show it
+        legs.forEach(function(s, i){ s.result = legOutcomes[i]; });
+
+        var status = _combine(legOutcomes, t.type);
+        // Map combine output to ticket status field (match existing balance path)
+        var nextStatus = status === 'won' ? 'won' : status === 'lost' ? 'lost' : 'push';
+
+        var risk    = parseFloat(t.riskAmount)        || 0;
+        var profit  = parseFloat(t.potentialProfit)   || 0;
+        var payout  = parseFloat(t.estimatedPayout)   || (risk + profit);
+
+        // Compute payout per spec:
+        //   won  -> risk + profit  (returned to player)
+        //   lost -> 0              (player keeps nothing)
+        //   push -> risk           (stake refunded)
+        var ticketPayout = nextStatus === 'won'  ? payout
+                         : nextStatus === 'lost' ? 0
+                                                  : risk;
+
+        // Net delta to player's available balance for THIS flip:
+        //   active state already had this ticket's risk excluded from
+        //   available, so flipping the status releases that risk back into
+        //   available. We then apply the win/lose/push effect.
+        //   won  -> available += risk + profit  (release risk + add profit)
+        //   lost -> available += 0              (risk stays gone, settledLosses)
+        //   push -> available += risk           (release risk, no profit)
+        var balanceDelta = nextStatus === 'won'  ? (risk + profit)
+                         : nextStatus === 'lost' ? 0
+                                                  : risk;
+        var rowBefore = runningBalance;
+        runningBalance = Math.round((runningBalance + balanceDelta) * 100) / 100;
+
+        t.status = nextStatus;
+        t.gradedAt = new Date().toISOString();
+        t.simulated = true;
+
+        var oddsStr = t.odds || (legs[0] && legs[0].odds) || '';
+        console.log('[ticket graded]\n' +
+                    '  player: '         + (t.playerName || t.playerUsername || '?') + '\n' +
+                    '  wager: $'         + risk.toFixed(2) + '\n' +
+                    '  odds: '           + oddsStr + '\n' +
+                    '  result: '         + nextStatus.toUpperCase() + '\n' +
+                    '  payout: $'        + ticketPayout.toFixed(2) + '\n' +
+                    '  balanceBefore: $' + rowBefore.toFixed(2) + '\n' +
+                    '  balanceAfter: $'  + runningBalance.toFixed(2));
+        graded++;
+      });
+
+      // Persist + sync
+      localStorage.setItem('pb-tickets', JSON.stringify(tickets));
+      try { localStorage.setItem('pb-tickets-version',
+              String((parseInt(localStorage.getItem('pb-tickets-version')||'0',10)||0) + 1)); } catch(_e){}
+      var bsAfter = (typeof calcAvailableBalance === 'function') ? calcAvailableBalance() : null;
+      var balanceAfter = bsAfter ? bsAfter.available : null;
+      console.log('[simulate grade] graded ' + graded + ' ticket(s) | balanceBefore: ' +
+                  (balanceBefore != null ? '$'+balanceBefore.toFixed(2) : '(unknown)') +
+                  ' | balanceAfter: ' + (balanceAfter != null ? '$'+balanceAfter.toFixed(2) : '(unknown)'));
+
+      // Append a per-flip ledger entry for the math test trail
+      tickets.filter(function(t){ return t.simulated && t.gradedAt && t.status !== 'active' && t.status !== 'open'; }).forEach(function(t){
+        try {
+          if (typeof addLedgerEntry === 'function') {
+            var risk   = parseFloat(t.riskAmount)      || 0;
+            var profit = parseFloat(t.potentialProfit) || 0;
+            var amt    = t.status === 'won'  ?  profit
+                       : t.status === 'lost' ? -risk
+                                              :  0;
+            addLedgerEntry({
+              id: 'L' + Date.now() + Math.floor(Math.random()*1000),
+              type: 'ticket_graded',
+              ticketIds: [t.id],
+              amount: amt,
+              status: t.status,
+              betType: t.type,
+              createdAt: t.gradedAt,
+              source: 'simulate'
+            });
+          }
+        } catch(_e){}
+      });
+
+      // Refresh UI
+      try { betTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(_e){}
+      try { syncBalanceDisplays && syncBalanceDisplays(); } catch(_e){}
+      try { renderMyBets && renderMyBets(); } catch(_e){}
+      try { showToast && showToast('Graded ' + graded + ' ticket' + (graded===1?'':'s') + ' \u2705'); } catch(_e){}
+    } catch(e) {
+      console.error('[simulate grade] error:', e);
+      try { showToast && showToast('Grade simulation error'); } catch(_e){}
+    }
+  }
+  window.simulateGradeResults = simulateGradeResults;
+
+  // Inject a "Simulate Grade Results" button at the top of the My Bets section
+  // whenever it renders. We hook by re-running an injection observer.
+  function _injectButton() {
+    var el = document.getElementById('mybets-section');
+    if (!el) return;
+    if (el.querySelector('[data-sim-grade-btn]')) return; // already there
+    // Look for the "Check Results" header row
+    var headers = el.querySelectorAll('div');
+    for (var i = 0; i < headers.length; i++) {
+      var h = headers[i];
+      if (h.textContent && h.textContent.indexOf('My Bets') !== -1 && h.querySelector && h.querySelector('button')) {
+        var btn = document.createElement('button');
+        btn.setAttribute('data-sim-grade-btn','1');
+        btn.textContent = '\ud83c\udfb2 Simulate Grade Results';
+        btn.style.cssText = 'font-size:0.7rem;font-weight:800;color:#fff;background:linear-gradient(135deg,#7c3aed,#a855f7);border:none;border-radius:20px;padding:6px 12px;cursor:pointer;margin-left:8px;letter-spacing:0.3px';
+        btn.onclick = function(){ simulateGradeResults(); };
+        h.appendChild(btn);
+        break;
+      }
+    }
+  }
+  // Re-inject after each render (renderMyBets rewrites the section)
+  var _miObs = new MutationObserver(function(){ _injectButton(); });
+  document.addEventListener('DOMContentLoaded', function(){
+    var el = document.getElementById('mybets-section');
+    if (el) _miObs.observe(el, { childList:true, subtree:true });
+    _injectButton();
+  });
+})();
+// ══════════════════════════════════════════════════════════════════════════
+
 </script>
 
 <!-- JOIN CLUB MODAL -->
