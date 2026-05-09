@@ -2441,6 +2441,25 @@ function confirmBet() {
     amount: -riskAmount, balanceBefore: _bs.available + riskAmount,
     balanceAfter: _bs.available, createdAt: now,
     betType: snap.type, count: newTickets.length });
+  // Spec-format BET_PLACED rows (one per ticket) so the audit panel + balance
+  // history have the canonical entry shape per ticket.
+  try {
+    if (typeof recordSpecLedger === 'function') {
+      newTickets.forEach(function(t){
+        var risk = parseFloat(t.riskAmount) || 0;
+        recordSpecLedger({
+          type:          'BET_PLACED',
+          playerId:      t.playerId || null,
+          ticketId:      t.id,
+          amount:        -risk,
+          timestamp:     t.placedAt,
+          balanceBefore: _bs.available + riskAmount,
+          balanceAfter:  _bs.available,
+          note:          (t.type || 'Single') + ' · ' + (t.selections && t.selections.length ? t.selections.length+' leg(s)' : ''),
+        });
+      });
+    }
+  } catch(_e){}
 
   dbgBanner('CONFIRMED: '+newTickets.length+' ticket(s)\nRisk: $'+riskAmount.toFixed(2)+'\nBalance: $'+_bs.available.toFixed(2), '#020');
   console.log('[confirmBet] tickets saved:', newTickets.length, 'balance:', _bs.available, 'snapshotAt:', snap.capturedAt);
@@ -2640,6 +2659,11 @@ function renderMyBets() {
           '<div style="font-size:0.88rem;font-weight:900;color:#0064c8">'+fmtDollar(t.estimatedPayout)+'</div>' +
         '</div>' +
       '</div>' +
+      // ── Audit row ──────────────────────────────────────────────
+      '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button onclick="event.stopPropagation();toggleAuditPanel(\''+t.id+'\')" style="font-size:0.7rem;font-weight:700;color:#555;background:none;border:1px solid #ccc;border-radius:18px;padding:5px 12px;cursor:pointer">View Audit</button>' +
+      '</div>' +
+      '<div id="audit-'+t.id+'" style="display:none;margin-top:10px;background:#fafafa;border:1px solid #eee;border-radius:10px;padding:10px 12px;font-size:0.72rem;color:#333;line-height:1.55;font-family:ui-monospace,Menlo,monospace"></div>' +
       deleteBtn +
     '</div>';
   }
@@ -3635,6 +3659,24 @@ function _wireResultsButtons(el){
         t.status = nextStatus;
         t.gradedAt = new Date().toISOString();
         t.simulated = true;
+        t.gradingSource = 'simulated';
+
+        // Spec-format ledger entry for this grade flip
+        if (typeof recordSpecLedger === 'function') {
+          var _specType = nextStatus === 'won' ? 'BET_WON'
+                        : nextStatus === 'lost' ? 'BET_LOST'
+                                                 : 'BET_PUSH';
+          recordSpecLedger({
+            type:          _specType,
+            playerId:      t.playerId || null,
+            ticketId:      t.id,
+            amount:        balanceDelta - risk,  // net change (won=+profit, lost=-risk, push=0)
+            timestamp:     t.gradedAt,
+            balanceBefore: rowBefore,
+            balanceAfter:  runningBalance,
+            note:          'simulated · ' + (t.type || 'Single'),
+          });
+        }
 
         var oddsStr = t.odds || (legs[0] && legs[0].odds) || '';
         console.log('[ticket graded]\n' +
@@ -3720,6 +3762,330 @@ function _wireResultsButtons(el){
     var el = document.getElementById('mybets-section');
     if (el) _miObs.observe(el, { childList:true, subtree:true });
     _injectButton();
+  });
+})();
+// ══════════════════════════════════════════════════════════════════════════
+
+
+
+// ══════════ TICKET AUDIT TRAIL + GRADING CONSOLE ═══════════════════════════
+// Spec: every ticket exposes a View Audit panel; new ledger row types
+// (BET_PLACED / BET_WON / BET_LOST / BET_PUSH / BET_CANCELLED /
+// MANUAL_ADJUSTMENT / SETTLEMENT) coexist with the existing ledger.
+// View Balance History opens a player-scoped log. Grading Console (test
+// mode only) lists pending+graded tickets and exposes a Regrade button.
+// No accounting paths altered.
+
+// ── Ledger type normalizer ────────────────────────────────────────────────
+// Map legacy entry types to the spec uppercase set without breaking existing
+// readers. Returns the normalized "spec type" for display purposes only —
+// the underlying entry shape is unchanged.
+function _ledgerSpecType(entry) {
+  if (!entry || !entry.type) return '';
+  var t = String(entry.type);
+  var u = t.toUpperCase();
+  if (u === 'BET_PLACED' || u === 'BET_WON' || u === 'BET_LOST' ||
+      u === 'BET_PUSH' || u === 'BET_CANCELLED' ||
+      u === 'MANUAL_ADJUSTMENT' || u === 'SETTLEMENT') return u;
+  if (t === 'bet_placed')                    return 'BET_PLACED';
+  if (t === 'ticket_graded') {
+    var st = String(entry.status||'').toLowerCase();
+    if (st === 'won')  return 'BET_WON';
+    if (st === 'lost') return 'BET_LOST';
+    if (st === 'push' || st === 'pushed') return 'BET_PUSH';
+    return 'SETTLEMENT';
+  }
+  if (t === 'bet_cancelled' || t === 'bet_canceled' || t === 'bet_voided') return 'BET_CANCELLED';
+  if (t === 'adjustment' || t === 'manual_adjustment') return 'MANUAL_ADJUSTMENT';
+  return u;
+}
+
+// Add an entry to the ledger using the spec field set. Preserves existing
+// addLedgerEntry() behaviour and just stamps the new fields.
+function recordSpecLedger(opts) {
+  opts = opts || {};
+  var s = (typeof calcAvailableBalance === 'function') ? calcAvailableBalance() : { available: 0 };
+  var entry = {
+    id:            opts.id || ('L' + Date.now() + Math.floor(Math.random()*1000)),
+    type:          opts.type,
+    playerId:      opts.playerId || null,
+    ticketId:      opts.ticketId || null,
+    amount:        Number(opts.amount) || 0,
+    timestamp:     opts.timestamp || new Date().toISOString(),
+    balanceBefore: (opts.balanceBefore != null) ? Number(opts.balanceBefore) : null,
+    balanceAfter:  (opts.balanceAfter  != null) ? Number(opts.balanceAfter)  : Number(s.available),
+    note:          opts.note || '',
+  };
+  try { addLedgerEntry(entry); } catch(_e){}
+  return entry;
+}
+
+// ── View Audit panel ──────────────────────────────────────────────────────
+function _ticketAuditHTML(t) {
+  function row(k,v){
+    return '<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px dashed #eee">'+
+             '<span style="color:#888">'+k+'</span>'+
+             '<span style="color:#111;font-weight:700;text-align:right;word-break:break-word;max-width:60%">'+v+'</span>'+
+           '</div>';
+  }
+  function ts(s){ if(!s) return '—'; var d=new Date(s); return isNaN(d)?String(s):d.toLocaleString(); }
+
+  var legs = (t.selections||[]);
+  var teams = legs.map(function(s){ return (s.game || s.matchup || s.pick || ''); }).filter(Boolean).join(' · ') || '—';
+  var oddsStr = t.odds || (legs[0] && (legs[0].odds!=null?String(legs[0].odds):'')) || '—';
+  var risk = parseFloat(t.riskAmount) || 0;
+  var profit = parseFloat(t.potentialProfit) || 0;
+  var payout;
+  if (t.status === 'won')        payout = parseFloat(t.estimatedPayout) || (risk + profit);
+  else if (t.status === 'lost')  payout = 0;
+  else if (t.status === 'push' || t.status === 'pushed' || t.status === 'canceled' || t.status === 'cancelled' || t.status === 'voided') payout = risk;
+  else                            payout = null; // pending
+  var resultLabel = ({won:'WIN',lost:'LOSS',push:'PUSH',pushed:'PUSH',canceled:'CANCEL',cancelled:'CANCEL',voided:'CANCEL'}[t.status] || (t.status||'PENDING').toUpperCase());
+
+  // Find ledger entries for this ticket — pull balanceBefore/After from the
+  // grading entry if present; otherwise fall back to the placement entry.
+  var ledger = JSON.parse(localStorage.getItem('pb-ledger')||'[]');
+  var grading = ledger.find(function(e){ return e.ticketId === t.id && /BET_(WON|LOST|PUSH|CANCELLED)|SETTLEMENT|ticket_graded/i.test(e.type); }) ||
+                ledger.find(function(e){ return Array.isArray(e.ticketIds) && e.ticketIds.indexOf(t.id) !== -1 && /ticket_graded|BET_(WON|LOST|PUSH|CANCELLED)/i.test(e.type); });
+  var placement = ledger.find(function(e){ return e.ticketId === t.id && /BET_PLACED|bet_placed/i.test(e.type); }) ||
+                  ledger.find(function(e){ return Array.isArray(e.ticketIds) && e.ticketIds.indexOf(t.id) !== -1 && /BET_PLACED|bet_placed/i.test(e.type); });
+  var balBefore = (grading && grading.balanceBefore != null) ? grading.balanceBefore
+                : (placement && placement.balanceBefore != null) ? placement.balanceBefore
+                : null;
+  var balAfter  = (grading && grading.balanceAfter  != null) ? grading.balanceAfter
+                : (placement && placement.balanceAfter  != null) ? placement.balanceAfter
+                : null;
+
+  var src = t.gradingSource || (t.simulated ? 'simulated' : (t.gradedAt ? 'manual' : '—'));
+
+  var html =
+    row('ticketId',           t.id || '—') +
+    row('player',             (t.playerName || t.playerUsername || t.playerRealName || '—')) +
+    row('wager',              '$' + risk.toFixed(2)) +
+    row('odds',               oddsStr) +
+    row('bet type',           t.type || '—') +
+    row('teams/game',         teams) +
+    row('placed timestamp',   ts(t.placedAt)) +
+    row('graded timestamp',   ts(t.gradedAt)) +
+    row('result',             resultLabel) +
+    row('payout amount',      payout != null ? '$'+payout.toFixed(2) : '— (pending)') +
+    row('balance before',     balBefore != null ? '$'+Number(balBefore).toFixed(2) : '—') +
+    row('balance after',      balAfter  != null ? '$'+Number(balAfter ).toFixed(2) : '—') +
+    row('grading source',     src);
+  return html;
+}
+
+function toggleAuditPanel(ticketId) {
+  var el = document.getElementById('audit-' + ticketId);
+  if (!el) return;
+  if (el.style.display === 'block') { el.style.display = 'none'; return; }
+  var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
+  var t = tickets.find(function(x){ return x.id === ticketId; });
+  if (!t) { el.style.display = 'none'; return; }
+  el.innerHTML = _ticketAuditHTML(t);
+  el.style.display = 'block';
+}
+window.toggleAuditPanel = toggleAuditPanel;
+
+// ── Balance history (player-scoped) ───────────────────────────────────────
+function showBalanceHistory(playerId) {
+  var ledger = JSON.parse(localStorage.getItem('pb-ledger')||'[]');
+  var rows = ledger.filter(function(e){ return !playerId || !e.playerId || e.playerId === playerId; });
+  var html =
+    '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9998;display:flex;align-items:flex-end;justify-content:center" onclick="if(event.target===this) this.remove()">' +
+      '<div style="background:#fff;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;border-radius:18px 18px 0 0;padding:14px 14px 22px;color:#111">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+          '<div style="font-size:1rem;font-weight:900">📒 Balance History</div>' +
+          '<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="background:#f0f0f0;border:none;border-radius:50%;width:30px;height:30px;cursor:pointer">✕</button>' +
+        '</div>' +
+        (rows.length === 0
+          ? '<div style="text-align:center;color:#aaa;padding:30px 0;font-size:0.85rem">No ledger entries yet.</div>'
+          : '<div style="font-size:0.72rem;font-family:ui-monospace,Menlo,monospace">' +
+              rows.map(function(e){
+                var t = _ledgerSpecType(e) || (e.type||'');
+                var when = e.timestamp || e.createdAt || '';
+                var ts = when ? new Date(when).toLocaleString() : '';
+                var amt = (Number(e.amount)||0);
+                var amtStr = (amt>=0?'+':'') + '$' + Math.abs(amt).toFixed(2);
+                var amtCol = amt > 0 ? '#00875a' : amt < 0 ? '#cc0000' : '#888';
+                var bb = (e.balanceBefore != null) ? '$'+Number(e.balanceBefore).toFixed(2) : '—';
+                var ba = (e.balanceAfter  != null) ? '$'+Number(e.balanceAfter ).toFixed(2) : '—';
+                return '<div style="padding:8px 0;border-bottom:1px solid #f0f0f0">' +
+                         '<div style="display:flex;justify-content:space-between;font-weight:700">' +
+                           '<span>'+t+'</span><span style="color:'+amtCol+'">'+amtStr+'</span>' +
+                         '</div>' +
+                         '<div style="display:flex;justify-content:space-between;color:#777">' +
+                           '<span>'+(e.ticketId || (Array.isArray(e.ticketIds)?e.ticketIds.join(','):''))+'</span>' +
+                           '<span>'+ts+'</span>' +
+                         '</div>' +
+                         '<div style="color:#888">'+bb+' → '+ba+(e.note?(' · '+e.note):'')+'</div>' +
+                       '</div>';
+              }).join('') +
+            '</div>') +
+      '</div>' +
+    '</div>';
+  var wrap = document.createElement('div'); wrap.innerHTML = html;
+  document.body.appendChild(wrap.firstChild);
+}
+window.showBalanceHistory = showBalanceHistory;
+
+// Mount a "📒 Balance History" button next to "Check Results" on My Bets.
+(function(){
+  function inject() {
+    var el = document.getElementById('mybets-section');
+    if (!el || el.querySelector('[data-balhist-btn]')) return;
+    var headers = el.querySelectorAll('div');
+    for (var i=0;i<headers.length;i++){
+      var h = headers[i];
+      if (h.textContent && h.textContent.indexOf('My Bets') !== -1 && h.querySelector && h.querySelector('button')) {
+        var btn = document.createElement('button');
+        btn.setAttribute('data-balhist-btn','1');
+        btn.textContent = '📒 Balance History';
+        btn.style.cssText = 'font-size:0.7rem;font-weight:700;color:#0064c8;background:none;border:1.5px solid #0064c8;border-radius:20px;padding:5px 12px;cursor:pointer;margin-left:8px';
+        btn.onclick = function(){
+          var pl = (function(){ try { return JSON.parse(localStorage.getItem('pb-player')||'null'); } catch(_e){ return null; }})() || {};
+          showBalanceHistory(pl.id || null);
+        };
+        h.appendChild(btn);
+        break;
+      }
+    }
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    var el = document.getElementById('mybets-section');
+    if (el) new MutationObserver(inject).observe(el, { childList:true, subtree:true });
+    inject();
+  });
+})();
+
+// ── Grading Console (test mode only) ──────────────────────────────────────
+function _isTestModeAudit() {
+  try {
+    var qs = new URLSearchParams(location.search);
+    return qs.get('testmode') === '1' || qs.get('preview') === '1';
+  } catch(_e) { return false; }
+}
+
+function regradeTicket(ticketId) {
+  if (!_isTestModeAudit()) return; // testing-only safety
+  var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
+  var t = tickets.find(function(x){ return x.id === ticketId; });
+  if (!t) return;
+  // Reset to active so simulateGradeResults will pick it up again. Released
+  // from settled buckets via the openRisk-exclusion model.
+  t.status = 'active';
+  delete t.gradedAt;
+  t.gradingSource = null;
+  t.simulated = false;
+  localStorage.setItem('pb-tickets', JSON.stringify(tickets));
+  try { localStorage.setItem('pb-tickets-version', String((parseInt(localStorage.getItem('pb-tickets-version')||'0',10)||0)+1)); } catch(_e){}
+  if (typeof simulateGradeResults === 'function') simulateGradeResults();
+  try { renderGradingConsole(); } catch(_e){}
+}
+window.regradeTicket = regradeTicket;
+
+function renderGradingConsole() {
+  if (!document.getElementById('grading-console-modal')) return;
+  var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
+  function _src(t) { return t.gradingSource || (t.simulated ? 'simulated' : (t.gradedAt ? 'manual' : 'pending')); }
+  function _bal(t) {
+    var risk = parseFloat(t.riskAmount)||0, profit = parseFloat(t.potentialProfit)||0;
+    if (t.status === 'won')  return '+$' + profit.toFixed(2);
+    if (t.status === 'lost') return '-$' + risk.toFixed(2);
+    if (t.status === 'push' || t.status === 'pushed') return '$0.00';
+    return '—';
+  }
+  function _result(t){ return ({won:'WIN',lost:'LOSS',push:'PUSH',pushed:'PUSH',canceled:'CANCEL',cancelled:'CANCEL',voided:'CANCEL',active:'PENDING',open:'PENDING'}[t.status] || String(t.status||'').toUpperCase()); }
+  var rows = tickets.slice().sort(function(a,b){
+    return new Date(b.gradedAt||b.placedAt||0) - new Date(a.gradedAt||a.placedAt||0);
+  });
+  var html =
+    '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.72rem;font-family:ui-monospace,Menlo,monospace">' +
+      '<thead><tr style="background:#f5f5f5;color:#333">' +
+        ['Player','Ticket','Wager','Odds','Result','Payout','Balance Δ','Source','Timestamp',''].map(function(h){
+          return '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid #ddd;font-weight:800">'+h+'</th>';
+        }).join('') +
+      '</tr></thead><tbody>' +
+      (rows.length === 0
+        ? '<tr><td colspan="10" style="padding:20px;color:#aaa;text-align:center">No tickets.</td></tr>'
+        : rows.map(function(t){
+            var risk = parseFloat(t.riskAmount)||0;
+            var payout = t.status === 'won'  ? (parseFloat(t.estimatedPayout)||0)
+                       : t.status === 'lost' ? 0
+                       : t.status === 'push' || t.status === 'pushed' ? risk
+                       : '—';
+            var when = t.gradedAt || t.placedAt || '';
+            var ts = when ? new Date(when).toLocaleString() : '';
+            return '<tr style="border-bottom:1px solid #f0f0f0">' +
+              '<td style="padding:6px 8px">'+(t.playerName||t.playerUsername||'—')+'</td>' +
+              '<td style="padding:6px 8px;color:#888">'+t.id+'</td>' +
+              '<td style="padding:6px 8px">$'+risk.toFixed(2)+'</td>' +
+              '<td style="padding:6px 8px">'+(t.odds||'—')+'</td>' +
+              '<td style="padding:6px 8px;font-weight:800">'+_result(t)+'</td>' +
+              '<td style="padding:6px 8px">'+(payout==='—'?payout:'$'+Number(payout).toFixed(2))+'</td>' +
+              '<td style="padding:6px 8px">'+_bal(t)+'</td>' +
+              '<td style="padding:6px 8px;color:#666">'+_src(t)+'</td>' +
+              '<td style="padding:6px 8px;color:#888">'+ts+'</td>' +
+              '<td style="padding:6px 8px;text-align:right">' +
+                ((t.status==='active'||t.status==='open')
+                  ? ''
+                  : '<button onclick="regradeTicket(\''+t.id+'\')" style="font-size:0.7rem;font-weight:700;color:#7c3aed;background:none;border:1px solid #7c3aed;border-radius:14px;padding:3px 10px;cursor:pointer">Regrade</button>') +
+              '</td>' +
+            '</tr>';
+          }).join('')
+      ) +
+    '</tbody></table></div>';
+  document.getElementById('grading-console-body').innerHTML = html;
+}
+window.renderGradingConsole = renderGradingConsole;
+
+function openGradingConsole() {
+  if (!_isTestModeAudit()) return;
+  var existing = document.getElementById('grading-console-modal');
+  if (existing) { renderGradingConsole(); return; }
+  var html =
+    '<div id="grading-console-modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9998;display:flex;align-items:flex-start;justify-content:center;padding:24px" onclick="if(event.target===this) this.remove()">' +
+      '<div style="background:#fff;width:100%;max-width:1100px;max-height:90vh;overflow:auto;border-radius:14px;padding:14px;color:#111">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+          '<div style="font-size:1rem;font-weight:900">🧪 Grading Console</div>' +
+          '<div style="display:flex;gap:8px">' +
+            '<button onclick="if(typeof simulateGradeResults===\'function\') simulateGradeResults(); renderGradingConsole();" style="font-size:0.72rem;font-weight:700;color:#fff;background:linear-gradient(135deg,#7c3aed,#a855f7);border:none;border-radius:18px;padding:6px 12px;cursor:pointer">🎲 Simulate Grade</button>' +
+            '<button onclick="this.closest(\'#grading-console-modal\').remove()" style="background:#f0f0f0;border:none;border-radius:50%;width:30px;height:30px;cursor:pointer">✕</button>' +
+          '</div>' +
+        '</div>' +
+        '<div id="grading-console-body"></div>' +
+      '</div>' +
+    '</div>';
+  var w = document.createElement('div'); w.innerHTML = html;
+  document.body.appendChild(w.firstChild);
+  renderGradingConsole();
+}
+window.openGradingConsole = openGradingConsole;
+
+// Mount "🧪 Grading Console" button (test mode only) on My Bets header
+(function(){
+  if (!_isTestModeAudit()) return;
+  function inject() {
+    var el = document.getElementById('mybets-section');
+    if (!el || el.querySelector('[data-grading-console-btn]')) return;
+    var headers = el.querySelectorAll('div');
+    for (var i=0;i<headers.length;i++){
+      var h = headers[i];
+      if (h.textContent && h.textContent.indexOf('My Bets') !== -1 && h.querySelector && h.querySelector('button')) {
+        var btn = document.createElement('button');
+        btn.setAttribute('data-grading-console-btn','1');
+        btn.textContent = '🧪 Grading Console';
+        btn.style.cssText = 'font-size:0.7rem;font-weight:700;color:#fff;background:linear-gradient(135deg,#0064c8,#0093e9);border:none;border-radius:20px;padding:6px 12px;cursor:pointer;margin-left:8px';
+        btn.onclick = function(){ openGradingConsole(); };
+        h.appendChild(btn);
+        break;
+      }
+    }
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    var el = document.getElementById('mybets-section');
+    if (el) new MutationObserver(inject).observe(el, { childList:true, subtree:true });
+    inject();
   });
 })();
 // ══════════════════════════════════════════════════════════════════════════
