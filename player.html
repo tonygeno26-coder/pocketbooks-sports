@@ -3872,6 +3872,17 @@ function _ticketAuditHTML(t) {
     row('balance before',     balBefore != null ? '$'+Number(balBefore).toFixed(2) : '—') +
     row('balance after',      balAfter  != null ? '$'+Number(balAfter ).toFixed(2) : '—') +
     row('grading source',     src);
+  // Append manual final score(s) when present
+  if (Array.isArray(t.manualFinalScore) && t.manualFinalScore.length) {
+    html += row('final score (manual)',
+      t.manualFinalScore.map(function(fs, i){
+        var leg = (t.selections||[])[i] || {};
+        return (leg.awayTeam || 'A') + ' ' + fs.away + ' – ' + (leg.homeTeam || 'H') + ' ' + fs.home +
+          (fs.status && fs.status !== 'final' ? ' ('+fs.status+')' : '') +
+          (fs.legResult ? ' · leg=' + String(fs.legResult).toUpperCase() : '');
+      }).join('<br>')
+    );
+  }
   return html;
 }
 
@@ -3984,6 +3995,228 @@ function regradeTicket(ticketId) {
 }
 window.regradeTicket = regradeTicket;
 
+// ── Manual leg grader ─────────────────────────────────────────────────────
+// Given one selection { side, market, pick, awayTeam, homeTeam, odds } and the
+// final score { away, home, status }, returns 'win' | 'lose' | 'push'.
+// status = 'final' | 'final_ot' | 'cancelled' | 'postponed'.
+// status === 'cancelled' or 'postponed' returns 'push' (treated as void).
+function _gradeLegFromScore(sel, awayScore, homeScore, status) {
+  status = String(status||'final').toLowerCase();
+  if (status === 'cancelled' || status === 'canceled' || status === 'postponed') return 'push';
+  var a = Number(awayScore), h = Number(homeScore);
+  if (!isFinite(a) || !isFinite(h)) return 'push';
+  var market = String(sel.market||'').toLowerCase();
+  var side   = String(sel.side  ||'').toLowerCase();
+  var pick   = String(sel.pick  ||'');
+
+  // Moneyline
+  if (market === 'moneyline' || market.includes('moneyline') || market === 'ml' || pick.toLowerCase().includes(' ml')) {
+    if (a === h) return 'push'; // tie -> push (extra innings would make this rare in MLB)
+    if (side === 'home') return h > a ? 'win' : 'lose';
+    if (side === 'away') return a > h ? 'win' : 'lose';
+    // Fallback: match by team name
+    var pl = pick.toLowerCase();
+    if (sel.homeTeam && pl.includes(sel.homeTeam.toLowerCase().split(' ').pop())) return h > a ? 'win' : 'lose';
+    if (sel.awayTeam && pl.includes(sel.awayTeam.toLowerCase().split(' ').pop())) return a > h ? 'win' : 'lose';
+    return 'push';
+  }
+
+  // Total over/under — check first so 'Over 8.5' / 'Under 9' don't fall
+  // through the spread regex.
+  if (market === 'total' || market === 'totals' || market === 'ou' || side === 'over' || side === 'under' || /^(over|under)\b/i.test(pick)) {
+    var nMatch = pick.match(/\d+(?:\.\d+)?/);
+    var line2  = nMatch ? Number(nMatch[0]) : NaN;
+    if (!isFinite(line2)) return 'push';
+    var sum = a + h;
+    if (Math.abs(sum - line2) < 1e-9) return 'push';
+    var isOver = (side === 'over') || /^over\b/i.test(pick);
+    return isOver ? (sum > line2 ? 'win' : 'lose')
+                  : (sum < line2 ? 'win' : 'lose');
+  }
+
+  // Spread / Run line
+  if (market === 'spread' || market === 'spreads' || market === 'run line' || market === 'runline' || /\s[+-]?\d+(\.\d+)?\b/.test(pick)) {
+    var lineMatch = pick.match(/[+-]?\d+(?:\.\d+)?/);
+    var line = lineMatch ? Number(lineMatch[0]) : 0;
+    var pickedDiff = (side === 'home') ? (h - a) : (a - h);
+    var adjusted   = pickedDiff + line;
+    if (Math.abs(adjusted) < 1e-9) return 'push';
+    return adjusted > 0 ? 'win' : 'lose';
+  }
+
+  // Unknown market -> push (don't take money on something we can't grade)
+  return 'push';
+}
+window._gradeLegFromScore = _gradeLegFromScore;
+
+// Combine leg results into a ticket result. Match simulator's combine.
+function _combineLegs(outcomes) {
+  if (!outcomes.length) return 'push';
+  if (outcomes.includes('lose')) return 'lost';
+  if (outcomes.every(function(o){ return o === 'push'; })) return 'pushed';
+  return 'won';
+}
+
+// Manual grader for a single ticket. `legScores` is a parallel array of
+// { away, home, status } per selection (or one entry for a single).
+function gradeTicketByScores(ticketId, legScores) {
+  if (!_isTestModeAudit()) return 'test mode only';
+  var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
+  var t = tickets.find(function(x){ return x.id === ticketId; });
+  if (!t) return 'ticket not found';
+  if (t.status !== 'active' && t.status !== 'open') return 'ticket already settled';
+  var legs = Array.isArray(t.selections) ? t.selections : [];
+  if (!legs.length) return 'no selections on ticket';
+
+  var bsBefore = (typeof calcAvailableBalance === 'function') ? calcAvailableBalance() : null;
+  var balanceBefore = bsBefore ? bsBefore.available : null;
+
+  // Run each leg
+  var legOutcomes = legs.map(function(s, i){
+    var sc = legScores[i] || legScores[0] || {};
+    var o = _gradeLegFromScore(s, sc.away, sc.home, sc.status||'final');
+    s.result = o;
+    s.finalScore = { away: Number(sc.away), home: Number(sc.home), status: sc.status||'final' };
+    return o;
+  });
+  var combined = _combineLegs(legOutcomes);
+  var nextStatus = combined === 'won' ? 'won' : combined === 'lost' ? 'lost' : 'push';
+
+  var risk    = parseFloat(t.riskAmount)        || 0;
+  var profit  = parseFloat(t.potentialProfit)   || 0;
+  var payout  = parseFloat(t.estimatedPayout)   || (risk + profit);
+  var ticketPayout = nextStatus === 'won'  ? payout
+                   : nextStatus === 'lost' ? 0
+                                            : risk;
+  var balanceDelta = nextStatus === 'won'  ? (risk + profit)
+                   : nextStatus === 'lost' ? 0
+                                            : risk;
+  var balanceAfter = (balanceBefore != null) ? Math.round((balanceBefore + balanceDelta) * 100) / 100 : null;
+
+  t.status = nextStatus;
+  t.gradedAt = new Date().toISOString();
+  t.simulated = false;
+  t.gradingSource = 'manual';
+  // Stamp final-score breakdown for the audit panel.
+  t.manualFinalScore = legScores.map(function(s,i){ return { gameId: legs[i] && legs[i].gameId, away:Number(s.away), home:Number(s.home), status:s.status||'final', legResult: legOutcomes[i] }; });
+
+  localStorage.setItem('pb-tickets', JSON.stringify(tickets));
+  try { localStorage.setItem('pb-tickets-version', String((parseInt(localStorage.getItem('pb-tickets-version')||'0',10)||0)+1)); } catch(_e){}
+
+  // Spec ledger row
+  if (typeof recordSpecLedger === 'function') {
+    var specType = nextStatus === 'won' ? 'BET_WON'
+                 : nextStatus === 'lost' ? 'BET_LOST'
+                                          : 'BET_PUSH';
+    recordSpecLedger({
+      type:          specType,
+      playerId:      t.playerId || null,
+      ticketId:      t.id,
+      amount:        balanceDelta - risk,  // net change: won=+profit, lost=-risk, push=0
+      timestamp:     t.gradedAt,
+      balanceBefore: balanceBefore,
+      balanceAfter:  balanceAfter,
+      note:          'manual · ' + (t.type || 'Single') + ' · ' + legScores.map(function(s){ return s.away+'-'+s.home; }).join('|'),
+    });
+  }
+  // Legacy ledger entry for back-compat
+  try {
+    if (typeof addLedgerEntry === 'function') {
+      addLedgerEntry({
+        id: 'L' + Date.now() + Math.floor(Math.random()*1000),
+        type: 'ticket_graded', ticketIds: [t.id],
+        amount: balanceDelta - risk, status: nextStatus, betType: t.type,
+        createdAt: t.gradedAt, source: 'manual'
+      });
+    }
+  } catch(_e){}
+
+  console.log('[ticket graded]\n' +
+              '  player: '         + (t.playerName || t.playerUsername || '?') + '\n' +
+              '  wager: $'         + risk.toFixed(2) + '\n' +
+              '  odds: '           + (t.odds || (legs[0] && legs[0].odds) || '') + '\n' +
+              '  result: '         + nextStatus.toUpperCase() + '\n' +
+              '  payout: $'        + ticketPayout.toFixed(2) + '\n' +
+              '  balanceBefore: $' + (balanceBefore != null ? balanceBefore.toFixed(2) : '?') + '\n' +
+              '  balanceAfter: $'  + (balanceAfter  != null ? balanceAfter.toFixed(2)  : '?') + '\n' +
+              '  source: manual\n' +
+              '  finalScore: '     + legScores.map(function(s,i){ return (legs[i]&&legs[i].awayTeam||'A')+' '+s.away+' · '+(legs[i]&&legs[i].homeTeam||'H')+' '+s.home+(s.status&&s.status!=='final'?(' ('+s.status+')'):''); }).join(' | '));
+
+  // Refresh UI
+  try { betTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(_e){}
+  try { syncBalanceDisplays && syncBalanceDisplays(); } catch(_e){}
+  try { renderMyBets && renderMyBets(); } catch(_e){}
+  try { renderGradingConsole && renderGradingConsole(); } catch(_e){}
+  return null; // success
+}
+window.gradeTicketByScores = gradeTicketByScores;
+
+// UI: open inline manual-score form for one ticket
+function openManualGrade(ticketId) {
+  if (!_isTestModeAudit()) return;
+  var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
+  var t = tickets.find(function(x){ return x.id === ticketId; });
+  if (!t) return;
+  var legs = t.selections || [];
+  var rows = legs.map(function(s, i){
+    var label = (s.awayTeam || 'Away') + ' @ ' + (s.homeTeam || 'Home') + ' — ' + (s.pick || s.market || 'leg ' + (i+1));
+    return '<div style="border:1px solid #e8e8e8;border-radius:10px;padding:10px;margin-bottom:8px">' +
+      '<div style="font-size:0.75rem;font-weight:700;color:#333;margin-bottom:6px">' + label + '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:6px">' +
+        '<input type="number" id="mg-away-'+ticketId+'-'+i+'" placeholder="'+(s.awayTeam||'Away')+'" style="padding:7px;border:1px solid #ccc;border-radius:8px;font-size:0.78rem">' +
+        '<input type="number" id="mg-home-'+ticketId+'-'+i+'" placeholder="'+(s.homeTeam||'Home')+'" style="padding:7px;border:1px solid #ccc;border-radius:8px;font-size:0.78rem">' +
+        '<select id="mg-status-'+ticketId+'-'+i+'" style="padding:7px;border:1px solid #ccc;border-radius:8px;font-size:0.78rem">' +
+          '<option value="final">Final</option>' +
+          '<option value="final_ot">Final / Extra Innings</option>' +
+          '<option value="cancelled">Cancelled</option>' +
+          '<option value="postponed">Postponed</option>' +
+        '</select>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+  var html =
+    '<div id="manual-grade-modal" style="position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px" onclick="if(event.target===this) this.remove()">' +
+      '<div style="background:#fff;width:100%;max-width:520px;max-height:90vh;overflow:auto;border-radius:14px;padding:16px;color:#111">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+          '<div style="font-size:0.95rem;font-weight:900">✍️ Manual Final Score — ' + ticketId + '</div>' +
+          '<button onclick="this.closest(\'#manual-grade-modal\').remove()" style="background:#f0f0f0;border:none;border-radius:50%;width:30px;height:30px;cursor:pointer">✕</button>' +
+        '</div>' +
+        '<div style="font-size:0.7rem;color:#777;margin-bottom:10px">Enter the final score for each leg. Cancelled / Postponed grades the leg as PUSH.</div>' +
+        rows +
+        '<button onclick="submitManualGrade(\''+ticketId+'\')" style="width:100%;padding:11px;background:linear-gradient(135deg,#0064c8,#0093e9);color:#fff;border:none;border-radius:10px;font-size:0.85rem;font-weight:800;cursor:pointer;margin-top:6px">Grade Ticket</button>' +
+      '</div>' +
+    '</div>';
+  var wrap = document.createElement('div'); wrap.innerHTML = html;
+  document.body.appendChild(wrap.firstChild);
+}
+window.openManualGrade = openManualGrade;
+
+function submitManualGrade(ticketId) {
+  var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
+  var t = tickets.find(function(x){ return x.id === ticketId; });
+  if (!t) return;
+  var legs = t.selections || [];
+  var legScores = [];
+  for (var i = 0; i < legs.length; i++) {
+    var aEl = document.getElementById('mg-away-'+ticketId+'-'+i);
+    var hEl = document.getElementById('mg-home-'+ticketId+'-'+i);
+    var sEl = document.getElementById('mg-status-'+ticketId+'-'+i);
+    var aV = aEl ? parseFloat(aEl.value) : NaN;
+    var hV = hEl ? parseFloat(hEl.value) : NaN;
+    var st = sEl ? sEl.value : 'final';
+    if ((st === 'final' || st === 'final_ot') && (!isFinite(aV) || !isFinite(hV))) {
+      try { showToast && showToast('Enter both scores for leg ' + (i+1)); } catch(_e){}
+      return;
+    }
+    legScores.push({ away: isFinite(aV)?aV:0, home: isFinite(hV)?hV:0, status: st });
+  }
+  var err = gradeTicketByScores(ticketId, legScores);
+  if (err) { try { showToast && showToast('⚠️ ' + err); } catch(_e){} return; }
+  var modal = document.getElementById('manual-grade-modal'); if (modal) modal.remove();
+  try { showToast && showToast('Manually graded ✅'); } catch(_e){}
+}
+window.submitManualGrade = submitManualGrade;
+
 function renderGradingConsole() {
   if (!document.getElementById('grading-console-modal')) return;
   var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
@@ -4028,7 +4261,7 @@ function renderGradingConsole() {
               '<td style="padding:6px 8px;color:#888">'+ts+'</td>' +
               '<td style="padding:6px 8px;text-align:right">' +
                 ((t.status==='active'||t.status==='open')
-                  ? ''
+                  ? '<button onclick="openManualGrade(\''+t.id+'\')" style="font-size:0.7rem;font-weight:700;color:#0064c8;background:none;border:1px solid #0064c8;border-radius:14px;padding:3px 10px;cursor:pointer">✍️ Manual Grade</button>'
                   : '<button onclick="regradeTicket(\''+t.id+'\')" style="font-size:0.7rem;font-weight:700;color:#7c3aed;background:none;border:1px solid #7c3aed;border-radius:14px;padding:3px 10px;cursor:pointer">Regrade</button>') +
               '</td>' +
             '</tr>';
