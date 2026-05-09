@@ -3883,6 +3883,30 @@ function _ticketAuditHTML(t) {
       }).join('<br>')
     );
   }
+  // Per-leg result rows when present
+  var legRows = (t.selections||[]).filter(function(s){ return s.result; });
+  if (legRows.length) {
+    html += row('leg results',
+      legRows.map(function(s, i){
+        return (i+1) + '. ' + (s.pick || s.market || 'leg') + ' → ' + String(s.result).toUpperCase();
+      }).join('<br>')
+    );
+  }
+  // Regrade history (older grades preserved for audit)
+  if (Array.isArray(t.regradeHistory) && t.regradeHistory.length) {
+    html += row('regrade history',
+      t.regradeHistory.map(function(h, i){
+        var when = h.regradedAt ? new Date(h.regradedAt).toLocaleString() : '';
+        var prevScore = (h.manualFinalScore || []).map(function(fs){
+          return fs.away + '–' + fs.home + (fs.status && fs.status !== 'final' ? ' ('+fs.status+')' : '');
+        }).join(' | ');
+        return '#' + (i+1) + ' · was ' + String(h.status||'?').toUpperCase() +
+          ' · ' + (h.gradingSource || (h.simulated ? 'simulated' : '?')) +
+          (prevScore ? ' · ' + prevScore : '') +
+          (when ? ' · regraded ' + when : '');
+      }).join('<br>')
+    );
+  }
   return html;
 }
 
@@ -3982,12 +4006,27 @@ function regradeTicket(ticketId) {
   var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
   var t = tickets.find(function(x){ return x.id === ticketId; });
   if (!t) return;
-  // Reset to active so simulateGradeResults will pick it up again. Released
-  // from settled buckets via the openRisk-exclusion model.
+  // Preserve the prior grade as an audit entry instead of erasing it.
+  if (!Array.isArray(t.regradeHistory)) t.regradeHistory = [];
+  if (t.gradedAt) {
+    t.regradeHistory.push({
+      gradedAt:        t.gradedAt,
+      status:          t.status,
+      gradingSource:   t.gradingSource || (t.simulated ? 'simulated' : null),
+      simulated:       !!t.simulated,
+      manualFinalScore: Array.isArray(t.manualFinalScore) ? JSON.parse(JSON.stringify(t.manualFinalScore)) : null,
+      legs: (t.selections || []).map(function(s){ return { pick: s.pick, result: s.result, finalScore: s.finalScore || null }; }),
+      regradedAt: new Date().toISOString(),
+    });
+  }
+  // Reset to active so simulateGradeResults / openManualGrade will pick it up.
+  // Released from settled buckets via the openRisk-exclusion model.
   t.status = 'active';
   delete t.gradedAt;
   t.gradingSource = null;
   t.simulated = false;
+  delete t.manualFinalScore;
+  (t.selections || []).forEach(function(s){ delete s.result; delete s.finalScore; });
   localStorage.setItem('pb-tickets', JSON.stringify(tickets));
   try { localStorage.setItem('pb-tickets-version', String((parseInt(localStorage.getItem('pb-tickets-version')||'0',10)||0)+1)); } catch(_e){}
   if (typeof simulateGradeResults === 'function') simulateGradeResults();
@@ -4157,6 +4196,11 @@ function openManualGrade(ticketId) {
   var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
   var t = tickets.find(function(x){ return x.id === ticketId; });
   if (!t) return;
+  // Hard-stop: never re-grade a settled ticket through this entry point.
+  if (t.status !== 'active' && t.status !== 'open') {
+    try { showToast && showToast('Ticket already graded — use Regrade.'); } catch(_e){}
+    return;
+  }
   var legs = t.selections || [];
   var rows = legs.map(function(s, i){
     var label = (s.awayTeam || 'Away') + ' @ ' + (s.homeTeam || 'Home') + ' — ' + (s.pick || s.market || 'leg ' + (i+1));
@@ -4261,8 +4305,8 @@ function renderGradingConsole() {
               '<td style="padding:6px 8px;color:#888">'+ts+'</td>' +
               '<td style="padding:6px 8px;text-align:right">' +
                 ((t.status==='active'||t.status==='open')
-                  ? '<button onclick="openManualGrade(\''+t.id+'\')" style="font-size:0.7rem;font-weight:700;color:#0064c8;background:none;border:1px solid #0064c8;border-radius:14px;padding:3px 10px;cursor:pointer">✍️ Manual Grade</button>'
-                  : '<button onclick="regradeTicket(\''+t.id+'\')" style="font-size:0.7rem;font-weight:700;color:#7c3aed;background:none;border:1px solid #7c3aed;border-radius:14px;padding:3px 10px;cursor:pointer">Regrade</button>') +
+                  ? '<button onclick="openManualGrade(\''+t.id+'\')" style="font-size:0.7rem;font-weight:700;color:#0064c8;background:none;border:1px solid #0064c8;border-radius:14px;padding:3px 10px;cursor:pointer" title="Manual grade pending ticket">✍️ Manual Grade</button>'
+                  : '<button onclick="regradeTicket(\''+t.id+'\')" style="font-size:0.7rem;font-weight:700;color:#7c3aed;background:none;border:1px solid #7c3aed;border-radius:14px;padding:3px 10px;cursor:pointer" title="Reset to active and re-grade (preserves prior audit)">Regrade</button>') +
               '</td>' +
             '</tr>';
           }).join('')
