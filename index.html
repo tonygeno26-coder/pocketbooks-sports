@@ -420,36 +420,55 @@ function _getPlayerDiamondBalance(playerId) {
 function _bdAdminCredit(btn) {
   var pid = btn.dataset.pid2; var pname = btn.dataset.pname;
   var diamonds = parseInt(btn.dataset.diamonds)||0; var purchaseId = btn.dataset.pid;
-  adminCreditDiamonds(purchaseId, pid, pname, diamonds, 'crypto purchase verified');
+  adminCreditPurchase(purchaseId, pid, pname, diamonds);
 }
 function _bdAdminReject(btn) {
   var n = prompt('Rejection reason:'); if (n !== null) adminRejectPurchase(btn.dataset.pid, n);
 }
-function adminCreditDiamonds(purchaseId, playerId, playerName, diamonds, reason) {
+// PURCHASE_CREDIT — called when a verified crypto purchase is confirmed
+function adminCreditPurchase(purchaseId, playerId, playerName, diamonds) {
   var balanceBefore = _getPlayerDiamondBalance(playerId);
   var balanceAfter  = balanceBefore + diamonds;
   var entry = {
-    id: 'ADMCR-'+Date.now(),
-    type: 'ADMIN_DIAMOND_CREDIT',
-    playerId: playerId,
-    playerName: playerName,
+    id: 'PURCH-'+Date.now(),
+    type: 'PURCHASE_CREDIT',
+    playerId: playerId, playerName: playerName,
     diamonds: diamonds,
-    reason: reason || 'admin manual credit',
+    reason: 'crypto purchase credited by admin review',
     admin: 'host',
     timestamp: new Date().toISOString(),
-    relatedPurchaseId: purchaseId || null
+    relatedPurchaseId: purchaseId
   };
-  console.table({ '[admin diamond credit]':'', playerId:playerId, diamonds:diamonds, balanceBefore:balanceBefore, balanceAfter:balanceAfter, reason:reason });
+  console.table({ '[admin purchase credit]':'', playerId:playerId, diamonds:diamonds, balanceBefore:balanceBefore, balanceAfter:balanceAfter, purchaseId:purchaseId });
   var ledger = _getDiamondLedger();
   ledger.unshift(entry);
   _saveDiamondLedger(ledger);
-  // Mark purchase as credited
-  if (purchaseId) {
-    var purchases = _getCryptoPurchases();
-    var idx = purchases.findIndex(function(p){ return p.id===purchaseId; });
-    if (idx >= 0) { purchases[idx].status='credited'; purchases[idx].creditedAt=entry.timestamp; _saveCryptoPurchases(purchases); }
-  }
-  showToastHost('✅ Credited 💎'+diamonds.toLocaleString()+' to '+playerName);
+  var purchases = _getCryptoPurchases();
+  var idx = purchases.findIndex(function(p){ return p.id===purchaseId; });
+  if (idx >= 0) { purchases[idx].status='credited'; purchases[idx].creditedAt=entry.timestamp; _saveCryptoPurchases(purchases); }
+  showToastHost('✅ Purchase credited: 💎'+diamonds.toLocaleString()+' → '+playerName);
+  renderAdminCrypto();
+}
+
+// ADMIN_BONUS_DIAMONDS — manual bonus, separate from any purchase
+function adminBonusDiamonds(playerId, playerName, diamonds, reason) {
+  if (!playerId || !diamonds || diamonds <= 0) { showToastHost('Enter valid player ID and amount'); return; }
+  var balanceBefore = _getPlayerDiamondBalance(playerId);
+  var balanceAfter  = balanceBefore + diamonds;
+  var entry = {
+    id: 'BONUS-'+Date.now(),
+    type: 'ADMIN_BONUS_DIAMONDS',
+    playerId: playerId, playerName: playerName || playerId,
+    diamonds: diamonds,
+    reason: reason || 'admin bonus',
+    admin: 'host',
+    timestamp: new Date().toISOString()
+  };
+  console.table({ '[admin bonus diamonds]':'', playerId:playerId, playerName:playerName, diamonds:diamonds, balanceBefore:balanceBefore, balanceAfter:balanceAfter, reason:reason });
+  var ledger = _getDiamondLedger();
+  ledger.unshift(entry);
+  _saveDiamondLedger(ledger);
+  showToastHost('✅ Bonus credited: 💎'+diamonds.toLocaleString()+' → '+(playerName||playerId));
   renderAdminCrypto();
 }
 
@@ -465,6 +484,20 @@ function adminRejectPurchase(purchaseId, note) {
   renderAdminCrypto();
 }
 
+
+function _doAdminBonus() {
+  var pid    = (document.getElementById('mcredit-pid')||{}).value.trim();
+  var pname  = (document.getElementById('mcredit-name')||{}).value.trim();
+  var amt    = parseInt((document.getElementById('mcredit-amt')||{}).value)||0;
+  var reason = (document.getElementById('mcredit-reason')||{}).value.trim();
+  if (!pid)    { showToastHost('Enter Player ID'); return; }
+  if (!amt)    { showToastHost('Enter diamond amount'); return; }
+  if (!reason) { showToastHost('Enter reason for bonus'); return; }
+  adminBonusDiamonds(pid, pname||pid, amt, reason);
+  ['mcredit-pid','mcredit-name','mcredit-amt','mcredit-reason'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value='';
+  });
+}
 function renderAdminCrypto() {
   var el = document.getElementById('crypto-section');
   if (!el) return;
@@ -504,15 +537,16 @@ function renderAdminCrypto() {
       }).join('')
     : '<tr><td colspan="9" style="padding:30px;text-align:center;color:#555;font-size:0.85rem">No crypto purchases yet</td></tr>';
 
-  // Manual credit form
-  var manualCreditForm = '<div style="background:#141414;border:1px solid #252525;border-radius:14px;padding:16px;margin-bottom:16px">'
-    +'<div style="font-size:0.8rem;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px">Manual Diamond Credit</div>'
+  // Bonus Diamonds form (separate from purchase verification)
+  var manualCreditForm = '<div style="background:#141414;border:1px solid rgba(245,158,11,0.3);border-radius:14px;padding:16px;margin-bottom:16px">'
+    +'<div style="font-size:0.8rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">💎 Admin Bonus Diamonds</div>'
+    +'<div style="font-size:0.7rem;color:#555;margin-bottom:10px">Separate from crypto purchase credits. Use for promotions, corrections, or goodwill.</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
-      +'<input id="mcredit-pid" placeholder="Player ID" style="flex:1;min-width:120px;background:#1c1c1c;border:1px solid #2a2a2a;color:#fff;padding:8px 12px;border-radius:8px;font-size:0.82rem">'
+      +'<input id="mcredit-pid" placeholder="Player ID *" style="flex:1;min-width:120px;background:#1c1c1c;border:1px solid #2a2a2a;color:#fff;padding:8px 12px;border-radius:8px;font-size:0.82rem">'
       +'<input id="mcredit-name" placeholder="Player Name" style="flex:1;min-width:120px;background:#1c1c1c;border:1px solid #2a2a2a;color:#fff;padding:8px 12px;border-radius:8px;font-size:0.82rem">'
-      +'<input id="mcredit-amt" type="number" placeholder="Diamonds" min="1" style="width:110px;background:#1c1c1c;border:1px solid #2a2a2a;color:#fff;padding:8px 12px;border-radius:8px;font-size:0.82rem">'
-      +'<input id="mcredit-reason" placeholder="Reason" style="flex:2;min-width:140px;background:#1c1c1c;border:1px solid #2a2a2a;color:#fff;padding:8px 12px;border-radius:8px;font-size:0.82rem">'
-          actions = '<button data-pid="'+p.id+'" data-pid2="'+p.playerId+'" data-pname="'+p.playerName+'" data-diamonds="'+p.diamonds+'" onclick="_bdAdminCredit(this)" style="padding:6px 10px;background:rgba(0,135,90,0.15);border:1px solid #00875a;border-radius:6px;color:#00875a;font-size:0.72rem;font-weight:700;cursor:pointer;margin-right:6px">✅ Credit</button>'
+      +'<input id="mcredit-amt" type="number" placeholder="Diamonds *" min="1" style="width:110px;background:#1c1c1c;border:1px solid #2a2a2a;color:#fff;padding:8px 12px;border-radius:8px;font-size:0.82rem">'
+      +'<input id="mcredit-reason" placeholder="Reason *" style="flex:2;min-width:140px;background:#1c1c1c;border:1px solid #2a2a2a;color:#fff;padding:8px 12px;border-radius:8px;font-size:0.82rem">'
+      +'<button onclick="_doAdminBonus()" style="padding:8px 16px;background:var(--gold);color:#000;border:none;border-radius:8px;font-size:0.8rem;font-weight:800;cursor:pointer;white-space:nowrap">💎 Give Bonus</button>'
     +'</div>'
   +'</div>';
 
