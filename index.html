@@ -1762,15 +1762,54 @@ function _amountDueCrypto(usd, cryptoId) {
 }
 
 // Fetch live prices from CoinGecko (free, no key). Updates CRYPTO_METHODS in place.
-function _fetchLiveCryptoPrices() {
+// Price state
+var _cryptoPriceState = { status: 'loading', lastUpdated: null, error: null };
+
+function _fetchLiveCryptoPrices(onDone) {
+  _cryptoPriceState.status = 'loading';
+  _renderPriceStatus();
   fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd')
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (d.bitcoin && d.bitcoin.usd)  { var btc = CRYPTO_METHODS.find(function(c){return c.id==='btc';}); if(btc) btc.priceUsd = d.bitcoin.usd; }
       if (d.ethereum && d.ethereum.usd){ var eth = CRYPTO_METHODS.find(function(c){return c.id==='eth';}); if(eth) eth.priceUsd = d.ethereum.usd; }
+      _cryptoPriceState.status = 'ok';
+      _cryptoPriceState.lastUpdated = new Date();
+      _cryptoPriceState.error = null;
       console.log('[crypto prices updated] BTC:', d.bitcoin&&d.bitcoin.usd, 'ETH:', d.ethereum&&d.ethereum.usd);
+      _renderPriceStatus();
+      if (typeof onDone === 'function') onDone();
     })
-    .catch(function(e){ console.warn('[crypto prices] fetch failed, using fallback:', e.message); });
+    .catch(function(e){
+      _cryptoPriceState.status = 'failed';
+      _cryptoPriceState.error = e.message;
+      console.warn('[crypto prices] fetch failed:', e.message);
+      _renderPriceStatus();
+      if (typeof onDone === 'function') onDone();
+    });
+}
+
+function _renderPriceStatus() {
+  var el = document.getElementById('bd-price-status');
+  if (!el) return;
+  var s = _cryptoPriceState;
+  if (s.status === 'loading') {
+    el.innerHTML = '<span style="color:#888;font-size:0.7rem">Fetching live price…</span>';
+  } else if (s.status === 'failed') {
+    el.innerHTML = '<span style="color:#ff3d57;font-size:0.7rem;font-weight:700">⚠️ Price unavailable — stale fallback</span> '
+      + '<button onclick="_fetchLiveCryptoPrices(function(){selectPayMethod&&selectPayMethod(_bdState&&_bdState.selectedPkgIdx,_bdState&&_bdState.selectedCrypto);})" style="padding:3px 8px;background:#1c1c1c;border:1px solid #555;color:#aaa;border-radius:5px;font-size:0.68rem;cursor:pointer">🔄 Retry</button>';
+    // Disable submit
+    var sub = document.getElementById('bd-submit-btn');
+    if (sub) { sub.disabled = true; sub.style.opacity = '0.4'; sub.title = 'Price unavailable — refresh first'; }
+  } else if (s.status === 'ok' && s.lastUpdated) {
+    var ago = Math.round((Date.now() - s.lastUpdated.getTime()) / 1000);
+    var agoStr = ago < 60 ? ago + 's ago' : Math.round(ago/60) + 'm ago';
+    el.innerHTML = '<span style="color:#00875a;font-size:0.7rem">✅ Live price · Updated ' + agoStr + '</span> '
+      + '<button onclick="_fetchLiveCryptoPrices(function(){var m=_bdState&&_bdState.selectedCrypto;if(m)selectPayMethod&&selectPayMethod(_bdState.selectedPkgIdx,m);})" style="padding:3px 8px;background:#1c1c1c;border:1px solid #333;color:#888;border-radius:5px;font-size:0.68rem;cursor:pointer">🔄 Refresh</button>';
+    // Re-enable submit
+    var sub = document.getElementById('bd-submit-btn');
+    if (sub) { sub.disabled = false; sub.style.opacity = ''; sub.title = ''; }
+  }
 }
 _fetchLiveCryptoPrices(); // run on load
 
@@ -2064,10 +2103,11 @@ function _bdRenderBody() {
               '<span style="font-size:0.7rem;color:#888;font-weight:700">Amount Due</span>' +
               '<span style="font-size:0.85rem;font-weight:900;color:#fff">$' + usd.toLocaleString('en-US') + '</span>' +
             '</div>' +
-            '<div style="display:flex;justify-content:space-between;align-items:center">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
               '<span style="font-size:0.7rem;color:#888;font-weight:700">Send Exactly</span>' +
               '<span style="font-size:0.95rem;font-weight:900;color:#00c2ff;font-family:monospace">' + dueStr + ' ' + (method?method.symbol:'') + '</span>' +
             '</div>' +
+            '<div id="bd-price-status" style="margin-top:4px"></div>' +
           '</div>';
         })()) +
       '</div>' +
