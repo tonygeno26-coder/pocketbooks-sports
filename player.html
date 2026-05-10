@@ -703,8 +703,26 @@ function _debugClearTickets() {
 </nav>
 
 <script>
+console.log('[PBS init start]');
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
-console.log('player page loaded');
+// dbgBanner must be defined FIRST — called by balance engine before any other function
+function dbgBanner(msg, color) {
+  try {
+    var b = document.getElementById('_dbg_banner');
+    if (!b) {
+      b = document.createElement('div');
+      b.id = '_dbg_banner';
+      b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#000;color:#0f0;font-size:16px;font-weight:900;padding:16px 12px;text-align:center;font-family:monospace;white-space:pre-wrap;word-break:break-all;border-bottom:3px solid #0f0;pointer-events:none';
+      document.body.appendChild(b);
+    }
+    b.style.background = color || '#000';
+    b.style.color = '#fff';
+    b.textContent = msg;
+    b.style.display = 'block';
+    clearTimeout(b._t);
+    b._t = setTimeout(function(){ b.style.display='none'; }, 10000);
+  } catch(_dbgErr) { console.warn('[dbgBanner]', msg); }
+}
 // Sync balance on page load immediately
 (function(){
   try {
@@ -1348,6 +1366,7 @@ function setMarketFilter(el, filter) {
 }
 
 console.log("[PBS tabs bind]");
+console.log("[PBS tabs bound]");
 function setSport(el,sport){
   document.querySelectorAll('.sport-tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
@@ -1459,7 +1478,14 @@ function returnToLobby() {
 }
 // ══════════════════════════════════════════════════════════════════════════════
 
-try { loadGames('mlb'); } catch(e) { console.error('loadGames init error:', e); }
+try { loadGames('mlb'); } catch(e) { console.error('[PBS fetch failed]', e); }
+setTimeout(function(){
+  var gl = document.getElementById('games-list');
+  if (gl && gl.textContent && gl.textContent.indexOf('Loading') !== -1) {
+    console.warn('[PBS fetch failed] timeout — still loading after 8s');
+    gl.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#888"><div style="font-size:1rem;font-weight:700;margin-bottom:8px">⚠️ Odds failed to load</div><div style="font-size:0.8rem;margin-bottom:14px">Check your connection or try again</div><button onclick="loadGames(\'mlb\')" style="padding:10px 20px;background:#00ff88;color:#000;border:none;border-radius:10px;font-weight:800;cursor:pointer">?? Retry</button></div>';
+  }
+}, 8000);
 renderMyBets();
 
 // Auto-join from URL param
