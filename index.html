@@ -170,6 +170,140 @@ try {
   function syncBody(){ if (!document.body) return; if (document.documentElement.classList.contains('theme-light')) document.body.classList.add('theme-light'); }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',syncBody); else syncBody();
 })();
+
+// ═══ BUY DIAMONDS SYSTEM ══════════════════════════════════════════════════════
+// Wallet pool — admin-managed, never auto-generated
+var WALLET_POOL = {
+  'ETH': [
+    { address: '0x61F74cD55bA283269eb86a2AA7a882B2e1a9225F', network: 'ETH_ERC20', usageCount: 0, maxUsageCount: 10, active: true }
+  ],
+  'USDT': [
+    { address: '0x61F74cD55bA283269eb86a2AA7a882B2e1a9225F', network: 'ETH_ERC20', usageCount: 0, maxUsageCount: 10, active: true }
+  ],
+  'USDC': [
+    { address: '0x61F74cD55bA283269eb86a2AA7a882B2e1a9225F', network: 'ETH_ERC20', usageCount: 0, maxUsageCount: 10, active: true }
+  ],
+  'BTC': [
+    { address: 'bc1qu6um0h9qdy8nn6w3m2t4x3ava8lp6tm96erwc4', network: 'BTC', usageCount: 0, maxUsageCount: 3, active: true }
+  ]
+};
+
+var DIAMOND_PACKAGES = [
+  { diamonds: 500,   price: 4.99,  label: 'Starter',  bonus: '' },
+  { diamonds: 1200,  price: 9.99,  label: 'Popular',  bonus: '+200 bonus', highlight: true },
+  { diamonds: 2500,  price: 19.99, label: 'Pro',      bonus: '+500 bonus' },
+  { diamonds: 6000,  price: 44.99, label: 'Elite',    bonus: '+1000 bonus' },
+  { diamonds: 15000, price: 99.99, label: 'Whale',    bonus: '+3000 bonus' }
+];
+
+var _activeOrder = null; // { packageIdx, payMethod, walletAddress, createdAt }
+
+function getActiveWallet(method) {
+  var pool = WALLET_POOL[method] || [];
+  return pool.find(function(w){ return w.active && w.usageCount < w.maxUsageCount; }) || null;
+}
+
+function showBuyDiamonds() {
+  var screen = document.getElementById('buy-diamonds-screen');
+  if (screen) screen.style.display = 'block';
+  _activeOrder = null;
+  renderPackageSelect();
+}
+function hideBuyDiamonds() {
+  var screen = document.getElementById('buy-diamonds-screen');
+  if (screen) screen.style.display = 'none';
+  _activeOrder = null;
+}
+
+function renderPackageSelect() {
+  var el = document.getElementById('buy-diamonds-content');
+  if (!el) return;
+  el.innerHTML =
+    '<div style="font-size:0.78rem;color:var(--light);margin-bottom:16px">Choose a diamond package to top up your account.</div>' +
+    DIAMOND_PACKAGES.map(function(pkg, i) {
+      return '<div onclick="selectPackage(' + i + ')" style="background:var(--card);border:1.5px solid '+(pkg.highlight?'var(--gold)':'var(--border)')+';border-radius:14px;padding:16px;margin-bottom:10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">' +
+        '<div>' +
+          '<div style="font-size:1rem;font-weight:900">💎 ' + pkg.diamonds.toLocaleString() + (pkg.bonus?' <span style="font-size:0.72rem;color:var(--gold);font-weight:700">'+pkg.bonus+'</span>':'') + '</div>' +
+          '<div style="font-size:0.72rem;color:var(--light);margin-top:2px">' + pkg.label + '</div>' +
+        '</div>' +
+        '<div style="font-size:1.1rem;font-weight:900;color:var(--green)">$' + pkg.price.toFixed(2) + '</div>' +
+      '</div>';
+    }).join('');
+}
+
+function selectPackage(idx) {
+  var el = document.getElementById('buy-diamonds-content');
+  var pkg = DIAMOND_PACKAGES[idx];
+  el.innerHTML =
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px">' +
+      '<div style="font-size:0.72rem;color:var(--light);margin-bottom:4px">Selected Package</div>' +
+      '<div style="font-size:1rem;font-weight:900">💎 ' + pkg.diamonds.toLocaleString() + ' diamonds</div>' +
+      '<div style="font-size:0.82rem;color:var(--green);font-weight:700">$' + pkg.price.toFixed(2) + (pkg.bonus?' · '+pkg.bonus:'') + '</div>' +
+    '</div>' +
+    '<div style="font-size:0.82rem;font-weight:800;margin-bottom:10px">Select Payment Method:</div>' +
+    ['ETH','USDT','USDC','BTC'].map(function(method) {
+      var available = !!getActiveWallet(method);
+      var icons = { ETH: 'Ξ', USDT: '₮', USDC: 'Ⓢ', BTC: '₿' };
+      var _oc = available ? 'selectPayMethod(' + idx + ',\"' + method + '\")' : ''; return '<div onclick="' + _oc + '" style="background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:' + (available?'pointer':'not-allowed') + ';opacity:' + (available?'1':'0.4') + '">' +
+        '<div style="font-size:1.4rem;width:36px;text-align:center">' + icons[method] + '</div>' +
+        '<div>' +
+          '<div style="font-weight:800">' + method + (method!=='BTC'?' (ERC-20)':'') + '</div>' +
+          '<div style="font-size:0.7rem;color:var(--light)">' + (available ? 'Available' : 'Temporarily unavailable') + '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('') +
+    '<button onclick="renderPackageSelect()" style="width:100%;margin-top:8px;padding:12px;background:transparent;border:1px solid var(--border);border-radius:12px;color:var(--light);font-size:0.82rem;cursor:pointer">← Back</button>';
+}
+
+function selectPayMethod(pkgIdx, method) {
+  var wallet = getActiveWallet(method);
+  if (!wallet) {
+    showToastHost('Payment temporarily unavailable. Please try again later.'); return;
+  }
+  var pkg = DIAMOND_PACKAGES[pkgIdx];
+  _activeOrder = { pkgIdx: pkgIdx, method: method, walletAddress: wallet.address, createdAt: new Date().toISOString() };
+  var isERC = method !== 'BTC';
+  var warning = isERC
+    ? 'Only send assets on the Ethereum/ERC-20 network to this address.'
+    : 'Only send Bitcoin (BTC) to this address.';
+  var network = isERC ? 'Ethereum ERC-20' : 'Bitcoin Mainnet';
+  var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(wallet.address);
+  var el = document.getElementById('buy-diamonds-content');
+  el.innerHTML =
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px">' +
+      '<div style="font-size:0.72rem;color:var(--light)">Package</div>' +
+      '<div style="font-weight:900">💎 ' + pkg.diamonds.toLocaleString() + ' · $' + pkg.price.toFixed(2) + '</div>' +
+    '</div>' +
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;text-align:center;margin-bottom:14px">' +
+      '<img src="' + qrUrl + '" style="width:180px;height:180px;border-radius:12px;background:#fff;padding:8px;margin-bottom:14px" alt="Payment QR">' +
+      '<div style="font-size:0.72rem;color:var(--light);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">' + method + ' Address · ' + network + '</div>' +
+      '<div id="wallet-addr-display" style="font-size:0.7rem;font-weight:700;color:var(--white);word-break:break-all;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px">' + wallet.address + '</div>' +
+      '<button id="copy-addr-btn" data-addr="' + wallet.address + '" onclick="copyWalletAddress(this.dataset.addr)" style="width:100%;padding:11px;background:var(--cyan-dim);border:1px solid rgba(0,194,255,0.3);border-radius:10px;color:var(--cyan);font-size:0.82rem;font-weight:800;cursor:pointer">📋 Copy Address</button>' +
+    '</div>' +
+    '<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:12px;margin-bottom:14px;font-size:0.75rem;color:#f59e0b">⚠️ ' + warning + '</div>' +
+    '<div style="font-size:0.72rem;color:var(--light);margin-bottom:16px">Send exactly <strong>$' + pkg.price.toFixed(2) + ' worth of ' + method + '</strong> to this address. Diamonds are credited after 1 network confirmation. Screenshot this page before sending.</div>' +
+    '<button onclick="selectPackage('+pkgIdx+')" style="width:100%;padding:12px;background:transparent;border:1px solid var(--border);border-radius:12px;color:var(--light);font-size:0.82rem;cursor:pointer">← Change Method</button>';
+}
+
+function copyWalletAddress(addr) {
+  navigator.clipboard.writeText(addr).then(function() {
+    var btn = document.getElementById('copy-addr-btn');
+    if (btn) { btn.textContent = '✅ Copied!'; btn.style.background = 'rgba(0,255,136,0.1)'; btn.style.color = 'var(--green)'; btn.style.borderColor = 'rgba(0,255,136,0.3)'; }
+    setTimeout(function() {
+      if (btn) { btn.textContent = '📋 Copy Address'; btn.style.background = 'var(--cyan-dim)'; btn.style.color = 'var(--cyan)'; btn.style.borderColor = 'rgba(0,194,255,0.3)'; }
+    }, 2500);
+  }).catch(function() {
+    // Fallback for browsers without clipboard API
+    var ta = document.createElement('textarea');
+    ta.value = addr; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+    var btn = document.getElementById('copy-addr-btn');
+    if (btn) { btn.textContent = '✅ Copied!'; setTimeout(function(){ if(btn) btn.textContent = '📋 Copy Address'; }, 2500); }
+  });
+}
+// ══════════════════════════════════════════════════════════════════════════════
+
 </script></head>
 <body>
 
@@ -2851,5 +2985,18 @@ seedMockSettlementPlayers();
 checkWeeklySettlement();
 
 </script>
+
+<!-- BUY DIAMONDS FULL SCREEN -->
+<div id="buy-diamonds-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:99999;overflow-y:auto;max-width:430px;margin:0 auto">
+  <!-- Header -->
+  <div style="display:flex;align-items:center;padding:14px 16px;background:rgba(10,10,10,0.97);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10">
+    <button onclick="hideBuyDiamonds()" style="background:none;border:none;color:#aaa;font-size:1.1rem;cursor:pointer;padding:4px 10px 4px 0;display:flex;align-items:center">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <div style="font-size:1rem;font-weight:900">Buy Diamonds 💎</div>
+  </div>
+  <div style="padding:20px 16px 100px" id="buy-diamonds-content"></div>
+</div>
+
 </body>
 </html>
