@@ -2692,6 +2692,90 @@ setInterval(function() {
   }
 }, 3000);
 // ══════════════════════════════════════════════════════════════════════════════
+
+// ═══ GRADED BETS AUDIT ═══════════════════════════════════════════════════════
+function openGradedAudit() {
+  var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
+  var graded  = tickets.filter(function(t){ return t.status==='won'||t.status==='lost'||t.status==='push'; });
+  var ledger  = JSON.parse(localStorage.getItem('pb-ledger')||'[]');
+  var active  = tickets.filter(function(t){ return t.status==='active'||t.status==='open'; });
+
+  var existing = document.getElementById('_graded_audit_modal');
+  if (existing) existing.remove();
+
+  var modal = document.createElement('div');
+  modal.id = '_graded_audit_modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:2147483647;display:flex;align-items:flex-start;justify-content:center;padding:20px;pointer-events:auto;overflow-y:auto';
+  modal.onclick = function(e){ if(e.target===modal) modal.remove(); };
+
+  var rows = graded.length
+    ? graded.map(function(t){
+        var d = new Date(t.placedAt);
+        var ts = isNaN(d) ? t.placedAt : d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+        var statusColor = t.status==='won'?'#00875a':t.status==='lost'?'#cc0000':'#888';
+        var picks = (t.selections||[]).map(function(s){ return s.pick||s.label||'—'; }).join(', ');
+        var matchup = (t.selections||[]).map(function(s){ return s.matchup||s.game||''; }).filter(Boolean)[0]||'—';
+        var ledgerEntry = ledger.find(function(l){ return l.ticketId===t.id||(Array.isArray(l.ticketIds)&&l.ticketIds.indexOf(t.id)>=0); });
+        var balBefore = ledgerEntry ? '$'+((ledgerEntry.balanceBefore||0).toFixed(2)) : '—';
+        var balAfter  = ledgerEntry ? '$'+((ledgerEntry.balanceAfter||0).toFixed(2))  : '—';
+        var gradingSource = t.gradingSource || t.gradeSource || (t.finalScore?'manual':'—');
+
+        return '<tr style="border-bottom:1px solid #f0f0f0">'
+          +'<td style="padding:8px;font-size:0.68rem;color:#aaa;font-family:monospace">'+t.id.slice(0,12)+'...</td>'
+          +'<td style="padding:8px;font-size:0.78rem;font-weight:700">'+t.playerUsername+'</td>'
+          +'<td style="padding:8px;font-size:0.75rem">'+matchup+'</td>'
+          +'<td style="padding:8px;font-size:0.75rem">'+picks+'</td>'
+          +'<td style="padding:8px;font-size:0.75rem">'+t.type+'</td>'
+          +'<td style="padding:8px;font-size:0.75rem">$'+(t.riskAmount||0).toFixed(2)+'</td>'
+          +'<td style="padding:8px;font-size:0.75rem">'+(t.odds||'—')+'</td>'
+          +'<td style="padding:8px"><span style="font-size:0.7rem;font-weight:800;color:'+statusColor+'">'+t.status.toUpperCase()+'</span></td>'
+          +'<td style="padding:8px;font-size:0.75rem;color:#00875a">$'+(t.estimatedPayout||0).toFixed(2)+'</td>'
+          +'<td style="padding:8px;font-size:0.72rem;color:#888">'+(t.finalScore||'—')+'</td>'
+          +'<td style="padding:8px;font-size:0.7rem;color:#888">'+gradingSource+'</td>'
+          +'<td style="padding:8px;font-size:0.72rem;color:#aaa">'+balBefore+'</td>'
+          +'<td style="padding:8px;font-size:0.72rem;color:#aaa">'+balAfter+'</td>'
+          +'<td style="padding:8px;font-size:0.68rem;color:#aaa">'+ts+'</td>'
+          +'</tr>';
+      }).join('')
+    : '<tr><td colspan="14" style="padding:30px;text-align:center;color:#aaa;font-size:0.85rem">No graded baseball bets found on this device/browser.<br><span style="font-size:0.75rem">Data is stored per browser in localStorage.</span></td></tr>';
+
+  modal.innerHTML =
+    '<div style="background:#fff;width:100%;max-width:1100px;max-height:85vh;overflow:auto;border-radius:14px;padding:20px;color:#111">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
+        '<div>' +
+          '<div style="font-size:1rem;font-weight:900">🧪 Graded Bets / Audit</div>' +
+          '<div style="font-size:0.72rem;color:#888;margin-top:2px">Active: '+active.length+' · Graded: '+graded.length+' · Ledger rows: '+ledger.length+'</div>' +
+        '</div>' +
+        '<button onclick="document.getElementById('_graded_audit_modal').remove()" style="background:#f0f0f0;border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:1rem">✕</button>' +
+      '</div>' +
+      (graded.length === 0 && active.length === 0 && ledger.length === 0
+        ? '<div style="text-align:center;padding:40px 20px;color:#aaa"><div style="font-size:2rem;margin-bottom:10px">📭</div><div style="font-weight:700;margin-bottom:6px">No ticket data on this device</div><div style="font-size:0.8rem">If this persists, click 🔍 in the footer to run a diagnostic.</div></div>'
+        : '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.75rem">'
+          +'<thead><tr style="background:#f8f8f8;border-bottom:2px solid #e0e0e0">'
+          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Ticket ID</th>'
+          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Player</th>'
+          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Matchup</th>'
+          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Picks</th>'
+          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Type</th>'
+          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Wager</th>'
+          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Odds</th>'
+          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Result</th>'
+          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Payout</th>'
+          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Final Score</th>'
+          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Grading Source</th>'
+          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Bal Before</th>'
+          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Bal After</th>'
+          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Time</th>'
+          +'</tr></thead>'
+          +'<tbody>'+rows+'</tbody>'
+          +'</table></div>'
+      ) +
+    '</div>';
+
+  document.body.appendChild(modal);
+}
+// ══════════════════════════════════════════════════════════════════════════════
+
 function renderMyBets() {
   var el = document.getElementById('mybets-section');
   if (!el) { console.warn('mybets-section not found'); return; }
@@ -2765,10 +2849,21 @@ function renderMyBets() {
   }
   var active   = betTickets.filter(function(t){ return (t.status==='active'||t.status==='open') && t.status!=='canceled'; });
   var settled  = betTickets.filter(function(t){ return t.status!=='active'&&t.status!=='open'; });
+  var graded  = betTickets.filter(function(t){ return t.status==='won'||t.status==='lost'||t.status==='push'; });
+  var ledger  = JSON.parse(localStorage.getItem('pb-ledger')||'[]');
   var html =
     '<div style="padding:16px 14px 8px;display:flex;justify-content:space-between;align-items:center">' +
       '<span style="font-size:1rem;font-weight:900;color:#111">My Bets</span>' +
-      '<button onclick="checkOpenTickets()" style="font-size:0.7rem;font-weight:700;color:#0064c8;background:none;border:1.5px solid #0064c8;border-radius:20px;padding:5px 12px;cursor:pointer">Check Results</button>' +
+      '<div style="display:flex;gap:6px">' +
+        '<button onclick="openGradedAudit()" style="font-size:0.7rem;font-weight:700;color:#7c3aed;background:rgba(124,58,237,0.08);border:1.5px solid #7c3aed;border-radius:20px;padding:5px 12px;cursor:pointer">🧪 Graded ('+(graded.length)+')</button>' +
+        '<button onclick="checkOpenTickets()" style="font-size:0.7rem;font-weight:700;color:#0064c8;background:none;border:1.5px solid #0064c8;border-radius:20px;padding:5px 12px;cursor:pointer">Check Results</button>' +
+      '</div>' +
+    '</div>' +
+    // Counts bar
+    '<div style="display:flex;gap:12px;padding:0 14px 10px;font-size:0.68rem;color:#aaa">' +
+      '<span>Active: <strong style="color:#0064c8">'+(active.length)+'</strong></span>' +
+      '<span>Graded: <strong style="color:#00875a">'+(graded.length)+'</strong></span>' +
+      '<span>Ledger rows: <strong style="color:#555">'+(ledger.length)+'</strong></span>' +
     '</div>';
   if (!betTickets.length) {
     html += '<div style="text-align:center;padding:50px 20px;color:#aaa;font-size:0.9rem">No active bets yet</div>';
