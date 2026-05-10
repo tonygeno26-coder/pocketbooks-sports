@@ -715,7 +715,7 @@ console.log('player page loaded');
     var _avail = Math.round((_start - _risk)*100)/100;
     var _el = document.getElementById('player-balance-display');
     if (_el) _el.textContent = '$'+_avail.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-    dbgBanner('PAGE LOAD BALANCE\nSTARTING: $'+_start.toFixed(2)+'\nACTIVE_RISK: $'+_risk.toFixed(2)+'\nAVAILABLE: $'+_avail.toFixed(2)+'\nDISPLAYED: $'+_avail.toFixed(2)+'\nTickets: '+_t.length+' ('+_open.length+' active)', '#005');
+    console.log('[PBS init start] balance STARTING:$'+_start+' RISK:$'+_risk+' AVAILABLE:$'+_avail+' tickets:'+_t.length+'('+_open.length+' active)');
   } catch(e){ console.error('balance init error', e); }
 })();
 let TOKEN=localStorage.getItem('pb-sports-token')||'';
@@ -1080,7 +1080,7 @@ async function loadGames(sport, opts){
   try{
     const _sport = sport || 'mlb';
     const _url = '/api/odds/'+_sport; // backend proxy only — never call Odds API directly from client
-    console.log('[sportsbook fetch started] sport:', _sport, 'url:', _url, 'live:', _liveOnly);
+    console.log('[PBS fetch start] sport:', _sport, 'url:', _url, 'live:', _liveOnly);
     let _res;
     try { _res = await fetch(_url); } catch(fetchErr) {
       console.error('[sportsbook fetch failed] network error:', fetchErr.message);
@@ -1100,7 +1100,8 @@ async function loadGames(sport, opts){
     let games;
     try { games = JSON.parse(_raw); } catch(parseErr) { throw new Error('Bad JSON: '+parseErr.message); }
     if(!Array.isArray(games)) throw new Error('Expected array, got: '+typeof games);
-    console.log('[sportsbook fetch success] gamesLoaded:', games.length);
+    console.log('[PBS fetch success] gamesLoaded:', games.length);
+    console.log('[PBS render start]');
     if(!games.length){
       console.warn('[odds] empty response — check ODDS_API_KEY is set in Railway env vars');
       if (_liveOnly) {
@@ -1346,6 +1347,7 @@ function setMarketFilter(el, filter) {
   });
 }
 
+console.log("[PBS tabs bind]");
 function setSport(el,sport){
   document.querySelectorAll('.sport-tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
