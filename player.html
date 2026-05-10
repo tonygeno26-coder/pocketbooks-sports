@@ -1356,15 +1356,17 @@ function setMarketFilter(el, filter) {
   var showSpread   = filter === 'lines' || filter === 'spread';
   var showTotals   = filter === 'lines' || filter === 'totals';
   var showML       = filter === 'lines' || filter === 'moneyline';
-  document.querySelectorAll('.mc-col-label').forEach(function(col, i) {
-    // 0=spacer, 1=Run Line, 2=Total, 3=To Win
-    if (i === 1) col.style.display = showSpread  ? '' : 'none';
-    if (i === 2) col.style.display = showTotals  ? '' : 'none';
-    if (i === 3) col.style.display = showML      ? '' : 'none';
+  // Scope per-card so index never accumulates across multiple game cards
+  document.querySelectorAll('.mc-cols').forEach(function(colHeader) {
+    var labels = colHeader.querySelectorAll('.mc-col-label');
+    // labels: 0=Run Line, 1=Total, 2=To Win  (first child is spacer div, not a label)
+    if (labels[0]) labels[0].style.display = showSpread  ? '' : 'none';
+    if (labels[1]) labels[1].style.display = showTotals  ? '' : 'none';
+    if (labels[2]) labels[2].style.display = showML      ? '' : 'none';
   });
   document.querySelectorAll('.mc-team-row').forEach(function(row) {
     var cells = row.querySelectorAll('.odds-box');
-    // cells: 0=spread, 1=total, 2=moneyline
+    // cells order matches render: 0=spread/runline, 1=total, 2=moneyline
     if (cells[0]) cells[0].style.display = showSpread  ? '' : 'none';
     if (cells[1]) cells[1].style.display = showTotals  ? '' : 'none';
     if (cells[2]) cells[2].style.display = showML      ? '' : 'none';
