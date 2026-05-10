@@ -192,8 +192,7 @@ try {
     <div class="ntab" onclick="setSection('users')">Users</div>
     <div class="ntab" onclick="setSection('clubs')">Clubs</div>
     <div class="ntab" onclick="setSection('payments')">Payments</div>
-    <div class="ntab" onclick="setSection('bets')">Bets</div>
-    <div class="ntab" onclick="setSection('risk')">Risk / Flags</div>
+    <!-- Bets + Risk tabs hidden for now -->
     <div class="ntab" onclick="setSection('tools')">Tools</div>
     <div class="ntab" onclick="setSection('settings')">Settings</div>
   </div>
@@ -309,7 +308,24 @@ const API = 'https://pocketbooks-sports-backend-production.up.railway.app';
 let ADMIN_TOKEN = localStorage.getItem('pb-admin-token') || '';
 let statsCache = null;
 
+// Preview mock data — returned instead of real API in preview mode
+const _ADMIN_MOCK = {
+  '/api/auth/me':         { id:'preview', name:'Preview Admin', role:'master_admin' },
+  '/api/admin/stats':     { users:42, clubs:8, active_hosts:5, active_members:37, total_bets:284, handle:'18450', profit:'1230', pending_requests:3, sharp_players:[] },
+  '/api/admin/users?limit=100': [],
+  '/api/admin/clubs':     [],
+  '/api/admin/payments':  [],
+  '/api/admin/bets':      [],
+};
+const _isAdminPreview = new URLSearchParams(window.location.search).get('preview')==='1';
+
 async function adminApi(method, path, body) {
+  if (_isAdminPreview) {
+    // Find best mock match
+    var mockKey = Object.keys(_ADMIN_MOCK).find(function(k){ return path.startsWith(k); });
+    if (mockKey) return Promise.resolve(_ADMIN_MOCK[mockKey]);
+    return Promise.resolve({});
+  }
   const r = await fetch(API + path, {
     method, headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+ADMIN_TOKEN },
     body: body ? JSON.stringify(body) : undefined
@@ -340,6 +356,10 @@ async function adminLogin() {
   }
 }
 
+function showGate() {
+  document.getElementById('gate').style.display = 'flex';
+  document.getElementById('admin-app').style.display = 'none';
+}
 function adminLogout() {
   localStorage.removeItem('pb-admin-token');
   ADMIN_TOKEN = '';
@@ -350,23 +370,28 @@ function adminLogout() {
 function showAdmin() {
   document.getElementById('gate').style.display = 'none';
   document.getElementById('admin-app').style.display = 'block';
+  if (_isAdminPreview) {
+    var banner = document.createElement('div');
+    banner.style.cssText = 'background:rgba(245,158,11,0.15);border-bottom:1px solid rgba(245,158,11,0.4);padding:6px 16px;text-align:center;font-size:0.75rem;font-weight:700;color:#f5c842;letter-spacing:0.3px';
+    banner.textContent = '🧪 Preview Mode — mock data — no real API calls';
+    document.getElementById('admin-app').prepend(banner);
+    console.log('[admin preview] login bypass active — preview mode only, not for production');
+  }
   loadOverview();
 }
 
 // Check existing token
 // Preview bypass — dev only, never use with real credentials
 (function(){
-  var qs = new URLSearchParams(window.location.search);
-  if (qs.get('preview') === '1') {
-    console.log('[admin preview] login bypass active — preview mode only, not for production');
-    showAdmin();
+  if (_isAdminPreview) {
+    showAdmin(); // preview bypass — no token needed, mock data used
     return;
   }
   if (ADMIN_TOKEN) {
     adminApi('GET', '/api/auth/me').then(function(u){
       if (u.role === 'master_admin') showAdmin();
-      else { ADMIN_TOKEN = ''; localStorage.removeItem('pb-admin-token'); }
-    }).catch(function(){ ADMIN_TOKEN = ''; localStorage.removeItem('pb-admin-token'); });
+      else { ADMIN_TOKEN = ''; localStorage.removeItem('pb-admin-token'); showGate(); }
+    }).catch(function(){ ADMIN_TOKEN = ''; localStorage.removeItem('pb-admin-token'); showGate(); });
   }
 })();
 
