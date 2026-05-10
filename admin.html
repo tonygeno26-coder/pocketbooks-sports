@@ -354,12 +354,21 @@ function showAdmin() {
 }
 
 // Check existing token
-if (ADMIN_TOKEN) {
-  adminApi('GET', '/api/auth/me').then(u => {
-    if (u.role === 'master_admin') showAdmin();
-    else { ADMIN_TOKEN = ''; localStorage.removeItem('pb-admin-token'); }
-  }).catch(() => { ADMIN_TOKEN = ''; localStorage.removeItem('pb-admin-token'); });
-}
+// Preview bypass — dev only, never use with real credentials
+(function(){
+  var qs = new URLSearchParams(window.location.search);
+  if (qs.get('preview') === '1') {
+    console.log('[admin preview] login bypass active — preview mode only, not for production');
+    showAdmin();
+    return;
+  }
+  if (ADMIN_TOKEN) {
+    adminApi('GET', '/api/auth/me').then(function(u){
+      if (u.role === 'master_admin') showAdmin();
+      else { ADMIN_TOKEN = ''; localStorage.removeItem('pb-admin-token'); }
+    }).catch(function(){ ADMIN_TOKEN = ''; localStorage.removeItem('pb-admin-token'); });
+  }
+})();
 
 // SECTIONS
 function setSection(s) {
