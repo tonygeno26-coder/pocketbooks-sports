@@ -400,6 +400,149 @@ function _debugClearTickets() {
 }
 // ══════════════════════════════════════════════════════════════════════════════
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ADMIN CRYPTO TRANSACTIONS
+// ══════════════════════════════════════════════════════════════════════════════
+function _getDiamondLedger() {
+  try { return JSON.parse(localStorage.getItem('pb-diamond-ledger')||'[]'); } catch(e){ return []; }
+}
+function _saveDiamondLedger(l) { localStorage.setItem('pb-diamond-ledger', JSON.stringify(l)); }
+function _getCryptoPurchases() {
+  try { return JSON.parse(localStorage.getItem('pb-crypto-purchases')||'[]'); } catch(e){ return []; }
+}
+function _saveCryptoPurchases(p) { localStorage.setItem('pb-crypto-purchases', JSON.stringify(p)); }
+function _getPlayerDiamondBalance(playerId) {
+  var ledger = _getDiamondLedger();
+  return ledger.filter(function(e){ return e.playerId===playerId; }).reduce(function(s,e){ return s+e.diamonds; }, 0);
+}
+
+function _bdAdminCredit(btn) {
+  var pid = btn.dataset.pid2; var pname = btn.dataset.pname;
+  var diamonds = parseInt(btn.dataset.diamonds)||0; var purchaseId = btn.dataset.pid;
+  adminCreditDiamonds(purchaseId, pid, pname, diamonds, 'crypto purchase verified');
+}
+function _bdAdminReject(btn) {
+  var n = prompt('Rejection reason:'); if (n !== null) adminRejectPurchase(btn.dataset.pid, n);
+}
+function adminCreditDiamonds(purchaseId, playerId, playerName, diamonds, reason) {
+  var balanceBefore = _getPlayerDiamondBalance(playerId);
+  var balanceAfter  = balanceBefore + diamonds;
+  var entry = {
+    id: 'ADMCR-'+Date.now(),
+    type: 'ADMIN_DIAMOND_CREDIT',
+    playerId: playerId,
+    playerName: playerName,
+    diamonds: diamonds,
+    reason: reason || 'admin manual credit',
+    admin: 'host',
+    timestamp: new Date().toISOString(),
+    relatedPurchaseId: purchaseId || null
+  };
+  console.table({ '[admin diamond credit]':'', playerId:playerId, diamonds:diamonds, balanceBefore:balanceBefore, balanceAfter:balanceAfter, reason:reason });
+  var ledger = _getDiamondLedger();
+  ledger.unshift(entry);
+  _saveDiamondLedger(ledger);
+  // Mark purchase as credited
+  if (purchaseId) {
+    var purchases = _getCryptoPurchases();
+    var idx = purchases.findIndex(function(p){ return p.id===purchaseId; });
+    if (idx >= 0) { purchases[idx].status='credited'; purchases[idx].creditedAt=entry.timestamp; _saveCryptoPurchases(purchases); }
+  }
+  showToastHost('✅ Credited 💎'+diamonds.toLocaleString()+' to '+playerName);
+  renderAdminCrypto();
+}
+
+function adminRejectPurchase(purchaseId, note) {
+  var purchases = _getCryptoPurchases();
+  var idx = purchases.findIndex(function(p){ return p.id===purchaseId; });
+  if (idx < 0) return;
+  purchases[idx].status = 'rejected';
+  purchases[idx].rejectedAt = new Date().toISOString();
+  purchases[idx].rejectNote = note || '';
+  _saveCryptoPurchases(purchases);
+  showToastHost('❌ Purchase rejected');
+  renderAdminCrypto();
+}
+
+function renderAdminCrypto() {
+  var el = document.getElementById('crypto-section');
+  if (!el) return;
+  var purchases = _getCryptoPurchases();
+  var ledger    = _getDiamondLedger();
+  var searchQ   = (document.getElementById('admin-player-search')||{}).value || '';
+
+  // Search + filter
+  var filtered = purchases;
+  if (searchQ) filtered = filtered.filter(function(p){ return (p.playerId||'').toLowerCase().includes(searchQ.toLowerCase()) || (p.playerName||'').toLowerCase().includes(searchQ.toLowerCase()); });
+
+  var statusColors = { pending:'#f59e0b', submitted:'#0064c8', credited:'#00875a', rejected:'#cc0000' };
+
+  var rows = filtered.length
+    ? filtered.map(function(p){
+        var sc = statusColors[p.status]||'#888';
+        var bal = _getPlayerDiamondBalance(p.playerId||'');
+        var actions = '';
+        if (p.status==='submitted') {
+          actions = '<button data-pid="'+p.id+'" data-pid2="'+p.playerId+'" data-pname="'+p.playerName+'" data-diamonds="'+p.diamonds+'" onclick="_bdAdminCredit(this)" style="padding:6px 10px;background:rgba(0,135,90,0.15);border:1px solid #00875a;border-radius:6px;color:#00875a;font-size:0.72rem;font-weight:700;cursor:pointer;margin-right:6px">✅ Credit</button>'
+            +'<button data-pid="'+p.id+'" onclick="_bdAdminReject(this)" style="padding:6px 10px;background:rgba(204,0,0,0.1);border:1px solid #cc0000;border-radius:6px;color:#cc0000;font-size:0.72rem;font-weight:700;cursor:pointer">❌ Reject</button>';
+        } else if (p.status==='pending') {
+          actions = '<span style="font-size:0.7rem;color:#888">Awaiting TX hash</span>';
+        }
+        var ts = p.timestamp ? new Date(p.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+        return '<tr style="border-bottom:1px solid #1a1a1a">'
+          +'<td style="padding:10px;font-size:0.68rem;color:#555;font-family:monospace">'+(p.id||'').slice(0,10)+'</td>'
+          +'<td style="padding:10px;font-size:0.78rem;font-weight:700">'+(p.playerName||'—')+'<div style="font-size:0.62rem;color:#555">'+(p.playerId||'')+'</div></td>'
+          +'<td style="padding:10px;font-size:0.78rem">💎 '+(p.diamonds||0).toLocaleString()+'<div style="font-size:0.62rem;color:#555">Balance: 💎'+(bal).toLocaleString()+'</div></td>'
+          +'<td style="padding:10px;font-size:0.75rem">'+(p.cryptoMethod||'—')+'<div style="font-size:0.68rem;color:#00c2ff;font-family:monospace">'+(p.amountDueCrypto||'?')+' '+(p.cryptoSymbol||'')+'</div></td>'
+          +'<td style="padding:10px;font-size:0.62rem;color:#888;font-family:monospace;max-width:120px;word-break:break-all">'+(p.walletAddress||'—').slice(0,16)+'…</td>'
+          +'<td style="padding:10px;font-size:0.62rem;color:#aaa;font-family:monospace;max-width:100px;word-break:break-all">'+(p.txHash||'<span style="color:#555">No hash yet</span>')+'</td>'
+          +'<td style="padding:10px"><span style="font-size:0.68rem;font-weight:800;color:'+sc+';background:rgba(255,255,255,0.06);padding:3px 8px;border-radius:10px">'+(p.status||'pending').toUpperCase()+'</span></td>'
+          +'<td style="padding:10px;font-size:0.68rem;color:#888">'+ts+'</td>'
+          +'<td style="padding:10px">'+actions+'</td>'
+          +'</tr>';
+      }).join('')
+    : '<tr><td colspan="9" style="padding:30px;text-align:center;color:#555;font-size:0.85rem">No crypto purchases yet</td></tr>';
+
+  // Manual credit form
+  var manualCreditForm = '<div style="background:#141414;border:1px solid #252525;border-radius:14px;padding:16px;margin-bottom:16px">'
+    +'<div style="font-size:0.8rem;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px">Manual Diamond Credit</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      +'<input id="mcredit-pid" placeholder="Player ID" style="flex:1;min-width:120px;background:#1c1c1c;border:1px solid #2a2a2a;color:#fff;padding:8px 12px;border-radius:8px;font-size:0.82rem">'
+      +'<input id="mcredit-name" placeholder="Player Name" style="flex:1;min-width:120px;background:#1c1c1c;border:1px solid #2a2a2a;color:#fff;padding:8px 12px;border-radius:8px;font-size:0.82rem">'
+      +'<input id="mcredit-amt" type="number" placeholder="Diamonds" min="1" style="width:110px;background:#1c1c1c;border:1px solid #2a2a2a;color:#fff;padding:8px 12px;border-radius:8px;font-size:0.82rem">'
+      +'<input id="mcredit-reason" placeholder="Reason" style="flex:2;min-width:140px;background:#1c1c1c;border:1px solid #2a2a2a;color:#fff;padding:8px 12px;border-radius:8px;font-size:0.82rem">'
+          actions = '<button data-pid="'+p.id+'" data-pid2="'+p.playerId+'" data-pname="'+p.playerName+'" data-diamonds="'+p.diamonds+'" onclick="_bdAdminCredit(this)" style="padding:6px 10px;background:rgba(0,135,90,0.15);border:1px solid #00875a;border-radius:6px;color:#00875a;font-size:0.72rem;font-weight:700;cursor:pointer;margin-right:6px">✅ Credit</button>'
+    +'</div>'
+  +'</div>';
+
+  el.innerHTML =
+    '<div style="padding:16px">'
+    +'<div style="font-size:1rem;font-weight:900;margin-bottom:4px">💎 Crypto Transactions</div>'
+    +'<div style="font-size:0.72rem;color:#555;margin-bottom:16px">'+purchases.length+' total · '+purchases.filter(function(p){return p.status==='submitted';}).length+' awaiting review · '+purchases.filter(function(p){return p.status==='credited';}).length+' credited</div>'
+    + manualCreditForm
+    +'<div style="display:flex;gap:8px;margin-bottom:14px">'
+      +'<input id="admin-player-search" placeholder="Search by player ID or name…" oninput="renderAdminCrypto()" style="flex:1;background:#1c1c1c;border:1px solid #2a2a2a;color:#fff;padding:8px 12px;border-radius:8px;font-size:0.82rem">'
+    +'</div>'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.75rem">'
+      +'<thead><tr style="border-bottom:2px solid #252525">'
+        +'<th style="padding:10px;text-align:left;color:#555;font-size:0.65rem;text-transform:uppercase">ID</th>'
+        +'<th style="padding:10px;text-align:left;color:#555;font-size:0.65rem;text-transform:uppercase">Player</th>'
+        +'<th style="padding:10px;text-align:left;color:#555;font-size:0.65rem;text-transform:uppercase">Diamonds</th>'
+        +'<th style="padding:10px;text-align:left;color:#555;font-size:0.65rem;text-transform:uppercase">Crypto</th>'
+        +'<th style="padding:10px;text-align:left;color:#555;font-size:0.65rem;text-transform:uppercase">Wallet</th>'
+        +'<th style="padding:10px;text-align:left;color:#555;font-size:0.65rem;text-transform:uppercase">TX Hash</th>'
+        +'<th style="padding:10px;text-align:left;color:#555;font-size:0.65rem;text-transform:uppercase">Status</th>'
+        +'<th style="padding:10px;text-align:left;color:#555;font-size:0.65rem;text-transform:uppercase">Time</th>'
+        +'<th style="padding:10px;text-align:left;color:#555;font-size:0.65rem;text-transform:uppercase">Actions</th>'
+      +'</tr></thead>'
+      +'<tbody>'+rows+'</tbody>'
+    +'</table></div>'
+    +'</div>';
+}
+// ══════════════════════════════════════════════════════════════════════════════
+
+
 </script></head>
 <body>
 
@@ -584,6 +727,7 @@ function _debugClearTickets() {
 <!-- BOTTOM NAV -->
 <div id="players-section" style="display:none;padding-bottom:100px"></div>
 <div id="settlements-section" style="display:none;background:#0a0a0a;min-height:100vh;padding-bottom:100px"></div>
+<div id="crypto-section" style="display:none;padding-bottom:100px"></div>
 <div id="bets-section" style="display:none;padding-bottom:100px">
   <div style="padding:16px 16px 8px;display:flex;justify-content:space-between;align-items:center">
     <span style="font-size:1rem;font-weight:900">Active Bets</span>
@@ -608,6 +752,10 @@ function _debugClearTickets() {
   <div class="bn" onclick="setBN(this,'players')">
     <div class="bn-ico"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
     <div class="bn-lbl">Players <span id="req-badge" style="display:none;background:var(--red);color:#fff;font-size:0.55rem;padding:1px 5px;border-radius:8px;font-weight:800;vertical-align:middle"></span></div>
+  </div>
+  <div class="bn" onclick="setBN(this,'crypto')">
+    <div class="bn-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
+    <div class="bn-lbl">💎 Crypto</div>
   </div>
   <div class="bn" onclick="setBN(this,'settlements')">
     <div class="bn-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
@@ -1042,7 +1190,7 @@ function renderHostBets(){
   });
 }
 
-const SECTIONS=['home-content','bets-section','players-section','settlements-section'];
+const SECTIONS=['home-content','bets-section','players-section','settlements-section','crypto-section'];
 function returnToLobby() {
   console.log('[host returnToLobby] clicked');
   console.log('[host returnToLobby] state before nav', {
@@ -1075,6 +1223,10 @@ function setBN(el,tab){
     var s=document.getElementById('players-section');
     if(s)s.style.display='block';
     renderPlayersTab();
+  } else if(tab==='crypto'){
+    var s=document.getElementById('crypto-section');
+    if(s)s.style.display='block';
+    renderAdminCrypto();
   } else if(tab==='settlements'){
     var s=document.getElementById('settlements-section');
     if(s)s.style.display='block';
