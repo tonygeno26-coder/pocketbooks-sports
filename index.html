@@ -1736,8 +1736,8 @@ var CRYPTO_METHODS = [
   // priceUsd updated by spot-price plug; static fallback for offline dev.
   { id: 'usdt', symbol: 'USDT', label: 'USDT', network: 'ERC-20',     icon: 'Ⓜ️', priceUsd: 1     },
   { id: 'usdc', symbol: 'USDC', label: 'USDC', network: 'ERC-20',     icon: 'Ⓐ️', priceUsd: 1     },
-  { id: 'btc',  symbol: 'BTC',  label: 'BTC',  network: 'Bitcoin',    icon: '₿',    priceUsd: 65000 },
-  { id: 'eth',  symbol: 'ETH',  label: 'ETH',  network: 'Ethereum',   icon: 'Ξ',    priceUsd: 3200  },
+  { id: 'btc',  symbol: 'BTC',  label: 'BTC',  network: 'Bitcoin',    icon: '₿',    priceUsd: 103000 },
+  { id: 'eth',  symbol: 'ETH',  label: 'ETH',  network: 'Ethereum',   icon: 'Ξ',    priceUsd: 2329   },
 ];
 // Min confirmations per network before auto-credit
 var CONFIRMATION_THRESHOLDS = { usdt: 19, usdc: 12, btc: 2, eth: 12 };
@@ -1749,11 +1749,30 @@ function registerDiamondScanner(cryptoId, fn) { DIAMOND_SCANNERS[cryptoId] = fn;
 function _amountDueCrypto(usd, cryptoId) {
   var m = CRYPTO_METHODS.find(function(c){ return c.id===cryptoId; });
   if (!m || !m.priceUsd) return null;
+  // formula: amountDue = usdAmount / cryptoUsdPrice
   var v = usd / m.priceUsd;
-  // 6 dp for stables, 8 for BTC, 6 for ETH
-  var dp = (cryptoId==='btc') ? 8 : 6;
-  return Math.round(v * Math.pow(10,dp)) / Math.pow(10,dp);
+  // stablecoins = 2dp, BTC = 8dp, ETH = 6dp
+  var dp = (cryptoId==='btc') ? 8 : (cryptoId==='usdt'||cryptoId==='usdc') ? 2 : 6;
+  var result = Math.round(v * Math.pow(10,dp)) / Math.pow(10,dp);
+  console.log('[crypto amount calc]', {
+    diamonds: usd, usdAmount: usd, selectedCrypto: cryptoId,
+    cryptoUsdPrice: m.priceUsd, amountDue: result
+  });
+  return result;
 }
+
+// Fetch live prices from CoinGecko (free, no key). Updates CRYPTO_METHODS in place.
+function _fetchLiveCryptoPrices() {
+  fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.bitcoin && d.bitcoin.usd)  { var btc = CRYPTO_METHODS.find(function(c){return c.id==='btc';}); if(btc) btc.priceUsd = d.bitcoin.usd; }
+      if (d.ethereum && d.ethereum.usd){ var eth = CRYPTO_METHODS.find(function(c){return c.id==='eth';}); if(eth) eth.priceUsd = d.ethereum.usd; }
+      console.log('[crypto prices updated] BTC:', d.bitcoin&&d.bitcoin.usd, 'ETH:', d.ethereum&&d.ethereum.usd);
+    })
+    .catch(function(e){ console.warn('[crypto prices] fetch failed, using fallback:', e.message); });
+}
+_fetchLiveCryptoPrices(); // run on load
 
 // ═══ WALLET POOL (manual rotation) ═════════════════════════════════════════════════════════════
 // Owner-managed receive addresses, NOT auto-generated. Pool is keyed by
