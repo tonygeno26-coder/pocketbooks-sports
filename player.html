@@ -2435,12 +2435,19 @@ function openBetConfirm() {
   overlay.addEventListener('click', function(e){ if(e.target===overlay) closeBetConfirm(); });
   // Wire confirm + cancel via addEventListener (inline onclick inside innerHTML can be blocked)
   var _confirmBtn = sheet.querySelector('[data-action="confirm"]');
-  var _cancelBtn  = sheet.querySelector('[data-action="cancel"]');
+  // Wire ALL cancel buttons (X in header + Cancel in footer)
+  var _cancelBtns = sheet.querySelectorAll('[data-action="cancel"]');
   if (_confirmBtn) _confirmBtn.addEventListener('click', function(){
     console.log('[CONFIRM BUTTON CLICKED]', bsType, '_pendingRisk:', _pendingRisk);
     confirmBet();
   });
-  if (_cancelBtn)  _cancelBtn.addEventListener('click', closeBetConfirm);
+  _cancelBtns.forEach(function(btn){
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      console.log('[cancel confirm bet clicked]');
+      closeBetConfirm();
+    });
+  });
   } catch(e) { dbgBanner('ERROR in openBetConfirm:\n'+e.message,'#800'); console.error(e); }
 }
 
@@ -2450,9 +2457,23 @@ function closeBetConfirm() {
   // Also clean up any legacy overlay
   var ov = document.getElementById('bc-modal-overlay');
   if (ov) ov.remove();
-  // BUG #5: invalidate snapshot so a stale confirm cannot fire after close.
+  // Invalidate snapshot so a stale confirm cannot fire after close.
   _pendingSnapshot = null;
+  console.log('[cancel confirm bet] modal closed, balance unchanged, no ticket placed');
 }
+// Alias for user-facing requests
+var closeConfirmBet = closeBetConfirm;
+
+// Document-level delegation — catches any cancel button that missed addEventListener
+document.addEventListener('click', function(e) {
+  if (e.target.closest('[data-close-confirm-bet]') || e.target.closest('[data-action="cancel"]')) {
+    // Only close if the confirm overlay is currently open
+    if (document.getElementById('bc-modal-overlay')) {
+      console.log('[cancel confirm bet clicked] delegation caught');
+      closeBetConfirm();
+    }
+  }
+});
 
 function _resolvePlayer() {
   var _playerData  = JSON.parse(localStorage.getItem('pb-player') || 'null') || {};
