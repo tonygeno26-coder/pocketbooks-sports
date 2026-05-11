@@ -2815,6 +2815,242 @@ function openGradedAudit() {
 }
 // ══════════════════════════════════════════════════════════════════════════════
 
+
+// ════════════════════════════════════════════════════════════════════════════
+// REAL GRADING ENGINE
+// Fetches completed game scores → grades active tickets → updates balances
+// ════════════════════════════════════════════════════════════════════════════
+
+// Grade one ticket leg against a final game result
+// Returns 'won' | 'lost' | 'push' | null (if game not found)
+function _gradeSingleLeg(sel, gameResult) {
+  var market = (sel.market || '').toLowerCase();
+  var pick   = (sel.pick || '').toLowerCase();
+  var hs = gameResult.home_score;
+  var as = gameResult.away_score;
+  var home = (gameResult.home || '').toLowerCase();
+  var away = (gameResult.away || '').toLowerCase();
+
+  // Moneyline / To Win
+  if (market.includes('moneyline') || market.includes('to win') || market.includes('ml')) {
+    var winner = hs > as ? home : (as > hs ? away : null);
+    if (!winner) return 'push';
+    return pick.includes(winner) || pick.includes(winner.split(' ').pop()) ? 'won' : 'lost';
+  }
+
+  // Run Line / Spread
+  if (market.includes('run line') || market.includes('spread') || market.includes('rl')) {
+    var m = pick.match(/([+-]?\d+\.?\d*)/);
+    if (!m) return null;
+    var spread = parseFloat(m[1]);
+    var isHome = pick.includes(home) || pick.includes(home.split(' ').pop());
+    var margin = isHome ? (hs - as) : (as - hs);
+    var adjusted = margin + spread;
+    if (adjusted > 0) return 'won';
+    if (adjusted < 0) return 'lost';
+    return 'push';
+  }
+
+  // Totals Over/Under
+  if (market.includes('total') || market.includes('over') || market.includes('under')) {
+    var m2 = pick.match(/([+-]?\d+\.?\d*)/);
+    if (!m2) return null;
+    var line = parseFloat(m2[1]);
+    var total = hs + as;
+    var isOver = pick.includes('over') || pick.includes('o ');
+    if (total === line) return 'push';
+    return (isOver ? total > line : total < line) ? 'won' : 'lost';
+  }
+  return null;
+}
+
+// Grade a full ticket (all selections must match game results)
+function _gradeTicket(ticket, resultsMap) {
+  if (!ticket.selections || !ticket.selections.length) return null;
+  var legResults = [];
+  var finalScores = [];
+  var gamesUsed = [];
+
+  for (var i = 0; i < ticket.selections.length; i++) {
+    var sel = ticket.selections[i];
+    var matchup = (sel.matchup || sel.game || '').toLowerCase();
+    // Find matching completed game
+    var gameResult = null;
+    var keys = Object.keys(resultsMap);
+    for (var j = 0; j < keys.length; j++) {
+      var g = resultsMap[keys[j]];
+      var gHome = (g.home || '').toLowerCase();
+      var gAway = (g.away || '').toLowerCase();
+      if (matchup.includes(gHome) || matchup.includes(gAway) ||
+          (sel.gameId && sel.gameId === g.id)) {
+        gameResult = g; break;
+      }
+    }
+    if (!gameResult) return null; // game not found / not complete yet
+
+    var legResult = _gradeSingleLeg(sel, gameResult);
+    if (!legResult) return null;
+    legResults.push(legResult);
+    finalScores.push(gameResult.away + ' ' + gameResult.away_score + ' @ ' + gameResult.home + ' ' + gameResult.home_score);
+    gamesUsed.push(gameResult.id);
+  }
+
+  // Combine leg results for multi-leg tickets
+  if (legResults.some(function(r){ return r === 'lost'; })) return { result:'lost', finalScores:finalScores };
+  if (legResults.every(function(r){ return r === 'push'; })) return { result:'push', finalScores:finalScores };
+  if (legResults.some(function(r){ return r === 'push'; })) {
+    // Parlay with push: recalculate without push legs (simplified: treat as push)
+    return { result:'push', finalScores:finalScores };
+  }
+  return { result:'won', finalScores:finalScores };
+}
+
+// Main grading entry point — called by Check Results button
+async function checkOpenTickets() {
+  console.log('[grading start] checking active tickets');
+  var btn = document.getElementById('check-results-btn');
+  if (btn) { btn.textContent = '⏳ Checking…'; btn.disabled = true; }
+
+  try {
+    // Reload tickets from storage
+    try { betTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(e){}
+
+    var activeTickets = betTickets.filter(function(t){
+      return (t.status === 'active' || t.status === 'open') && !t.gradedAt;
+    });
+    console.log('[grading start] active tickets:', activeTickets.length);
+
+    if (!activeTickets.length) {
+      showToast('No active bets to grade');
+      if (btn) { btn.textContent = 'Check Results'; btn.disabled = false; }
+      return;
+    }
+
+    // Fetch completed MLB scores (covers past 3 days)
+    var res = await fetch('/api/scores/mlb?daysFrom=3');
+    if (!res.ok) throw new Error('Scores API error: ' + res.status);
+    var games = await res.json();
+    if (games.error_code) throw new Error(games.error || 'Quota exceeded');
+
+    console.log('[grading start] completed games:', games.length);
+
+    // Build results map keyed by game ID + team names
+    var resultsMap = {};
+    games.forEach(function(g){
+      resultsMap[g.id] = g;
+      // Also index by team name for fuzzy matching
+      resultsMap[g.home.toLowerCase()] = g;
+      resultsMap[g.away.toLowerCase()] = g;
+    });
+
+    var gradedCount = 0;
+    var totalPayout = 0;
+
+    activeTickets.forEach(function(ticket) {
+      var gradeResult = _gradeTicket(ticket, resultsMap);
+      if (!gradeResult) {
+        console.log('[ticket graded] NOT YET COMPLETE:', ticket.id);
+        return;
+      }
+
+      var result     = gradeResult.result;
+      var finalScore = gradeResult.finalScores.join(' | ');
+
+      // Calculate payout
+      var payout = 0;
+      if (result === 'won')  payout = ticket.estimatedPayout || (ticket.riskAmount + (ticket.potentialProfit||0));
+      if (result === 'push') payout = ticket.riskAmount || 0;
+      if (result === 'lost') payout = 0;
+
+      // Balance update
+      var balBefore = calcAvailableBalance().available;
+      // Update ticket status
+      ticket.status        = result;
+      ticket.gradedAt      = new Date().toISOString();
+      ticket.gradingSource = 'api-scores';
+      ticket.finalScore    = finalScore;
+      ticket.grading = {
+        result:        result,
+        finalScore:    finalScore,
+        payout:        Math.round(payout * 100) / 100,
+        balanceBefore: balBefore,
+        balanceAfter:  null, // set after sync
+        gradedAt:      ticket.gradedAt
+      };
+
+      // For wins: add profit to starting balance
+      if (result === 'won') {
+        var currentStart = parseFloat(localStorage.getItem('pb-balance-start')) || 1000;
+        var newStart = Math.round((currentStart + (ticket.potentialProfit||0)) * 100) / 100;
+        localStorage.setItem('pb-balance-start', String(newStart));
+      }
+      // For pushes: no net change (risk was already "held", now returned by recalc)
+
+      var balAfter = calcAvailableBalance().available;
+      ticket.grading.balanceAfter = balAfter;
+      totalPayout += payout;
+
+      // Ledger entry
+      if (result === 'won' || result === 'push') {
+        addLedgerEntry({
+          id: 'G'+Date.now()+Math.random().toString(36).slice(2,6),
+          type: result === 'won' ? 'bet_won' : 'bet_push',
+          ticketId: ticket.id,
+          amount: result === 'won' ? (ticket.potentialProfit||0) : 0,
+          balanceBefore: balBefore,
+          balanceAfter:  balAfter,
+          createdAt: ticket.gradedAt,
+          finalScore: finalScore
+        });
+      } else {
+        addLedgerEntry({
+          id: 'G'+Date.now()+Math.random().toString(36).slice(2,6),
+          type: 'bet_lost',
+          ticketId: ticket.id,
+          amount: 0,
+          balanceBefore: balBefore,
+          balanceAfter:  balAfter,
+          createdAt: ticket.gradedAt,
+          finalScore: finalScore
+        });
+      }
+
+      console.log('[ticket graded]', { id:ticket.id, result:result, finalScore:finalScore, payout:payout });
+      gradedCount++;
+    });
+
+    // Save all ticket changes
+    saveTickets();
+    // Mirror to hostActiveBets
+    var hostBets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
+    betTickets.forEach(function(t){
+      var hi = hostBets.findIndex(function(h){ return h.id===t.id; });
+      if (hi >= 0) Object.assign(hostBets[hi], { status:t.status, gradedAt:t.gradedAt, finalScore:t.finalScore, grading:t.grading });
+    });
+    localStorage.setItem('hostActiveBets', JSON.stringify(hostBets));
+
+    syncBalanceDisplays();
+    console.log('[balance updated] after grading', gradedCount, 'tickets');
+
+    // Update last graded timestamp
+    localStorage.setItem('pb-last-graded', new Date().toISOString());
+
+    renderMyBets();
+    if (gradedCount > 0) {
+      showToast('✅ Graded ' + gradedCount + ' ticket(s) · New balance: ' + fmtBalance());
+    } else {
+      showToast('No completed games matched active tickets yet');
+    }
+
+  } catch(e) {
+    console.error('[grading] error:', e.message);
+    showToast('⚠️ Grading error: ' + e.message);
+  } finally {
+    if (btn) { btn.textContent = 'Check Results'; btn.disabled = false; }
+  }
+}
+// ════════════════════════════════════════════════════════════════════════════
+
 function renderMyBets() {
   var el = document.getElementById('mybets-section');
   if (!el) { console.warn('mybets-section not found'); return; }
@@ -2895,7 +3131,7 @@ function renderMyBets() {
       '<span style="font-size:1rem;font-weight:900;color:#111">My Bets</span>' +
       '<div style="display:flex;gap:6px">' +
         '<button onclick="openGradedAudit()" style="font-size:0.7rem;font-weight:700;color:#7c3aed;background:rgba(124,58,237,0.08);border:1.5px solid #7c3aed;border-radius:20px;padding:5px 12px;cursor:pointer">🧪 Graded ('+(graded.length)+')</button>' +
-        '<button onclick="checkOpenTickets()" style="font-size:0.7rem;font-weight:700;color:#0064c8;background:none;border:1.5px solid #0064c8;border-radius:20px;padding:5px 12px;cursor:pointer">Check Results</button>' +
+        '<button id="check-results-btn" onclick="checkOpenTickets()" style="font-size:0.7rem;font-weight:700;color:#0064c8;background:none;border:1.5px solid #0064c8;border-radius:20px;padding:5px 12px;cursor:pointer">Check Results</button>' +
       '</div>' +
     '</div>' +
     // Counts bar
@@ -2903,7 +3139,9 @@ function renderMyBets() {
       '<span>Active: <strong style="color:#0064c8">'+(active.length)+'</strong></span>' +
       '<span>Graded: <strong style="color:#00875a">'+(graded.length)+'</strong></span>' +
       '<span>Ledger rows: <strong style="color:#555">'+(ledger.length)+'</strong></span>' +
-    '</div>';
+    '<span id="last-graded-display" style="margin-left:auto"></span>' +
+    '</div>' +
+    (function(){ var lg=localStorage.getItem(\'pb-last-graded\'); return lg ? \'<div style="padding:0 14px 6px;font-size:0.65rem;color:#aaa">Last graded: \' + new Date(lg).toLocaleString() + \'</div>\' : \'\'; })();
   if (!betTickets.length) {
     html += '<div style="text-align:center;padding:50px 20px;color:#aaa;font-size:0.9rem">No active bets yet</div>';
   } else {
