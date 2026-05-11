@@ -1276,6 +1276,10 @@ function rmLeg(i){
 }
 
 function setSType(t){
+  if (t === 'teaser' && !_canTeaser()) {
+    showToast('Teasers unavailable for ' + _currentSport.toUpperCase());
+    return;
+  }
   sType=t;
   document.querySelectorAll('.stype').forEach(s=>s.classList.remove('active'));
   document.getElementById('st-'+t).classList.add('active');
@@ -1378,6 +1382,8 @@ console.log("[PBS tabs bound]");
 function setSport(el,sport){
   document.querySelectorAll('.sport-tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
+  _currentSport = sport;
+  _updateTeaserTab();
   loadGames(sport);
 }
 // setFilter removed — replaced by setMarketFilter
@@ -1486,7 +1492,7 @@ function returnToLobby() {
 }
 // ══════════════════════════════════════════════════════════════════════════════
 
-try { loadGames('mlb'); } catch(e) { console.error('[PBS fetch failed]', e); }
+try { _currentSport='mlb'; _updateTeaserTab(); loadGames('mlb'); } catch(e) { console.error('[PBS fetch failed]', e); }
 setTimeout(function(){
   var gl = document.getElementById('games-list');
   if (gl && gl.textContent && gl.textContent.indexOf('Loading') !== -1) {
@@ -1770,6 +1776,17 @@ function setRRSize(s) {
 
 // ===== TEASER =====
 var teaserPts = 6;
+var _currentSport = 'mlb';
+var TEASER_ENABLED_SPORTS = ['nfl','ncaaf','nba','ncaab'];
+function _canTeaser() { return TEASER_ENABLED_SPORTS.includes(_currentSport); }
+function _updateTeaserTab() {
+  var tab = document.getElementById('st-teaser');
+  if (!tab) return;
+  var ok = _canTeaser();
+  tab.style.display = ok ? '' : 'none';
+  // If currently on teaser and sport changed to non-teaser, switch to singles
+  if (!ok && bsType === 'teaser') setSType('single');
+}
 var TEASER_ELIGIBLE = ['run line','spread','total','over','under'];
 function isTeaserEligible(b) {
   var m = (b.market||'').toLowerCase();
