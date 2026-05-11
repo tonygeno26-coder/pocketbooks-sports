@@ -1493,6 +1493,7 @@ function returnToLobby() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 try { _currentSport='mlb'; _updateTeaserTab(); loadGames('mlb'); } catch(e) { console.error('[PBS fetch failed]', e); }
+try { startAutoGradeDaemon(); } catch(e) { console.error('[auto grade daemon] failed to start:', e.message); }
 setTimeout(function(){
   var gl = document.getElementById('games-list');
   if (gl && gl.textContent && gl.textContent.indexOf('Loading') !== -1) {
@@ -3102,6 +3103,167 @@ async function checkOpenTickets() {
   } finally {
     if (btn) { btn.textContent = 'Check Results'; btn.disabled = false; }
   }
+}
+// ════════════════════════════════════════════════════════════════════════════
+// AUTO-GRADE DAEMON
+// Polls /api/scores/mlb every 60 s. Only grades COMPLETED games.
+// Reuses existing _gradeSingleLeg / _gradeTicket / balance model.
+// ════════════════════════════════════════════════════════════════════════════
+var _autoGradeInterval = null;
+var _autoGradeRunning  = false;
+
+async function _autoGradePoll() {
+  if (_autoGradeRunning) return; // prevent overlap if poll is slow
+  _autoGradeRunning = true;
+  var ts = new Date().toISOString();
+  try {
+    // Reload tickets fresh from storage
+    var tickets = [];
+    try { tickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]'); } catch(e) { tickets = []; }
+
+    // Only active MLB tickets not yet graded
+    var activeMLB = tickets.filter(function(t) {
+      var sport = (t.sport || t.selections && t.selections[0] && t.selections[0].sport || '').toLowerCase();
+      var statusOpen = t.status === 'active' || t.status === 'open';
+      var notGraded  = !t.gradedAt;
+      return statusOpen && notGraded;
+      // Note: if sport tag not set we still attempt — _gradeTicket returns null if game not found
+    });
+
+    if (!activeMLB.length) {
+      _autoGradeRunning = false;
+      return; // nothing to do, skip API call
+    }
+
+    // Fetch completed scores from backend proxy
+    var res = await fetch('/api/scores/mlb?daysFrom=3');
+    if (!res.ok) { _autoGradeRunning = false; return; }
+    var games = await res.json();
+    if (!Array.isArray(games) || games.error_code) { _autoGradeRunning = false; return; }
+
+    // Build results map — only completed games (safety gate: never grade in-progress)
+    var resultsMap = {};
+    var completedGames = games.filter(function(g) { return g.completed === true; });
+    completedGames.forEach(function(g) {
+      resultsMap[g.id] = g;
+      if (g.home) resultsMap[g.home.toLowerCase()] = g;
+      if (g.away) resultsMap[g.away.toLowerCase()] = g;
+    });
+
+    var ticketsGraded = 0;
+
+    activeMLB.forEach(function(ticket) {
+      try {
+        // Skip if already graded (double-grade safety)
+        if (ticket.status === 'won' || ticket.status === 'lost' || ticket.status === 'push') return;
+
+        var gradeResult = _gradeTicket(ticket, resultsMap);
+        if (!gradeResult || !gradeResult.result) return; // game not final yet
+
+        var result     = gradeResult.result;
+        var finalScore = (gradeResult.finalScores || []).join(' | ');
+        var payout     = result === 'won'  ? (parseFloat(ticket.estimatedPayout) || 0)
+                       : result === 'push' ? (parseFloat(ticket.riskAmount) || 0)
+                       : 0;
+
+        var balBefore = calcAvailableBalance().available;
+
+        // Flip status — derived balance model does the rest, no pb-balance-start writes
+        ticket.status        = result;
+        ticket.gradedAt      = ts;
+        ticket.gradingSource = 'auto-api';
+        ticket.finalScore    = finalScore;
+        ticket.grading = {
+          result:          result,
+          finalScore:      finalScore,
+          payout:          Math.round(payout * 100) / 100,
+          balanceBefore:   balBefore,
+          balanceAfter:    null,
+          gradedAt:        ts,
+          riskWasDeducted: true
+        };
+
+        // Re-derive after status flip
+        var balAfter  = calcAvailableBalance().available;
+        var balChange = Math.round((balAfter - balBefore) * 100) / 100;
+        ticket.grading.balanceAfter  = balAfter;
+        ticket.grading.balanceChange = balChange;
+
+        console.log('[auto graded ticket]',
+          '\n  ticketId:    ', ticket.id,
+          '\n  game:        ', finalScore,
+          '\n  result:      ', result.toUpperCase(),
+          '\n  balanceChange: ' + (balChange >= 0 ? '+' : '') + balChange.toFixed(2),
+          '\n  newBalance:  $' + balAfter.toFixed(2)
+        );
+
+        addLedgerEntry({
+          id: 'AG' + Date.now() + Math.random().toString(36).slice(2, 6),
+          type: result === 'won' ? 'bet_won' : result === 'push' ? 'bet_push' : 'bet_lost',
+          ticketId:      ticket.id,
+          amount:        result === 'won' ? (parseFloat(ticket.potentialProfit) || 0) : 0,
+          risk:          parseFloat(ticket.riskAmount) || 0,
+          payout:        payout,
+          balanceBefore: balBefore,
+          balanceAfter:  balAfter,
+          balanceChange: balChange,
+          createdAt:     ts,
+          finalScore:    finalScore,
+          source:        'auto-api'
+        });
+
+        ticketsGraded++;
+      } catch(ticketErr) {
+        console.error('[auto grade] error on ticket', ticket.id, ticketErr.message);
+        // continue — one bad ticket never stops the loop
+      }
+    });
+
+    console.log('[auto grade tick]',
+      '\n  gamesChecked:   ', completedGames.length,
+      '\n  ticketsChecked: ', activeMLB.length,
+      '\n  ticketsGraded:  ', ticketsGraded,
+      '\n  timestamp:      ', ts
+    );
+
+    if (ticketsGraded > 0) {
+      // Persist all changes
+      localStorage.setItem('pb-tickets', JSON.stringify(tickets));
+      try { betTickets = tickets; } catch(e) {}
+
+      // Mirror to hostActiveBets
+      try {
+        var hostBets = JSON.parse(localStorage.getItem('hostActiveBets') || '[]');
+        tickets.forEach(function(t) {
+          var hi = hostBets.findIndex(function(h) { return h.id === t.id; });
+          if (hi >= 0) Object.assign(hostBets[hi], { status:t.status, gradedAt:t.gradedAt, finalScore:t.finalScore, grading:t.grading });
+        });
+        localStorage.setItem('hostActiveBets', JSON.stringify(hostBets));
+      } catch(e) {}
+
+      localStorage.setItem('pb-last-graded', ts);
+      syncBalanceDisplays();
+      renderMyBets();
+      showToast('✅ Auto-graded ' + ticketsGraded + ' ticket(s)');
+    }
+  } catch(e) {
+    console.error('[auto grade poll] error:', e.message);
+    // daemon keeps running — catch never stops the interval
+  } finally {
+    _autoGradeRunning = false;
+  }
+}
+
+function startAutoGradeDaemon() {
+  if (_autoGradeInterval) return; // already running
+  console.log('[auto grade daemon] started — polling every 60s');
+  _autoGradePoll(); // immediate first check
+  _autoGradeInterval = setInterval(_autoGradePoll, 60000);
+}
+
+function stopAutoGradeDaemon() {
+  if (_autoGradeInterval) { clearInterval(_autoGradeInterval); _autoGradeInterval = null; }
+  console.log('[auto grade daemon] stopped');
 }
 // ════════════════════════════════════════════════════════════════════════════
 
