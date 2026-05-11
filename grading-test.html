@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Grading Test — PocketBooks Sports</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,monospace;background:#0a0a0a;color:#f0f0f0;padding:20px;max-width:900px;margin:0 auto}
+h1{font-size:1.2rem;color:#00ff88;margin-bottom:4px}
+.sub{font-size:0.75rem;color:#555;margin-bottom:20px}
+.card{background:#141414;border:1px solid #252525;border-radius:10px;padding:14px;margin-bottom:12px}
+.card-title{font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#555;margin-bottom:10px}
+.row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1a1a1a;font-size:0.8rem}
+.row:last-child{border-bottom:none}
+.key{color:#888}
+.val{font-weight:700;color:#fff;text-align:right;max-width:60%;word-break:break-all}
+.won{color:#00ff88!important}
+.lost{color:#ff3d57!important}
+.push{color:#f59e0b!important}
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:0.7rem;font-weight:900}
+.badge-won{background:rgba(0,255,136,0.12);color:#00ff88;border:1px solid rgba(0,255,136,0.3)}
+.badge-lost{background:rgba(255,61,87,0.12);color:#ff3d57;border:1px solid rgba(255,61,87,0.3)}
+.badge-push{background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3)}
+.badge-pending{background:rgba(100,100,100,0.12);color:#888;border:1px solid #333}
+button{padding:12px 24px;background:#00ff88;color:#000;border:none;border-radius:8px;font-weight:900;font-size:0.9rem;cursor:pointer;margin-right:8px;margin-bottom:12px}
+button.outline{background:transparent;color:#00ff88;border:1.5px solid #00ff88}
+button:disabled{background:#333;color:#666;cursor:not-allowed}
+pre{background:#0d0d0d;border:1px solid #1a1a1a;border-radius:8px;padding:12px;font-size:0.7rem;color:#aaa;overflow-x:auto;white-space:pre-wrap;word-break:break-all}
+.section-title{font-size:0.85rem;font-weight:800;color:#00c2ff;margin:20px 0 10px;border-bottom:1px solid #1a1a1a;padding-bottom:6px}
+#log{background:#0d0d0d;border:1px solid #1a1a1a;border-radius:8px;padding:12px;font-size:0.72rem;color:#aaa;min-height:80px;max-height:200px;overflow-y:auto;font-family:monospace;white-space:pre-wrap}
+.pass{color:#00ff88}.fail{color:#ff3d57}.info{color:#00c2ff}.warn{color:#f59e0b}
+</style>
+</head>
+<body>
+
+<h1>🧪 Grading Test Page</h1>
+<div class="sub">Isolated grading logic test — no player dashboard changes. Pure functions only.</div>
+
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+  <button onclick="runTest()">▶ Run Grading Test</button>
+  <button class="outline" onclick="runLiveTest()">🌐 Run vs Live API</button>
+  <button class="outline" onclick="document.getElementById('log').textContent=''">Clear Log</button>
+</div>
+
+<div id="log">Click "Run Grading Test" to start…</div>
+
+<div id="results"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// PURE GRADING FUNCTIONS (copy of engine, standalone)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function gradeSingleLeg(sel, game) {
+  var market = (sel.market || '').toLowerCase();
+  var pick   = (sel.pick   || '').toLowerCase();
+  var hs = game.home_score;
+  var as = game.away_score;
+  var home = (game.home || '').toLowerCase();
+  var away = (game.away || '').toLowerCase();
+
+  // Moneyline / To Win
+  if (market.includes('moneyline') || market.includes('to win') || market.includes(' ml')) {
+    var winner = hs > as ? home : (as > hs ? away : null);
+    if (!winner) return 'push';
+    var pickLast = pick.split(' ').pop();
+    return (pick.includes(winner) || winner.includes(pickLast)) ? 'won' : 'lost';
+  }
+
+  // Run Line / Spread
+  if (market.includes('run line') || market.includes('spread') || market.includes('rl')) {
+    var m = pick.match(/([+-]?\d+\.?\d*)/);
+    if (!m) return null;
+    var spread = parseFloat(m[1]);
+    var homeWords = home.split(' '); var awayWords = away.split(' ');
+    var isHome = homeWords.some(function(w){ return pick.includes(w); });
+    var margin = isHome ? (hs - as) : (as - hs);
+    var adjusted = margin + spread;
+    if (adjusted > 0) return 'won';
+    if (adjusted < 0) return 'lost';
+    return 'push';
+  }
+
+  // Totals Over/Under
+  if (market.includes('total') || market.includes('over') || market.includes('under')) {
+    var m2 = pick.match(/(\d+\.?\d*)/);
+    if (!m2) return null;
+    var line = parseFloat(m2[1]);
+    var total = hs + as;
+    var isOver = pick.startsWith('over') || /^o\s/.test(pick);
+    if (total === line) return 'push';
+    return (isOver ? total > line : total < line) ? 'won' : 'lost';
+  }
+  return null;
+}
+
+function gradeTicket(ticket, games) {
+  var sels = ticket.selections || [];
+  if (!sels.length) return { result: null, error: 'no selections' };
+  var legResults = [];
+  var finalScores = [];
+
+  for (var i = 0; i < sels.length; i++) {
+    var sel = sels[i];
+    var matchup = (sel.matchup || sel.game || '').toLowerCase();
+    var game = null;
+    for (var j = 0; j < games.length; j++) {
+      var g = games[j];
+      var gh = (g.home||'').toLowerCase(); var ga = (g.away||'').toLowerCase();
+      if (matchup.includes(gh) || matchup.includes(ga) || matchup.includes(gh.split(' ').pop()) || matchup.includes(ga.split(' ').pop())) {
+        game = g; break;
+      }
+    }
+    if (!game || !game.completed) return { result: null, error: 'game not final: ' + (sel.matchup||'?') };
+    var lr = gradeSingleLeg(sel, game);
+    if (!lr) return { result: null, error: 'market not graded: ' + sel.market };
+    legResults.push(lr);
+    finalScores.push(game.away + ' ' + game.away_score + ' @ ' + game.home + ' ' + game.home_score);
+  }
+
+  var finalScoreStr = finalScores.join(' | ');
+  if (legResults.some(function(r){ return r === 'lost'; }))  return { result: 'lost', finalScore: finalScoreStr };
+  if (legResults.every(function(r){ return r === 'push'; })) return { result: 'push', finalScore: finalScoreStr };
+  if (legResults.some(function(r){ return r === 'push'; }))  return { result: 'push', finalScore: finalScoreStr };
+  return { result: 'won', finalScore: finalScoreStr };
+}
+
+function calcPayout(ticket, result) {
+  if (result === 'won')  return Math.round(ticket.estimatedPayout * 100) / 100;
+  if (result === 'push') return Math.round(ticket.riskAmount * 100);
+  return 0;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MOCK DATA
+// ─────────────────────────────────────────────────────────────────────────────
+
+var MOCK_GAMES = [
+  { id:'g1', home:'Toronto Blue Jays', away:'Los Angeles Angels', home_score:14, away_score:1, completed:true },
+  { id:'g2', home:'Baltimore Orioles',  away:'Athletics',          home_score:2,  away_score:6, completed:true },
+  { id:'g3', home:'Houston Astros',     away:'Los Angeles Dodgers',home_score:3,  away_score:7, completed:true },
+  { id:'g4', home:'New York Yankees',   away:'Texas Rangers',      home_score:5,  away_score:3, completed:true },
+  { id:'g5', home:'Chicago Cubs',       away:'Cincinnati Reds',    home_score:4,  away_score:4, completed:true }
+];
+
+var MOCK_TICKETS = [
+  {
+    id: 'T001', type: 'Single', riskAmount: 50, estimatedPayout: 95, potentialProfit: 45,
+    selections: [{ matchup: 'Los Angeles Angels vs Toronto Blue Jays', pick: 'Toronto Blue Jays ML', market: 'Moneyline', odds: -110 }]
+  },
+  {
+    id: 'T002', type: 'Single', riskAmount: 100, estimatedPayout: 191, potentialProfit: 91,
+    selections: [{ matchup: 'Athletics vs Baltimore Orioles', pick: 'Athletics +1.5', market: 'Run Line', odds: -180 }]
+  },
+  {
+    id: 'T003', type: 'Single', riskAmount: 75, estimatedPayout: 143, potentialProfit: 68,
+    selections: [{ matchup: 'Los Angeles Dodgers vs Houston Astros', pick: 'Over 8.5', market: 'Total', odds: -110 }]
+  },
+  {
+    id: 'T004', type: 'Parlay', riskAmount: 25, estimatedPayout: 190, potentialProfit: 165,
+    selections: [
+      { matchup: 'Texas Rangers vs New York Yankees', pick: 'New York Yankees ML', market: 'Moneyline', odds: -200 },
+      { matchup: 'Los Angeles Dodgers vs Houston Astros', pick: 'Los Angeles Dodgers -1.5', market: 'Run Line', odds: +130 }
+    ]
+  },
+  {
+    id: 'T005', type: 'Single', riskAmount: 60, estimatedPayout: 60, potentialProfit: 0,
+    selections: [{ matchup: 'Cincinnati Reds vs Chicago Cubs', pick: 'Under 9', market: 'Total', odds: -110 }]
+  }
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TEST RUNNER
+// ─────────────────────────────────────────────────────────────────────────────
+
+var _log = [];
+function log(cls, msg) {
+  var el = document.getElementById('log');
+  var line = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+  _log.push(line);
+  el.textContent += line + '\n';
+  el.scrollTop = el.scrollHeight;
+  console.log(msg);
+}
+
+function runTest() {
+  _log = [];
+  document.getElementById('log').textContent = '';
+  document.getElementById('results').innerHTML = '';
+  log('info', '[grading start] running against mock data');
+  log('info', '[grading start] tickets: ' + MOCK_TICKETS.length + ' | games: ' + MOCK_GAMES.length);
+  _runGrading(MOCK_TICKETS, MOCK_GAMES, 1000);
+}
+
+async function runLiveTest() {
+  _log = [];
+  document.getElementById('log').textContent = '';
+  document.getElementById('results').innerHTML = '<div style="color:#aaa;padding:10px">Fetching live MLB scores…</div>';
+  log('info', '[live test] fetching /api/scores/mlb?daysFrom=3');
+  try {
+    var r = await fetch('/api/scores/mlb?daysFrom=3');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var games = await r.json();
+    if (games.error_code) throw new Error(games.error || 'Quota error');
+    log('info', '[live test] completed games: ' + games.length);
+    games.slice(0,3).forEach(function(g){ log('info', '  [game final] ' + g.away + ' ' + g.away_score + ' @ ' + g.home + ' ' + g.home_score); });
+    _runGrading(MOCK_TICKETS, games, 1000);
+  } catch(e) {
+    log('warn', '[live test] failed: ' + e.message);
+    document.getElementById('results').innerHTML = '<div style="color:#ff3d57;padding:10px">Live fetch failed: ' + e.message + '</div>';
+  }
+}
+
+function _runGrading(tickets, games, startingBalance) {
+  var balance = startingBalance;
+  var ledger = [];
+  var html = '';
+
+  tickets.forEach(function(ticket) {
+    var gradeResult = gradeTicket(ticket, games);
+    var result = gradeResult.result;
+    var finalScore = gradeResult.finalScore || gradeResult.error || '—';
+    var payout = result ? calcPayout(ticket, result) : 0;
+    var balBefore = balance;
+
+    if (result === 'won')  { balance = Math.round((balance + ticket.potentialProfit) * 100) / 100; }
+    if (result === 'push') { /* no net change */ }
+    var balAfter = balance;
+
+    var ledgerEntry = result ? {
+      type: result === 'won' ? 'bet_won' : result === 'push' ? 'bet_push' : 'bet_lost',
+      ticketId: ticket.id, amount: result === 'won' ? ticket.potentialProfit : 0,
+      balanceBefore: balBefore, balanceAfter: balAfter, finalScore: finalScore,
+      gradedAt: new Date().toISOString()
+    } : null;
+    if (ledgerEntry) { ledger.push(ledgerEntry); }
+
+    var badgeCls = !result ? 'badge-pending' : 'badge-'+result;
+    var badge = result ? '<span class="badge '+badgeCls+'">'+result.toUpperCase()+'</span>' : '<span class="badge badge-pending">NOT FINAL</span>';
+
+    log(result||'warn', '[ticket graded] ' + ticket.id + ' → ' + (result||'not final') + ' | score: ' + finalScore);
+    if (result) log('info', '[balance updated] ' + balBefore + ' → ' + balAfter + ' | payout: $' + payout);
+
+    html += '<div class="card">'
+      + '<div class="card-title">' + ticket.id + ' · ' + ticket.type + ' ' + badge + '</div>'
+      + '<div class="row"><span class="key">Selections</span><span class="val">' + ticket.selections.map(function(s){ return s.pick + ' (' + s.market + ')'; }).join('<br>') + '</span></div>'
+      + '<div class="row"><span class="key">Risk</span><span class="val">$' + ticket.riskAmount.toFixed(2) + '</span></div>'
+      + '<div class="row"><span class="key">Est. Payout</span><span class="val">$' + ticket.estimatedPayout.toFixed(2) + '</span></div>'
+      + '<div class="row"><span class="key">Final Score</span><span class="val" style="color:#00c2ff">' + finalScore + '</span></div>'
+      + '<div class="row"><span class="key">Result</span><span class="val '+(result||'')+'">' + (result ? result.toUpperCase() : '⏳ Not Final') + '</span></div>'
+      + '<div class="row"><span class="key">Payout</span><span class="val">$' + payout.toFixed(2) + '</span></div>'
+      + '<div class="row"><span class="key">Balance Before</span><span class="val">$' + balBefore.toFixed(2) + '</span></div>'
+      + '<div class="row"><span class="key">Balance After</span><span class="val '+(balAfter>balBefore?'won':balAfter<balBefore?'lost':'')+'">$' + balAfter.toFixed(2) + '</span></div>'
+      + '</div>';
+  });
+
+  // Summary
+  var won  = tickets.filter(function(t,i){ return ledger[i] && ledger[i].type==='bet_won'; }).length;
+  var lost = tickets.filter(function(t,i){ return ledger[i] && ledger[i].type==='bet_lost'; }).length;
+  var push = tickets.filter(function(t,i){ return ledger[i] && ledger[i].type==='bet_push'; }).length;
+  var notFinal = tickets.length - ledger.length;
+  log('info', '[grading complete] won:'+won+' lost:'+lost+' push:'+push+' notFinal:'+notFinal+' finalBalance:$'+balance.toFixed(2));
+
+  var summary = '<div class="section-title">Summary</div>'
+    + '<div class="card">'
+    + '<div class="row"><span class="key">Starting Balance</span><span class="val">$'+startingBalance.toFixed(2)+'</span></div>'
+    + '<div class="row"><span class="key">Final Balance</span><span class="val '+(balance>=startingBalance?'won':'lost')+'">$'+balance.toFixed(2)+'</span></div>'
+    + '<div class="row"><span class="key">Won / Lost / Push / Not Final</span><span class="val">'+won+' / '+lost+' / '+push+' / '+notFinal+'</span></div>'
+    + '</div>'
+    + '<div class="section-title">Ledger Entries</div>'
+    + '<pre>' + JSON.stringify(ledger, null, 2) + '</pre>'
+    + '<div class="section-title">Ticket Results</div>';
+
+  document.getElementById('results').innerHTML = summary + html;
+}
+</script>
+</body>
+</html>
