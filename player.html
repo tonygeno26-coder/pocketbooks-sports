@@ -2792,10 +2792,16 @@ function openGradedAudit() {
         var statusColor = t.status==='won'?'#00875a':t.status==='lost'?'#cc0000':'#888';
         var picks = (t.selections||[]).map(function(s){ return s.pick||s.label||'—'; }).join(', ');
         var matchup = (t.selections||[]).map(function(s){ return s.matchup||s.game||''; }).filter(Boolean)[0]||'—';
+        var g = t.grading || {};
         var ledgerEntry = ledger.find(function(l){ return l.ticketId===t.id||(Array.isArray(l.ticketIds)&&l.ticketIds.indexOf(t.id)>=0); });
-        var balBefore = ledgerEntry ? '$'+((ledgerEntry.balanceBefore||0).toFixed(2)) : '—';
-        var balAfter  = ledgerEntry ? '$'+((ledgerEntry.balanceAfter||0).toFixed(2))  : '—';
+        var balBefore  = g.balanceBefore  != null ? g.balanceBefore  : (ledgerEntry ? ledgerEntry.balanceBefore  : null);
+        var balAfter   = g.balanceAfter   != null ? g.balanceAfter   : (ledgerEntry ? ledgerEntry.balanceAfter   : null);
+        var balChange  = g.balanceChange  != null ? g.balanceChange  : (balBefore != null && balAfter != null ? balAfter - balBefore : null);
+        var actualPayout = g.payout != null ? g.payout : (t.estimatedPayout||0);
+        var riskDeducted = 'Yes (held in openRisk at placement)';
         var gradingSource = t.gradingSource || t.gradeSource || (t.finalScore?'manual':'—');
+        var balChangeColor = balChange > 0 ? '#00875a' : balChange < 0 ? '#cc0000' : '#888';
+        var fmtB = function(v){ return v != null ? '$'+v.toFixed(2) : '—'; };
 
         return '<tr style="border-bottom:1px solid #f0f0f0">'
           +'<td style="padding:8px;font-size:0.68rem;color:#aaa;font-family:monospace">'+t.id.slice(0,12)+'...</td>'
@@ -2806,11 +2812,14 @@ function openGradedAudit() {
           +'<td style="padding:8px;font-size:0.75rem">$'+(t.riskAmount||0).toFixed(2)+'</td>'
           +'<td style="padding:8px;font-size:0.75rem">'+(t.odds||'—')+'</td>'
           +'<td style="padding:8px"><span style="font-size:0.7rem;font-weight:800;color:'+statusColor+'">'+t.status.toUpperCase()+'</span></td>'
-          +'<td style="padding:8px;font-size:0.75rem;color:#00875a">$'+(t.estimatedPayout||0).toFixed(2)+'</td>'
+          +'<td style="padding:8px;font-size:0.75rem;color:#555">'+riskDeducted+'</td>'
+          +'<td style="padding:8px;font-size:0.75rem;color:#555">$'+(t.potentialProfit||0).toFixed(2)+'</td>'
+          +'<td style="padding:8px;font-size:0.75rem;color:#00875a">'+fmtB(actualPayout)+'</td>'
+          +'<td style="padding:8px;font-size:0.75rem;color:'+balChangeColor+';font-weight:800">'+(balChange!=null?(balChange>=0?'+':'')+balChange.toFixed(2):'—')+'</td>'
           +'<td style="padding:8px;font-size:0.72rem;color:#888">'+(t.finalScore||'—')+'</td>'
           +'<td style="padding:8px;font-size:0.7rem;color:#888">'+gradingSource+'</td>'
-          +'<td style="padding:8px;font-size:0.72rem;color:#aaa">'+balBefore+'</td>'
-          +'<td style="padding:8px;font-size:0.72rem;color:#aaa">'+balAfter+'</td>'
+          +'<td style="padding:8px;font-size:0.72rem;color:#0064c8">'+fmtB(balBefore)+'</td>'
+          +'<td style="padding:8px;font-size:0.72rem;font-weight:700;color:#111">'+fmtB(balAfter)+'</td>'
           +'<td style="padding:8px;font-size:0.68rem;color:#aaa">'+ts+'</td>'
           +'</tr>';
       }).join('')
@@ -2837,9 +2846,12 @@ function openGradedAudit() {
           +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Wager</th>'
           +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Odds</th>'
           +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Result</th>'
-          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Payout</th>'
+          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Risk Deducted?</th>'
+          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Profit</th>'
+          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Payout Applied</th>'
+          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Bal Δ</th>'
           +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Final Score</th>'
-          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Grading Source</th>'
+          +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Source</th>'
           +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Bal Before</th>'
           +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Bal After</th>'
           +'<th style="padding:8px;text-align:left;font-weight:800;color:#555">Time</th>'
@@ -3016,42 +3028,46 @@ async function checkOpenTickets() {
         gradedAt:      ticket.gradedAt
       };
 
-      // For wins: add profit to starting balance
-      if (result === 'won') {
-        var currentStart = parseFloat(localStorage.getItem('pb-balance-start')) || 1000;
-        var newStart = Math.round((currentStart + (ticket.potentialProfit||0)) * 100) / 100;
-        localStorage.setItem('pb-balance-start', String(newStart));
-      }
-      // For pushes: no net change (risk was already "held", now returned by recalc)
+      // ── BALANCE MODEL ────────────────────────────────────────────────────
+      // Do NOT write pb-balance-start. calcAvailableBalance() derives balance
+      // purely from ticket statuses:
+      //   active  → locked in openRisk (deducted from available)
+      //   won     → potentialProfit added via settledGains; risk freed from openRisk
+      //   lost    → riskAmount added to settledLosses; risk freed from openRisk
+      //   push    → risk freed from openRisk automatically (no other change)
+      // Flipping ticket.status is the ONLY thing needed. No pb-balance-start writes.
 
       var balAfter = calcAvailableBalance().available;
-      ticket.grading.balanceAfter = balAfter;
+      var balChange = Math.round((balAfter - balBefore) * 100) / 100;
+      ticket.grading.balanceAfter    = balAfter;
+      ticket.grading.balanceChange   = balChange;
+      ticket.grading.riskWasDeducted = true; // always true: risk held in openRisk at placement
+      ticket.grading.fullPayoutAdded = result === 'won'  ? payout : (result === 'push' ? ticket.riskAmount : 0);
       totalPayout += payout;
 
-      // Ledger entry
-      if (result === 'won' || result === 'push') {
-        addLedgerEntry({
-          id: 'G'+Date.now()+Math.random().toString(36).slice(2,6),
-          type: result === 'won' ? 'bet_won' : 'bet_push',
-          ticketId: ticket.id,
-          amount: result === 'won' ? (ticket.potentialProfit||0) : 0,
-          balanceBefore: balBefore,
-          balanceAfter:  balAfter,
-          createdAt: ticket.gradedAt,
-          finalScore: finalScore
-        });
-      } else {
-        addLedgerEntry({
-          id: 'G'+Date.now()+Math.random().toString(36).slice(2,6),
-          type: 'bet_lost',
-          ticketId: ticket.id,
-          amount: 0,
-          balanceBefore: balBefore,
-          balanceAfter:  balAfter,
-          createdAt: ticket.gradedAt,
-          finalScore: finalScore
-        });
-      }
+      console.log('[balance grading audit]',
+        '\n  ticketId:        ', ticket.id,
+        '\n  result:          ', result.toUpperCase(),
+        '\n  risk:            $' + (ticket.riskAmount||0).toFixed(2),
+        '\n  payout:          $' + payout.toFixed(2),
+        '\n  balanceBeforeGrade: $' + balBefore.toFixed(2),
+        '\n  balanceChange:   $' + balChange.toFixed(2),
+        '\n  balanceAfterGrade:  $' + balAfter.toFixed(2)
+      );
+
+      addLedgerEntry({
+        id: 'G'+Date.now()+Math.random().toString(36).slice(2,6),
+        type: result === 'won' ? 'bet_won' : result === 'push' ? 'bet_push' : 'bet_lost',
+        ticketId: ticket.id,
+        amount: result === 'won' ? (ticket.potentialProfit||0) : 0,
+        risk: ticket.riskAmount||0,
+        payout: payout,
+        balanceBefore: balBefore,
+        balanceAfter:  balAfter,
+        balanceChange: balChange,
+        createdAt: ticket.gradedAt,
+        finalScore: finalScore
+      });
 
       console.log('[ticket graded]', { id:ticket.id, result:result, finalScore:finalScore, payout:payout });
       gradedCount++;
