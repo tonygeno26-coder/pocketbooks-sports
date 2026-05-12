@@ -1112,6 +1112,11 @@ async function loadGames(sport, opts){
   try{
     const _sport = sport || 'mlb';
     const _url = '/api/odds/'+_sport; // backend proxy only — never call Odds API directly from client
+    // MLB sportsbook scope log — only emit on the MLB path so we can verify
+    // in Network/Console that no other sports are being fetched.
+    if (_sport === 'mlb' && !_liveOnly) {
+      console.log('[sportsbook fetch] sport=baseball_mlb');
+    }
     console.log('[PBS fetch start] sport:', _sport, 'url:', _url, 'live:', _liveOnly);
     let _res;
     try { _res = await fetch(_url); } catch(fetchErr) {
@@ -1127,12 +1132,33 @@ async function loadGames(sport, opts){
         : (_errBody.error || 'Backend error HTTP '+_res.status);
       throw new Error(_msg);
     }
+    // Surface cache source (HIT/MISS/STALE) from our Vercel proxy.
+    const _xCache = (_res.headers && _res.headers.get) ? (_res.headers.get('X-Cache') || '') : '';
+    const _xCount = (_res.headers && _res.headers.get) ? (_res.headers.get('X-Games-Count') || '') : '';
     const _raw = await _res.text();
     console.log('[odds] raw (first 200):', _raw.slice(0,200));
     let games;
     try { games = JSON.parse(_raw); } catch(parseErr) { throw new Error('Bad JSON: '+parseErr.message); }
     if(!Array.isArray(games)) throw new Error('Expected array, got: '+typeof games);
-    console.log('[PBS fetch success] gamesLoaded:', games.length);
+    if (_sport === 'mlb' && !_liveOnly) {
+      var _src = _xCache === 'HIT' ? 'cache' : (_xCache === 'STALE' ? 'stale' : 'live');
+      console.log('[odds cache] source=' + _src + ' games=' + games.length);
+      // Non-blocking "using cached lines" badge when payload is stale.
+      try {
+        var _badgeHost = document.getElementById('games-list');
+        if (_badgeHost && _xCache === 'STALE' && !document.getElementById('odds-stale-badge')) {
+          var _b = document.createElement('div');
+          _b.id = 'odds-stale-badge';
+          _b.style.cssText = 'margin:8px 12px;padding:6px 10px;border-radius:8px;background:#fff8e1;border:1px solid #f59e0b;color:#92400e;font-size:0.7rem;font-weight:700;text-align:center';
+          _b.textContent = 'Using cached lines — odds provider temporarily unavailable';
+          _badgeHost.parentNode && _badgeHost.parentNode.insertBefore(_b, _badgeHost);
+        } else if (_xCache !== 'STALE') {
+          var _old = document.getElementById('odds-stale-badge');
+          if (_old && _old.parentNode) _old.parentNode.removeChild(_old);
+        }
+      } catch(_be){}
+    }
+    console.log('[PBS fetch success] gamesLoaded:', games.length, _xCount ? ('(server X-Games-Count='+_xCount+')') : '');
     console.log('[PBS render start]');
     if(!games.length){
       console.warn('[odds] empty response — check ODDS_API_KEY is set in Railway env vars');
