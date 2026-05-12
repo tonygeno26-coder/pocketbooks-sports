@@ -1110,12 +1110,21 @@ async function loadGames(sport, opts){
   if (!el) return;
   el.innerHTML='<div class="empty">Loading...</div>';
   try{
-    const _sport = sport || 'mlb';
-    const _url = '/api/odds/'+_sport; // backend proxy only — never call Odds API directly from client
-    // MLB sportsbook scope log — only emit on the MLB path so we can verify
-    // in Network/Console that no other sports are being fetched.
-    if (_sport === 'mlb' && !_liveOnly) {
-      console.log('[sportsbook fetch] sport=baseball_mlb');
+    // Normalize sport key. Accept 'mlb' or 'baseball_mlb' — both map to the
+    // local MLB-only Vercel proxy at /api/odds/mlb. Anything else uses the
+    // legacy /api/odds/<sport> path (Railway) until those sports get their
+    // own local proxies.
+    var _rawSport = sport || 'mlb';
+    var _sportLc  = String(_rawSport).toLowerCase();
+    var _isMlb    = (_sportLc === 'mlb' || _sportLc === 'baseball_mlb');
+    const _sport  = _isMlb ? 'mlb' : _sportLc;
+    // MLB sportsbook ALWAYS hits the local Vercel proxy at exactly
+    // /api/odds/mlb. Never /api/odds/baseball_mlb, never api.the-odds-api.com
+    // directly, never the legacy Railway path for MLB.
+    const _url = _isMlb ? '/api/odds/mlb' : ('/api/odds/' + _sport);
+    // Per-request log Tony requested. Emit on MLB sportsbook path only.
+    if (_isMlb && !_liveOnly) {
+      console.log('[sportsbook fetch] url=/api/odds/mlb sport=baseball_mlb');
     }
     console.log('[PBS fetch start] sport:', _sport, 'url:', _url, 'live:', _liveOnly);
     let _res;
