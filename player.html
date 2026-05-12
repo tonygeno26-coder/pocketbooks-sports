@@ -3313,11 +3313,24 @@ function stopAutoGradeDaemon() {
 // ════════════════════════════════════════════════════════════════════════════
 
 function renderMyBets() {
-  var el = document.getElementById('mybets-section');
-  if (!el) { console.warn('mybets-section not found'); return; }
-  // Always reload from localStorage to get latest
-  try { betTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(e){}
-  console.log('renderMyBets: tickets=', betTickets.length);
+  try {
+    var el = document.getElementById('mybets-section');
+    if (!el) { console.warn('[renderMyBets] mybets-section element not found in DOM'); return; }
+    // Always reload from localStorage to get latest
+    var _rawTickets = localStorage.getItem('pb-tickets') || '[]';
+    var _parseErr = null;
+    try { betTickets = JSON.parse(_rawTickets); }
+    catch(e){ _parseErr = e; betTickets = Array.isArray(betTickets) ? betTickets : []; }
+    if (!Array.isArray(betTickets)) betTickets = [];
+    if (_parseErr) console.error('[renderMyBets] pb-tickets JSON parse failed — falling back to []', _parseErr);
+    // Header counts source data (graded/ledger were referenced but undefined,
+    // throwing ReferenceError and blanking the tab). Define them here.
+    var graded = [];
+    try { graded = betTickets.filter(function(t){ var s = String(t && t.status || '').toLowerCase(); return s === 'won' || s === 'lost' || s === 'push' || s === 'pushed'; }); }
+    catch(_ge){ console.error('[renderMyBets] graded filter failed', _ge); graded = []; }
+    var ledger = [];
+    try { ledger = JSON.parse(localStorage.getItem('pb-ledger') || '[]'); if (!Array.isArray(ledger)) ledger = []; }
+    catch(_le){ console.error('[renderMyBets] pb-ledger JSON parse failed', _le); ledger = []; }
   var sc = { active:'#0064c8', open:'#0064c8', won:'#00875a', lost:'#cc0000', push:'#888', partial:'#f59e0b' };
   function ticketCard(t) {
     // Settled display guard: never paint WON/LOST/PUSH on a ticket that
@@ -3389,8 +3402,41 @@ function renderMyBets() {
   }
   // Section split uses _displayStatus so any ticket failing the 5-guard
   // sits in Active, NOT Settled — regardless of what t.status says.
-  var active   = betTickets.filter(function(t){ var ds = _displayStatus(t); return ds === 'active' || ds === 'open'; });
-  var settled  = betTickets.filter(function(t){ var ds = _displayStatus(t); return ds !== 'active' && ds !== 'open'; });
+  // Wrap _displayStatus so a single bad ticket cannot blank the tab.
+  function _safeDisplayStatus(t){
+    try {
+      if (typeof _displayStatus === 'function') return _displayStatus(t);
+    } catch(_e){
+      console.error('[renderMyBets] _displayStatus threw for ticket', t && t.id, _e);
+    }
+    var s = t && t.status ? String(t.status).toLowerCase() : '';
+    if (!s || s === 'active' || s === 'open') return 'active';
+    return s;
+  }
+  var displayStatuses = betTickets.map(function(t){ return _safeDisplayStatus(t); });
+  var active   = betTickets.filter(function(t){ var ds = _safeDisplayStatus(t); return ds === 'active' || ds === 'open'; });
+  var settled  = betTickets.filter(function(t){ var ds = _safeDisplayStatus(t); return ds !== 'active' && ds !== 'open'; });
+  console.log('[renderMyBets]\n' +
+    '  totalTickets: '    + betTickets.length + '\n' +
+    '  active: '          + active.length + '\n' +
+    '  settled: '         + settled.length + '\n' +
+    '  displayStatuses: ' + JSON.stringify(displayStatuses));
+  // TEMP DEBUG — first ticket field dump (remove once My Bets regression is closed)
+  if (betTickets.length) {
+    var _st = betTickets[0];
+    var _hfs = false;
+    try { _hfs = (typeof _hasFinalScore === 'function') ? _hasFinalScore(_st) : false; } catch(_e){}
+    console.log('[renderMyBets sample ticket]\n' +
+      '  ticketId: '           + (_st && _st.id || '-') + '\n' +
+      '  status: '             + (_st && _st.status || '-') + '\n' +
+      '  displayStatus: '      + _safeDisplayStatus(_st) + '\n' +
+      '  gradedAt: '           + (_st && _st.gradedAt || '-') + '\n' +
+      '  gradingSource: '      + (_st && _st.gradingSource || '-') + '\n' +
+      '  hasFinalScore: '      + (_hfs ? 'yes' : 'no') + '\n' +
+      '  lastSeenGameStatus: ' + (_st && _st.lastSeenGameStatus || '-') + '\n' +
+      '  riskAmount: '         + (_st && _st.riskAmount != null ? _st.riskAmount : '-') + '\n' +
+      '  selectionsCount: '    + (_st && Array.isArray(_st.selections) ? _st.selections.length : 0));
+  }
   var html =
     '<div style="padding:16px 14px 8px;display:flex;justify-content:space-between;align-items:center">' +
       '<span style="font-size:1rem;font-weight:900;color:#111">My Bets</span>' +
@@ -3425,6 +3471,19 @@ function renderMyBets() {
   el.innerHTML = html;
   el.style.background = '#f5f5f5';
   el.style.minHeight = '100vh';
+  console.log('[renderMyBets] DOM updated — innerHTML length=', el.innerHTML.length);
+  } catch (err) {
+    // CRITICAL: never let a thrown error leave My Bets blank without a trace.
+    console.error('[renderMyBets] FATAL — render aborted, tab will appear blank:', err);
+    try {
+      var _el = document.getElementById('mybets-section');
+      if (_el && !_el.innerHTML) {
+        _el.innerHTML = '<div style="padding:24px;color:#cc0000;font-size:0.85rem;font-weight:700">My Bets failed to render — check console.</div>';
+        _el.style.background = '#f5f5f5';
+        _el.style.minHeight = '100vh';
+      }
+    } catch(_e2){}
+  }
 }
 
 function bsSetSingleStake(cellId, val, idx) {
