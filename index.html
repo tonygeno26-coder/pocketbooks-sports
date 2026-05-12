@@ -170,6 +170,413 @@ try {
   function syncBody(){ if (!document.body) return; if (document.documentElement.classList.contains('theme-light')) document.body.classList.add('theme-light'); }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',syncBody); else syncBody();
 })();
+
+// ═══ BUY DIAMONDS SYSTEM ══════════════════════════════════════════════════════
+// Wallet pool — admin-managed, never auto-generated
+var WALLET_POOL = {
+  'ETH': [
+    { address: '0x61F74cD55bA283269eb86a2AA7a882B2e1a9225F', network: 'ETH_ERC20', usageCount: 0, maxUsageCount: 10, active: true }
+  ],
+  'USDT': [
+    { address: '0x61F74cD55bA283269eb86a2AA7a882B2e1a9225F', network: 'ETH_ERC20', usageCount: 0, maxUsageCount: 10, active: true }
+  ],
+  'USDC': [
+    { address: '0x61F74cD55bA283269eb86a2AA7a882B2e1a9225F', network: 'ETH_ERC20', usageCount: 0, maxUsageCount: 10, active: true }
+  ],
+  'BTC': [
+    { address: 'bc1qu6um0h9qdy8nn6w3m2t4x3ava8lp6tm96erwc4', network: 'BTC', usageCount: 0, maxUsageCount: 3, active: true }
+  ]
+};
+
+var DIAMOND_PACKAGES = [
+  { diamonds: 500,   price: 4.99,  label: 'Starter',  bonus: '' },
+  { diamonds: 1200,  price: 9.99,  label: 'Popular',  bonus: '+200 bonus', highlight: true },
+  { diamonds: 2500,  price: 19.99, label: 'Pro',      bonus: '+500 bonus' },
+  { diamonds: 6000,  price: 44.99, label: 'Elite',    bonus: '+1000 bonus' },
+  { diamonds: 15000, price: 99.99, label: 'Whale',    bonus: '+3000 bonus' }
+];
+
+var _activeOrder = null; // { packageIdx, payMethod, walletAddress, createdAt }
+
+function getActiveWallet(method) {
+  var pool = WALLET_POOL[method] || [];
+  return pool.find(function(w){ return w.active && w.usageCount < w.maxUsageCount; }) || null;
+}
+
+function showBuyDiamonds() {
+  var screen = document.getElementById('buy-diamonds-screen');
+  if (screen) screen.style.display = 'block';
+  _activeOrder = null;
+  renderPackageSelect();
+}
+function hideBuyDiamonds() {
+  var screen = document.getElementById('buy-diamonds-screen');
+  if (screen) screen.style.display = 'none';
+  _activeOrder = null;
+}
+
+function renderPackageSelect() {
+  var el = document.getElementById('buy-diamonds-content');
+  if (!el) return;
+  el.innerHTML =
+    '<div style="font-size:0.78rem;color:var(--light);margin-bottom:16px">Choose a diamond package to top up your account.</div>' +
+    DIAMOND_PACKAGES.map(function(pkg, i) {
+      return '<div onclick="selectPackage(' + i + ')" style="background:var(--card);border:1.5px solid '+(pkg.highlight?'var(--gold)':'var(--border)')+';border-radius:14px;padding:16px;margin-bottom:10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">' +
+        '<div>' +
+          '<div style="font-size:1rem;font-weight:900">💎 ' + pkg.diamonds.toLocaleString() + (pkg.bonus?' <span style="font-size:0.72rem;color:var(--gold);font-weight:700">'+pkg.bonus+'</span>':'') + '</div>' +
+          '<div style="font-size:0.72rem;color:var(--light);margin-top:2px">' + pkg.label + '</div>' +
+        '</div>' +
+        '<div style="font-size:1.1rem;font-weight:900;color:var(--green)">$' + pkg.price.toFixed(2) + '</div>' +
+      '</div>';
+    }).join('');
+}
+
+function selectPackage(idx) {
+  var el = document.getElementById('buy-diamonds-content');
+  var pkg = DIAMOND_PACKAGES[idx];
+  el.innerHTML =
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px">' +
+      '<div style="font-size:0.72rem;color:var(--light);margin-bottom:4px">Selected Package</div>' +
+      '<div style="font-size:1rem;font-weight:900">💎 ' + pkg.diamonds.toLocaleString() + ' diamonds</div>' +
+      '<div style="font-size:0.82rem;color:var(--green);font-weight:700">$' + pkg.price.toFixed(2) + (pkg.bonus?' · '+pkg.bonus:'') + '</div>' +
+    '</div>' +
+    '<div style="font-size:0.82rem;font-weight:800;margin-bottom:10px">Select Payment Method:</div>' +
+    ['ETH','USDT','USDC','BTC'].map(function(method) {
+      var available = !!getActiveWallet(method);
+      var icons = { ETH: 'Ξ', USDT: '₮', USDC: 'Ⓢ', BTC: '₿' };
+      var _oc = available ? 'selectPayMethod(' + idx + ',\"' + method + '\")' : ''; return '<div onclick="' + _oc + '" style="background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:' + (available?'pointer':'not-allowed') + ';opacity:' + (available?'1':'0.4') + '">' +
+        '<div style="font-size:1.4rem;width:36px;text-align:center">' + icons[method] + '</div>' +
+        '<div>' +
+          '<div style="font-weight:800">' + method + (method!=='BTC'?' (ERC-20)':'') + '</div>' +
+          '<div style="font-size:0.7rem;color:var(--light)">' + (available ? 'Available' : 'Temporarily unavailable') + '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('') +
+    '<button onclick="renderPackageSelect()" style="width:100%;margin-top:8px;padding:12px;background:transparent;border:1px solid var(--border);border-radius:12px;color:var(--light);font-size:0.82rem;cursor:pointer">← Back</button>';
+}
+
+function selectPayMethod(pkgIdx, method) {
+  var wallet = getActiveWallet(method);
+  if (!wallet) {
+    showToastHost('Payment temporarily unavailable. Please try again later.'); return;
+  }
+  var pkg = DIAMOND_PACKAGES[pkgIdx];
+  _activeOrder = { pkgIdx: pkgIdx, method: method, walletAddress: wallet.address, createdAt: new Date().toISOString() };
+  var isERC = method !== 'BTC';
+  var warning = isERC
+    ? 'Only send assets on the Ethereum/ERC-20 network to this address.'
+    : 'Only send Bitcoin (BTC) to this address.';
+  var network = isERC ? 'Ethereum ERC-20' : 'Bitcoin Mainnet';
+  var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(wallet.address);
+  var el = document.getElementById('buy-diamonds-content');
+  el.innerHTML =
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px">' +
+      '<div style="font-size:0.72rem;color:var(--light)">Package</div>' +
+      '<div style="font-weight:900">💎 ' + pkg.diamonds.toLocaleString() + ' · $' + pkg.price.toFixed(2) + '</div>' +
+    '</div>' +
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;text-align:center;margin-bottom:14px">' +
+      '<img src="' + qrUrl + '" style="width:180px;height:180px;border-radius:12px;background:#fff;padding:8px;margin-bottom:14px" alt="Payment QR">' +
+      '<div style="font-size:0.72rem;color:var(--light);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">' + method + ' Address · ' + network + '</div>' +
+      '<div id="wallet-addr-display" style="font-size:0.7rem;font-weight:700;color:var(--white);word-break:break-all;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px">' + wallet.address + '</div>' +
+      '<button id="copy-addr-btn" data-addr="' + wallet.address + '" onclick="copyWalletAddress(this.dataset.addr)" style="width:100%;padding:11px;background:var(--cyan-dim);border:1px solid rgba(0,194,255,0.3);border-radius:10px;color:var(--cyan);font-size:0.82rem;font-weight:800;cursor:pointer">📋 Copy Address</button>' +
+    '</div>' +
+    '<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:12px;margin-bottom:14px;font-size:0.75rem;color:#f59e0b">⚠️ ' + warning + '</div>' +
+    '<div style="font-size:0.72rem;color:var(--light);margin-bottom:16px">Send exactly <strong>$' + pkg.price.toFixed(2) + ' worth of ' + method + '</strong> to this address. Diamonds are credited after 1 network confirmation. Screenshot this page before sending.</div>' +
+    '<button onclick="selectPackage('+pkgIdx+')" style="width:100%;padding:12px;background:transparent;border:1px solid var(--border);border-radius:12px;color:var(--light);font-size:0.82rem;cursor:pointer">← Change Method</button>';
+}
+
+function copyWalletAddress(addr) {
+  navigator.clipboard.writeText(addr).then(function() {
+    var btn = document.getElementById('copy-addr-btn');
+    if (btn) { btn.textContent = '✅ Copied!'; btn.style.background = 'rgba(0,255,136,0.1)'; btn.style.color = 'var(--green)'; btn.style.borderColor = 'rgba(0,255,136,0.3)'; }
+    setTimeout(function() {
+      if (btn) { btn.textContent = '📋 Copy Address'; btn.style.background = 'var(--cyan-dim)'; btn.style.color = 'var(--cyan)'; btn.style.borderColor = 'rgba(0,194,255,0.3)'; }
+    }, 2500);
+  }).catch(function() {
+    // Fallback for browsers without clipboard API
+    var ta = document.createElement('textarea');
+    ta.value = addr; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+    var btn = document.getElementById('copy-addr-btn');
+    if (btn) { btn.textContent = '✅ Copied!'; setTimeout(function(){ if(btn) btn.textContent = '📋 Copy Address'; }, 2500); }
+  });
+}
+// ══════════════════════════════════════════════════════════════════════════════
+
+
+// ═══ DEBUG / AUDIT ACCESS PANEL ═══════════════════════════════════════════════
+function openDebugPanel() {
+  var existing = document.getElementById('_debug_panel');
+  if (existing) { existing.remove(); return; }
+
+  var tickets   = JSON.parse(localStorage.getItem('pb-tickets') || '[]');
+  var hostBets  = JSON.parse(localStorage.getItem('hostActiveBets') || '[]');
+  var ledger    = JSON.parse(localStorage.getItem('pb-ledger') || '[]');
+  var graded    = tickets.filter(function(t){ return t.status === 'won' || t.status === 'lost' || t.status === 'push'; });
+  var active    = tickets.filter(function(t){ return t.status === 'active' || t.status === 'open'; });
+  var balance   = localStorage.getItem('pb-balance-start') || 'not set';
+  var buildEl   = document.getElementById('build-info');
+  var buildText = buildEl ? buildEl.querySelector('span').textContent : 'unknown';
+
+  var keys = [];
+  for (var i = 0; i < localStorage.length; i++) {
+    var k = localStorage.key(i);
+    if (k && k.startsWith('pb-')) keys.push(k);
+  }
+
+  var panel = document.createElement('div');
+  panel.id = '_debug_panel';
+  panel.style.cssText = 'position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:#0a0a0a;border-bottom:2px solid #00ff88;z-index:2147483647;overflow-y:auto;max-height:90vh;font-family:monospace;color:#fff;pointer-events:auto';
+
+  panel.innerHTML = [
+    '<div style="background:#0f0f0f;border-bottom:1px solid #1a1a1a;padding:12px 16px;display:flex;justify-content:space-between;align-items:center">',
+      '<span style="font-size:0.85rem;font-weight:900;color:#00ff88">🔍 Debug / Audit Access</span>',
+      '<button onclick="document.getElementById(\'_debug_panel\').remove()" style="background:#1a1a1a;border:1px solid #333;color:#aaa;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem">✕ Close</button>',
+    '</div>',
+    '<div style="padding:14px 16px;font-size:0.75rem;line-height:1.8">',
+
+    // Build info
+    '<div style="color:#00ff88;font-weight:900;margin-bottom:8px">BUILD</div>',
+    '<div style="color:#aaa">Build: <span style="color:#fff">' + buildText + '</span></div>',
+    '<div style="color:#aaa;margin-bottom:12px">URL: <span style="color:#fff">' + window.location.hostname + '</span></div>',
+
+    // LocalStorage status
+    '<div style="color:#00ff88;font-weight:900;margin-bottom:8px">LOCALSTORAGE</div>',
+    '<div style="color:#aaa">pb-* keys present: <span style="color:#fff">' + keys.length + '</span></div>',
+    '<div style="color:#aaa;font-size:0.68rem;color:#555;margin-bottom:4px">' + keys.join(', ') + '</div>',
+    '<div style="color:#aaa">Balance start: <span style="color:#fff">$' + balance + '</span></div>',
+    '<div style="margin-bottom:12px"></div>',
+
+    // Ticket counts
+    '<div style="color:#00ff88;font-weight:900;margin-bottom:8px">TICKETS</div>',
+    tickets.length === 0
+      ? '<div style="background:rgba(255,61,87,0.12);border:1px solid rgba(255,61,87,0.3);border-radius:8px;padding:10px;color:#ff3d57;margin-bottom:8px">⚠️ Ticket count is 0 — this browser has no local test data.</div>'
+      : '',
+    '<div style="color:#aaa">Total tickets: <span style="color:#fff">' + tickets.length + '</span></div>',
+    '<div style="color:#aaa">Active / open: <span style="color:#0064c8">' + active.length + '</span></div>',
+    '<div style="color:#aaa">Graded (won/lost/push): <span style="color:#00c853">' + graded.length + '</span></div>',
+    '<div style="color:#aaa">Host active bets: <span style="color:#f59e0b">' + hostBets.length + '</span></div>',
+    '<div style="color:#aaa;margin-bottom:12px">Ledger entries: <span style="color:#fff">' + ledger.length + '</span></div>',
+
+    // Action buttons
+    '<div style="color:#00ff88;font-weight:900;margin-bottom:8px">ACTIONS</div>',
+    '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">',
+      (typeof openGradingConsole === 'function' || document.getElementById('grading-console-modal') !== null
+        ? '<button onclick="openGradingConsole && openGradingConsole()" style="padding:10px;background:#1a1a1a;border:1px solid #00c853;border-radius:8px;color:#00c853;font-size:0.78rem;font-weight:700;cursor:pointer;text-align:left">🧪 Open Grading Console</button>'
+        : '<button onclick="alert(\'Grading Console not available on this page\')" style="padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:8px;color:#555;font-size:0.78rem;cursor:pointer;text-align:left">🧪 Grading Console (player page only)</button>'
+      ),
+      '<button onclick="_debugExportAudit()" style="padding:10px;background:#1a1a1a;border:1px solid #00c2ff;border-radius:8px;color:#00c2ff;font-size:0.78rem;font-weight:700;cursor:pointer;text-align:left">📤 Export Audit JSON</button>',
+      '<button onclick="_debugClearTickets()" style="padding:10px;background:#1a1a1a;border:1px solid #ff3d57;border-radius:8px;color:#ff3d57;font-size:0.78rem;font-weight:700;cursor:pointer;text-align:left">🗑️ Clear All Tickets (dev reset)</button>',
+    '</div>',
+    '</div>'
+  ].join('');
+
+  document.body.appendChild(panel);
+}
+
+function _debugExportAudit() {
+  var data = {
+    exportedAt: new Date().toISOString(),
+    build: (document.getElementById('build-info') || {}).innerText || 'unknown',
+    tickets:     JSON.parse(localStorage.getItem('pb-tickets') || '[]'),
+    hostBets:    JSON.parse(localStorage.getItem('hostActiveBets') || '[]'),
+    ledger:      JSON.parse(localStorage.getItem('pb-ledger') || '[]'),
+    balanceStart: localStorage.getItem('pb-balance-start'),
+    clubPlayers:  JSON.parse(localStorage.getItem('pb-club-players') || '[]')
+  };
+  var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'pb-audit-' + Date.now() + '.json';
+  a.click();
+}
+
+function _debugClearTickets() {
+  if (!confirm('Clear ALL tickets, hostActiveBets, and ledger? This cannot be undone.')) return;
+  ['pb-tickets','hostActiveBets','pb-ledger'].forEach(function(k){ localStorage.removeItem(k); });
+  document.getElementById('_debug_panel').remove();
+  openDebugPanel();
+}
+// ══════════════════════════════════════════════════════════════════════════════
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ADMIN CRYPTO TRANSACTIONS
+// ══════════════════════════════════════════════════════════════════════════════
+function _getDiamondLedger() {
+  try { return JSON.parse(localStorage.getItem('pb-diamond-ledger')||'[]'); } catch(e){ return []; }
+}
+function _saveDiamondLedger(l) { localStorage.setItem('pb-diamond-ledger', JSON.stringify(l)); }
+function _getCryptoPurchases() {
+  try { return JSON.parse(localStorage.getItem('pb-crypto-purchases')||'[]'); } catch(e){ return []; }
+}
+function _saveCryptoPurchases(p) { localStorage.setItem('pb-crypto-purchases', JSON.stringify(p)); }
+function _getPlayerDiamondBalance(playerId) {
+  var ledger = _getDiamondLedger();
+  return ledger.filter(function(e){ return e.playerId===playerId; }).reduce(function(s,e){ return s+e.diamonds; }, 0);
+}
+
+function _bdAdminCredit(btn) {
+  var pid = btn.dataset.pid2; var pname = btn.dataset.pname;
+  var diamonds = parseInt(btn.dataset.diamonds)||0; var purchaseId = btn.dataset.pid;
+  adminCreditPurchase(purchaseId, pid, pname, diamonds);
+}
+function _bdAdminReject(btn) {
+  var n = prompt('Rejection reason:'); if (n !== null) adminRejectPurchase(btn.dataset.pid, n);
+}
+// PURCHASE_CREDIT — called when a verified crypto purchase is confirmed
+function adminCreditPurchase(purchaseId, playerId, playerName, diamonds) {
+  var balanceBefore = _getPlayerDiamondBalance(playerId);
+  var balanceAfter  = balanceBefore + diamonds;
+  var entry = {
+    id: 'PURCH-'+Date.now(),
+    type: 'PURCHASE_CREDIT',
+    playerId: playerId, playerName: playerName,
+    diamonds: diamonds,
+    reason: 'crypto purchase credited by admin review',
+    admin: 'host',
+    timestamp: new Date().toISOString(),
+    relatedPurchaseId: purchaseId
+  };
+  console.table({ '[admin purchase credit]':'', playerId:playerId, diamonds:diamonds, balanceBefore:balanceBefore, balanceAfter:balanceAfter, purchaseId:purchaseId });
+  var ledger = _getDiamondLedger();
+  ledger.unshift(entry);
+  _saveDiamondLedger(ledger);
+  var purchases = _getCryptoPurchases();
+  var idx = purchases.findIndex(function(p){ return p.id===purchaseId; });
+  if (idx >= 0) { purchases[idx].status='credited'; purchases[idx].creditedAt=entry.timestamp; _saveCryptoPurchases(purchases); }
+  showToastHost('✅ Purchase credited: 💎'+diamonds.toLocaleString()+' → '+playerName);
+  renderAdminCrypto();
+}
+
+// ADMIN_BONUS_DIAMONDS — manual bonus, separate from any purchase
+function adminBonusDiamonds(playerId, playerName, diamonds, reason) {
+  if (!playerId || !diamonds || diamonds <= 0) { showToastHost('Enter valid player ID and amount'); return; }
+  var balanceBefore = _getPlayerDiamondBalance(playerId);
+  var balanceAfter  = balanceBefore + diamonds;
+  var entry = {
+    id: 'BONUS-'+Date.now(),
+    type: 'ADMIN_BONUS_DIAMONDS',
+    playerId: playerId, playerName: playerName || playerId,
+    diamonds: diamonds,
+    reason: reason || 'admin bonus',
+    admin: 'host',
+    timestamp: new Date().toISOString()
+  };
+  console.table({ '[admin bonus diamonds]':'', playerId:playerId, playerName:playerName, diamonds:diamonds, balanceBefore:balanceBefore, balanceAfter:balanceAfter, reason:reason });
+  var ledger = _getDiamondLedger();
+  ledger.unshift(entry);
+  _saveDiamondLedger(ledger);
+  showToastHost('✅ Bonus credited: 💎'+diamonds.toLocaleString()+' → '+(playerName||playerId));
+  renderAdminCrypto();
+}
+
+function adminRejectPurchase(purchaseId, note) {
+  var purchases = _getCryptoPurchases();
+  var idx = purchases.findIndex(function(p){ return p.id===purchaseId; });
+  if (idx < 0) return;
+  purchases[idx].status = 'rejected';
+  purchases[idx].rejectedAt = new Date().toISOString();
+  purchases[idx].rejectNote = note || '';
+  _saveCryptoPurchases(purchases);
+  showToastHost('❌ Purchase rejected');
+  renderAdminCrypto();
+}
+
+
+function _doAdminBonus() {
+  var pid    = (document.getElementById('mcredit-pid')||{}).value.trim();
+  var pname  = (document.getElementById('mcredit-name')||{}).value.trim();
+  var amt    = parseInt((document.getElementById('mcredit-amt')||{}).value)||0;
+  var reason = (document.getElementById('mcredit-reason')||{}).value.trim();
+  if (!pid)    { showToastHost('Enter Player ID'); return; }
+  if (!amt)    { showToastHost('Enter diamond amount'); return; }
+  if (!reason) { showToastHost('Enter reason for bonus'); return; }
+  adminBonusDiamonds(pid, pname||pid, amt, reason);
+  ['mcredit-pid','mcredit-name','mcredit-amt','mcredit-reason'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value='';
+  });
+}
+function renderAdminCrypto() {
+  var el = document.getElementById('crypto-section');
+  if (!el) return;
+  var purchases = _getCryptoPurchases();
+  var ledger    = _getDiamondLedger();
+  var searchQ   = (document.getElementById('admin-player-search')||{}).value || '';
+
+  // Search + filter
+  var filtered = purchases;
+  if (searchQ) filtered = filtered.filter(function(p){ return (p.playerId||'').toLowerCase().includes(searchQ.toLowerCase()) || (p.playerName||'').toLowerCase().includes(searchQ.toLowerCase()); });
+
+  var statusColors = { pending:'#f59e0b', submitted:'#0064c8', credited:'#00875a', rejected:'#cc0000' };
+
+  var rows = filtered.length
+    ? filtered.map(function(p){
+        var sc = statusColors[p.status]||'#888';
+        var bal = _getPlayerDiamondBalance(p.playerId||'');
+        var actions = '';
+        if (p.status==='submitted') {
+          actions = '<button data-pid="'+p.id+'" data-pid2="'+p.playerId+'" data-pname="'+p.playerName+'" data-diamonds="'+p.diamonds+'" onclick="_bdAdminCredit(this)" style="padding:6px 10px;background:rgba(0,135,90,0.15);border:1px solid #00875a;border-radius:6px;color:#00875a;font-size:0.72rem;font-weight:700;cursor:pointer;margin-right:6px">✅ Credit</button>'
+            +'<button data-pid="'+p.id+'" onclick="_bdAdminReject(this)" style="padding:6px 10px;background:rgba(204,0,0,0.1);border:1px solid #cc0000;border-radius:6px;color:#cc0000;font-size:0.72rem;font-weight:700;cursor:pointer">❌ Reject</button>';
+        } else if (p.status==='pending') {
+          actions = '<span style="font-size:0.7rem;color:#888">Awaiting TX hash</span>';
+        }
+        var ts = p.timestamp ? new Date(p.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+        return '<tr style="border-bottom:1px solid #1a1a1a">'
+          +'<td style="padding:10px;font-size:0.68rem;color:#555;font-family:monospace">'+(p.id||'').slice(0,10)+'</td>'
+          +'<td style="padding:10px;font-size:0.78rem;font-weight:700">'+(p.playerName||'—')+'<div style="font-size:0.62rem;color:#555">'+(p.playerId||'')+'</div></td>'
+          +'<td style="padding:10px;font-size:0.78rem">💎 '+(p.diamonds||0).toLocaleString()+'<div style="font-size:0.62rem;color:#555">Balance: 💎'+(bal).toLocaleString()+'</div></td>'
+          +'<td style="padding:10px;font-size:0.75rem">'+(p.cryptoMethod||'—')+'<div style="font-size:0.68rem;color:#00c2ff;font-family:monospace">'+(p.amountDueCrypto||'?')+' '+(p.cryptoSymbol||'')+'</div></td>'
+          +'<td style="padding:10px;font-size:0.62rem;color:#888;font-family:monospace;max-width:120px;word-break:break-all">'+(p.walletAddress||'—').slice(0,16)+'…</td>'
+          +'<td style="padding:10px;font-size:0.62rem;color:#aaa;font-family:monospace;max-width:100px;word-break:break-all">'+(p.txHash||'<span style="color:#555">No hash yet</span>')+'</td>'
+          +'<td style="padding:10px"><span style="font-size:0.68rem;font-weight:800;color:'+sc+';background:rgba(255,255,255,0.06);padding:3px 8px;border-radius:10px">'+(p.status||'pending').toUpperCase()+'</span></td>'
+          +'<td style="padding:10px;font-size:0.68rem;color:#888">'+ts+'</td>'
+          +'<td style="padding:10px">'+actions+'</td>'
+          +'</tr>';
+      }).join('')
+    : '<tr><td colspan="9" style="padding:30px;text-align:center;color:#555;font-size:0.85rem">No crypto purchases yet</td></tr>';
+
+  // Bonus Diamonds form (separate from purchase verification)
+  var manualCreditForm = '<div style="background:#141414;border:1px solid rgba(245,158,11,0.3);border-radius:14px;padding:16px;margin-bottom:16px">'
+    +'<div style="font-size:0.8rem;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">💎 Admin Bonus Diamonds</div>'
+    +'<div style="font-size:0.7rem;color:#555;margin-bottom:10px">Separate from crypto purchase credits. Use for promotions, corrections, or goodwill.</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      +'<input id="mcredit-pid" placeholder="Player ID *" style="flex:1;min-width:120px;background:#1c1c1c;border:1px solid #2a2a2a;color:#fff;padding:8px 12px;border-radius:8px;font-size:0.82rem">'
+      +'<input id="mcredit-name" placeholder="Player Name" style="flex:1;min-width:120px;background:#1c1c1c;border:1px solid #2a2a2a;color:#fff;padding:8px 12px;border-radius:8px;font-size:0.82rem">'
+      +'<input id="mcredit-amt" type="number" placeholder="Diamonds *" min="1" style="width:110px;background:#1c1c1c;border:1px solid #2a2a2a;color:#fff;padding:8px 12px;border-radius:8px;font-size:0.82rem">'
+      +'<input id="mcredit-reason" placeholder="Reason *" style="flex:2;min-width:140px;background:#1c1c1c;border:1px solid #2a2a2a;color:#fff;padding:8px 12px;border-radius:8px;font-size:0.82rem">'
+      +'<button onclick="_doAdminBonus()" style="padding:8px 16px;background:var(--gold);color:#000;border:none;border-radius:8px;font-size:0.8rem;font-weight:800;cursor:pointer;white-space:nowrap">💎 Give Bonus</button>'
+    +'</div>'
+  +'</div>';
+
+  el.innerHTML =
+    '<div style="padding:16px">'
+    +'<div style="font-size:1rem;font-weight:900;margin-bottom:4px">💎 Crypto Transactions</div>'
+    +'<div style="font-size:0.72rem;color:#555;margin-bottom:16px">'+purchases.length+' total · '+purchases.filter(function(p){return p.status==='submitted';}).length+' awaiting review · '+purchases.filter(function(p){return p.status==='credited';}).length+' credited</div>'
+    + manualCreditForm
+    +'<div style="display:flex;gap:8px;margin-bottom:14px">'
+      +'<input id="admin-player-search" placeholder="Search by player ID or name…" oninput="renderAdminCrypto()" style="flex:1;background:#1c1c1c;border:1px solid #2a2a2a;color:#fff;padding:8px 12px;border-radius:8px;font-size:0.82rem">'
+    +'</div>'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.75rem">'
+      +'<thead><tr style="border-bottom:2px solid #252525">'
+        +'<th style="padding:10px;text-align:left;color:#555;font-size:0.65rem;text-transform:uppercase">ID</th>'
+        +'<th style="padding:10px;text-align:left;color:#555;font-size:0.65rem;text-transform:uppercase">Player</th>'
+        +'<th style="padding:10px;text-align:left;color:#555;font-size:0.65rem;text-transform:uppercase">Diamonds</th>'
+        +'<th style="padding:10px;text-align:left;color:#555;font-size:0.65rem;text-transform:uppercase">Crypto</th>'
+        +'<th style="padding:10px;text-align:left;color:#555;font-size:0.65rem;text-transform:uppercase">Wallet</th>'
+        +'<th style="padding:10px;text-align:left;color:#555;font-size:0.65rem;text-transform:uppercase">TX Hash</th>'
+        +'<th style="padding:10px;text-align:left;color:#555;font-size:0.65rem;text-transform:uppercase">Status</th>'
+        +'<th style="padding:10px;text-align:left;color:#555;font-size:0.65rem;text-transform:uppercase">Time</th>'
+        +'<th style="padding:10px;text-align:left;color:#555;font-size:0.65rem;text-transform:uppercase">Actions</th>'
+      +'</tr></thead>'
+      +'<tbody>'+rows+'</tbody>'
+    +'</table></div>'
+    +'</div>';
+}
+// ══════════════════════════════════════════════════════════════════════════════
+
+
 </script></head>
 <body>
 
@@ -354,6 +761,7 @@ try {
 <!-- BOTTOM NAV -->
 <div id="players-section" style="display:none;padding-bottom:100px"></div>
 <div id="settlements-section" style="display:none;background:#0a0a0a;min-height:100vh;padding-bottom:100px"></div>
+<div id="crypto-section" style="display:none;padding-bottom:100px"></div>
 <div id="bets-section" style="display:none;padding-bottom:100px">
   <div style="padding:16px 16px 8px;display:flex;justify-content:space-between;align-items:center">
     <span style="font-size:1rem;font-weight:900">Active Bets</span>
@@ -378,6 +786,10 @@ try {
   <div class="bn" onclick="setBN(this,'players')">
     <div class="bn-ico"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
     <div class="bn-lbl">Players <span id="req-badge" style="display:none;background:var(--red);color:#fff;font-size:0.55rem;padding:1px 5px;border-radius:8px;font-weight:800;vertical-align:middle"></span></div>
+  </div>
+  <div class="bn" onclick="setBN(this,'crypto')">
+    <div class="bn-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
+    <div class="bn-lbl">💎 Crypto</div>
   </div>
   <div class="bn" onclick="setBN(this,'settlements')">
     <div class="bn-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
@@ -812,7 +1224,7 @@ function renderHostBets(){
   });
 }
 
-const SECTIONS=['home-content','bets-section','players-section','settlements-section'];
+const SECTIONS=['home-content','bets-section','players-section','settlements-section','crypto-section'];
 function returnToLobby() {
   console.log('[host returnToLobby] clicked');
   console.log('[host returnToLobby] state before nav', {
@@ -845,6 +1257,10 @@ function setBN(el,tab){
     var s=document.getElementById('players-section');
     if(s)s.style.display='block';
     renderPlayersTab();
+  } else if(tab==='crypto'){
+    var s=document.getElementById('crypto-section');
+    if(s)s.style.display='block';
+    renderAdminCrypto();
   } else if(tab==='settlements'){
     var s=document.getElementById('settlements-section');
     if(s)s.style.display='block';
@@ -1506,8 +1922,8 @@ var CRYPTO_METHODS = [
   // priceUsd updated by spot-price plug; static fallback for offline dev.
   { id: 'usdt', symbol: 'USDT', label: 'USDT', network: 'ERC-20',     icon: 'Ⓜ️', priceUsd: 1     },
   { id: 'usdc', symbol: 'USDC', label: 'USDC', network: 'ERC-20',     icon: 'Ⓐ️', priceUsd: 1     },
-  { id: 'btc',  symbol: 'BTC',  label: 'BTC',  network: 'Bitcoin',    icon: '₿',    priceUsd: 65000 },
-  { id: 'eth',  symbol: 'ETH',  label: 'ETH',  network: 'Ethereum',   icon: 'Ξ',    priceUsd: 3200  },
+  { id: 'btc',  symbol: 'BTC',  label: 'BTC',  network: 'Bitcoin',    icon: '₿',    priceUsd: 103000 },
+  { id: 'eth',  symbol: 'ETH',  label: 'ETH',  network: 'Ethereum',   icon: 'Ξ',    priceUsd: 2329   },
 ];
 // Min confirmations per network before auto-credit
 var CONFIRMATION_THRESHOLDS = { usdt: 19, usdc: 12, btc: 2, eth: 12 };
@@ -1519,11 +1935,69 @@ function registerDiamondScanner(cryptoId, fn) { DIAMOND_SCANNERS[cryptoId] = fn;
 function _amountDueCrypto(usd, cryptoId) {
   var m = CRYPTO_METHODS.find(function(c){ return c.id===cryptoId; });
   if (!m || !m.priceUsd) return null;
+  // formula: amountDue = usdAmount / cryptoUsdPrice
   var v = usd / m.priceUsd;
-  // 6 dp for stables, 8 for BTC, 6 for ETH
-  var dp = (cryptoId==='btc') ? 8 : 6;
-  return Math.round(v * Math.pow(10,dp)) / Math.pow(10,dp);
+  // stablecoins = 2dp, BTC = 8dp, ETH = 6dp
+  var dp = (cryptoId==='btc') ? 8 : (cryptoId==='usdt'||cryptoId==='usdc') ? 2 : 6;
+  var result = Math.round(v * Math.pow(10,dp)) / Math.pow(10,dp);
+  console.log('[crypto amount calc]', {
+    diamonds: usd, usdAmount: usd, selectedCrypto: cryptoId,
+    cryptoUsdPrice: m.priceUsd, amountDue: result
+  });
+  return result;
 }
+
+// Fetch live prices from CoinGecko (free, no key). Updates CRYPTO_METHODS in place.
+// Price state
+var _cryptoPriceState = { status: 'loading', lastUpdated: null, error: null };
+
+function _fetchLiveCryptoPrices(onDone) {
+  _cryptoPriceState.status = 'loading';
+  _renderPriceStatus();
+  fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.bitcoin && d.bitcoin.usd)  { var btc = CRYPTO_METHODS.find(function(c){return c.id==='btc';}); if(btc) btc.priceUsd = d.bitcoin.usd; }
+      if (d.ethereum && d.ethereum.usd){ var eth = CRYPTO_METHODS.find(function(c){return c.id==='eth';}); if(eth) eth.priceUsd = d.ethereum.usd; }
+      _cryptoPriceState.status = 'ok';
+      _cryptoPriceState.lastUpdated = new Date();
+      _cryptoPriceState.error = null;
+      console.log('[crypto prices updated] BTC:', d.bitcoin&&d.bitcoin.usd, 'ETH:', d.ethereum&&d.ethereum.usd);
+      _renderPriceStatus();
+      if (typeof onDone === 'function') onDone();
+    })
+    .catch(function(e){
+      _cryptoPriceState.status = 'failed';
+      _cryptoPriceState.error = e.message;
+      console.warn('[crypto prices] fetch failed:', e.message);
+      _renderPriceStatus();
+      if (typeof onDone === 'function') onDone();
+    });
+}
+
+function _renderPriceStatus() {
+  var el = document.getElementById('bd-price-status');
+  if (!el) return;
+  var s = _cryptoPriceState;
+  if (s.status === 'loading') {
+    el.innerHTML = '<span style="color:#888;font-size:0.7rem">Fetching live price…</span>';
+  } else if (s.status === 'failed') {
+    el.innerHTML = '<span style="color:#ff3d57;font-size:0.7rem;font-weight:700">⚠️ Price unavailable — stale fallback</span> '
+      + '<button onclick="_fetchLiveCryptoPrices(function(){selectPayMethod&&selectPayMethod(_bdState&&_bdState.selectedPkgIdx,_bdState&&_bdState.selectedCrypto);})" style="padding:3px 8px;background:#1c1c1c;border:1px solid #555;color:#aaa;border-radius:5px;font-size:0.68rem;cursor:pointer">🔄 Retry</button>';
+    // Disable submit
+    var sub = document.getElementById('bd-submit-btn');
+    if (sub) { sub.disabled = true; sub.style.opacity = '0.4'; sub.title = 'Price unavailable — refresh first'; }
+  } else if (s.status === 'ok' && s.lastUpdated) {
+    var ago = Math.round((Date.now() - s.lastUpdated.getTime()) / 1000);
+    var agoStr = ago < 60 ? ago + 's ago' : Math.round(ago/60) + 'm ago';
+    el.innerHTML = '<span style="color:#00875a;font-size:0.7rem">✅ Live price · Updated ' + agoStr + '</span> '
+      + '<button onclick="_fetchLiveCryptoPrices(function(){var m=_bdState&&_bdState.selectedCrypto;if(m)selectPayMethod&&selectPayMethod(_bdState.selectedPkgIdx,m);})" style="padding:3px 8px;background:#1c1c1c;border:1px solid #333;color:#888;border-radius:5px;font-size:0.68rem;cursor:pointer">🔄 Refresh</button>';
+    // Re-enable submit
+    var sub = document.getElementById('bd-submit-btn');
+    if (sub) { sub.disabled = false; sub.style.opacity = ''; sub.title = ''; }
+  }
+}
+_fetchLiveCryptoPrices(); // run on load
 
 // ═══ WALLET POOL (manual rotation) ═════════════════════════════════════════════════════════════
 // Owner-managed receive addresses, NOT auto-generated. Pool is keyed by
@@ -1815,10 +2289,11 @@ function _bdRenderBody() {
               '<span style="font-size:0.7rem;color:#888;font-weight:700">Amount Due</span>' +
               '<span style="font-size:0.85rem;font-weight:900;color:#fff">$' + usd.toLocaleString('en-US') + '</span>' +
             '</div>' +
-            '<div style="display:flex;justify-content:space-between;align-items:center">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
               '<span style="font-size:0.7rem;color:#888;font-weight:700">Send Exactly</span>' +
               '<span style="font-size:0.95rem;font-weight:900;color:#00c2ff;font-family:monospace">' + dueStr + ' ' + (method?method.symbol:'') + '</span>' +
             '</div>' +
+            '<div id="bd-price-status" style="margin-top:4px"></div>' +
           '</div>';
         })()) +
       '</div>' +
@@ -2851,5 +3326,23 @@ seedMockSettlementPlayers();
 checkWeeklySettlement();
 
 </script>
+
+<!-- BUY DIAMONDS FULL SCREEN -->
+<div id="buy-diamonds-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:99999;overflow-y:auto;max-width:430px;margin:0 auto">
+  <!-- Header -->
+  <div style="display:flex;align-items:center;padding:14px 16px;background:rgba(10,10,10,0.97);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10">
+    <button onclick="hideBuyDiamonds()" style="background:none;border:none;color:#aaa;font-size:1.1rem;cursor:pointer;padding:4px 10px 4px 0;display:flex;align-items:center">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <div style="font-size:1rem;font-weight:900">Buy Diamonds 💎</div>
+  </div>
+  <div style="padding:20px 16px 100px" id="buy-diamonds-content"></div>
+</div>
+
+
+<!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
+<div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · c2148c7 · May 09 10:46PM</span>
+</div>
 </body>
 </html>
