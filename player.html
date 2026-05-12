@@ -812,14 +812,22 @@ function calcAvailableBalance() {
   // ─────────────────────────────────────────────────────────────────────────
   var starting = _getStartingBalance();
   var tickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]');
+  // Use _displayStatus so a ticket with stale status='lost' but failing the
+  // 5-guard is held in openRisk (recoverable), not subtracted as settledLoss.
+  function _effective(t){
+    var s = String(t.status||'').toLowerCase();
+    if (s === 'canceled' || s === 'voided' || s === 'deleted') return s;
+    if (s === 'active' || s === 'open' || s === '') return 'active';
+    return (typeof _isSettledTicket === 'function' && _isSettledTicket(t)) ? s : 'active';
+  }
   var openRisk = tickets
-    .filter(function(t){ return t.status==='active' || t.status==='open'; })
+    .filter(function(t){ var es = _effective(t); return es==='active' || es==='open'; })
     .reduce(function(s,t){ return s + (parseFloat(t.riskAmount)||0); }, 0);
   var settledGains = tickets
-    .filter(function(t){ return t.status==='won'; })
+    .filter(function(t){ return _effective(t)==='won'; })
     .reduce(function(s,t){ return s + (parseFloat(t.potentialProfit)||0); }, 0);
   var settledLosses = tickets
-    .filter(function(t){ return t.status==='lost'; })
+    .filter(function(t){ return _effective(t)==='lost'; })
     .reduce(function(s,t){ return s + (parseFloat(t.riskAmount)||0); }, 0);
   // refunds bucket intentionally empty under the openRisk-exclusion model.
   var refunds = 0;
@@ -1411,7 +1419,14 @@ function setBNav(el,tab){
     if(sec) sec.style.display='block';
     if(ss) ss.style.display='none';
     if(pb) pb.style.display='none';
-    if (typeof loadGames === 'function') loadGames('mlb', { targetId:'live-games-list', liveOnly:true });
+    // Live tab now reads from the cached SportsDataIO GamesByDate proxy.
+    // The Odds API is no longer used for Live. Falls back to the original
+    // loadGames if the new loader isn't available (older cached page).
+    if (typeof loadLiveGamesFromSportsDataIO === 'function') {
+      loadLiveGamesFromSportsDataIO();
+    } else if (typeof loadGames === 'function') {
+      loadGames('mlb', { targetId:'live-games-list', liveOnly:true });
+    }
   } else if(tab==='predictions'){
     const sec=document.getElementById('predictions-section');
     if(sec) sec.style.display='block';
@@ -1790,10 +1805,14 @@ function _updateTeaserTab() {
 }
 var TEASER_ELIGIBLE = ['run line','spread','total','over','under'];
 function isTeaserEligible(b) {
-  var m = (b.market||'').toLowerCase();
-  return TEASER_ELIGIBLE.some(function(t){ return m.includes(t); });
+  // Defensive against malformed slip entries after upstream odds failures.
+  if (!b || typeof b !== 'object') return false;
+  var m = String(b.market || b.pick || '').toLowerCase();
+  if (!m) return false;
+  return TEASER_ELIGIBLE.some(function(t){ return t && m.indexOf(t) !== -1; });
 }
 function getTeaserLegs() {
+  if (!Array.isArray(betSlip)) return [];
   return betSlip.filter(isTeaserEligible);
 }
 
@@ -3275,7 +3294,11 @@ function renderMyBets() {
   console.log('renderMyBets: tickets=', betTickets.length);
   var sc = { active:'#0064c8', open:'#0064c8', won:'#00875a', lost:'#cc0000', push:'#888', partial:'#f59e0b' };
   function ticketCard(t) {
-    var color = sc[t.status] || '#555';
+    // Settled display guard: never paint WON/LOST/PUSH on a ticket that
+    // fails the 5-guard, even if t.status is stale-set to 'lost'.
+    var displayStatus = _displayStatus(t);
+    try { _logSettledDisplayGuard(t); } catch(_e){}
+    var color = sc[displayStatus] || '#555';
     var d = new Date(t.placedAt);
     var dateStr = isNaN(d) ? t.placedAt : d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
     var picks = (t.selections||[]).slice(0,3).map(function(s){
@@ -3288,17 +3311,17 @@ function renderMyBets() {
     var morePicks = (t.selections||[]).length > 3 ? '<div style="font-size:0.68rem;color:#aaa;padding-top:4px">+'+(t.selections.length-3)+' more picks</div>' : '';
     var isDeletePending = t.deleteRequestStatus === 'pending';
     var isDeleteDenied  = t.deleteRequestStatus === 'denied';
-    var isVoided        = t.status === 'voided' || t.status === 'deleted' || t.status === 'canceled';
+    var isVoided        = displayStatus === 'voided' || displayStatus === 'deleted' || displayStatus === 'canceled';
     var statusBadge = isDeletePending
       ? '<span style="font-size:0.68rem;font-weight:800;color:#f59e0b;background:#fffbeb;padding:4px 10px;border-radius:20px;border:1px solid #f59e0b">DELETE REQUESTED</span>'
       : isDeleteDenied
         ? '<span style="font-size:0.68rem;font-weight:800;color:#cc0000;background:#fff0f0;padding:4px 10px;border-radius:20px;border:1px solid #cc0000">REQUEST DENIED</span>'
-        : t.status === 'canceled'
+        : displayStatus === 'canceled'
           ? '<span style="font-size:0.68rem;font-weight:800;color:#555;background:#f0f0f0;padding:4px 10px;border-radius:20px;border:1px solid #ccc">BET CANCELED</span>'
           : isVoided
             ? '<span style="font-size:0.68rem;font-weight:800;color:#888;background:#f5f5f5;padding:4px 10px;border-radius:20px;border:1px solid #ddd">VOIDED</span>'
-          : '<span style="font-size:0.68rem;font-weight:800;color:'+color+';background:'+(t.status==='lost'?'#fff0f0':t.status==='won'?'#f0fff4':'#f0f4ff')+';padding:4px 10px;border-radius:20px;border:1px solid '+color+'">'+t.status.toUpperCase()+'</span>';
-    var canRequestDelete = (t.status==='active'||t.status==='open') && !isDeletePending && !isVoided;
+          : '<span style="font-size:0.68rem;font-weight:800;color:'+color+';background:'+(displayStatus==='lost'?'#fff0f0':displayStatus==='won'?'#f0fff4':'#f0f4ff')+';padding:4px 10px;border-radius:20px;border:1px solid '+color+'">'+displayStatus.toUpperCase()+'</span>';
+    var canRequestDelete = (displayStatus==='active'||displayStatus==='open') && !isDeletePending && !isVoided;
     var deleteBtn = canRequestDelete
       ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;text-align:right"><button data-reqdelete="'+t.id+'" onclick="event.stopPropagation();requestBetDelete(\''+t.id+'\',event)" style="font-size:0.72rem;font-weight:700;color:#cc0000;background:none;border:1.5px solid #cc0000;border-radius:20px;padding:5px 14px;cursor:pointer;pointer-events:auto;position:relative;z-index:50">✕ Request Delete</button></div>'
       : isDeletePending
@@ -3338,10 +3361,10 @@ function renderMyBets() {
       deleteBtn +
     '</div>';
   }
-  var active   = betTickets.filter(function(t){ return (t.status==='active'||t.status==='open') && t.status!=='canceled'; });
-  var settled  = betTickets.filter(function(t){ return t.status!=='active'&&t.status!=='open'; });
-  var graded  = betTickets.filter(function(t){ return t.status==='won'||t.status==='lost'||t.status==='push'; });
-  var ledger  = JSON.parse(localStorage.getItem('pb-ledger')||'[]');
+  // Section split uses _displayStatus so any ticket failing the 5-guard
+  // sits in Active, NOT Settled — regardless of what t.status says.
+  var active   = betTickets.filter(function(t){ var ds = _displayStatus(t); return ds === 'active' || ds === 'open'; });
+  var settled  = betTickets.filter(function(t){ var ds = _displayStatus(t); return ds !== 'active' && ds !== 'open'; });
   var html =
     '<div style="padding:16px 14px 8px;display:flex;justify-content:space-between;align-items:center">' +
       '<span style="font-size:1rem;font-weight:900;color:#111">My Bets</span>' +
@@ -4290,6 +4313,14 @@ function _wireResultsButtons(el){
 
   function simulateGradeResults() {
     try {
+      // Refuse to grade when scores provider is unavailable. The simulate
+      // path doesn't need scores, but per safety policy: no flips while the
+      // circuit breaker is open.
+      if (typeof _isScoresGradingSuspended === 'function' && _isScoresGradingSuspended()) {
+        try { showToast && showToast('Scores unavailable — grading suspended'); } catch(_e){}
+        console.log('[scores unavailable — grading suspended]\n  simulateGradeResults refused');
+        return;
+      }
       var raw = localStorage.getItem('pb-tickets') || '[]';
       var tickets;
       try { tickets = JSON.parse(raw); } catch(_e) { tickets = []; }
@@ -4720,6 +4751,283 @@ function regradeTicket(ticketId) {
 }
 window.regradeTicket = regradeTicket;
 
+// =============================================================================
+// PROTECTIVE FIXES — safety branch (no feature changes; no bet math changes)
+//
+// (1) 5-guard display/settlement: a ticket can only be shown WON/LOST/PUSH
+//     when all 5 hold: status ∈ {won,lost,push}, gradedAt, gradingSource,
+//     finalScore-or-manualFinalScore, AND upstream sourceGameStatus is
+//     final/completed family.
+// (2) Scores-unavailable circuit breaker: any 402/429/401/403 from a scores
+//     endpoint suspends grading for 5 min. No ticket is flipped while
+//     suspended.
+// (3) Hard intercept of /api/scores/... fetches: if anything in the deployed
+//     bundle (or an injected script) attempts to poll a scores endpoint,
+//     after the first non-2xx the wrapper returns a synthetic 503 without
+//     hitting the network, plus an exponential backoff so the loop dies.
+// (4) Live tab: routed to the cached SportsDataIO GamesByDate proxy at
+//     /api/sportsdataio/mlb?path=scores/json/GamesByDate/<date>. Falls back
+//     to the prior loadGames(..., liveOnly:true) only if the new loader
+//     isn't available.
+// (5) Teaser TypeError guard: isTeaserEligible/getTeaserLegs defensively
+//     handle null/undefined slip entries.
+// =============================================================================
+
+var _SCORES_GRADING_SUSPENDED     = false;
+var _SCORES_SUSPENSION_REASON     = '';
+var _SCORES_SUSPENSION_AT         = 0;
+var _SCORES_SUSPENSION_BASE_MS    = 60 * 1000;   // 60s after first failure
+var _SCORES_SUSPENSION_MAX_MS     = 5 * 60 * 1000; // cap 5 min
+var _SCORES_SUSPENSION_STEP       = 0;            // backoff step counter
+function _scoresBackoffMs(){
+  // 60s -> 120s -> 300s (capped)
+  var ms = _SCORES_SUSPENSION_BASE_MS * Math.pow(2, _SCORES_SUSPENSION_STEP);
+  return Math.min(ms, _SCORES_SUSPENSION_MAX_MS);
+}
+function _isScoresGradingSuspended(){
+  if (!_SCORES_GRADING_SUSPENDED) return false;
+  if (Date.now() - _SCORES_SUSPENSION_AT > _scoresBackoffMs()) {
+    _SCORES_GRADING_SUSPENDED = false;
+    console.log('[scores grading resumed] backoff window elapsed; next failure will re-suspend with a longer window');
+    return false;
+  }
+  return true;
+}
+function _suspendScoresGrading(reason){
+  _SCORES_GRADING_SUSPENDED = true;
+  _SCORES_SUSPENSION_REASON = String(reason || 'unknown');
+  _SCORES_SUSPENSION_AT     = Date.now();
+  _SCORES_SUSPENSION_STEP   = Math.min(_SCORES_SUSPENSION_STEP + 1, 4);
+  console.warn('[scores unavailable — grading suspended]\n' +
+               '  reason: '         + _SCORES_SUSPENSION_REASON + '\n' +
+               '  effect: '         + 'no ticket flips, no balance settlement\n' +
+               '  backoffSeconds: ' + Math.round(_scoresBackoffMs()/1000));
+}
+window._isScoresGradingSuspended = _isScoresGradingSuspended;
+window._suspendScoresGrading     = _suspendScoresGrading;
+
+// Display guards — single source of truth for ALL UI / balance / aggregator code.
+function _hasFinalScore(t){
+  if (!t) return false;
+  if (Array.isArray(t.manualFinalScore) && t.manualFinalScore.length) return true;
+  if (t.finalScore && (t.finalScore.status || t.finalScore.awayRuns != null || t.finalScore.away != null)) return true;
+  return false;
+}
+function _sourceGameStatus(t){
+  if (!t) return null;
+  if (t.lastSeenGameStatus) return String(t.lastSeenGameStatus);
+  if (Array.isArray(t.manualFinalScore) && t.manualFinalScore[0] && t.manualFinalScore[0].status) {
+    return String(t.manualFinalScore[0].status);
+  }
+  if (t.finalScore && t.finalScore.status) return String(t.finalScore.status);
+  return null;
+}
+function _isFinalSourceStatus(s){
+  if (s == null) return false;
+  var v = String(s).toLowerCase().trim();
+  if (!v) return false;
+  if (v === 'final' || v.indexOf('final') === 0) return true;
+  if (v === 'f' || v.indexOf('f/') === 0) return true;
+  if (v === 'completed' || v === 'complete') return true;
+  if (v === 'cancelled' || v === 'canceled') return true;
+  if (v === 'postponed') return true;
+  if (v === 'suspended') return true;
+  if (v === 'forfeit') return true;
+  return false;
+}
+function _isSettledTicket(t){
+  if (!t) return false;
+  var s = String(t.status||'').toLowerCase();
+  if (s !== 'won' && s !== 'lost' && s !== 'push' && s !== 'pushed') return false;
+  if (!t.gradedAt)      return false;
+  if (!t.gradingSource) return false;
+  if (!_hasFinalScore(t)) return false;
+  var src = _sourceGameStatus(t);
+  if (src && !_isFinalSourceStatus(src)) return false; // upstream says not final — refuse
+  return true;
+}
+function _displayStatus(t){
+  if (!t) return 'active';
+  var s = String(t.status||'').toLowerCase();
+  if (s === 'canceled' || s === 'voided' || s === 'deleted') return s;
+  if (s === 'active' || s === 'open' || s === '') return 'active';
+  return _isSettledTicket(t) ? s : 'active';
+}
+function _logSettledDisplayGuard(t){
+  if (!t) return;
+  try {
+    var stored  = String(t.status||'').toLowerCase();
+    var display = _displayStatus(t);
+    var src     = _sourceGameStatus(t);
+    var teams = '';
+    if (Array.isArray(t.teams) && t.teams.length) teams = t.teams.join(' | ');
+    else if (t.selections && t.selections[0]) {
+      var sel0 = t.selections[0];
+      teams = (sel0.awayTeam || '?') + ' @ ' + (sel0.homeTeam || '?');
+    }
+    console.log('[settled display guard]\n' +
+                '  ticketId: '         + (t.id || '?') + '\n' +
+                '  teams: '            + (teams || '-') + '\n' +
+                '  storedStatus: '     + (stored || '-') + '\n' +
+                '  gradedAt: '         + (t.gradedAt || '-') + '\n' +
+                '  gradingSource: '    + (t.gradingSource || '-') + '\n' +
+                '  hasFinalScore: '    + (_hasFinalScore(t) ? 'yes' : 'no') + '\n' +
+                '  sourceGameStatus: ' + (src || '-') + '\n' +
+                '  displayStatus: '    + display + (stored !== display ? ' (FORCED ACTIVE)' : ''));
+  } catch(_e){}
+}
+window._hasFinalScore     = _hasFinalScore;
+window._sourceGameStatus  = _sourceGameStatus;
+window._isFinalSourceStatus = _isFinalSourceStatus;
+window._isSettledTicket   = _isSettledTicket;
+window._displayStatus     = _displayStatus;
+window._logSettledDisplayGuard = _logSettledDisplayGuard;
+
+// Global fetch interceptor — catches /api/scores/* polling that might come
+// from a stale deployed bundle or injected script. Without this, a 402 loop
+// can keep burning paid calls. With this, after the first non-2xx response
+// the wrapper short-circuits to a synthetic 503 until the backoff clears.
+(function _installScoresFetchGuard(){
+  if (typeof window.fetch !== 'function') return;
+  if (window._origFetch_safety) return; // idempotent
+  var orig = window.fetch.bind(window);
+  window._origFetch_safety = orig;
+  window.fetch = function(input, init){
+    var url = '';
+    try { url = (typeof input === 'string') ? input : (input && input.url) || ''; } catch(_e){ url = ''; }
+    var isScoresEndpoint = url.indexOf('/api/scores/') !== -1 ||
+                           url.indexOf('/scores/json/') !== -1 ||
+                           url.indexOf('/api/sportsdataio/') !== -1;
+    if (isScoresEndpoint && _isScoresGradingSuspended()) {
+      console.warn('[scores fetch blocked] ' + url + ' — suspended (' + _SCORES_SUSPENSION_REASON + ')');
+      return Promise.resolve(new Response(JSON.stringify({
+        error: 'scores_suspended', reason: _SCORES_SUSPENSION_REASON
+      }), { status: 503, headers: { 'Content-Type': 'application/json' } }));
+    }
+    return orig(input, init).then(function(res){
+      if (isScoresEndpoint && res && !res.ok) {
+        if (res.status === 402 || res.status === 429 || res.status === 401 || res.status === 403) {
+          _suspendScoresGrading('HTTP ' + res.status + ' from ' + url);
+        }
+      }
+      return res;
+    }).catch(function(err){
+      if (isScoresEndpoint) {
+        _suspendScoresGrading('fetch error from ' + url + ': ' + (err && err.message || err));
+      }
+      throw err;
+    });
+  };
+  console.log('[scores fetch guard] installed');
+})();
+
+// =============================================================================
+// LIVE TAB — SportsDataIO via /api/sportsdataio/mlb (cached 60s client +
+// 120s proxy). Read-only display. The Odds API path is no longer used here.
+// Honors the scores suspension circuit breaker: if scores are unavailable,
+// shows an explanatory empty state instead of polling.
+// =============================================================================
+var _liveCache = { fetchedAt: 0, games: null };
+var _LIVE_CACHE_MS = 60 * 1000;
+function _liveIsLiveStatus(s){
+  var v = String(s||'').toLowerCase().trim();
+  if (!v) return false;
+  if (v === 'inprogress' || v === 'in_progress' || v === 'in progress') return true;
+  if (v === 'live' || v === 'in_play' || v === 'in play') return true;
+  if (v === 'delayed' || v === 'suspended') return true;
+  if (/^(top|bot|bottom|mid|end)\b/.test(v)) return true;
+  if (/^(q[1-4]|h[12]|p[1-3]|ot|halftime)\b/.test(v)) return true;
+  return false;
+}
+function _liveSdioDate(ymd){
+  var m = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/); if (!m) return null;
+  var months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  return m[1] + '-' + months[parseInt(m[2],10)-1] + '-' + m[3];
+}
+function _liveFetchToday(){
+  var now = Date.now();
+  if (_liveCache.games && (now - _liveCache.fetchedAt) < _LIVE_CACHE_MS) {
+    return Promise.resolve(_liveCache.games);
+  }
+  var ymd = new Date().toISOString().slice(0,10);
+  var sdioDate = _liveSdioDate(ymd);
+  if (!sdioDate) return Promise.resolve([]);
+  var url = '/api/sportsdataio/mlb?path=' +
+            encodeURIComponent('scores/json/GamesByDate/' + sdioDate);
+  return fetch(url, { headers: { 'Accept': 'application/json' } })
+    .then(function(r){
+      if (!r.ok) {
+        console.warn('[live sportsdataio] fetch failed status=' + r.status);
+        return [];
+      }
+      return r.json();
+    })
+    .then(function(arr){
+      var games = Array.isArray(arr) ? arr : [];
+      _liveCache = { fetchedAt: now, games: games };
+      return games;
+    })
+    .catch(function(err){
+      console.warn('[live sportsdataio] fetch error', err && err.message);
+      return [];
+    });
+}
+function _renderLiveGameCard(g){
+  function esc(s){ return String(s == null ? '' : s).replace(/[<>&"']/g, function(c){
+    return ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'})[c];
+  }); }
+  var away = g.AwayTeamName || g.AwayTeam || 'Away';
+  var home = g.HomeTeamName || g.HomeTeam || 'Home';
+  var awayScore = (g.AwayTeamScore != null) ? g.AwayTeamScore : (g.AwayTeamRuns != null ? g.AwayTeamRuns : '—');
+  var homeScore = (g.HomeTeamScore != null) ? g.HomeTeamScore : (g.HomeTeamRuns != null ? g.HomeTeamRuns : '—');
+  var inningStr = '';
+  if (g.Inning) {
+    var half = String(g.InningHalf||'').toUpperCase();
+    var arrow = half === 'T' ? 'TOP' : half === 'B' ? 'BOT' : (half || '');
+    inningStr = (arrow ? (arrow + ' ') : '') + g.Inning;
+  }
+  var statusLabel = inningStr || g.Status || 'LIVE';
+  return '<div style="background:#141414;border:1px solid #2a2a2a;border-radius:14px;padding:14px 16px;color:#fff">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+      '<span style="font-size:0.62rem;font-weight:900;color:#f59e0b;background:rgba(245,158,11,0.12);padding:3px 10px;border-radius:12px;border:1px solid #f59e0b;text-transform:uppercase;letter-spacing:0.4px">● LIVE · ' + esc(statusLabel) + '</span>' +
+      '<span style="font-size:0.6rem;color:#666;font-weight:700">⚾ MLB</span>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center">' +
+      '<div style="font-size:0.92rem;font-weight:800">' + esc(away) + '</div>' +
+      '<div style="font-size:1.2rem;font-weight:900;font-variant-numeric:tabular-nums">' + esc(awayScore) + '</div>' +
+      '<div style="font-size:0.92rem;font-weight:800">' + esc(home) + '</div>' +
+      '<div style="font-size:1.2rem;font-weight:900;font-variant-numeric:tabular-nums">' + esc(homeScore) + '</div>' +
+    '</div>' +
+  '</div>';
+}
+function loadLiveGamesFromSportsDataIO(){
+  var el = document.getElementById('live-games-list');
+  if (!el) return;
+  if (_isScoresGradingSuspended()) {
+    el.innerHTML = '<div class="empty" style="padding:60px 20px;text-align:center;color:#888">' +
+      'Scores unavailable — grading suspended.<br>' +
+      '<span style="font-size:0.72rem;color:#555">' + (_SCORES_SUSPENSION_REASON || 'upstream error') +
+      '<br>Tickets remain ACTIVE; live feed will return when service recovers.</span></div>';
+    console.log('[scores unavailable — grading suspended]\n  loadLiveGamesFromSportsDataIO short-circuited');
+    return;
+  }
+  el.innerHTML = '<div class="empty">Loading…</div>';
+  _liveFetchToday().then(function(games){
+    games = Array.isArray(games) ? games : [];
+    var live = games.filter(function(g){ return g && _liveIsLiveStatus(g.Status); });
+    console.log('[live sportsdataio]\n  gamesChecked: ' + games.length + '\n  liveGamesShown: ' + live.length);
+    var cnt = document.getElementById('live-count');
+    if (cnt) cnt.textContent = live.length + (live.length === 1 ? ' game' : ' games');
+    if (!live.length) {
+      el.innerHTML = '<div class="empty" style="padding:60px 20px;text-align:center;color:#888">No live games right now.</div>';
+      return;
+    }
+    el.innerHTML = live.map(_renderLiveGameCard).join('');
+  });
+}
+window.loadLiveGamesFromSportsDataIO = loadLiveGamesFromSportsDataIO;
+// =============================================================================
+
 // ── Manual leg grader ─────────────────────────────────────────────────────
 // Given one selection { side, market, pick, awayTeam, homeTeam, odds } and the
 // final score { away, home, status }, returns 'win' | 'lose' | 'push'.
@@ -4786,6 +5094,12 @@ function _combineLegs(outcomes) {
 // { away, home, status } per selection (or one entry for a single).
 function gradeTicketByScores(ticketId, legScores) {
   if (!_isTestModeAudit()) return 'test mode only';
+  // Refuse to grade when scores provider is currently unavailable. Tickets
+  // stay ACTIVE; no balance settlement.
+  if (typeof _isScoresGradingSuspended === 'function' && _isScoresGradingSuspended()) {
+    console.log('[scores unavailable — grading suspended]\n  gradeTicketByScores refused for ticketId=' + ticketId);
+    return 'scores unavailable — grading suspended';
+  }
   var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
   var t = tickets.find(function(x){ return x.id === ticketId; });
   if (!t) return 'ticket not found';
