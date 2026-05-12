@@ -1560,7 +1560,12 @@ function returnToLobby() {
 }
 // ══════════════════════════════════════════════════════════════════════════════
 
-try { _currentSport='mlb'; _updateTeaserTab(); loadGames('mlb'); } catch(e) { console.error('[PBS fetch failed]', e); }
+// Bootstrap sportsbook. Each step in its OWN try so an earlier failure
+// (e.g. teaser tab init) cannot prevent loadGames() from running. Tony
+// hit exactly this: _updateTeaserTab threw before /api/odds/mlb fetched.
+try { _currentSport = 'mlb'; } catch(e) { console.error('[PBS init] set _currentSport failed:', e && e.message || e); }
+try { _updateTeaserTab(); } catch(e) { console.error('[PBS init] _updateTeaserTab failed (continuing):', e && e.message || e); }
+try { loadGames('mlb'); } catch(e) { console.error('[PBS fetch failed]', e); }
 try { startAutoGradeDaemon(); } catch(e) { console.error('[auto grade daemon] failed to start:', e.message); }
 setTimeout(function(){
   var gl = document.getElementById('games-list');
@@ -1847,14 +1852,35 @@ function setRRSize(s) {
 var teaserPts = 6;
 var _currentSport = 'mlb';
 var TEASER_ENABLED_SPORTS = ['nfl','ncaaf','nba','ncaab'];
-function _canTeaser() { return TEASER_ENABLED_SPORTS.includes(_currentSport); }
+function _canTeaser() {
+  // Defensive: this runs during page bootstrap and can fire BEFORE the
+  // `var TEASER_ENABLED_SPORTS = [...]` initializer executes (hoisting
+  // leaves the binding as undefined). Returning false on any unexpected
+  // shape is correct — the teaser tab simply stays hidden until init
+  // completes, instead of throwing TypeError and aborting sportsbook boot.
+  try {
+    if (!Array.isArray(TEASER_ENABLED_SPORTS)) return false;
+    var cs = (typeof _currentSport === 'string') ? _currentSport : '';
+    if (!cs) return false;
+    return TEASER_ENABLED_SPORTS.indexOf(cs) !== -1;
+  } catch (_e) {
+    return false;
+  }
+}
 function _updateTeaserTab() {
-  var tab = document.getElementById('st-teaser');
-  if (!tab) return;
-  var ok = _canTeaser();
-  tab.style.display = ok ? '' : 'none';
-  // If currently on teaser and sport changed to non-teaser, switch to singles
-  if (!ok && bsType === 'teaser') setSType('single');
+  try {
+    var tab = document.getElementById('st-teaser');
+    if (!tab) return;
+    var ok = _canTeaser();
+    tab.style.display = ok ? '' : 'none';
+    // If currently on teaser and sport changed to non-teaser, switch to singles
+    if (!ok && typeof bsType !== 'undefined' && bsType === 'teaser' && typeof setSType === 'function') {
+      setSType('single');
+    }
+  } catch (_e) {
+    // Never let teaser-tab init throw out of the bootstrap chain.
+    try { console.error('[teaser] _updateTeaserTab guarded against:', _e && _e.message || _e); } catch(_e2){}
+  }
 }
 var TEASER_ELIGIBLE = ['run line','spread','total','over','under'];
 function isTeaserEligible(b) {
