@@ -3779,6 +3779,36 @@ function _logSportsDataIOFinals(scores) {
 window._logSportsDataIOFinals = _logSportsDataIOFinals;
 
 // Main grading entry point — called by Check Results button
+// ===========================================================================
+// Grader sport allowlist
+// ---------------------------------------------------------------------------
+// Auto-grading currently supports MLB only. NFL/NBA/NHL/etc. need their own
+// scores feed, team dictionary, and SDIO field normalizer before they can
+// be graded safely. Until then, non-MLB tickets are allowed to be PLACED
+// (no change to confirmBet / saveTickets / pb-tickets shape) but they are
+// not handed to the MLB grader — if we did, _findGameForSelection's
+// substring fallback could match an NFL team like "Cleveland" Browns to an
+// MLB "Cleveland" Guardians game and grade it as baseball, producing a
+// nonsense WON/LOST.
+//
+// Empty / missing sport is treated as MLB. That's the legacy assumption —
+// every ticket placed before sport-tagging existed was implicitly MLB and
+// must continue to grade normally.
+var GRADER_SUPPORTED_SPORTS = ['mlb', 'baseball_mlb', ''];
+function _ticketSportKey(t) {
+  if (!t) return '';
+  var raw = t.sport ||
+            (t.selections && t.selections[0] && t.selections[0].sport) ||
+            '';
+  return String(raw || '').toLowerCase().trim();
+}
+function _isSupportedForGrading(t) {
+  return GRADER_SUPPORTED_SPORTS.indexOf(_ticketSportKey(t)) !== -1;
+}
+window.GRADER_SUPPORTED_SPORTS = GRADER_SUPPORTED_SPORTS;
+window._ticketSportKey         = _ticketSportKey;
+window._isSupportedForGrading  = _isSupportedForGrading;
+
 async function checkOpenTickets() {
   console.log('[grading start] checking active tickets');
   var btn = document.getElementById('check-results-btn');
@@ -3788,10 +3818,23 @@ async function checkOpenTickets() {
     // Reload tickets from storage
     try { betTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(e){}
 
-    var activeTickets = betTickets.filter(function(t){
+    var activeAllSports = betTickets.filter(function(t){
       return (t.status === 'active' || t.status === 'open') && !t.gradedAt;
     });
-    console.log('[grading start] active tickets:', activeTickets.length);
+    // Sport allowlist gate. Non-MLB tickets stay ACTIVE; auto-grader never
+    // touches them.
+    var activeTickets    = activeAllSports.filter(_isSupportedForGrading);
+    var skippedUnsupported = activeAllSports.filter(function(t){ return !_isSupportedForGrading(t); });
+    if (skippedUnsupported.length) {
+      var summary = skippedUnsupported.map(function(t){
+        return '    - ' + (t.id || '?') + ' sport=' + (_ticketSportKey(t) || '(empty)');
+      }).join('\n');
+      console.log('[grading skipped unsupported sport]\n' +
+        '  count: ' + skippedUnsupported.length + '\n' +
+        '  supportedSports: ' + JSON.stringify(GRADER_SUPPORTED_SPORTS) + '\n' +
+        '  tickets:\n' + summary);
+    }
+    console.log('[grading start] active tickets (after sport allowlist):', activeTickets.length);
 
     if (!activeTickets.length) {
       showToast('No active bets to grade');
@@ -3975,14 +4018,26 @@ async function _autoGradePoll() {
     var tickets = [];
     try { tickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]'); } catch(e) { tickets = []; }
 
-    // Only active MLB tickets not yet graded
-    var activeMLB = tickets.filter(function(t) {
-      var sport = (t.sport || t.selections && t.selections[0] && t.selections[0].sport || '').toLowerCase();
+    // Only active tickets not yet graded, then narrow to grader-supported
+    // sports (currently MLB only). Non-MLB tickets stay ACTIVE; we never
+    // hand them to the MLB matcher — see GRADER_SUPPORTED_SPORTS comment.
+    var activeOpen = tickets.filter(function(t) {
       var statusOpen = t.status === 'active' || t.status === 'open';
       var notGraded  = !t.gradedAt;
       return statusOpen && notGraded;
-      // Note: if sport tag not set we still attempt — _gradeTicket returns null if game not found
     });
+    var activeMLB        = activeOpen.filter(_isSupportedForGrading);
+    var skippedUnsupportedAuto = activeOpen.filter(function(t){ return !_isSupportedForGrading(t); });
+    if (skippedUnsupportedAuto.length) {
+      var summaryAuto = skippedUnsupportedAuto.map(function(t){
+        return '    - ' + (t.id || '?') + ' sport=' + (_ticketSportKey(t) || '(empty)');
+      }).join('\n');
+      console.log('[grading skipped unsupported sport]\n' +
+        '  source: auto-poll\n' +
+        '  count:  ' + skippedUnsupportedAuto.length + '\n' +
+        '  supportedSports: ' + JSON.stringify(GRADER_SUPPORTED_SPORTS) + '\n' +
+        '  tickets:\n' + summaryAuto);
+    }
 
     if (!activeMLB.length) {
       _autoGradeRunning = false;
