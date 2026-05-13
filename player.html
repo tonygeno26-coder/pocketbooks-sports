@@ -755,6 +755,97 @@ function saveTickets(){
   } catch(_e) {}
 }
 
+// ===========================================================================
+// One-shot recovery: pb-tickets <- hostActiveBets
+// ---------------------------------------------------------------------------
+// Some browser origins (preview deploys, or post-clear-all sessions) ended up
+// with an empty pb-tickets while hostActiveBets retained the player's tickets.
+// confirmBet writes the SAME ticket object to both, and the auto-grade mirror
+// only Object.assign()s additional fields onto host records — so host entries
+// carry the full player-ticket schema. We can safely restore.
+//
+// Rules:
+//   - Migrate only records that look like player tickets (object with id and
+//     selections[] or riskAmount).
+//   - Skip any record whose id already exists in pb-tickets (de-dup).
+//   - Never modify hostActiveBets. It stays as host mirror.
+//   - Never touch balance writes directly; calcAvailableBalance derives from
+//     the restored pb-tickets in the normal way.
+//   - Idempotent: re-running does nothing once pb-tickets has the entries.
+//   - Marks each migrated ticket with _recoveredFrom='hostActiveBets' and
+//     _recoveredAt timestamp for forensic visibility. Never used for logic.
+function _recoverTicketsFromHostMirror() {
+  try {
+    var hostRaw = localStorage.getItem('hostActiveBets');
+    if (!hostRaw) return { recovered: 0, reason: 'no_host_mirror' };
+    var hostBets;
+    try { hostBets = JSON.parse(hostRaw); } catch(_e){ return { recovered: 0, reason: 'host_mirror_parse_error' }; }
+    if (!Array.isArray(hostBets) || !hostBets.length) return { recovered: 0, reason: 'host_mirror_empty' };
+
+    // Current player tickets (de-dup source).
+    var current = Array.isArray(betTickets) ? betTickets.slice() : [];
+    var existingIds = {};
+    for (var i = 0; i < current.length; i++) {
+      if (current[i] && current[i].id) existingIds[current[i].id] = true;
+    }
+
+    var added = 0;
+    var skippedNotTicket = 0;
+    var skippedDuplicate = 0;
+    var nowIso = new Date().toISOString();
+    for (var j = 0; j < hostBets.length; j++) {
+      var h = hostBets[j];
+      if (!h || typeof h !== 'object' || !h.id) { skippedNotTicket++; continue; }
+      var looksLikeTicket = (Array.isArray(h.selections) && h.selections.length > 0) ||
+                            (h.riskAmount != null);
+      if (!looksLikeTicket) { skippedNotTicket++; continue; }
+      if (existingIds[h.id]) { skippedDuplicate++; continue; }
+      // Shallow clone so future mutations to host or player records don't alias.
+      var copy = {};
+      for (var k in h) if (Object.prototype.hasOwnProperty.call(h, k)) copy[k] = h[k];
+      copy._recoveredFrom = 'hostActiveBets';
+      copy._recoveredAt   = nowIso;
+      current.push(copy);
+      existingIds[h.id] = true;
+      added++;
+    }
+
+    if (!added) return { recovered: 0, reason: 'nothing_new', skippedNotTicket: skippedNotTicket, skippedDuplicate: skippedDuplicate };
+
+    // Commit through the existing write path. saveTickets() handles
+    // pb-tickets + pb-tickets-version bump. Update the global in-memory
+    // mirror first so saveTickets persists the merged set.
+    betTickets = current;
+    try { saveTickets(); } catch(_e) {
+      // Fallback if saveTickets isn't ready yet (script-load ordering).
+      try {
+        localStorage.setItem('pb-tickets', JSON.stringify(betTickets));
+        var _vv = parseInt(localStorage.getItem('pb-tickets-version')||'0',10)||0;
+        localStorage.setItem('pb-tickets-version', String(_vv + 1));
+      } catch(_e2){}
+    }
+    return {
+      recovered:        added,
+      reason:           'merged_into_pb_tickets',
+      skippedNotTicket: skippedNotTicket,
+      skippedDuplicate: skippedDuplicate,
+      pbTicketsTotal:   betTickets.length,
+      hostMirrorTotal:  hostBets.length
+    };
+  } catch(err) {
+    return { recovered: 0, reason: 'exception', error: String(err && err.message || err) };
+  }
+}
+window._recoverTicketsFromHostMirror = _recoverTicketsFromHostMirror;
+// Run immediately at script load — BEFORE any rendering, grading, or balance
+// derivation — so the rest of player.html sees the canonical merged set.
+try {
+  var _recoveryResult = _recoverTicketsFromHostMirror();
+  console.log('[ticket recovery] ' + JSON.stringify(_recoveryResult));
+} catch(_e) {
+  console.warn('[ticket recovery] failed:', _e && _e.message || _e);
+}
+
 // ═══ CENTRALIZED BALANCE ENGINE ══════════════════════════════════════════════
 // availableBalance = startingBalance - openRisk + settledWinnings + refunds
 // Source of truth: localStorage['pb-balance-start'] + localStorage['pb-tickets']
@@ -3687,7 +3778,635 @@ function _logSportsDataIOFinals(scores) {
 }
 window._logSportsDataIOFinals = _logSportsDataIOFinals;
 
+// ===========================================================================
+// Balance reconciliation audit (READ-ONLY)
+// ---------------------------------------------------------------------------
+// Inspect every ticket and report whether its per-ticket effect on player
+// balance and host balance matches the canonical formulas already used by
+// the running code:
+//
+//   PLAYER (calcAvailableBalance, _effective() variant):
+//     active/open   → −riskAmount       (held in openRisk)
+//     won           → +potentialProfit  (wager returns via openRisk
+//                                          exclusion + profit added)
+//     lost          → −riskAmount       (permanent)
+//     push          → 0                  (openRisk excluded → wager returns)
+//     canceled/voided/deleted → 0
+//
+//   HOST (computeHostKPIs in index.html):
+//     active/open   → +potentialProfit  (atRisk exposure)
+//     won           → −potentialProfit  (host pays the player's profit)
+//     lost          → +riskAmount       (host keeps player's wager)
+//     push          → 0                  (host unchanged)
+//     canceled/voided/deleted → 0
+//
+// Reads (never writes): pb-tickets, hostActiveBets, pb-ledger,
+// pb-settlements.
+//
+// Returns the result both via console.table() (compact) and as the
+// function's return value (full structure with mismatches array).
+function runBalanceReconciliation() {
+  function _parseStore(key) {
+    try {
+      var raw = localStorage.getItem(key);
+      if (raw == null) return null;
+      var v = JSON.parse(raw);
+      return Array.isArray(v) ? v : null;
+    } catch (_e) {
+      return null;
+    }
+  }
+  function _statusGroup(s) {
+    var v = String(s || '').toLowerCase().trim();
+    if (v === 'active' || v === 'open' || v === '') return 'active';
+    if (v === 'won')                                  return 'won';
+    if (v === 'lost')                                 return 'lost';
+    if (v === 'push' || v === 'pushed')               return 'push';
+    if (v === 'canceled' || v === 'cancelled' ||
+        v === 'voided'   || v === 'deleted')          return 'void';
+    return v; // unknown
+  }
+  function _round(n) { return Math.round((n || 0) * 100) / 100; }
+  function _supported(t) {
+    return (typeof _isSupportedForGrading === 'function') ? _isSupportedForGrading(t) : true;
+  }
+  // Effective settlement-aware status used by calcAvailableBalance. A
+  // ticket with stale t.status='lost' but missing 5-guard fields is held
+  // in active. Audit must follow the same rule.
+  function _effectiveStatus(t) {
+    var s = _statusGroup(t.status);
+    if (s === 'void' || s === 'active') return s;
+    // For won/lost/push: only treat as settled if the 5-guard accepts it.
+    if (typeof _isSettledTicket === 'function' && !_isSettledTicket(t)) return 'active';
+    return s;
+  }
+  function _expectedDeltas(t) {
+    var risk   = parseFloat(t.riskAmount)      || 0;
+    var profit = parseFloat(t.potentialProfit) || 0;
+    var eff    = _effectiveStatus(t);
+    switch (eff) {
+      case 'active': return { player: -risk,    host: +profit };
+      case 'won':    return { player: +profit,  host: -profit };
+      case 'lost':   return { player: -risk,    host: +risk   };
+      case 'push':   return { player: 0,        host: 0       };
+      case 'void':   return { player: 0,        host: 0       };
+      default:       return { player: NaN,      host: NaN     };
+    }
+  }
+
+  var pbTickets       = _parseStore('pb-tickets')       || [];
+  var hostActiveBets  = _parseStore('hostActiveBets')   || [];
+  var ledger          = _parseStore('pb-ledger')        || [];
+  var settlements     = _parseStore('pb-settlements')   || [];
+
+  // Index host mirror by id for O(1) lookups.
+  var hostById = {};
+  for (var i = 0; i < hostActiveBets.length; i++) {
+    var hb = hostActiveBets[i];
+    if (hb && hb.id) hostById[hb.id] = hb;
+  }
+  // Index ledger by ticketId. Sum settlement-related balanceChange per
+  // ticket so a re-grade with two rows doesn't trigger a false mismatch.
+  var ledgerByTicket = {};
+  for (var j = 0; j < ledger.length; j++) {
+    var L = ledger[j];
+    if (!L || !L.ticketId) continue;
+    if (!ledgerByTicket[L.ticketId]) ledgerByTicket[L.ticketId] = [];
+    ledgerByTicket[L.ticketId].push(L);
+  }
+
+  var rows = [];
+  var mismatches = [];
+  for (var k = 0; k < pbTickets.length; k++) {
+    var t = pbTickets[k];
+    if (!t || !t.id) continue;
+    var risk   = parseFloat(t.riskAmount)      || 0;
+    var profit = parseFloat(t.potentialProfit) || 0;
+    var effStatus = _effectiveStatus(t);
+    var exp = _expectedDeltas(t);
+
+    // "Actual" player delta: just the same formula applied to the same
+    // ticket. The point of the audit is consistency across SOURCES (player
+    // store, host mirror, ledger), not a recomputation of the same number.
+    var actualPlayer = exp.player;
+    var actualHost   = exp.host;
+    var issues = [];
+
+    // 1. Host mirror existence
+    var hostMirror = hostById[t.id];
+    if (!hostMirror) {
+      issues.push('missing_from_hostActiveBets');
+    } else {
+      // 2. Host mirror status agreement
+      var hostStatus = _statusGroup(hostMirror.status);
+      if (hostStatus !== effStatus && hostStatus !== 'active') {
+        // hostActiveBets keeps active tickets as-is; a host record showing
+        // 'active' while the player shows settled is acceptable if the
+        // settlement just happened and the host hasn't re-rendered yet,
+        // but a mirror showing 'won' while player shows 'lost' is real drift.
+        issues.push('host_status_drift:' + hostStatus + '_vs_' + effStatus);
+      }
+      // 3. risk/profit fields drift
+      var hRisk = parseFloat(hostMirror.riskAmount) || 0;
+      var hProfit = parseFloat(hostMirror.potentialProfit) || 0;
+      if (Math.abs(hRisk - risk) > 0.01) {
+        issues.push('host_risk_drift:' + hRisk + '_vs_' + risk);
+      }
+      if (Math.abs(hProfit - profit) > 0.01) {
+        issues.push('host_profit_drift:' + hProfit + '_vs_' + profit);
+      }
+    }
+
+    // 4. Settled ticket without any settlement ledger row
+    var ledgerRows = ledgerByTicket[t.id] || [];
+    var hasSettlementLedger = ledgerRows.some(function(L){
+      var typ = String(L.type || '').toLowerCase();
+      return typ === 'bet_won' || typ === 'bet_lost' || typ === 'bet_push' ||
+             typ === 'bet_won_settle' || typ === 'bet_settled' ||
+             /^bet_won|^bet_lost|^bet_push|won|lost|push/.test(typ);
+    });
+    if ((effStatus === 'won' || effStatus === 'lost' || effStatus === 'push') && !hasSettlementLedger) {
+      issues.push('no_settlement_ledger_row');
+    }
+
+    // 5. Ledger balanceChange consistency (only on settlement rows).
+    if (hasSettlementLedger) {
+      var settleRow = ledgerRows.filter(function(L){
+        var typ = String(L.type || '').toLowerCase();
+        return typ.indexOf('bet_won') === 0 || typ.indexOf('bet_lost') === 0 || typ.indexOf('bet_push') === 0 ||
+               typ === 'won' || typ === 'lost' || typ === 'push';
+      }).pop(); // most recent
+      if (settleRow && settleRow.balanceChange != null) {
+        var bcExpected = exp.player; // settlement delta == player delta
+        if (Math.abs(parseFloat(settleRow.balanceChange) - bcExpected) > 0.01) {
+          issues.push('ledger_balanceChange_drift:' +
+                      _round(parseFloat(settleRow.balanceChange)) +
+                      '_vs_' + _round(bcExpected));
+        }
+      }
+    }
+
+    // 6. Unsupported sport with settled status: shouldn't happen post-allowlist.
+    if (!_supported(t) && (effStatus === 'won' || effStatus === 'lost' || effStatus === 'push')) {
+      issues.push('unsupported_sport_was_graded:' + (_ticketSportKey ? _ticketSportKey(t) : '?'));
+    }
+
+    var row = {
+      ticketId:            t.id,
+      playerId:            t.playerId || '-',
+      sport:               (_ticketSportKey ? _ticketSportKey(t) : (t.sport || '-')) || '-',
+      status:              effStatus,
+      risk:                _round(risk),
+      payout:              _round(t.estimatedPayout != null ? t.estimatedPayout : (risk + profit)),
+      result:              effStatus.toUpperCase(),
+      playerDeltaExpected: _round(exp.player),
+      playerDeltaActual:   _round(actualPlayer),
+      hostDeltaExpected:   _round(exp.host),
+      hostDeltaActual:     _round(actualHost),
+      hostMirrored:        hostMirror ? 'yes' : 'NO',
+      match:               issues.length === 0,
+      issue:               issues.length ? issues.join('; ') : ''
+    };
+    rows.push(row);
+    if (!row.match) mismatches.push(row);
+  }
+
+  // 7. Orphans: host mirror entries with no matching pb-tickets id.
+  var pbIds = {};
+  for (var p = 0; p < pbTickets.length; p++) if (pbTickets[p] && pbTickets[p].id) pbIds[pbTickets[p].id] = true;
+  var orphans = hostActiveBets.filter(function(h){ return h && h.id && !pbIds[h.id]; });
+
+  // 8. Aggregate sanity: sum of expected player deltas should equal
+  // (available − starting) under the calcAvailableBalance model.
+  var sumPlayer = rows.reduce(function(s,r){ return s + (r.playerDeltaExpected || 0); }, 0);
+  var sumHost   = rows.reduce(function(s,r){ return s + (r.hostDeltaExpected   || 0); }, 0);
+  var liveAvailable = (typeof calcAvailableBalance === 'function') ? calcAvailableBalance() : null;
+  var liveDeltaFromStarting = liveAvailable ? _round(liveAvailable.available - liveAvailable.starting) : null;
+  var aggregateDrift = (liveDeltaFromStarting != null && Math.abs(liveDeltaFromStarting - _round(sumPlayer)) > 0.01)
+    ? { expectedSum: _round(sumPlayer), liveAvailableMinusStarting: liveDeltaFromStarting }
+    : null;
+
+  console.log('[balance reconciliation]');
+  console.log('  pbTickets:        ' + pbTickets.length);
+  console.log('  hostActiveBets:   ' + hostActiveBets.length);
+  console.log('  ledger rows:      ' + ledger.length);
+  console.log('  settlements:      ' + settlements.length);
+  console.log('  mismatches:       ' + mismatches.length);
+  console.log('  hostMirror orphans (in host, not in pb-tickets): ' + orphans.length);
+  console.log('  sum playerDeltaExpected: ' + _round(sumPlayer));
+  console.log('  sum hostDeltaExpected:   ' + _round(sumHost));
+  if (liveDeltaFromStarting != null) {
+    console.log('  live (available - starting): ' + liveDeltaFromStarting);
+  }
+  if (aggregateDrift) {
+    console.warn('  AGGREGATE DRIFT: per-ticket sum (' + aggregateDrift.expectedSum +
+                 ') != live calcAvailableBalance delta (' + aggregateDrift.liveAvailableMinusStarting + ')');
+  }
+
+  try {
+    if (typeof console.table === 'function') {
+      console.table(rows.map(function(r){
+        return {
+          ticketId:        r.ticketId,
+          sport:           r.sport,
+          status:          r.status,
+          risk:            r.risk,
+          payout:          r.payout,
+          playerExpected:  r.playerDeltaExpected,
+          playerActual:    r.playerDeltaActual,
+          hostExpected:    r.hostDeltaExpected,
+          hostActual:      r.hostDeltaActual,
+          hostMirrored:    r.hostMirrored,
+          match:           r.match,
+          issue:           r.issue
+        };
+      }));
+    } else {
+      rows.forEach(function(r){ console.log(JSON.stringify(r)); });
+    }
+  } catch(_e) {
+    rows.forEach(function(r){ console.log(JSON.stringify(r)); });
+  }
+
+  if (mismatches.length) {
+    console.warn('[balance reconciliation] ' + mismatches.length + ' mismatch(es). Drift sources:');
+    mismatches.forEach(function(r){
+      console.warn('  ' + r.ticketId + ' (' + r.sport + ', ' + r.status + ') -> ' + r.issue);
+    });
+  } else {
+    console.log('[balance reconciliation] all rows consistent.');
+  }
+  if (orphans.length) {
+    console.warn('[balance reconciliation] ' + orphans.length + ' host orphan ticket(s) not in pb-tickets:');
+    orphans.forEach(function(h){ console.warn('  hostActiveBets ' + h.id + ' status=' + (h.status||'?')); });
+  }
+
+  return {
+    pbTicketsCount:     pbTickets.length,
+    hostMirrorCount:    hostActiveBets.length,
+    ledgerCount:        ledger.length,
+    settlementsCount:   settlements.length,
+    rows:               rows,
+    mismatches:         mismatches,
+    hostOrphans:        orphans,
+    aggregateDrift:     aggregateDrift,
+    sumPlayerExpected:  _round(sumPlayer),
+    sumHostExpected:    _round(sumHost),
+    liveDeltaFromStart: liveDeltaFromStarting
+  };
+}
+window.runBalanceReconciliation = runBalanceReconciliation;
+
+// ===========================================================================
+// Per-player balance audit (READ-ONLY)
+// ---------------------------------------------------------------------------
+// Verifies that tickets belonging to ONE player produce the right effect on:
+//   - that player's starting balance (pb-balance-start:<playerId> with
+//     fallback to global pb-balance-start, then _BASE_BALANCE)
+//   - host exposure for that player (sum of potentialProfit over active
+//     hostActiveBets where playerId matches)
+//   - host profit for that player (sum of +riskAmount for lost,
+//     -potentialProfit for won, 0 for push over settled tickets)
+//
+// Uses the SAME formulas as the running code so the audit can't disagree
+// by design.
+function runSinglePlayerBetAudit(playerId) {
+  function _parseStore(key) {
+    try { var raw = localStorage.getItem(key); if (raw == null) return null;
+          var v = JSON.parse(raw); return Array.isArray(v) ? v : null; }
+    catch (_e) { return null; }
+  }
+  function _round(n) { return Math.round((n || 0) * 100) / 100; }
+  function _effStatus(t) {
+    var s = String(t && t.status || '').toLowerCase().trim();
+    if (s === '' || s === 'active' || s === 'open') return 'active';
+    if (s === 'canceled' || s === 'cancelled' || s === 'voided' || s === 'deleted') return 'void';
+    if (typeof _isSettledTicket === 'function' && !_isSettledTicket(t)) return 'active';
+    if (s === 'won')                       return 'won';
+    if (s === 'lost')                      return 'lost';
+    if (s === 'push' || s === 'pushed')    return 'push';
+    return s;
+  }
+  function _startingFor(pid) {
+    var per = parseFloat(localStorage.getItem('pb-balance-start:' + pid));
+    if (!isNaN(per) && per > 0) return per;
+    var glb = parseFloat(localStorage.getItem('pb-balance-start'));
+    if (!isNaN(glb) && glb > 0) return glb;
+    return (typeof _BASE_BALANCE !== 'undefined') ? _BASE_BALANCE : 1000;
+  }
+  function _currentPlayerId() {
+    try {
+      var pl = JSON.parse(localStorage.getItem('pb-player') || 'null') || {};
+      return pl.id || pl.username || null;
+    } catch (_e) { return null; }
+  }
+
+  if (!playerId) {
+    console.warn('[player audit] missing playerId argument');
+    return { error: 'missing_playerId' };
+  }
+  var pbTickets      = _parseStore('pb-tickets')      || [];
+  var hostActiveBets = _parseStore('hostActiveBets')  || [];
+
+  var minePb   = pbTickets.filter(function(t){      return t && t.playerId === playerId; });
+  var mineHost = hostActiveBets.filter(function(t){ return t && t.playerId === playerId; });
+  var orphanPb = pbTickets.filter(function(t){      return t && t.id && t.playerId == null; });
+
+  var starting    = _round(_startingFor(playerId));
+  var activeRisk  = 0;
+  var settledWon  = 0;
+  var settledLost = 0;
+  var pushVoid    = 0;
+  var settledGains  = 0;
+  var settledLosses = 0;
+  var sports = {};
+  for (var i = 0; i < minePb.length; i++) {
+    var t = minePb[i];
+    var risk   = parseFloat(t.riskAmount)      || 0;
+    var profit = parseFloat(t.potentialProfit) || 0;
+    var eff    = _effStatus(t);
+    var sport  = (typeof _ticketSportKey === 'function') ? _ticketSportKey(t) : (t.sport || '');
+    if (sport) sports[sport] = (sports[sport] || 0) + 1;
+    switch (eff) {
+      case 'active': activeRisk    += risk;   break;
+      case 'won':    settledWon    += profit; settledGains  += profit; break;
+      case 'lost':   settledLost   += risk;   settledLosses += risk;   break;
+      case 'push':
+      case 'void':   pushVoid      += risk;   break;
+      default: break;
+    }
+  }
+  var balanceExpected = _round(starting - activeRisk - settledLosses + settledGains);
+
+  var currentPid = _currentPlayerId();
+  var balanceDisplayed = null;
+  if (currentPid === playerId && typeof calcAvailableBalance === 'function') {
+    try { balanceDisplayed = _round(calcAvailableBalance().available); } catch (_e) {}
+  }
+
+  var hostAtRiskFromPlayer = 0;
+  var hostPnlFromPlayer    = 0;
+  for (var j = 0; j < mineHost.length; j++) {
+    var h = mineHost[j];
+    var hRisk   = parseFloat(h.riskAmount)      || 0;
+    var hProfit = parseFloat(h.potentialProfit) || 0;
+    var hEff    = _effStatus(h);
+    if (hEff === 'active') hostAtRiskFromPlayer += hProfit;
+    else if (hEff === 'lost') hostPnlFromPlayer += hRisk;
+    else if (hEff === 'won')  hostPnlFromPlayer -= hProfit;
+  }
+
+  var issues = [];
+  if (balanceDisplayed != null && Math.abs(balanceExpected - balanceDisplayed) > 0.01) {
+    issues.push('balance_drift:expected=' + balanceExpected + '_displayed=' + balanceDisplayed);
+  }
+  if (minePb.length !== mineHost.length) {
+    issues.push('ticket_count_drift:pb=' + minePb.length + '_host=' + mineHost.length);
+  }
+  var hostIdsForPlayer = {};
+  mineHost.forEach(function(h){ if (h && h.id) hostIdsForPlayer[h.id] = true; });
+  var missingFromHost = minePb.filter(function(t){ return t.id && !hostIdsForPlayer[t.id]; }).map(function(t){ return t.id; });
+  if (missingFromHost.length) issues.push('missing_from_hostActiveBets:' + missingFromHost.join(','));
+  var pbIdsForPlayer = {};
+  minePb.forEach(function(t){ if (t && t.id) pbIdsForPlayer[t.id] = true; });
+  var hostOnlyForPlayer = mineHost.filter(function(h){ return h.id && !pbIdsForPlayer[h.id]; }).map(function(h){ return h.id; });
+  if (hostOnlyForPlayer.length) issues.push('host_only_no_pb:' + hostOnlyForPlayer.join(','));
+  if (orphanPb.length) issues.push('unowned_tickets_in_pb:' + orphanPb.length + ' (no playerId)');
+
+  var report = {
+    playerId:             playerId,
+    isCurrentPlayer:      currentPid === playerId,
+    startingBalance:      starting,
+    activeRisk:           _round(activeRisk),
+    settledWins:          _round(settledWon),
+    settledLosses:        _round(settledLost),
+    pushVoidRisk:         _round(pushVoid),
+    balanceExpected:      balanceExpected,
+    balanceDisplayed:     balanceDisplayed,
+    hostAtRiskFromPlayer: _round(hostAtRiskFromPlayer),
+    hostPnlFromPlayer:    _round(hostPnlFromPlayer),
+    ticketCount:          minePb.length,
+    hostTicketCount:      mineHost.length,
+    sports:               sports,
+    issues:               issues,
+    match:                issues.length === 0
+  };
+
+  console.log('[player audit] ' + playerId);
+  console.log('  startingBalance:       $' + report.startingBalance.toFixed(2));
+  console.log('  activeRisk:            $' + report.activeRisk.toFixed(2));
+  console.log('  settledWins (profit):  $' + report.settledWins.toFixed(2));
+  console.log('  settledLosses (risk):  $' + report.settledLosses.toFixed(2));
+  console.log('  pushVoidRisk:          $' + report.pushVoidRisk.toFixed(2));
+  console.log('  balanceExpected:       $' + report.balanceExpected.toFixed(2));
+  if (report.balanceDisplayed != null) {
+    console.log('  balanceDisplayed:      $' + report.balanceDisplayed.toFixed(2) + (report.isCurrentPlayer ? '' : ' (not current player)'));
+  } else {
+    console.log('  balanceDisplayed:      (not current player — cannot compare to live)');
+  }
+  console.log('  hostAtRiskFromPlayer:  $' + report.hostAtRiskFromPlayer.toFixed(2));
+  console.log('  hostPnlFromPlayer:     ' + (report.hostPnlFromPlayer >= 0 ? '+$' : '-$') + Math.abs(report.hostPnlFromPlayer).toFixed(2));
+  console.log('  ticketCount (pb):      ' + report.ticketCount);
+  console.log('  ticketCount (host):    ' + report.hostTicketCount);
+  console.log('  sports:                ' + (Object.keys(sports).length ? JSON.stringify(sports) : '(none)'));
+  if (issues.length) {
+    console.warn('  issues:');
+    issues.forEach(function(x){ console.warn('    - ' + x); });
+  } else {
+    console.log('  match:                 true');
+  }
+  return report;
+}
+window.runSinglePlayerBetAudit = runSinglePlayerBetAudit;
+
+// ===========================================================================
+// Multi-player rollup (READ-ONLY)
+// ---------------------------------------------------------------------------
+function runMultiPlayerBetAudit() {
+  function _parseStore(key) {
+    try { var raw = localStorage.getItem(key); if (raw == null) return null;
+          var v = JSON.parse(raw); return Array.isArray(v) ? v : null; }
+    catch (_e) { return null; }
+  }
+  var pbTickets      = _parseStore('pb-tickets')      || [];
+  var hostActiveBets = _parseStore('hostActiveBets')  || [];
+
+  var idCounts = {};
+  for (var i = 0; i < pbTickets.length; i++) {
+    var id = pbTickets[i] && pbTickets[i].id;
+    if (!id) continue;
+    idCounts[id] = (idCounts[id] || 0) + 1;
+  }
+  var duplicateIds = Object.keys(idCounts).filter(function(k){ return idCounts[k] > 1; });
+
+  var pidSet = {};
+  pbTickets.forEach(function(t){      if (t && t.playerId) pidSet[t.playerId] = true; });
+  hostActiveBets.forEach(function(t){ if (t && t.playerId) pidSet[t.playerId] = true; });
+  var pids = Object.keys(pidSet);
+
+  var unownedPb   = pbTickets.filter(function(t){ return t && !t.playerId; }).length;
+  var unownedHost = hostActiveBets.filter(function(t){ return t && !t.playerId; }).length;
+
+  console.log('[multi-player audit]');
+  console.log('  distinctPlayerIds:    ' + pids.length + ' (' + (pids.join(', ') || 'none') + ')');
+  console.log('  pbTicketsTotal:       ' + pbTickets.length);
+  console.log('  hostActiveBetsTotal:  ' + hostActiveBets.length);
+  console.log('  unowned pb (no pid):  ' + unownedPb);
+  console.log('  unowned host (no pid):' + unownedHost);
+  console.log('  duplicate ticket ids: ' + duplicateIds.length + (duplicateIds.length ? ' (' + duplicateIds.join(', ') + ')' : ''));
+
+  var rows = [];
+  pids.forEach(function(pid){
+    var r = runSinglePlayerBetAudit(pid);
+    rows.push({
+      playerId:         pid,
+      tickets:          r.ticketCount,
+      activeRisk:       r.activeRisk,
+      settledWon:       r.settledWins,
+      settledLost:      r.settledLosses,
+      balanceExpected:  r.balanceExpected,
+      balanceDisplayed: r.balanceDisplayed != null ? r.balanceDisplayed : '—',
+      hostExposure:     r.hostAtRiskFromPlayer,
+      match:            r.match,
+      issues:           r.issues.length ? r.issues.join('; ') : ''
+    });
+  });
+
+  try {
+    if (typeof console.table === 'function') console.table(rows);
+    else rows.forEach(function(r){ console.log(JSON.stringify(r)); });
+  } catch (_e) {
+    rows.forEach(function(r){ console.log(JSON.stringify(r)); });
+  }
+
+  // Cross-player ID bleed check
+  var idToPlayers = {};
+  function track(t) {
+    if (!t || !t.id || !t.playerId) return;
+    if (!idToPlayers[t.id]) idToPlayers[t.id] = {};
+    idToPlayers[t.id][t.playerId] = true;
+  }
+  pbTickets.forEach(track);
+  hostActiveBets.forEach(track);
+  var crossPlayer = Object.keys(idToPlayers).filter(function(id){ return Object.keys(idToPlayers[id]).length > 1; });
+  if (crossPlayer.length) {
+    console.warn('[multi-player audit] BLEED — same ticket id under multiple playerIds:');
+    crossPlayer.forEach(function(id){
+      console.warn('  ' + id + ' → ' + Object.keys(idToPlayers[id]).join(', '));
+    });
+  }
+
+  return {
+    distinctPlayerIds:  pids,
+    rows:               rows,
+    unownedPb:          unownedPb,
+    unownedHost:        unownedHost,
+    duplicateIds:       duplicateIds,
+    crossPlayerBleed:   crossPlayer
+  };
+}
+window.runMultiPlayerBetAudit = runMultiPlayerBetAudit;
+
+// ===========================================================================
+// dumpTicketById(id) — read-only ticket-shape inspector
+// ---------------------------------------------------------------------------
+// Prints the FULL stored ticket object from pb-tickets, plus a per-leg
+// view of every field name actually present. Use this when the renderer
+// claims a ticket has no displayable text but the ticket clearly exists
+// in storage. Output answers the question "what fields does this ticket
+// actually carry" without any guessing.
+//
+// Also dumps the matching hostActiveBets mirror entry (if any) and any
+// ledger rows scoped to this ticket id, so we can see whether the host
+// mirror has different fields than pb-tickets does.
+function dumpTicketById(ticketId) {
+  if (!ticketId) {
+    console.warn('[dumpTicketById] missing ticketId argument');
+    return null;
+  }
+  function _parseStore(key) {
+    try { var raw = localStorage.getItem(key); if (raw == null) return null;
+          var v = JSON.parse(raw); return Array.isArray(v) ? v : null; }
+    catch (_e) { return null; }
+  }
+  var pbTickets   = _parseStore('pb-tickets')      || [];
+  var hostMirror  = _parseStore('hostActiveBets')  || [];
+  var ledger      = _parseStore('pb-ledger')       || [];
+
+  var pb   = pbTickets.find(function(t){  return t && t.id === ticketId; }) || null;
+  var host = hostMirror.find(function(t){ return t && t.id === ticketId; }) || null;
+  var rows = ledger.filter(function(L){ return L && L.ticketId === ticketId; });
+
+  console.log('[dumpTicketById] ' + ticketId);
+  if (pb) {
+    console.log('--- pb-tickets entry ---');
+    console.log(JSON.stringify(pb, null, 2));
+    var legs = Array.isArray(pb.selections) ? pb.selections : (Array.isArray(pb.legs) ? pb.legs : []);
+    console.log('--- legs (' + legs.length + ') ---');
+    legs.forEach(function(s, i){
+      var keys = (s && typeof s === 'object') ? Object.keys(s) : [];
+      console.log('  leg[' + i + '] keys: ' + (keys.length ? keys.join(', ') : '(none)'));
+      console.log('  leg[' + i + '] json: ' + JSON.stringify(s));
+    });
+  } else {
+    console.warn('--- not found in pb-tickets ---');
+  }
+  if (host) {
+    console.log('--- hostActiveBets mirror entry ---');
+    console.log(JSON.stringify(host, null, 2));
+  } else {
+    console.log('--- no hostActiveBets mirror entry ---');
+  }
+  if (rows.length) {
+    console.log('--- pb-ledger rows for this ticket (' + rows.length + ') ---');
+    rows.forEach(function(L, i){ console.log('  [' + i + '] ' + JSON.stringify(L)); });
+  } else {
+    console.log('--- no pb-ledger rows for this ticket ---');
+  }
+  return { pb: pb, host: host, ledger: rows };
+}
+window.dumpTicketById = dumpTicketById;
+
+// ===========================================================================
+// Bundle identity log — one line at script load so we can settle the
+// "is this preview running the new code?" question instantly. The string
+// is hard-coded per push so it changes commit-over-commit.
+// ---------------------------------------------------------------------------
+try {
+  console.log('[my bets bundle] commit=9ab4da5+display — ticketCard supports {label,name,game} legs; dumpTicketById available');
+} catch(_e){}
+
 // Main grading entry point — called by Check Results button
+// ===========================================================================
+// Grader sport allowlist
+// ---------------------------------------------------------------------------
+// Auto-grading currently supports MLB only. NFL/NBA/NHL/etc. need their own
+// scores feed, team dictionary, and SDIO field normalizer before they can
+// be graded safely. Until then, non-MLB tickets are allowed to be PLACED
+// (no change to confirmBet / saveTickets / pb-tickets shape) but they are
+// not handed to the MLB grader — if we did, _findGameForSelection's
+// substring fallback could match an NFL team like "Cleveland" Browns to an
+// MLB "Cleveland" Guardians game and grade it as baseball, producing a
+// nonsense WON/LOST.
+//
+// Empty / missing sport is treated as MLB. That's the legacy assumption —
+// every ticket placed before sport-tagging existed was implicitly MLB and
+// must continue to grade normally.
+var GRADER_SUPPORTED_SPORTS = ['mlb', 'baseball_mlb', ''];
+function _ticketSportKey(t) {
+  if (!t) return '';
+  var raw = t.sport ||
+            (t.selections && t.selections[0] && t.selections[0].sport) ||
+            '';
+  return String(raw || '').toLowerCase().trim();
+}
+function _isSupportedForGrading(t) {
+  return GRADER_SUPPORTED_SPORTS.indexOf(_ticketSportKey(t)) !== -1;
+}
+window.GRADER_SUPPORTED_SPORTS = GRADER_SUPPORTED_SPORTS;
+window._ticketSportKey         = _ticketSportKey;
+window._isSupportedForGrading  = _isSupportedForGrading;
+
 async function checkOpenTickets() {
   console.log('[grading start] checking active tickets');
   var btn = document.getElementById('check-results-btn');
@@ -3697,10 +4416,23 @@ async function checkOpenTickets() {
     // Reload tickets from storage
     try { betTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(e){}
 
-    var activeTickets = betTickets.filter(function(t){
+    var activeAllSports = betTickets.filter(function(t){
       return (t.status === 'active' || t.status === 'open') && !t.gradedAt;
     });
-    console.log('[grading start] active tickets:', activeTickets.length);
+    // Sport allowlist gate. Non-MLB tickets stay ACTIVE; auto-grader never
+    // touches them.
+    var activeTickets    = activeAllSports.filter(_isSupportedForGrading);
+    var skippedUnsupported = activeAllSports.filter(function(t){ return !_isSupportedForGrading(t); });
+    if (skippedUnsupported.length) {
+      var summary = skippedUnsupported.map(function(t){
+        return '    - ' + (t.id || '?') + ' sport=' + (_ticketSportKey(t) || '(empty)');
+      }).join('\n');
+      console.log('[grading skipped unsupported sport]\n' +
+        '  count: ' + skippedUnsupported.length + '\n' +
+        '  supportedSports: ' + JSON.stringify(GRADER_SUPPORTED_SPORTS) + '\n' +
+        '  tickets:\n' + summary);
+    }
+    console.log('[grading start] active tickets (after sport allowlist):', activeTickets.length);
 
     if (!activeTickets.length) {
       showToast('No active bets to grade');
@@ -3884,14 +4616,26 @@ async function _autoGradePoll() {
     var tickets = [];
     try { tickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]'); } catch(e) { tickets = []; }
 
-    // Only active MLB tickets not yet graded
-    var activeMLB = tickets.filter(function(t) {
-      var sport = (t.sport || t.selections && t.selections[0] && t.selections[0].sport || '').toLowerCase();
+    // Only active tickets not yet graded, then narrow to grader-supported
+    // sports (currently MLB only). Non-MLB tickets stay ACTIVE; we never
+    // hand them to the MLB matcher — see GRADER_SUPPORTED_SPORTS comment.
+    var activeOpen = tickets.filter(function(t) {
       var statusOpen = t.status === 'active' || t.status === 'open';
       var notGraded  = !t.gradedAt;
       return statusOpen && notGraded;
-      // Note: if sport tag not set we still attempt — _gradeTicket returns null if game not found
     });
+    var activeMLB        = activeOpen.filter(_isSupportedForGrading);
+    var skippedUnsupportedAuto = activeOpen.filter(function(t){ return !_isSupportedForGrading(t); });
+    if (skippedUnsupportedAuto.length) {
+      var summaryAuto = skippedUnsupportedAuto.map(function(t){
+        return '    - ' + (t.id || '?') + ' sport=' + (_ticketSportKey(t) || '(empty)');
+      }).join('\n');
+      console.log('[grading skipped unsupported sport]\n' +
+        '  source: auto-poll\n' +
+        '  count:  ' + skippedUnsupportedAuto.length + '\n' +
+        '  supportedSports: ' + JSON.stringify(GRADER_SUPPORTED_SPORTS) + '\n' +
+        '  tickets:\n' + summaryAuto);
+    }
 
     if (!activeMLB.length) {
       _autoGradeRunning = false;
@@ -4098,14 +4842,155 @@ function renderMyBets() {
     var color = sc[displayStatus] || '#555';
     var d = new Date(t.placedAt);
     var dateStr = isNaN(d) ? t.placedAt : d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
-    var picks = (t.selections||[]).slice(0,3).map(function(s){
+
+    // Build a list of leg-like objects. Field-name reality check, from
+    // ACTUAL writers in this codebase:
+    //   _makeSelection (live placement) → { pick, market, matchup,
+    //                                       homeTeam, awayTeam, odds,
+    //                                       sport, gameId, side }
+    //   _resSeedMockIfEmpty             → { label }                only
+    //   bet-slip groups (place-bet)     → { name, pick, market,
+    //                                       game, odds, id, time }
+    //   _recoverTicketsFromHostMirror   → whatever host-side wrote
+    // So the fallback chain MUST include label, name, game in addition
+    // to pick/matchup/description.
+    var rawLegs = [];
+    if (Array.isArray(t.selections) && t.selections.length) rawLegs = t.selections;
+    else if (Array.isArray(t.legs) && t.legs.length) rawLegs = t.legs;
+    else if (t.pick || t.matchup || t.description || t.team ||
+             t.homeTeam || t.awayTeam || t.label || t.name || t.game) {
+      // Single-leg fallback synthesized from top-level fields.
+      rawLegs = [{
+        pick:        t.pick,
+        team:        t.team,
+        matchup:     t.matchup || t.game,
+        description: t.description,
+        homeTeam:    t.homeTeam, awayTeam: t.awayTeam,
+        odds:        t.odds, market: t.market || t.marketType || t.betType,
+        label:       t.label,
+        name:        t.name,
+        game:        t.game,
+        sport:       t.sport
+      }];
+    }
+    function _legPickText(s) {
+      if (!s) return 'Unknown matchup';
+      // Order of preference: explicit pick, team+market combo, matchup,
+      // description, slip-leg label/name, game, away/home, team alone.
+      // Never emit 'undefined' or an empty string.
+      var candidates = [
+        s.pick,
+        (s.team && s.market) ? (s.team + ' ' + s.market) : null,
+        s.matchup,
+        s.description,
+        s.label,                                                    // mock seeder
+        s.name,                                                     // bet-slip group
+        s.game,                                                     // legacy slip-leg
+        (s.awayTeam && s.homeTeam) ? (s.awayTeam + ' @ ' + s.homeTeam) : null,
+        s.awayTeam,
+        s.homeTeam,
+        s.team
+      ];
+      for (var i = 0; i < candidates.length; i++) {
+        var v = candidates[i];
+        if (v != null && String(v).trim() !== '' && String(v).toLowerCase() !== 'undefined') {
+          return String(v);
+        }
+      }
+      return 'Unknown matchup';
+    }
+    function _legMatchupText(s) {
+      // The game / matchup string, separate from the pick. Falls back
+      // across alternate field names. Returns '' when nothing available
+      // so the UI can omit the row instead of showing a blank.
+      if (!s) return '';
+      var candidates = [
+        s.matchup,
+        s.game,
+        (s.awayTeam && s.homeTeam) ? (s.awayTeam + ' @ ' + s.homeTeam) : null
+      ];
+      for (var i = 0; i < candidates.length; i++) {
+        var v = candidates[i];
+        if (v != null && String(v).trim() !== '' && String(v).toLowerCase() !== 'undefined') {
+          return String(v);
+        }
+      }
+      return '';
+    }
+    function _legOddsText(s) {
+      if (!s) return '';
+      var raw = (s.odds != null) ? s.odds : (s.line != null ? s.line : null);
+      if (raw == null || raw === '') return '';
+      var n = parseInt(String(raw).replace('+',''), 10);
+      if (isNaN(n)) return '';
+      return (n > 0 ? '+' : '') + n;
+    }
+    function _legMarketText(s) {
+      if (!s) return '';
+      var m = s.market || s.marketType || s.betType || s.market_type || '';
+      m = String(m || '').trim();
+      if (!m || m.toLowerCase() === 'undefined') return '';
+      return m;
+    }
+    function _ticketSportLabel(t, firstLeg) {
+      var raw = (t && t.sport) ||
+                (firstLeg && firstLeg.sport) ||
+                (typeof _ticketSportKey === 'function' ? _ticketSportKey(t) : '');
+      var v = String(raw || '').trim();
+      if (!v || v.toLowerCase() === 'undefined') return '';
+      var map = { 'mlb':'MLB','baseball_mlb':'MLB',
+                  'nfl':'NFL','americanfootball_nfl':'NFL',
+                  'nba':'NBA','basketball_nba':'NBA',
+                  'nhl':'NHL','icehockey_nhl':'NHL',
+                  'ncaaf':'NCAAF','ncaab':'NCAAB',
+                  'soccer':'Soccer','tennis':'Tennis','golf':'Golf' };
+      return map[v.toLowerCase()] || v.toUpperCase();
+    }
+    var picks = rawLegs.slice(0, 3).map(function(s){
+      var pickText    = _legPickText(s);
+      var matchupText = _legMatchupText(s);
+      var oddsText    = _legOddsText(s);
+      var marketText  = _legMarketText(s);
+      var oddsBlock   = oddsText   ? ' <span style="color:#0064c8;font-size:0.7rem">'+oddsText+'</span>' : '';
+      var marketBlock = marketText ? ' <span style="color:#aaa;font-size:0.68rem">· '+marketText+'</span>' : '';
+      // Show the matchup as a quieter second line when it's distinct from
+      // the pick text. Avoids redundancy like 'Cleveland Guardians ML'
+      // duplicated as a subtitle.
+      var matchupBlock = (matchupText && matchupText.toLowerCase() !== pickText.toLowerCase())
+        ? '<div style="font-size:0.66rem;color:#888;margin-top:2px">' + matchupText + '</div>'
+        : '';
       return '<div style="font-size:0.78rem;color:#333;padding:4px 0;border-bottom:1px solid #f0f0f0">' +
-        '<span style="font-weight:800">'+s.pick+'</span>' +
-        ' <span style="color:#0064c8;font-size:0.7rem">'+fmtOdds(s.odds)+'</span>' +
-        ' <span style="color:#aaa;font-size:0.68rem">· '+(s.market||'')+'</span>' +
+        '<span style="font-weight:800">'+pickText+'</span>' +
+        oddsBlock + marketBlock +
+        matchupBlock +
         '</div>';
     }).join('');
-    var morePicks = (t.selections||[]).length > 3 ? '<div style="font-size:0.68rem;color:#aaa;padding-top:4px">+'+(t.selections.length-3)+' more picks</div>' : '';
+    if (!picks) {
+      picks = '<div style="font-size:0.78rem;color:#333;padding:4px 0;border-bottom:1px solid #f0f0f0">' +
+              '<span style="font-weight:800">Unknown matchup</span>' +
+              '</div>';
+    }
+    var morePicks = rawLegs.length > 3 ? '<div style="font-size:0.68rem;color:#aaa;padding-top:4px">+'+(rawLegs.length-3)+' more picks</div>' : '';
+
+    var __firstLeg   = rawLegs[0] || {};
+    var ticketSport  = _ticketSportLabel(t, __firstLeg);
+    var sportBadge   = ticketSport
+      ? '<span style="font-size:0.6rem;font-weight:800;letter-spacing:0.4px;color:#0064c8;background:#eef4ff;border:1px solid #cfe0ff;border-radius:6px;padding:1px 6px;margin-right:6px;text-transform:uppercase">'+ticketSport+'</span>'
+      : '';
+
+    // TEMP DEBUG — spec'd log block. One per ticket render.
+    try {
+      var __rawFields = Object.keys(__firstLeg).filter(function(k){
+        var v = __firstLeg[k]; return v != null && v !== '';
+      }).map(function(k){ return k+'='+String(__firstLeg[k]).slice(0,40); }).join(' | ');
+      console.log('[ticket render resolved]\n' +
+        '  ticketId:         ' + (t.id || '-') + '\n' +
+        '  rawFields:        ' + (__rawFields || '(empty leg)') + '\n' +
+        '  renderedMatchup:  ' + (_legMatchupText(__firstLeg) || '(omitted)') + '\n' +
+        '  renderedPick:     ' + _legPickText(__firstLeg) + '\n' +
+        '  renderedMarket:   ' + (_legMarketText(__firstLeg) || '(omitted)') + '\n' +
+        '  renderedSport:    ' + (ticketSport || '(omitted)'));
+    } catch(_e){}
     var isDeletePending = t.deleteRequestStatus === 'pending';
     var isDeleteDenied  = t.deleteRequestStatus === 'denied';
     var isVoided        = displayStatus === 'voided' || displayStatus === 'deleted' || displayStatus === 'canceled';
@@ -4126,10 +5011,20 @@ function renderMyBets() {
         : isDeleteDenied
           ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;font-size:0.72rem;color:#cc0000;font-weight:700;text-align:center">❌ Delete request denied</div>'
           : '';
+    // Ticket type label fallback chain so we never paint 'undefined' at
+    // the top of a card. Modern tickets have t.type ('Straight' /
+    // 'Parlay' / etc.); older shapes may only have bet_type or imply
+    // type from selections length.
+    var typeLabel = t.type || t.betType || t.bet_type ||
+                    (rawLegs.length > 1 ? 'Parlay' :
+                     rawLegs.length === 1 ? 'Straight' : 'Bet');
+    if (typeof typeLabel !== 'string' || !typeLabel.trim() || typeLabel.toLowerCase() === 'undefined') {
+      typeLabel = 'Bet';
+    }
     return '<div style="background:#fff;border-radius:14px;margin:8px 0;padding:16px;border:1px solid #e8e8e8;box-shadow:0 1px 4px rgba(0,0,0,0.06)">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
         '<div>' +
-          '<div style="font-size:0.88rem;font-weight:900;color:#111">'+t.type+'</div>' +
+          '<div style="font-size:0.88rem;font-weight:900;color:#111">' + sportBadge + typeLabel+'</div>' +
           '<div style="font-size:0.62rem;color:#aaa;margin-top:2px">'+dateStr+'</div>' +
         '</div>' +
         statusBadge +
@@ -4172,7 +5067,109 @@ function renderMyBets() {
     return s;
   }
   var active   = betTickets.filter(function(t){ var ds = _safeDisplayStatus(t); return ds === 'active' || ds === 'open'; });
-  var settled  = betTickets.filter(function(t){ var ds = _safeDisplayStatus(t); return ds !== 'active' && ds !== 'open'; });
+  var settledAll = betTickets.filter(function(t){ var ds = _safeDisplayStatus(t); return ds !== 'active' && ds !== 'open'; });
+
+  // ===== My Bets ticket lifecycle =====================================
+  // My Bets shows ACTIVE tickets forever (until graded), and SETTLED
+  // tickets for 12 hours after gradedAt. After that, settled tickets are
+  // hidden from My Bets to reduce clutter, but the underlying data is
+  // NEVER deleted from pb-tickets. They remain permanently accessible:
+  //   - Results tab reads pb-tickets directly (no age filter applied).
+  //   - Host dashboard reads hostActiveBets (still mirrored).
+  //   - Settlement records / ledger entries / audit panel: all untouched.
+  // The canonical key is ticket.id, used across My Bets, hostActiveBets,
+  // pb-settlements, pb-ledger, and Results.
+  var MYBETS_SETTLED_TTL_MS = 12 * 60 * 60 * 1000;
+  var _nowMs = Date.now();
+  function _settledTicketAgeMs(t) {
+    // Prefer gradedAt (the finalization moment). Fall back to grading.gradedAt
+    // or settledAt for legacy shapes. Tickets with no timestamp default to
+    // "too old" so they are hidden — better than appearing forever.
+    var iso = (t && t.gradedAt) ||
+              (t && t.grading && t.grading.gradedAt) ||
+              (t && t.settledAt) || null;
+    if (!iso) return Number.POSITIVE_INFINITY;
+    var ms = Date.parse(iso);
+    if (!isFinite(ms)) return Number.POSITIVE_INFINITY;
+    return _nowMs - ms;
+  }
+  var settled = settledAll.filter(function(t){
+    return _settledTicketAgeMs(t) <= MYBETS_SETTLED_TTL_MS;
+  });
+  var hiddenSettledCount = settledAll.length - settled.length;
+  // One-shot debug so we can verify the cutoff is doing the right thing.
+  try {
+    console.log('[mybets lifecycle]\n' +
+      '  totalTickets:        ' + betTickets.length + '\n' +
+      '  active:              ' + active.length + '\n' +
+      '  settledAll:          ' + settledAll.length + '\n' +
+      '  settledShown:        ' + settled.length + ' (within 12h of gradedAt)\n' +
+      '  settledHidden:       ' + hiddenSettledCount + ' (older than 12h, still in pb-tickets, visible in Results)\n' +
+      '  ttlHours:            12');
+  } catch(_e){}
+  // [render source] — explicit attribution so we never again wonder
+  // 'is My Bets rendering from somewhere other than pb-tickets?'.
+  // renderMyBets ALWAYS reloads betTickets from pb-tickets at the top of
+  // its body; the active/settled arrays below are derived from that
+  // reload. Any ticket appearing in the UI MUST have an id that exists
+  // in pb-tickets at this moment. No mock seeder, no in-memory fixture,
+  // no host-mirror direct rendering.
+  try {
+    function _firstId(arr) { return (Array.isArray(arr) && arr[0] && arr[0].id) ? String(arr[0].id) : '—'; }
+    console.log('[render source]\n' +
+      '  section:        active\n' +
+      '  sourceName:     pb-tickets (via betTickets, reloaded in renderMyBets body)\n' +
+      '  ticketCount:    ' + active.length + '\n' +
+      '  firstTicketId:  ' + _firstId(active));
+    console.log('[render source]\n' +
+      '  section:        settled\n' +
+      '  sourceName:     pb-tickets (via betTickets, reloaded in renderMyBets body)\n' +
+      '  ticketCount:    ' + settled.length + '\n' +
+      '  firstTicketId:  ' + _firstId(settled));
+  } catch(_e){}
+  // TEMP DEBUG — dump real persisted schema for one active + one settled
+  // ticket so we can see EXACTLY what confirmBet/saveTickets writes,
+  // independent of any defensive rendering helpers. Strip after the
+  // display regression is verified closed.
+  try {
+    if (active.length)  console.log('[raw ticket object] ACTIVE\n'  + JSON.stringify(active[0],  null, 2));
+    if (settled.length) console.log('[raw ticket object] SETTLED\n' + JSON.stringify(settled[0], null, 2));
+  } catch(_e){
+    console.warn('[raw ticket object] dump failed', _e && _e.message || _e);
+  }
+  // TEMP DEBUG — ticket source audit. Confirms which localStorage key the
+  // renderer is reading from versus what other code is reading/writing.
+  // pb-tickets is the canonical player ticket source for ALL paths in
+  // player.html (confirmBet -> saveTickets -> renderMyBets / grader /
+  // auto-poll / calcAvailableBalance / simulateGrade). hostActiveBets is
+  // a host-side MIRROR (read by index.html). pb-settlements is host-only
+  // weekly settlement history, never written by player code.
+  try {
+    var _ptRaw = localStorage.getItem('pb-tickets');
+    var _ptArr = null;
+    try { _ptArr = _ptRaw ? JSON.parse(_ptRaw) : null; } catch(_e){ _ptArr = null; }
+    var _habRaw = localStorage.getItem('hostActiveBets');
+    var _habArr = null;
+    try { _habArr = _habRaw ? JSON.parse(_habRaw) : null; } catch(_e){ _habArr = null; }
+    var _allKeys = [];
+    try {
+      for (var __i = 0; __i < localStorage.length; __i++) {
+        var __k = localStorage.key(__i);
+        if (__k && __k.indexOf('pb-') === 0) _allKeys.push(__k);
+        if (__k === 'hostActiveBets') _allKeys.push(__k);
+      }
+    } catch(_e){}
+    console.log('[ticket source audit]\n' +
+      '  renderMyBets source:       pb-tickets\n' +
+      '  grading source:            pb-tickets (checkOpenTickets + _autoGradePoll)\n' +
+      '  confirmBet write target:   pb-tickets (via saveTickets) + hostActiveBets mirror\n' +
+      '  pb-tickets present:        ' + (_ptRaw === null ? 'no (key missing)' : (Array.isArray(_ptArr) ? ('yes ['+_ptArr.length+' entries]') : 'yes (not array, len='+_ptRaw.length+')')) + '\n' +
+      '  hostActiveBets present:    ' + (_habRaw === null ? 'no (key missing)' : (Array.isArray(_habArr) ? ('yes ['+_habArr.length+' entries]') : 'yes (not array, len='+_habRaw.length+')')) + '\n' +
+      '  betTickets in-memory:      ' + (Array.isArray(betTickets) ? betTickets.length : 'not array') + '\n' +
+      '  pb-* keys in localStorage: ' + _allKeys.join(', '));
+  } catch(_e){
+    console.warn('[ticket source audit] failed:', _e && _e.message || _e);
+  }
   var html =
     '<div style="padding:16px 14px 8px;display:flex;justify-content:space-between;align-items:center">' +
       '<span style="font-size:1rem;font-weight:900;color:#111">My Bets</span>' +
@@ -4201,6 +5198,13 @@ function renderMyBets() {
     if (settled.length) {
       html += '<div style="padding:12px 14px 4px;font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#888">Settled ('+settled.length+')</div>';
       html += '<div style="padding:0 14px">' + settled.map(ticketCard).join('') + '</div>';
+    }
+    // Hidden-older-settled notice. Data is intact in Results; this is
+    // just a heads-up so the user doesn't think tickets disappeared.
+    if (hiddenSettledCount > 0) {
+      html += '<div style="padding:10px 14px 4px;font-size:0.66rem;color:#888;text-align:center">' +
+              '+' + hiddenSettledCount + ' older settled ticket' + (hiddenSettledCount===1?'':'s') +
+              ' hidden — view full history in <strong style="color:#0064c8">Results</strong></div>';
     }
   }
   html += '<div style="height:80px"></div>'; // nav clearance
@@ -4845,27 +5849,62 @@ function _resGetTickets(){
   try { return JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(_e){ return []; }
 }
 // Seed mock tickets for current week if no tickets exist (acceptance criterion).
+// REMOVED: _resSeedMockIfEmpty used to write 10 MOCK-* tickets directly
+// into pb-tickets when the store was empty, contaminating the player's
+// canonical ticket source with demo data. Side effects observed:
+//   - My Bets rendered MOCK-W6 as an active 'Celtics +6.5' card even
+//     though the ticket existed nowhere in any auditable store after a
+//     subsequent storage event.
+//   - calcAvailableBalance subtracted the MOCK-* lost-status risk and
+//     added the won-status profit — affecting the real available
+//     balance display.
+//   - dumpTicketById / runBalanceReconciliation / audit panel reported
+//     'not found' because by the time we inspected, another path had
+//     cleared the key.
+//
+// Kept as a no-op so the existing call site (renderPlayerResults) does
+// not break. The Results page will simply show empty / zero-state when
+// pb-tickets is empty, which is the correct behavior.
 function _resSeedMockIfEmpty(){
-  var existing = _resGetTickets();
-  if (existing.length) return;
-  var now = new Date();
-  var ws  = _resSundayMidnight(now);
-  function dayTs(dayIdx, hour){ var d = new Date(ws); d.setDate(d.getDate()+dayIdx); d.setHours(hour||14,0,0,0); return d.toISOString(); }
-  var mock = [
-    { id:'MOCK-W1', type:'Single',  status:'won',    placedAt:dayTs(1,13), riskAmount:50,  potentialProfit:45,  estimatedPayout:95,  odds:'-110', selections:[{label:'Lakers ML'}] },
-    { id:'MOCK-W2', type:'Single',  status:'lost',   placedAt:dayTs(2,19), riskAmount:75,  potentialProfit:68,  estimatedPayout:143, odds:'-110', selections:[{label:'Yankees -1.5'}] },
-    { id:'MOCK-W3', type:'Parlay',  status:'won',    placedAt:dayTs(3,12), riskAmount:25,  potentialProfit:165, estimatedPayout:190, odds:'+660', selections:[{label:'Leg A'},{label:'Leg B'},{label:'Leg C'}] },
-    { id:'MOCK-W4', type:'Single',  status:'lost',   placedAt:dayTs(4,21), riskAmount:100, potentialProfit:91,  estimatedPayout:191, odds:'-110', selections:[{label:'Cowboys -3.5'}] },
-    { id:'MOCK-W5', type:'Single',  status:'won',    placedAt:dayTs(5,17), riskAmount:60,  potentialProfit:54,  estimatedPayout:114, odds:'-110', selections:[{label:'Over 8.5'}] },
-    { id:'MOCK-W6', type:'Single',  status:'active', placedAt:dayTs(6,11), riskAmount:40,  potentialProfit:36,  estimatedPayout:76,  odds:'-110', selections:[{label:'Celtics +6.5'}] },
-    { id:'MOCK-W7', type:'Single',  status:'canceled',placedAt:dayTs(2,15), riskAmount:30,  potentialProfit:27,  estimatedPayout:57,  odds:'-110', selections:[{label:'Voided market'}] },
-    { id:'MOCK-P1', type:'Single',  status:'won',    placedAt:(function(){var d=new Date(ws);d.setDate(d.getDate()-7+2);d.setHours(14);return d.toISOString();})(), riskAmount:80, potentialProfit:73, estimatedPayout:153, odds:'-110', selections:[{label:'Bucks ML'}] },
-    { id:'MOCK-P2', type:'Single',  status:'lost',   placedAt:(function(){var d=new Date(ws);d.setDate(d.getDate()-7+5);d.setHours(20);return d.toISOString();})(), riskAmount:120,potentialProfit:109,estimatedPayout:229, odds:'-110', selections:[{label:'Eagles -7'}] },
-    { id:'MOCK-P3', type:'Parlay',  status:'won',    placedAt:(function(){var d=new Date(ws);d.setDate(d.getDate()-7+6);d.setHours(18);return d.toISOString();})(), riskAmount:25, potentialProfit:240,estimatedPayout:265, odds:'+960', selections:[{label:'L1'},{label:'L2'},{label:'L3'},{label:'L4'}] }
-  ];
-  try { localStorage.setItem('pb-tickets', JSON.stringify(mock)); } catch(_e){}
-  betTickets = mock;
+  // intentionally empty — see comment above. Do NOT write demo tickets
+  // to localStorage; My Bets must be 100% driven by canonical pb-tickets.
 }
+
+// One-shot cleanup at script load: purge any MOCK-* tickets that a prior
+// run of the seeder already wrote to pb-tickets. Idempotent. Read-only
+// against any non-MOCK ticket.
+function _purgeMockTickets(){
+  try {
+    var raw = localStorage.getItem('pb-tickets');
+    if (raw == null) return { purged: 0, reason: 'pb-tickets missing' };
+    var arr;
+    try { arr = JSON.parse(raw); } catch(_e){ return { purged: 0, reason: 'pb-tickets parse error' }; }
+    if (!Array.isArray(arr) || !arr.length) return { purged: 0, reason: 'pb-tickets empty' };
+    var before = arr.length;
+    var cleaned = arr.filter(function(t){
+      if (!t || !t.id) return true;                // keep malformed but ID-less rows for the next layer
+      return String(t.id).indexOf('MOCK-') !== 0;   // drop only MOCK-* ids
+    });
+    var purged = before - cleaned.length;
+    if (purged > 0) {
+      localStorage.setItem('pb-tickets', JSON.stringify(cleaned));
+      try {
+        var _v = parseInt(localStorage.getItem('pb-tickets-version')||'0',10)||0;
+        localStorage.setItem('pb-tickets-version', String(_v + 1));
+      } catch(_e){}
+      try { betTickets = cleaned; } catch(_e){}
+      console.log('[mock purge] removed ' + purged + ' MOCK-* ticket(s) from pb-tickets');
+    }
+    return { purged: purged, before: before, after: cleaned.length };
+  } catch(err) {
+    return { purged: 0, reason: 'exception', error: String(err && err.message || err) };
+  }
+}
+window._purgeMockTickets = _purgeMockTickets;
+// Run at script load. Anything _recoverTicketsFromHostMirror restores
+// later runs AFTER this, but that recovery only pulls from hostActiveBets,
+// which has never carried MOCK-* tickets.
+try { _purgeMockTickets(); } catch(_e){}
 function _resWeekAggregates(weekStart, weekEnd){
   var bets = _resGetTickets();
   var wsT = weekStart.getTime(), weT = weekEnd.getTime();
