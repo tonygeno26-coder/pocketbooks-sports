@@ -4267,6 +4267,16 @@ function renderMyBets() {
   }
   var active   = betTickets.filter(function(t){ var ds = _safeDisplayStatus(t); return ds === 'active' || ds === 'open'; });
   var settled  = betTickets.filter(function(t){ var ds = _safeDisplayStatus(t); return ds !== 'active' && ds !== 'open'; });
+  // TEMP DEBUG — dump real persisted schema for one active + one settled
+  // ticket so we can see EXACTLY what confirmBet/saveTickets writes,
+  // independent of any defensive rendering helpers. Strip after the
+  // display regression is verified closed.
+  try {
+    if (active.length)  console.log('[raw ticket object] ACTIVE\n'  + JSON.stringify(active[0],  null, 2));
+    if (settled.length) console.log('[raw ticket object] SETTLED\n' + JSON.stringify(settled[0], null, 2));
+  } catch(_e){
+    console.warn('[raw ticket object] dump failed', _e && _e.message || _e);
+  }
   var html =
     '<div style="padding:16px 14px 8px;display:flex;justify-content:space-between;align-items:center">' +
       '<span style="font-size:1rem;font-weight:900;color:#111">My Bets</span>' +
