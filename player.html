@@ -4277,6 +4277,39 @@ function renderMyBets() {
   } catch(_e){
     console.warn('[raw ticket object] dump failed', _e && _e.message || _e);
   }
+  // TEMP DEBUG — ticket source audit. Confirms which localStorage key the
+  // renderer is reading from versus what other code is reading/writing.
+  // pb-tickets is the canonical player ticket source for ALL paths in
+  // player.html (confirmBet -> saveTickets -> renderMyBets / grader /
+  // auto-poll / calcAvailableBalance / simulateGrade). hostActiveBets is
+  // a host-side MIRROR (read by index.html). pb-settlements is host-only
+  // weekly settlement history, never written by player code.
+  try {
+    var _ptRaw = localStorage.getItem('pb-tickets');
+    var _ptArr = null;
+    try { _ptArr = _ptRaw ? JSON.parse(_ptRaw) : null; } catch(_e){ _ptArr = null; }
+    var _habRaw = localStorage.getItem('hostActiveBets');
+    var _habArr = null;
+    try { _habArr = _habRaw ? JSON.parse(_habRaw) : null; } catch(_e){ _habArr = null; }
+    var _allKeys = [];
+    try {
+      for (var __i = 0; __i < localStorage.length; __i++) {
+        var __k = localStorage.key(__i);
+        if (__k && __k.indexOf('pb-') === 0) _allKeys.push(__k);
+        if (__k === 'hostActiveBets') _allKeys.push(__k);
+      }
+    } catch(_e){}
+    console.log('[ticket source audit]\n' +
+      '  renderMyBets source:       pb-tickets\n' +
+      '  grading source:            pb-tickets (checkOpenTickets + _autoGradePoll)\n' +
+      '  confirmBet write target:   pb-tickets (via saveTickets) + hostActiveBets mirror\n' +
+      '  pb-tickets present:        ' + (_ptRaw === null ? 'no (key missing)' : (Array.isArray(_ptArr) ? ('yes ['+_ptArr.length+' entries]') : 'yes (not array, len='+_ptRaw.length+')')) + '\n' +
+      '  hostActiveBets present:    ' + (_habRaw === null ? 'no (key missing)' : (Array.isArray(_habArr) ? ('yes ['+_habArr.length+' entries]') : 'yes (not array, len='+_habRaw.length+')')) + '\n' +
+      '  betTickets in-memory:      ' + (Array.isArray(betTickets) ? betTickets.length : 'not array') + '\n' +
+      '  pb-* keys in localStorage: ' + _allKeys.join(', '));
+  } catch(_e){
+    console.warn('[ticket source audit] failed:', _e && _e.message || _e);
+  }
   var html =
     '<div style="padding:16px 14px 8px;display:flex;justify-content:space-between;align-items:center">' +
       '<span style="font-size:1rem;font-weight:900;color:#111">My Bets</span>' +
