@@ -4098,14 +4098,98 @@ function renderMyBets() {
     var color = sc[displayStatus] || '#555';
     var d = new Date(t.placedAt);
     var dateStr = isNaN(d) ? t.placedAt : d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
-    var picks = (t.selections||[]).slice(0,3).map(function(s){
+
+    // Build a list of leg-like objects. New code uses t.selections; older
+    // shapes may use t.legs, a single t.pick, or just a top-level matchup.
+    // Whatever exists, normalize each leg into { pick, odds, market }
+    // strings the renderer can safely concatenate.
+    var rawLegs = [];
+    if (Array.isArray(t.selections) && t.selections.length) rawLegs = t.selections;
+    else if (Array.isArray(t.legs) && t.legs.length) rawLegs = t.legs;
+    else if (t.pick || t.matchup || t.description || t.team || t.homeTeam || t.awayTeam) {
+      // Single-leg fallback synthesized from top-level fields.
+      rawLegs = [{
+        pick:     t.pick,
+        team:    t.team,
+        matchup:  t.matchup,
+        description: t.description,
+        homeTeam: t.homeTeam, awayTeam: t.awayTeam,
+        odds:     t.odds, market: t.market
+      }];
+    }
+    function _legPickText(s) {
+      if (!s) return 'Unknown matchup';
+      // Order of preference: explicit pick, team+market combo, matchup,
+      // description, away/home, team alone. Never emit 'undefined'.
+      var candidates = [
+        s.pick,
+        (s.team && s.market) ? (s.team + ' ' + s.market) : null,
+        s.matchup,
+        s.description,
+        (s.awayTeam && s.homeTeam) ? (s.awayTeam + ' @ ' + s.homeTeam) : null,
+        s.awayTeam,
+        s.homeTeam,
+        s.team
+      ];
+      for (var i = 0; i < candidates.length; i++) {
+        var v = candidates[i];
+        if (v != null && String(v).trim() !== '' && String(v).toLowerCase() !== 'undefined') {
+          return String(v);
+        }
+      }
+      return 'Unknown matchup';
+    }
+    function _legOddsText(s) {
+      if (!s) return '';
+      var raw = (s.odds != null) ? s.odds : (s.line != null ? s.line : null);
+      if (raw == null || raw === '') return '';
+      var n = parseInt(String(raw).replace('+',''), 10);
+      if (isNaN(n)) return '';
+      return (n > 0 ? '+' : '') + n;
+    }
+    function _legMarketText(s) {
+      if (!s) return '';
+      var m = s.market || s.marketType || s.betType || '';
+      m = String(m || '').trim();
+      if (!m || m.toLowerCase() === 'undefined') return '';
+      return m;
+    }
+    var picks = rawLegs.slice(0, 3).map(function(s){
+      var pickText   = _legPickText(s);
+      var oddsText   = _legOddsText(s);
+      var marketText = _legMarketText(s);
+      var oddsBlock  = oddsText   ? ' <span style="color:#0064c8;font-size:0.7rem">'+oddsText+'</span>' : '';
+      var marketBlock= marketText ? ' <span style="color:#aaa;font-size:0.68rem">· '+marketText+'</span>' : '';
       return '<div style="font-size:0.78rem;color:#333;padding:4px 0;border-bottom:1px solid #f0f0f0">' +
-        '<span style="font-weight:800">'+s.pick+'</span>' +
-        ' <span style="color:#0064c8;font-size:0.7rem">'+fmtOdds(s.odds)+'</span>' +
-        ' <span style="color:#aaa;font-size:0.68rem">· '+(s.market||'')+'</span>' +
+        '<span style="font-weight:800">'+pickText+'</span>' +
+        oddsBlock + marketBlock +
         '</div>';
     }).join('');
-    var morePicks = (t.selections||[]).length > 3 ? '<div style="font-size:0.68rem;color:#aaa;padding-top:4px">+'+(t.selections.length-3)+' more picks</div>' : '';
+    // Empty-state guard: no synthesizable legs at all. Show 'Unknown
+    // matchup' rather than an empty card body.
+    if (!picks) {
+      picks = '<div style="font-size:0.78rem;color:#333;padding:4px 0;border-bottom:1px solid #f0f0f0">' +
+              '<span style="font-weight:800">Unknown matchup</span>' +
+              '</div>';
+    }
+    var morePicks = rawLegs.length > 3 ? '<div style="font-size:0.68rem;color:#aaa;padding-top:4px">+'+(rawLegs.length-3)+' more picks</div>' : '';
+
+    // TEMP DEBUG — emit per ticket so we can spot any remaining shape
+    // problems. Strip when the regression is verified closed.
+    try {
+      var __firstLeg = rawLegs[0] || {};
+      console.log('[ticket display fields]\n' +
+        '  ticketId:    ' + (t.id || '-') + '\n' +
+        '  type:        ' + (t.type || '-') + '\n' +
+        '  status:      ' + (t.status || '-') + '\n' +
+        '  selections:  ' + (Array.isArray(t.selections) ? t.selections.length : 'n/a') + '\n' +
+        '  legs:        ' + (Array.isArray(t.legs) ? t.legs.length : 'n/a') + '\n' +
+        '  pick:        ' + (__firstLeg.pick || t.pick || '-') + '\n' +
+        '  matchup:     ' + (__firstLeg.matchup || t.matchup || '-') + '\n' +
+        '  homeTeam:    ' + (__firstLeg.homeTeam || t.homeTeam || '-') + '\n' +
+        '  awayTeam:    ' + (__firstLeg.awayTeam || t.awayTeam || '-') + '\n' +
+        '  renderedText:' + _legPickText(__firstLeg));
+    } catch(_e){}
     var isDeletePending = t.deleteRequestStatus === 'pending';
     var isDeleteDenied  = t.deleteRequestStatus === 'denied';
     var isVoided        = displayStatus === 'voided' || displayStatus === 'deleted' || displayStatus === 'canceled';
@@ -4126,10 +4210,20 @@ function renderMyBets() {
         : isDeleteDenied
           ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;font-size:0.72rem;color:#cc0000;font-weight:700;text-align:center">❌ Delete request denied</div>'
           : '';
+    // Ticket type label fallback chain so we never paint 'undefined' at
+    // the top of a card. Modern tickets have t.type ('Straight' /
+    // 'Parlay' / etc.); older shapes may only have bet_type or imply
+    // type from selections length.
+    var typeLabel = t.type || t.betType || t.bet_type ||
+                    (rawLegs.length > 1 ? 'Parlay' :
+                     rawLegs.length === 1 ? 'Straight' : 'Bet');
+    if (typeof typeLabel !== 'string' || !typeLabel.trim() || typeLabel.toLowerCase() === 'undefined') {
+      typeLabel = 'Bet';
+    }
     return '<div style="background:#fff;border-radius:14px;margin:8px 0;padding:16px;border:1px solid #e8e8e8;box-shadow:0 1px 4px rgba(0,0,0,0.06)">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
         '<div>' +
-          '<div style="font-size:0.88rem;font-weight:900;color:#111">'+t.type+'</div>' +
+          '<div style="font-size:0.88rem;font-weight:900;color:#111">'+typeLabel+'</div>' +
           '<div style="font-size:0.62rem;color:#aaa;margin-top:2px">'+dateStr+'</div>' +
         '</div>' +
         statusBadge +
