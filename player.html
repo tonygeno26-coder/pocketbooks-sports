@@ -3018,46 +3018,287 @@ function _gradeSingleLeg(sel, gameResult) {
   return null;
 }
 
-// Grade a full ticket (all selections must match game results)
-function _gradeTicket(ticket, resultsMap) {
-  if (!ticket.selections || !ticket.selections.length) return null;
-  var legResults = [];
+// Grade a full ticket (all selections must match game results).
+// Now returns BOTH the legacy string-form `finalScores` array (for backwards
+// compatibility with existing log/UI code) AND a structured `gameResults`
+// array per leg so the caller can build the 5-guard-compliant finalScore
+// object on the ticket.
+function _gradeTicket(ticket, resultsMap, normalizedGames) {
+  if (!ticket || !ticket.selections || !ticket.selections.length) return null;
+  // Tolerate calls where the caller passes only resultsMap (legacy path);
+  // derive normalizedGames from the unique values of resultsMap when missing.
+  var games = Array.isArray(normalizedGames) ? normalizedGames : (function(){
+    var seen = {}; var arr = [];
+    var keys = Object.keys(resultsMap || {});
+    for (var k = 0; k < keys.length; k++) {
+      var g = resultsMap[keys[k]];
+      if (g && g.id && !seen[g.id]) { seen[g.id] = 1; arr.push(g); }
+    }
+    return arr;
+  })();
+
+  var legResults  = [];
   var finalScores = [];
-  var gamesUsed = [];
+  var gameResultsPerLeg = [];
 
   for (var i = 0; i < ticket.selections.length; i++) {
     var sel = ticket.selections[i];
-    var matchup = (sel.matchup || sel.game || '').toLowerCase();
-    // Find matching completed game
-    var gameResult = null;
-    var keys = Object.keys(resultsMap);
-    for (var j = 0; j < keys.length; j++) {
-      var g = resultsMap[keys[j]];
-      var gHome = (g.home || '').toLowerCase();
-      var gAway = (g.away || '').toLowerCase();
-      if (matchup.includes(gHome) || matchup.includes(gAway) ||
-          (sel.gameId && sel.gameId === g.id)) {
-        gameResult = g; break;
-      }
+    var gameResult = _findGameForSelection(sel, games, resultsMap || {});
+    if (!gameResult) {
+      console.log('[active ticket final check]\n' +
+        '  ticketId:    ' + (ticket.id || '?') + '\n' +
+        '  legIndex:    ' + i + '\n' +
+        '  matchup:     ' + (sel.matchup || sel.game || '-') + '\n' +
+        '  selHome:     ' + (sel.homeTeam || '-') + '\n' +
+        '  selAway:     ' + (sel.awayTeam || '-') + '\n' +
+        '  gameId:      ' + (sel.gameId  || '-') + '\n' +
+        '  matched:     no');
+      return null;
     }
-    if (!gameResult) return null; // game not found / not complete yet
-
     var legResult = _gradeSingleLeg(sel, gameResult);
-    if (!legResult) return null;
+    if (!legResult) {
+      console.log('[active ticket final check]\n' +
+        '  ticketId:    ' + (ticket.id || '?') + '\n' +
+        '  legIndex:    ' + i + '\n' +
+        '  matchup:     ' + (sel.matchup || sel.game || '-') + '\n' +
+        '  matched:     yes\n' +
+        '  leg result:  unable_to_grade');
+      return null;
+    }
     legResults.push(legResult);
     finalScores.push(gameResult.away + ' ' + gameResult.away_score + ' @ ' + gameResult.home + ' ' + gameResult.home_score);
-    gamesUsed.push(gameResult.id);
+    gameResultsPerLeg.push(gameResult);
   }
 
-  // Combine leg results for multi-leg tickets
-  if (legResults.some(function(r){ return r === 'lost'; })) return { result:'lost', finalScores:finalScores };
-  if (legResults.every(function(r){ return r === 'push'; })) return { result:'push', finalScores:finalScores };
-  if (legResults.some(function(r){ return r === 'push'; })) {
-    // Parlay with push: recalculate without push legs (simplified: treat as push)
-    return { result:'push', finalScores:finalScores };
-  }
-  return { result:'won', finalScores:finalScores };
+  var combined;
+  if (legResults.some(function(r){ return r === 'lost'; })) combined = 'lost';
+  else if (legResults.every(function(r){ return r === 'push'; })) combined = 'push';
+  else if (legResults.some(function(r){ return r === 'push'; })) combined = 'push';
+  else combined = 'won';
+
+  return {
+    result:      combined,
+    finalScores: finalScores,
+    legResults:  legResults,
+    gameResults: gameResultsPerLeg,
+    primaryGame: gameResultsPerLeg[0] // used to build the structured finalScore object
+  };
 }
+
+// ============================================================================
+// SCORES PIPELINE — SportsDataIO only (Odds API is NEVER used for grading).
+// ============================================================================
+
+// MLB TLA → full team name dictionary. Tickets are persisted with full names
+// (e.g. "Los Angeles Angels"), SportsDataIO uses both TLAs ("LAA") and the
+// short HomeTeamName/AwayTeamName ("Angels"). The normalizer below uses
+// this to produce a consistent "home"/"away" full-name string that
+// _gradeSingleLeg's substring matcher can handle.
+var MLB_TEAM_BY_TLA = {
+  ARI:'Arizona Diamondbacks', ATL:'Atlanta Braves',     BAL:'Baltimore Orioles',
+  BOS:'Boston Red Sox',       CHC:'Chicago Cubs',       CWS:'Chicago White Sox',
+  CHW:'Chicago White Sox',    CIN:'Cincinnati Reds',    CLE:'Cleveland Guardians',
+  COL:'Colorado Rockies',     DET:'Detroit Tigers',     HOU:'Houston Astros',
+  KC:'Kansas City Royals',    KCR:'Kansas City Royals', LAA:'Los Angeles Angels',
+  LAD:'Los Angeles Dodgers',  MIA:'Miami Marlins',      MIL:'Milwaukee Brewers',
+  MIN:'Minnesota Twins',      NYM:'New York Mets',      NYY:'New York Yankees',
+  OAK:'Oakland Athletics',    ATH:'Oakland Athletics',  PHI:'Philadelphia Phillies',
+  PIT:'Pittsburgh Pirates',   SD:'San Diego Padres',    SDP:'San Diego Padres',
+  SF:'San Francisco Giants',  SFG:'San Francisco Giants', SEA:'Seattle Mariners',
+  STL:'St. Louis Cardinals',  TB:'Tampa Bay Rays',      TBR:'Tampa Bay Rays',
+  TEX:'Texas Rangers',        TOR:'Toronto Blue Jays',  WSH:'Washington Nationals',
+  WAS:'Washington Nationals'
+};
+window.MLB_TEAM_BY_TLA = MLB_TEAM_BY_TLA;
+
+// Resolve SportsDataIO team identifiers (TLA + short Name + City) into the
+// full team name the rest of the codebase uses. Falls back to whatever
+// non-empty value is available so we never produce undefined.
+function _sdioFullTeamName(tla, shortName, city) {
+  var t = String(tla || '').toUpperCase().trim();
+  if (t && MLB_TEAM_BY_TLA[t]) return MLB_TEAM_BY_TLA[t];
+  var c = String(city || '').trim();
+  var s = String(shortName || '').trim();
+  if (c && s) return c + ' ' + s;
+  if (s) return s;
+  if (c) return c;
+  return t || '';
+}
+
+// Normalize ONE SportsDataIO game into the flat shape _gradeSingleLeg /
+// _gradeTicket already consume. Status detection uses the existing
+// _isFinalSourceStatus helper so we honor the safety-branch 5-guard rules.
+function _normalizeSdioGame(g) {
+  if (!g || typeof g !== 'object') return null;
+  var awayTla   = g.AwayTeam || '';
+  var homeTla   = g.HomeTeam || '';
+  var awayShort = g.AwayTeamName || '';
+  var homeShort = g.HomeTeamName || '';
+  // SportsDataIO doesn't include city on every endpoint; HomeTeamCity exists
+  // on some payloads, otherwise we derive from the TLA dictionary.
+  var awayCity  = g.AwayTeamCity || '';
+  var homeCity  = g.HomeTeamCity || '';
+  var away      = _sdioFullTeamName(awayTla, awayShort, awayCity);
+  var home      = _sdioFullTeamName(homeTla, homeShort, homeCity);
+  var rawStatus = String(g.Status || g.GameStatus || g.status || '').trim();
+  var awayRuns  = (g.AwayTeamRuns != null) ? g.AwayTeamRuns
+                : (g.AwayTeamScore != null ? g.AwayTeamScore : null);
+  var homeRuns  = (g.HomeTeamRuns != null) ? g.HomeTeamRuns
+                : (g.HomeTeamScore != null ? g.HomeTeamScore : null);
+  return {
+    id:         g.GameID || g.GameId || g.id || (away + '@' + home),
+    sport:      'MLB',
+    home:       home,
+    away:       away,
+    home_score: homeRuns,
+    away_score: awayRuns,
+    status:     rawStatus,
+    completed: _isFinalSourceStatus(rawStatus) && (homeRuns != null) && (awayRuns != null),
+    _sdioRaw: {
+      AwayTeam:     awayTla,
+      HomeTeam:     homeTla,
+      AwayTeamName: awayShort,
+      HomeTeamName: homeShort,
+      AwayTeamRuns: awayRuns,
+      HomeTeamRuns: homeRuns,
+      Status:       rawStatus
+    }
+  };
+}
+
+// Build the lookup map _gradeTicket consumes. Indexes each game under
+// multiple keys so tickets storing full names, abbreviations, short names,
+// or city-only references all match the same physical game.
+function _buildResultsMap(normalizedGames) {
+  var map = {};
+  if (!Array.isArray(normalizedGames)) return map;
+  for (var i = 0; i < normalizedGames.length; i++) {
+    var g = normalizedGames[i];
+    if (!g) continue;
+    var keys = [];
+    if (g.id)               keys.push(String(g.id).toLowerCase());
+    if (g.home)             keys.push(g.home.toLowerCase());
+    if (g.away)             keys.push(g.away.toLowerCase());
+    var raw = g._sdioRaw || {};
+    if (raw.HomeTeam)       keys.push(String(raw.HomeTeam).toLowerCase());
+    if (raw.AwayTeam)       keys.push(String(raw.AwayTeam).toLowerCase());
+    if (raw.HomeTeamName)   keys.push(String(raw.HomeTeamName).toLowerCase());
+    if (raw.AwayTeamName)   keys.push(String(raw.AwayTeamName).toLowerCase());
+    // Also the last-token of each full name ("guardians", "red sox")
+    if (g.home)             keys.push(g.home.toLowerCase().split(' ').slice(-1)[0]);
+    if (g.away)             keys.push(g.away.toLowerCase().split(' ').slice(-1)[0]);
+    for (var k = 0; k < keys.length; k++) {
+      if (keys[k]) map[keys[k]] = g;
+    }
+  }
+  return map;
+}
+
+// Build the structured finalScore object the 5-guard (_hasFinalScore +
+// _sourceGameStatus + _isSettledTicket) requires. Writing a string here is
+// what previously kept tickets stuck in ACTIVE — _hasFinalScore returns
+// false on strings.
+function _buildFinalScoreObject(gameResult) {
+  if (!gameResult) return null;
+  var raw = gameResult._sdioRaw || {};
+  return {
+    status:    String(gameResult.status || raw.Status || 'Final'),
+    homeTeam:  gameResult.home || '',
+    awayTeam:  gameResult.away || '',
+    homeRuns:  (gameResult.home_score != null) ? gameResult.home_score : null,
+    awayRuns:  (gameResult.away_score != null) ? gameResult.away_score : null,
+    // legacy aliases consumed elsewhere in the codebase
+    home:      gameResult.home_score,
+    away:      gameResult.away_score,
+    source:    'sportsdataio',
+    gameId:    gameResult.id || null
+  };
+}
+
+// Match a ticket selection to a normalized game. Returns the game or null.
+// Bidirectional substring match — so a selection "Cleveland Guardians @ ..."
+// matches a game with home="Cleveland Guardians"/TLA="CLE"/name="Guardians",
+// and vice versa.
+function _findGameForSelection(sel, normalizedGames, resultsMap) {
+  if (!sel) return null;
+  // 1. Direct gameId hit
+  if (sel.gameId && resultsMap[String(sel.gameId).toLowerCase()]) {
+    return resultsMap[String(sel.gameId).toLowerCase()];
+  }
+  var matchup = String(sel.matchup || sel.game || '').toLowerCase();
+  var selHome = String(sel.homeTeam || '').toLowerCase();
+  var selAway = String(sel.awayTeam || '').toLowerCase();
+  for (var i = 0; i < normalizedGames.length; i++) {
+    var g = normalizedGames[i];
+    if (!g) continue;
+    var gh = String(g.home || '').toLowerCase();
+    var ga = String(g.away || '').toLowerCase();
+    var raw = g._sdioRaw || {};
+    var gTlas = [String(raw.HomeTeam||'').toLowerCase(), String(raw.AwayTeam||'').toLowerCase()];
+    var gShort = [String(raw.HomeTeamName||'').toLowerCase(), String(raw.AwayTeamName||'').toLowerCase()];
+    var ghLast = gh.split(' ').slice(-1)[0];
+    var gaLast = ga.split(' ').slice(-1)[0];
+
+    // 2. Selection homeTeam/awayTeam contains the game's full / short / TLA name (or vice versa)
+    function _bidir(needle, hay) {
+      if (!needle || !hay) return false;
+      return needle.indexOf(hay) !== -1 || hay.indexOf(needle) !== -1;
+    }
+    if (selHome && (_bidir(selHome, gh) || _bidir(selHome, gShort[0]) || (gTlas[0] && selHome === gTlas[0]))) {
+      if (selAway && (_bidir(selAway, ga) || _bidir(selAway, gShort[1]) || (gTlas[1] && selAway === gTlas[1]))) {
+        return g;
+      }
+    }
+    // 3. matchup string contains either team identifier
+    if (matchup && (matchup.indexOf(gh) !== -1 || matchup.indexOf(ga) !== -1 ||
+                    (gShort[0] && matchup.indexOf(gShort[0]) !== -1) ||
+                    (gShort[1] && matchup.indexOf(gShort[1]) !== -1) ||
+                    (ghLast && matchup.indexOf(ghLast) !== -1) ||
+                    (gaLast && matchup.indexOf(gaLast) !== -1))) {
+      return g;
+    }
+  }
+  return null;
+}
+
+// Fetch + normalize today's SportsDataIO MLB games. Returns
+// { games: [normalized...], resultsMap: {...}, completedCount, error: null|string }.
+// NEVER throws — callers must always get a usable object back.
+async function _fetchAndNormalizeScores() {
+  try {
+    if (typeof _isScoresGradingSuspended === 'function' && _isScoresGradingSuspended()) {
+      return { games: [], resultsMap: {}, completedCount: 0, error: 'scores_grading_suspended' };
+    }
+    var res = await fetch('/api/sportsdataio/mlb?endpoint=today');
+    if (!res.ok) {
+      return { games: [], resultsMap: {}, completedCount: 0, error: 'sdio_http_' + res.status };
+    }
+    var raw = await res.json();
+    if (!Array.isArray(raw)) {
+      return { games: [], resultsMap: {}, completedCount: 0, error: 'sdio_not_array' };
+    }
+    var normalized = [];
+    for (var i = 0; i < raw.length; i++) {
+      var n = _normalizeSdioGame(raw[i]);
+      if (n) normalized.push(n);
+    }
+    var completed = normalized.filter(function(g){ return g.completed; });
+    return {
+      games:           normalized,
+      resultsMap:      _buildResultsMap(completed),
+      completedCount:  completed.length,
+      completedGames:  completed,
+      error:           null
+    };
+  } catch (err) {
+    return { games: [], resultsMap: {}, completedCount: 0, error: String(err && err.message || err) };
+  }
+}
+window._normalizeSdioGame    = _normalizeSdioGame;
+window._buildResultsMap      = _buildResultsMap;
+window._buildFinalScoreObject = _buildFinalScoreObject;
+window._findGameForSelection = _findGameForSelection;
+window._fetchAndNormalizeScores = _fetchAndNormalizeScores;
 
 // Main grading entry point — called by Check Results button
 async function checkOpenTickets() {
@@ -3080,35 +3321,32 @@ async function checkOpenTickets() {
       return;
     }
 
-    // Fetch completed MLB scores (covers past 3 days)
-    var res = await fetch('/api/scores/mlb?daysFrom=3');
-    if (!res.ok) throw new Error('Scores API error: ' + res.status);
-    var games = await res.json();
-    if (games.error_code) throw new Error(games.error || 'Quota exceeded');
-
-    console.log('[grading start] completed games:', games.length);
-
-    // Build results map keyed by game ID + team names
-    var resultsMap = {};
-    games.forEach(function(g){
-      resultsMap[g.id] = g;
-      // Also index by team name for fuzzy matching
-      resultsMap[g.home.toLowerCase()] = g;
-      resultsMap[g.away.toLowerCase()] = g;
-    });
+    // SportsDataIO ONLY — grading never reads from the Odds API.
+    var scores = await _fetchAndNormalizeScores();
+    if (scores.error) {
+      console.warn('[grading] scores fetch error:', scores.error);
+      throw new Error('Scores unavailable: ' + scores.error);
+    }
+    console.log('[auto finalize pass]\n' +
+      '  source:         sportsdataio\n' +
+      '  totalGames:     ' + scores.games.length + '\n' +
+      '  completedGames: ' + scores.completedCount + '\n' +
+      '  activeTickets:  ' + activeTickets.length);
 
     var gradedCount = 0;
     var totalPayout = 0;
 
     activeTickets.forEach(function(ticket) {
-      var gradeResult = _gradeTicket(ticket, resultsMap);
+      var gradeResult = _gradeTicket(ticket, scores.resultsMap, scores.completedGames);
       if (!gradeResult) {
         console.log('[ticket graded] NOT YET COMPLETE:', ticket.id);
         return;
       }
 
-      var result     = gradeResult.result;
-      var finalScore = gradeResult.finalScores.join(' | ');
+      var result      = gradeResult.result;
+      var legacyScore = gradeResult.finalScores.join(' | ');
+      var primary     = gradeResult.primaryGame;
+      var finalScoreObj = _buildFinalScoreObject(primary);
 
       // Calculate payout
       var payout = 0;
@@ -3118,18 +3356,24 @@ async function checkOpenTickets() {
 
       // Balance update
       var balBefore = calcAvailableBalance().available;
-      // Update ticket status
-      ticket.status        = result;
-      ticket.gradedAt      = new Date().toISOString();
-      ticket.gradingSource = 'api-scores';
-      ticket.finalScore    = finalScore;
+      // Update ticket status. Structured finalScore is required by the
+      // safety-branch 5-guard — writing a plain string forces tickets back
+      // to ACTIVE via _displayStatus. We also stamp lastSeenGameStatus so
+      // _sourceGameStatus() resolves to Final without re-querying.
+      ticket.status              = result;
+      ticket.gradedAt            = new Date().toISOString();
+      ticket.gradingSource       = 'auto-api';
+      ticket.finalScore          = finalScoreObj;       // OBJECT, not string
+      ticket.lastSeenGameStatus  = (finalScoreObj && finalScoreObj.status) || 'Final';
+      ticket.finalScoreDisplay   = legacyScore;          // human-readable, separate from guard data
       ticket.grading = {
-        result:        result,
-        finalScore:    finalScore,
-        payout:        Math.round(payout * 100) / 100,
-        balanceBefore: balBefore,
-        balanceAfter:  null, // set after sync
-        gradedAt:      ticket.gradedAt
+        result:         result,
+        finalScore:     finalScoreObj,
+        finalScoreText: legacyScore,
+        payout:         Math.round(payout * 100) / 100,
+        balanceBefore:  balBefore,
+        balanceAfter:   null, // set after sync
+        gradedAt:       ticket.gradedAt
       };
 
       // ── BALANCE MODEL ────────────────────────────────────────────────────
@@ -3170,22 +3414,46 @@ async function checkOpenTickets() {
         balanceAfter:  balAfter,
         balanceChange: balChange,
         createdAt: ticket.gradedAt,
-        finalScore: finalScore
+        finalScore: legacyScore,       // human-readable form for the ledger row
+        finalScoreObj: finalScoreObj   // structured for the host-side grader
       });
 
-      console.log('[ticket graded]', { id:ticket.id, result:result, finalScore:finalScore, payout:payout });
+      console.log('[auto graded ticket]',
+        '\n  ticketId:    ', ticket.id,
+        '\n  result:      ', result.toUpperCase(),
+        '\n  finalScore:  ', legacyScore,
+        '\n  finalScoreObj:', JSON.stringify(finalScoreObj),
+        '\n  source:      sportsdataio (Check Results)'
+      );
       gradedCount++;
     });
 
     // Save all ticket changes
     saveTickets();
-    // Mirror to hostActiveBets
+    // Mirror to hostActiveBets. Include lastSeenGameStatus + structured
+    // finalScore so the host-side aggregator can apply the same 5-guard.
     var hostBets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
+    var hostUpdated = 0;
     betTickets.forEach(function(t){
       var hi = hostBets.findIndex(function(h){ return h.id===t.id; });
-      if (hi >= 0) Object.assign(hostBets[hi], { status:t.status, gradedAt:t.gradedAt, finalScore:t.finalScore, grading:t.grading });
+      if (hi >= 0) {
+        Object.assign(hostBets[hi], {
+          status:             t.status,
+          gradedAt:           t.gradedAt,
+          gradingSource:      t.gradingSource,
+          finalScore:         t.finalScore,
+          finalScoreDisplay:  t.finalScoreDisplay,
+          lastSeenGameStatus: t.lastSeenGameStatus,
+          grading:            t.grading
+        });
+        hostUpdated++;
+      }
     });
     localStorage.setItem('hostActiveBets', JSON.stringify(hostBets));
+    console.log('[host balance graded]\n' +
+      '  hostActiveBets total:    ' + hostBets.length + '\n' +
+      '  hostActiveBets updated:  ' + hostUpdated + '\n' +
+      '  source:                  Check Results');
 
     syncBalanceDisplays();
     console.log('[balance updated] after grading', gradedCount, 'tickets');
@@ -3238,20 +3506,22 @@ async function _autoGradePoll() {
       return; // nothing to do, skip API call
     }
 
-    // Fetch completed scores from backend proxy
-    var res = await fetch('/api/scores/mlb?daysFrom=3');
-    if (!res.ok) { _autoGradeRunning = false; return; }
-    var games = await res.json();
-    if (!Array.isArray(games) || games.error_code) { _autoGradeRunning = false; return; }
+    // SportsDataIO ONLY — grading never reads from the Odds API.
+    var scores = await _fetchAndNormalizeScores();
+    if (scores.error) {
+      console.log('[auto grade poll] scores unavailable:', scores.error);
+      _autoGradeRunning = false;
+      return;
+    }
 
-    // Build results map — only completed games (safety gate: never grade in-progress)
-    var resultsMap = {};
-    var completedGames = games.filter(function(g) { return g.completed === true; });
-    completedGames.forEach(function(g) {
-      resultsMap[g.id] = g;
-      if (g.home) resultsMap[g.home.toLowerCase()] = g;
-      if (g.away) resultsMap[g.away.toLowerCase()] = g;
-    });
+    var resultsMap     = scores.resultsMap;
+    var completedGames = scores.completedGames || [];
+
+    console.log('[auto finalize pass]\n' +
+      '  source:         sportsdataio\n' +
+      '  totalGames:     ' + scores.games.length + '\n' +
+      '  completedGames: ' + completedGames.length + '\n' +
+      '  activeTickets:  ' + activeMLB.length);
 
     var ticketsGraded = 0;
 
@@ -3260,30 +3530,36 @@ async function _autoGradePoll() {
         // Skip if already graded (double-grade safety)
         if (ticket.status === 'won' || ticket.status === 'lost' || ticket.status === 'push') return;
 
-        var gradeResult = _gradeTicket(ticket, resultsMap);
+        var gradeResult = _gradeTicket(ticket, resultsMap, completedGames);
         if (!gradeResult || !gradeResult.result) return; // game not final yet
 
-        var result     = gradeResult.result;
-        var finalScore = (gradeResult.finalScores || []).join(' | ');
-        var payout     = result === 'won'  ? (parseFloat(ticket.estimatedPayout) || 0)
-                       : result === 'push' ? (parseFloat(ticket.riskAmount) || 0)
-                       : 0;
+        var result        = gradeResult.result;
+        var legacyScore   = (gradeResult.finalScores || []).join(' | ');
+        var primary       = gradeResult.primaryGame;
+        var finalScoreObj = _buildFinalScoreObject(primary);
+        var payout        = result === 'won'  ? (parseFloat(ticket.estimatedPayout) || 0)
+                          : result === 'push' ? (parseFloat(ticket.riskAmount) || 0)
+                          : 0;
 
         var balBefore = calcAvailableBalance().available;
 
-        // Flip status — derived balance model does the rest, no pb-balance-start writes
-        ticket.status        = result;
-        ticket.gradedAt      = ts;
-        ticket.gradingSource = 'auto-api';
-        ticket.finalScore    = finalScore;
+        // Flip status with the structured finalScore the 5-guard requires.
+        // Writing a string here is what previously held tickets in ACTIVE.
+        ticket.status              = result;
+        ticket.gradedAt            = ts;
+        ticket.gradingSource       = 'auto-api';
+        ticket.finalScore          = finalScoreObj;      // OBJECT, not string
+        ticket.lastSeenGameStatus  = (finalScoreObj && finalScoreObj.status) || 'Final';
+        ticket.finalScoreDisplay   = legacyScore;        // human-readable, separate
         ticket.grading = {
-          result:          result,
-          finalScore:      finalScore,
-          payout:          Math.round(payout * 100) / 100,
-          balanceBefore:   balBefore,
-          balanceAfter:    null,
-          gradedAt:        ts,
-          riskWasDeducted: true
+          result:           result,
+          finalScore:       finalScoreObj,
+          finalScoreText:   legacyScore,
+          payout:           Math.round(payout * 100) / 100,
+          balanceBefore:    balBefore,
+          balanceAfter:     null,
+          gradedAt:         ts,
+          riskWasDeducted:  true
         };
 
         // Re-derive after status flip
@@ -3292,12 +3568,21 @@ async function _autoGradePoll() {
         ticket.grading.balanceAfter  = balAfter;
         ticket.grading.balanceChange = balChange;
 
+        console.log('[balance grading audit]',
+          '\n  ticketId:           ', ticket.id,
+          '\n  result:             ', result.toUpperCase(),
+          '\n  risk:               $' + (parseFloat(ticket.riskAmount)||0).toFixed(2),
+          '\n  payout:             $' + payout.toFixed(2),
+          '\n  balanceBeforeGrade: $' + balBefore.toFixed(2),
+          '\n  balanceChange:      ' + (balChange >= 0 ? '+$' : '-$') + Math.abs(balChange).toFixed(2),
+          '\n  balanceAfterGrade:  $' + balAfter.toFixed(2)
+        );
         console.log('[auto graded ticket]',
           '\n  ticketId:    ', ticket.id,
-          '\n  game:        ', finalScore,
+          '\n  game:        ', legacyScore,
           '\n  result:      ', result.toUpperCase(),
-          '\n  balanceChange: ' + (balChange >= 0 ? '+' : '') + balChange.toFixed(2),
-          '\n  newBalance:  $' + balAfter.toFixed(2)
+          '\n  finalScoreObj:', JSON.stringify(finalScoreObj),
+          '\n  source:      sportsdataio (auto-poll)'
         );
 
         addLedgerEntry({
@@ -3311,7 +3596,8 @@ async function _autoGradePoll() {
           balanceAfter:  balAfter,
           balanceChange: balChange,
           createdAt:     ts,
-          finalScore:    finalScore,
+          finalScore:    legacyScore,
+          finalScoreObj: finalScoreObj,
           source:        'auto-api'
         });
 
@@ -3334,15 +3620,34 @@ async function _autoGradePoll() {
       localStorage.setItem('pb-tickets', JSON.stringify(tickets));
       try { betTickets = tickets; } catch(e) {}
 
-      // Mirror to hostActiveBets
+      // Mirror to hostActiveBets with the full structured finalScore so the
+      // host-side aggregator can apply the same 5-guard.
+      var hostUpdated = 0;
       try {
         var hostBets = JSON.parse(localStorage.getItem('hostActiveBets') || '[]');
         tickets.forEach(function(t) {
           var hi = hostBets.findIndex(function(h) { return h.id === t.id; });
-          if (hi >= 0) Object.assign(hostBets[hi], { status:t.status, gradedAt:t.gradedAt, finalScore:t.finalScore, grading:t.grading });
+          if (hi >= 0) {
+            Object.assign(hostBets[hi], {
+              status:             t.status,
+              gradedAt:           t.gradedAt,
+              gradingSource:      t.gradingSource,
+              finalScore:         t.finalScore,
+              finalScoreDisplay:  t.finalScoreDisplay,
+              lastSeenGameStatus: t.lastSeenGameStatus,
+              grading:            t.grading
+            });
+            hostUpdated++;
+          }
         });
         localStorage.setItem('hostActiveBets', JSON.stringify(hostBets));
-      } catch(e) {}
+        console.log('[host balance graded]\n' +
+          '  hostActiveBets total:    ' + hostBets.length + '\n' +
+          '  hostActiveBets updated:  ' + hostUpdated + '\n' +
+          '  source:                  auto-poll');
+      } catch(e) {
+        console.error('[host balance graded] mirror failed:', e && e.message || e);
+      }
 
       localStorage.setItem('pb-last-graded', ts);
       syncBalanceDisplays();
