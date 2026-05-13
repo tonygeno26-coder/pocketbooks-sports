@@ -4357,7 +4357,46 @@ function renderMyBets() {
     return s;
   }
   var active   = betTickets.filter(function(t){ var ds = _safeDisplayStatus(t); return ds === 'active' || ds === 'open'; });
-  var settled  = betTickets.filter(function(t){ var ds = _safeDisplayStatus(t); return ds !== 'active' && ds !== 'open'; });
+  var settledAll = betTickets.filter(function(t){ var ds = _safeDisplayStatus(t); return ds !== 'active' && ds !== 'open'; });
+
+  // ===== My Bets ticket lifecycle =====================================
+  // My Bets shows ACTIVE tickets forever (until graded), and SETTLED
+  // tickets for 12 hours after gradedAt. After that, settled tickets are
+  // hidden from My Bets to reduce clutter, but the underlying data is
+  // NEVER deleted from pb-tickets. They remain permanently accessible:
+  //   - Results tab reads pb-tickets directly (no age filter applied).
+  //   - Host dashboard reads hostActiveBets (still mirrored).
+  //   - Settlement records / ledger entries / audit panel: all untouched.
+  // The canonical key is ticket.id, used across My Bets, hostActiveBets,
+  // pb-settlements, pb-ledger, and Results.
+  var MYBETS_SETTLED_TTL_MS = 12 * 60 * 60 * 1000;
+  var _nowMs = Date.now();
+  function _settledTicketAgeMs(t) {
+    // Prefer gradedAt (the finalization moment). Fall back to grading.gradedAt
+    // or settledAt for legacy shapes. Tickets with no timestamp default to
+    // "too old" so they are hidden — better than appearing forever.
+    var iso = (t && t.gradedAt) ||
+              (t && t.grading && t.grading.gradedAt) ||
+              (t && t.settledAt) || null;
+    if (!iso) return Number.POSITIVE_INFINITY;
+    var ms = Date.parse(iso);
+    if (!isFinite(ms)) return Number.POSITIVE_INFINITY;
+    return _nowMs - ms;
+  }
+  var settled = settledAll.filter(function(t){
+    return _settledTicketAgeMs(t) <= MYBETS_SETTLED_TTL_MS;
+  });
+  var hiddenSettledCount = settledAll.length - settled.length;
+  // One-shot debug so we can verify the cutoff is doing the right thing.
+  try {
+    console.log('[mybets lifecycle]\n' +
+      '  totalTickets:        ' + betTickets.length + '\n' +
+      '  active:              ' + active.length + '\n' +
+      '  settledAll:          ' + settledAll.length + '\n' +
+      '  settledShown:        ' + settled.length + ' (within 12h of gradedAt)\n' +
+      '  settledHidden:       ' + hiddenSettledCount + ' (older than 12h, still in pb-tickets, visible in Results)\n' +
+      '  ttlHours:            12');
+  } catch(_e){}
   // TEMP DEBUG — dump real persisted schema for one active + one settled
   // ticket so we can see EXACTLY what confirmBet/saveTickets writes,
   // independent of any defensive rendering helpers. Strip after the
@@ -4429,6 +4468,13 @@ function renderMyBets() {
     if (settled.length) {
       html += '<div style="padding:12px 14px 4px;font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#888">Settled ('+settled.length+')</div>';
       html += '<div style="padding:0 14px">' + settled.map(ticketCard).join('') + '</div>';
+    }
+    // Hidden-older-settled notice. Data is intact in Results; this is
+    // just a heads-up so the user doesn't think tickets disappeared.
+    if (hiddenSettledCount > 0) {
+      html += '<div style="padding:10px 14px 4px;font-size:0.66rem;color:#888;text-align:center">' +
+              '+' + hiddenSettledCount + ' older settled ticket' + (hiddenSettledCount===1?'':'s') +
+              ' hidden — view full history in <strong style="color:#0064c8">Results</strong></div>';
     }
   }
   html += '<div style="height:80px"></div>'; // nav clearance
