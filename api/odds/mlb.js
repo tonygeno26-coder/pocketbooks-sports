@@ -68,6 +68,97 @@ function _isQuotaOrAuth(status) {
   return status === 401 || status === 402 || status === 429;
 }
 
+// ---------------------------------------------------------------------------
+// Odds API v4 → flat-shape normalizer.
+//
+// Odds API v4 returns each game as:
+//   {
+//     id, sport_key, sport_title, commence_time,
+//     home_team, away_team,
+//     bookmakers: [
+//       { key, last_update, markets: [
+//         { key: 'h2h',     outcomes: [ { name: <team>, price: <american> }, ... ] },
+//         { key: 'spreads', outcomes: [ { name: <team>, price, point   }, ... ] },
+//         { key: 'totals',  outcomes: [ { name: 'Over'|'Under', price, point }, ... ] }
+//       ] }
+//     ]
+//   }
+//
+// PocketBooks player.html consumes a flat shape:
+//   { id, sport, home, away, time,
+//     moneyline: [ { team, odds } ],
+//     spreads:   [ { team, line, odds } ],
+//     totals:    [ { name:'Over'|'Under', line, odds } ] }
+//
+// Normalizing here keeps the player code untouched and gives us one place
+// to fix shape drift. Picks the FIRST bookmaker (per Odds API list order)
+// — the UI does not currently shop lines. Missing markets stay as empty
+// arrays so the renderer can hide that section gracefully.
+function _normalizeGame(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const home = raw.home_team || raw.home || '';
+  const away = raw.away_team || raw.away || '';
+  if (!home || !away) return null;
+
+  const out = {
+    id:    raw.id || (away + '@' + home + '@' + (raw.commence_time || '')),
+    sport: 'MLB',
+    home:  home,
+    away:  away,
+    time:  raw.commence_time || raw.time || null,
+    moneyline: [],
+    spreads:   [],
+    totals:    []
+  };
+
+  const bk = Array.isArray(raw.bookmakers) ? raw.bookmakers[0] : null;
+  if (!bk || !Array.isArray(bk.markets)) return out;
+
+  for (let i = 0; i < bk.markets.length; i++) {
+    const m = bk.markets[i];
+    if (!m || !Array.isArray(m.outcomes)) continue;
+
+    if (m.key === 'h2h') {
+      for (let j = 0; j < m.outcomes.length; j++) {
+        const o = m.outcomes[j];
+        if (!o || typeof o.price !== 'number') continue;
+        out.moneyline.push({ team: String(o.name || ''), odds: o.price });
+      }
+    } else if (m.key === 'spreads') {
+      for (let j = 0; j < m.outcomes.length; j++) {
+        const o = m.outcomes[j];
+        if (!o || typeof o.price !== 'number' || typeof o.point !== 'number') continue;
+        out.spreads.push({ team: String(o.name || ''), line: o.point, odds: o.price });
+      }
+    } else if (m.key === 'totals') {
+      for (let j = 0; j < m.outcomes.length; j++) {
+        const o = m.outcomes[j];
+        if (!o || typeof o.price !== 'number' || typeof o.point !== 'number') continue;
+        const nm = String(o.name || '');
+        if (nm !== 'Over' && nm !== 'Under') continue;
+        out.totals.push({ name: nm, line: o.point, odds: o.price });
+      }
+    }
+    // Other market keys (alternate_spreads, props, etc.) are intentionally
+    // ignored. The main MLB card doesn't render them.
+  }
+  return out;
+}
+
+// Apply normalizer across the whole payload. Defensive on every field.
+function _normalizePayload(rawBody) {
+  if (!rawBody || typeof rawBody !== 'string') return null;
+  let parsed;
+  try { parsed = JSON.parse(rawBody); } catch (_e) { return null; }
+  if (!Array.isArray(parsed)) return null;
+  const games = [];
+  for (let i = 0; i < parsed.length; i++) {
+    const g = _normalizeGame(parsed[i]);
+    if (g) games.push(g);
+  }
+  return games;
+}
+
 // TEMP DEBUG — extract upstream error_code from response body without
 // logging the full body. The Odds API returns shapes like:
 //   { "error_code": "OUT_OF_USAGE_CREDITS", "message": "..." }
@@ -199,21 +290,37 @@ module.exports = async function handler(req, res) {
 
   // ── Success path ───────────────────────────────────────────────────────
   if (result.ok) {
-    const gamesCount = _countGames(result.body);
+    // Normalize Odds API v4 shape → flat shape player.html expects.
+    // If normalization yields nothing (parser failure, empty list), fall
+    // back to forwarding the raw body so we never blank the sportsbook.
+    let outBody    = result.body;
+    let gamesCount = _countGames(result.body);
+    let shape      = 'raw';
+    try {
+      const normalized = _normalizePayload(result.body);
+      if (Array.isArray(normalized)) {
+        outBody    = JSON.stringify(normalized);
+        gamesCount = normalized.length;
+        shape      = 'flat';
+      }
+    } catch (normErr) {
+      console.error('[odds proxy] normalize failed, forwarding raw:', normErr && normErr.message || normErr);
+    }
     _cache.set(url, {
       expiresAt:  now + TTL_MS,
       storedAt:   now,
       status:     result.status,
-      body:       result.body,
+      body:       outBody,
       gamesCount: gamesCount
     });
     res.setHeader('X-Cache',       'MISS');
     res.setHeader('X-Games-Count', String(gamesCount));
     res.setHeader('X-Cache-Age',   '0');
     res.setHeader('X-Dedupe',      dedupeHit ? '1' : '0');
+    res.setHeader('X-Shape',       shape); // TEMP DEBUG — 'flat' = normalized, 'raw' = passthrough
     res.setHeader('Cache-Control', 'public, max-age=' + Math.round(TTL_MS / 1000));
-    res.setHeader('Content-Type',  result.contentType);
-    return res.status(result.status).send(result.body);
+    res.setHeader('Content-Type',  'application/json');
+    return res.status(result.status).send(outBody);
   }
 
   // ── Failure path → stale fallback if we have anything cached ──────────

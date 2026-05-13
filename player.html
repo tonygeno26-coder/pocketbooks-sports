@@ -1219,13 +1219,23 @@ async function loadGames(sport, opts){
     el.innerHTML=games.map(g=>{
       window.gamesCache[g.id]=g;
       try {
-      const aw=g.away,hw=g.home;
-      const awN=aw.split(' ').slice(-1)[0],hwN=hw.split(' ').slice(-1)[0];
+      // Defensive: tolerate Odds API v4 raw shape if normalization is
+      // bypassed (e.g. proxy fallback during shape drift). Prefer flat
+      // fields, fall back to v4 names. Skip the card entirely if neither
+      // team name is resolvable — better an empty slot than red error.
+      const aw=(g && (g.away || g.away_team)) || '';
+      const hw=(g && (g.home || g.home_team)) || '';
+      if (!aw || !hw) {
+        console.warn('[card] skipping game with missing teams', g && g.id);
+        return '';
+      }
+      const awN=aw.split(' ').slice(-1)[0]||aw,hwN=hw.split(' ').slice(-1)[0]||hw;
       const awC=aw.split(' ').slice(0,-1).join(' '),hwC=hw.split(' ').slice(0,-1).join(' ');
-      const awSp=(g.spreads||[]).find(s=>s.team===aw),hwSp=(g.spreads||[]).find(s=>s.team===hw);
-      const ov=(g.totals||[]).find(t=>t.name==='Over'),un=(g.totals||[]).find(t=>t.name==='Under');
-      const awML=(g.moneyline||[]).find(m=>m.team===aw),hwML=(g.moneyline||[]).find(m=>m.team===hw);
-      const time=new Date(g.time).toLocaleString('en-US',{weekday:'short',hour:'2-digit',minute:'2-digit'});
+      const awSp=(Array.isArray(g.spreads)?g.spreads:[]).find(s=>s&&s.team===aw),hwSp=(Array.isArray(g.spreads)?g.spreads:[]).find(s=>s&&s.team===hw);
+      const ov=(Array.isArray(g.totals)?g.totals:[]).find(t=>t&&t.name==='Over'),un=(Array.isArray(g.totals)?g.totals:[]).find(t=>t&&t.name==='Under');
+      const awML=(Array.isArray(g.moneyline)?g.moneyline:[]).find(m=>m&&m.team===aw),hwML=(Array.isArray(g.moneyline)?g.moneyline:[]).find(m=>m&&m.team===hw);
+      const timeRaw=g.time||g.commence_time||null;
+      const time=timeRaw?new Date(timeRaw).toLocaleString('en-US',{weekday:'short',hour:'2-digit',minute:'2-digit'}):'TBD';
       const sp=(g.sport?g.sport.toUpperCase():null)||'MLB';
       const icon=icons[sp]||'🏅';
 
@@ -1271,8 +1281,18 @@ async function loadGames(sport, opts){
         </div>
         <div class="mc-footer"><span class="mc-time">${time}</span></div>
       </div>`;
-      } catch(cardErr) { console.error('card render error:', cardErr, g); return '<div style="padding:10px;color:#f55">Card error: '+g.away+' vs '+g.home+'</div>'; }
-    }).join('');
+      } catch(cardErr) {
+        // Never paint a red error card with "undefined vs undefined". Log
+        // for debug; skip the broken game silently so the rest of the slate
+        // still renders.
+        try {
+          const _aw = (g && (g.away || g.away_team)) || 'unknown';
+          const _hw = (g && (g.home || g.home_team)) || 'unknown';
+          console.error('[card render error]', _aw + ' vs ' + _hw, cardErr && cardErr.message || cardErr, g);
+        } catch(_e2){}
+        return '';
+      }
+    }).filter(function(s){ return s; }).join('');
     console.log('games rendered');
     // Re-sync highlights after DOM update
     setTimeout(function(){
