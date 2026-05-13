@@ -1110,12 +1110,29 @@ async function loadGames(sport, opts){
   if (!el) return;
   el.innerHTML='<div class="empty">Loading...</div>';
   try{
-    const _sport = sport || 'mlb';
-    const _url = '/api/odds/'+_sport; // backend proxy only — never call Odds API directly from client
+    // Normalize sport key. Accept 'mlb' or 'baseball_mlb' — both map to the
+    // local MLB-only Vercel proxy at /api/odds/mlb. Anything else uses the
+    // legacy /api/odds/<sport> path (Railway) until those sports get their
+    // own local proxies.
+    var _rawSport = sport || 'mlb';
+    var _sportLc  = String(_rawSport).toLowerCase();
+    var _isMlb    = (_sportLc === 'mlb' || _sportLc === 'baseball_mlb');
+    const _sport  = _isMlb ? 'mlb' : _sportLc;
+    // MLB sportsbook ALWAYS hits the local Vercel proxy at exactly
+    // /api/odds/mlb. Never /api/odds/baseball_mlb, never api.the-odds-api.com
+    // directly, never the legacy Railway path for MLB.
+    const _url = _isMlb ? '/api/odds/mlb' : ('/api/odds/' + _sport);
+    // MLB sportsbook fetch marker (kept post-cleanup — useful operational
+    // signal that loadGames is wired to the local MLB proxy).
+    if (_isMlb && !_liveOnly) {
+      console.log('[sportsbook fetch] sport=baseball_mlb url=/api/odds/mlb');
+    }
     console.log('[PBS fetch start] sport:', _sport, 'url:', _url, 'live:', _liveOnly);
     let _res;
-    try { _res = await fetch(_url); } catch(fetchErr) {
-      console.error('[sportsbook fetch failed] network error:', fetchErr.message);
+    try {
+      _res = await fetch(_url);
+    } catch(fetchErr) {
+      console.error('[sportsbook fetch failed] network error url=' + _url + ' err=' + fetchErr.message);
       throw new Error('Backend unreachable: '+fetchErr.message);
     }
     console.log('[sportsbook fetch status]', _res.status);
@@ -1127,12 +1144,33 @@ async function loadGames(sport, opts){
         : (_errBody.error || 'Backend error HTTP '+_res.status);
       throw new Error(_msg);
     }
+    // Surface cache source (HIT/MISS/STALE) from our Vercel proxy.
+    const _xCache = (_res.headers && _res.headers.get) ? (_res.headers.get('X-Cache') || '') : '';
+    const _xCount = (_res.headers && _res.headers.get) ? (_res.headers.get('X-Games-Count') || '') : '';
     const _raw = await _res.text();
     console.log('[odds] raw (first 200):', _raw.slice(0,200));
     let games;
     try { games = JSON.parse(_raw); } catch(parseErr) { throw new Error('Bad JSON: '+parseErr.message); }
     if(!Array.isArray(games)) throw new Error('Expected array, got: '+typeof games);
-    console.log('[PBS fetch success] gamesLoaded:', games.length);
+    if (_sport === 'mlb' && !_liveOnly) {
+      var _src = _xCache === 'HIT' ? 'cache' : (_xCache === 'STALE' ? 'stale' : 'live');
+      console.log('[odds cache] source=' + _src + ' games=' + games.length);
+      // Non-blocking "using cached lines" badge when payload is stale.
+      try {
+        var _badgeHost = document.getElementById('games-list');
+        if (_badgeHost && _xCache === 'STALE' && !document.getElementById('odds-stale-badge')) {
+          var _b = document.createElement('div');
+          _b.id = 'odds-stale-badge';
+          _b.style.cssText = 'margin:8px 12px;padding:6px 10px;border-radius:8px;background:#fff8e1;border:1px solid #f59e0b;color:#92400e;font-size:0.7rem;font-weight:700;text-align:center';
+          _b.textContent = 'Using cached lines — odds provider temporarily unavailable';
+          _badgeHost.parentNode && _badgeHost.parentNode.insertBefore(_b, _badgeHost);
+        } else if (_xCache !== 'STALE') {
+          var _old = document.getElementById('odds-stale-badge');
+          if (_old && _old.parentNode) _old.parentNode.removeChild(_old);
+        }
+      } catch(_be){}
+    }
+    console.log('[PBS fetch success] gamesLoaded:', games.length, _xCount ? ('(server X-Games-Count='+_xCount+')') : '');
     console.log('[PBS render start]');
     if(!games.length){
       console.warn('[odds] empty response — check ODDS_API_KEY is set in Railway env vars');
@@ -1166,13 +1204,23 @@ async function loadGames(sport, opts){
     el.innerHTML=games.map(g=>{
       window.gamesCache[g.id]=g;
       try {
-      const aw=g.away,hw=g.home;
-      const awN=aw.split(' ').slice(-1)[0],hwN=hw.split(' ').slice(-1)[0];
+      // Defensive: tolerate Odds API v4 raw shape if normalization is
+      // bypassed (e.g. proxy fallback during shape drift). Prefer flat
+      // fields, fall back to v4 names. Skip the card entirely if neither
+      // team name is resolvable — better an empty slot than red error.
+      const aw=(g && (g.away || g.away_team)) || '';
+      const hw=(g && (g.home || g.home_team)) || '';
+      if (!aw || !hw) {
+        console.warn('[card] skipping game with missing teams', g && g.id);
+        return '';
+      }
+      const awN=aw.split(' ').slice(-1)[0]||aw,hwN=hw.split(' ').slice(-1)[0]||hw;
       const awC=aw.split(' ').slice(0,-1).join(' '),hwC=hw.split(' ').slice(0,-1).join(' ');
-      const awSp=(g.spreads||[]).find(s=>s.team===aw),hwSp=(g.spreads||[]).find(s=>s.team===hw);
-      const ov=(g.totals||[]).find(t=>t.name==='Over'),un=(g.totals||[]).find(t=>t.name==='Under');
-      const awML=(g.moneyline||[]).find(m=>m.team===aw),hwML=(g.moneyline||[]).find(m=>m.team===hw);
-      const time=new Date(g.time).toLocaleString('en-US',{weekday:'short',hour:'2-digit',minute:'2-digit'});
+      const awSp=(Array.isArray(g.spreads)?g.spreads:[]).find(s=>s&&s.team===aw),hwSp=(Array.isArray(g.spreads)?g.spreads:[]).find(s=>s&&s.team===hw);
+      const ov=(Array.isArray(g.totals)?g.totals:[]).find(t=>t&&t.name==='Over'),un=(Array.isArray(g.totals)?g.totals:[]).find(t=>t&&t.name==='Under');
+      const awML=(Array.isArray(g.moneyline)?g.moneyline:[]).find(m=>m&&m.team===aw),hwML=(Array.isArray(g.moneyline)?g.moneyline:[]).find(m=>m&&m.team===hw);
+      const timeRaw=g.time||g.commence_time||null;
+      const time=timeRaw?new Date(timeRaw).toLocaleString('en-US',{weekday:'short',hour:'2-digit',minute:'2-digit'}):'TBD';
       const sp=(g.sport?g.sport.toUpperCase():null)||'MLB';
       const icon=icons[sp]||'🏅';
 
@@ -1218,8 +1266,18 @@ async function loadGames(sport, opts){
         </div>
         <div class="mc-footer"><span class="mc-time">${time}</span></div>
       </div>`;
-      } catch(cardErr) { console.error('card render error:', cardErr, g); return '<div style="padding:10px;color:#f55">Card error: '+g.away+' vs '+g.home+'</div>'; }
-    }).join('');
+      } catch(cardErr) {
+        // Never paint a red error card with "undefined vs undefined". Log
+        // for debug; skip the broken game silently so the rest of the slate
+        // still renders.
+        try {
+          const _aw = (g && (g.away || g.away_team)) || 'unknown';
+          const _hw = (g && (g.home || g.home_team)) || 'unknown';
+          console.error('[card render error]', _aw + ' vs ' + _hw, cardErr && cardErr.message || cardErr, g);
+        } catch(_e2){}
+        return '';
+      }
+    }).filter(function(s){ return s; }).join('');
     console.log('games rendered');
     // Re-sync highlights after DOM update
     setTimeout(function(){
@@ -1507,7 +1565,12 @@ function returnToLobby() {
 }
 // ══════════════════════════════════════════════════════════════════════════════
 
-try { _currentSport='mlb'; _updateTeaserTab(); loadGames('mlb'); } catch(e) { console.error('[PBS fetch failed]', e); }
+// Bootstrap sportsbook. Each step in its OWN try so an earlier failure
+// (e.g. teaser tab init) cannot prevent loadGames() from running. Tony
+// hit exactly this: _updateTeaserTab threw before /api/odds/mlb fetched.
+try { _currentSport = 'mlb'; } catch(e) { console.error('[PBS init] set _currentSport failed:', e && e.message || e); }
+try { _updateTeaserTab(); } catch(e) { console.error('[PBS init] _updateTeaserTab failed (continuing):', e && e.message || e); }
+try { loadGames('mlb'); } catch(e) { console.error('[PBS fetch failed]', e); }
 try { startAutoGradeDaemon(); } catch(e) { console.error('[auto grade daemon] failed to start:', e.message); }
 setTimeout(function(){
   var gl = document.getElementById('games-list');
@@ -1794,14 +1857,35 @@ function setRRSize(s) {
 var teaserPts = 6;
 var _currentSport = 'mlb';
 var TEASER_ENABLED_SPORTS = ['nfl','ncaaf','nba','ncaab'];
-function _canTeaser() { return TEASER_ENABLED_SPORTS.includes(_currentSport); }
+function _canTeaser() {
+  // Defensive: this runs during page bootstrap and can fire BEFORE the
+  // `var TEASER_ENABLED_SPORTS = [...]` initializer executes (hoisting
+  // leaves the binding as undefined). Returning false on any unexpected
+  // shape is correct — the teaser tab simply stays hidden until init
+  // completes, instead of throwing TypeError and aborting sportsbook boot.
+  try {
+    if (!Array.isArray(TEASER_ENABLED_SPORTS)) return false;
+    var cs = (typeof _currentSport === 'string') ? _currentSport : '';
+    if (!cs) return false;
+    return TEASER_ENABLED_SPORTS.indexOf(cs) !== -1;
+  } catch (_e) {
+    return false;
+  }
+}
 function _updateTeaserTab() {
-  var tab = document.getElementById('st-teaser');
-  if (!tab) return;
-  var ok = _canTeaser();
-  tab.style.display = ok ? '' : 'none';
-  // If currently on teaser and sport changed to non-teaser, switch to singles
-  if (!ok && bsType === 'teaser') setSType('single');
+  try {
+    var tab = document.getElementById('st-teaser');
+    if (!tab) return;
+    var ok = _canTeaser();
+    tab.style.display = ok ? '' : 'none';
+    // If currently on teaser and sport changed to non-teaser, switch to singles
+    if (!ok && typeof bsType !== 'undefined' && bsType === 'teaser' && typeof setSType === 'function') {
+      setSType('single');
+    }
+  } catch (_e) {
+    // Never let teaser-tab init throw out of the bootstrap chain.
+    try { console.error('[teaser] _updateTeaserTab guarded against:', _e && _e.message || _e); } catch(_e2){}
+  }
 }
 var TEASER_ELIGIBLE = ['run line','spread','total','over','under'];
 function isTeaserEligible(b) {
@@ -3287,11 +3371,24 @@ function stopAutoGradeDaemon() {
 // ════════════════════════════════════════════════════════════════════════════
 
 function renderMyBets() {
-  var el = document.getElementById('mybets-section');
-  if (!el) { console.warn('mybets-section not found'); return; }
-  // Always reload from localStorage to get latest
-  try { betTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(e){}
-  console.log('renderMyBets: tickets=', betTickets.length);
+  try {
+    var el = document.getElementById('mybets-section');
+    if (!el) { console.warn('[renderMyBets] mybets-section element not found in DOM'); return; }
+    // Always reload from localStorage to get latest
+    var _rawTickets = localStorage.getItem('pb-tickets') || '[]';
+    var _parseErr = null;
+    try { betTickets = JSON.parse(_rawTickets); }
+    catch(e){ _parseErr = e; betTickets = Array.isArray(betTickets) ? betTickets : []; }
+    if (!Array.isArray(betTickets)) betTickets = [];
+    if (_parseErr) console.error('[renderMyBets] pb-tickets JSON parse failed — falling back to []', _parseErr);
+    // Header counts source data (graded/ledger were referenced but undefined,
+    // throwing ReferenceError and blanking the tab). Define them here.
+    var graded = [];
+    try { graded = betTickets.filter(function(t){ var s = String(t && t.status || '').toLowerCase(); return s === 'won' || s === 'lost' || s === 'push' || s === 'pushed'; }); }
+    catch(_ge){ console.error('[renderMyBets] graded filter failed', _ge); graded = []; }
+    var ledger = [];
+    try { ledger = JSON.parse(localStorage.getItem('pb-ledger') || '[]'); if (!Array.isArray(ledger)) ledger = []; }
+    catch(_le){ console.error('[renderMyBets] pb-ledger JSON parse failed', _le); ledger = []; }
   var sc = { active:'#0064c8', open:'#0064c8', won:'#00875a', lost:'#cc0000', push:'#888', partial:'#f59e0b' };
   function ticketCard(t) {
     // Settled display guard: never paint WON/LOST/PUSH on a ticket that
@@ -3363,8 +3460,19 @@ function renderMyBets() {
   }
   // Section split uses _displayStatus so any ticket failing the 5-guard
   // sits in Active, NOT Settled — regardless of what t.status says.
-  var active   = betTickets.filter(function(t){ var ds = _displayStatus(t); return ds === 'active' || ds === 'open'; });
-  var settled  = betTickets.filter(function(t){ var ds = _displayStatus(t); return ds !== 'active' && ds !== 'open'; });
+  // Wrap _displayStatus so a single bad ticket cannot blank the tab.
+  function _safeDisplayStatus(t){
+    try {
+      if (typeof _displayStatus === 'function') return _displayStatus(t);
+    } catch(_e){
+      console.error('[renderMyBets] _displayStatus threw for ticket', t && t.id, _e);
+    }
+    var s = t && t.status ? String(t.status).toLowerCase() : '';
+    if (!s || s === 'active' || s === 'open') return 'active';
+    return s;
+  }
+  var active   = betTickets.filter(function(t){ var ds = _safeDisplayStatus(t); return ds === 'active' || ds === 'open'; });
+  var settled  = betTickets.filter(function(t){ var ds = _safeDisplayStatus(t); return ds !== 'active' && ds !== 'open'; });
   var html =
     '<div style="padding:16px 14px 8px;display:flex;justify-content:space-between;align-items:center">' +
       '<span style="font-size:1rem;font-weight:900;color:#111">My Bets</span>' +
@@ -3399,6 +3507,18 @@ function renderMyBets() {
   el.innerHTML = html;
   el.style.background = '#f5f5f5';
   el.style.minHeight = '100vh';
+  } catch (err) {
+    // CRITICAL: never let a thrown error leave My Bets blank without a trace.
+    console.error('[renderMyBets] FATAL — render aborted, tab will appear blank:', err);
+    try {
+      var _el = document.getElementById('mybets-section');
+      if (_el && !_el.innerHTML) {
+        _el.innerHTML = '<div style="padding:24px;color:#cc0000;font-size:0.85rem;font-weight:700">My Bets failed to render — check console.</div>';
+        _el.style.background = '#f5f5f5';
+        _el.style.minHeight = '100vh';
+      }
+    } catch(_e2){}
+  }
 }
 
 function bsSetSingleStake(cellId, val, idx) {
