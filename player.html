@@ -3066,6 +3066,17 @@ function _gradeTicket(ticket, resultsMap, normalizedGames) {
           nearest               ? 'tla_pair_mismatch_with_nearest' :
           'no_candidate_in_window'
         ));
+      // Tony-spec mirror log so the skip path matches the requested shape.
+      console.log('[grade skipped]\n' +
+        '  reason:     ' + (
+          !games.length         ? 'no_completed_games_in_window' :
+          (!selHomeTla2 || !selAwayTla2) ? 'team_tla_unresolved' :
+          nearest               ? 'tla_pair_mismatch_with_nearest' :
+          'no_candidate_in_window'
+        ) + '\n' +
+        '  ticketId:   ' + (ticket.id || '?') + '\n' +
+        '  pick:       ' + (sel.pick || '-') + '\n' +
+        '  gameStatus: ' + (nearest ? (nearest.status || '-') : '-'));
       return null;
     }
     // Normalize team aliases on BOTH sides before handing to the grading
@@ -3073,6 +3084,28 @@ function _gradeTicket(ticket, resultsMap, normalizedGames) {
     // so 'Cleveland ML' / 'Guardians ML' / 'CLE ML' / 'Los Angeles Angels
     // ML' / 'LAA ML' all resolve identically against the same final game.
     var prepared = _prepareGradingInputs(sel, gameResult);
+    // Per-leg candidate log so we can see EXACTLY which game each ticket
+    // got matched to and what canonical inputs the grader is seeing.
+    try {
+      var __hs = gameResult.home_score;
+      var __as = gameResult.away_score;
+      var __winner =
+        (__hs != null && __as != null)
+          ? (__hs > __as ? prepared.game.home
+             : __as > __hs ? prepared.game.away
+             : 'push')
+          : 'pending';
+      console.log('[grade candidate]\n' +
+        '  ticketId:       ' + (ticket.id || '?') + '\n' +
+        '  legIndex:       ' + i + '\n' +
+        '  pick:           ' + (sel.pick || '-') + '\n' +
+        '  normalizedPick: ' + (prepared.sel.pick || '-') + '\n' +
+        '  matchedGameId:  ' + (gameResult.id || '-') + '\n' +
+        '  homeTeam:       ' + (prepared.game.home || '-') + '\n' +
+        '  awayTeam:       ' + (prepared.game.away || '-') + '\n' +
+        '  status:         ' + (gameResult.status || '-') + '\n' +
+        '  winner:         ' + __winner);
+    } catch(_e){}
     var legResult = _gradeSingleLeg(prepared.sel, prepared.game);
     if (!legResult) {
       console.log('[active ticket final check]\n' +
@@ -3088,6 +3121,11 @@ function _gradeTicket(ticket, resultsMap, normalizedGames) {
         '  homeScore:    ' + (gameResult.home_score != null ? gameResult.home_score : '-') + '\n' +
         '  awayScore:    ' + (gameResult.away_score != null ? gameResult.away_score : '-') + '\n' +
         '  skipReason:   leg_unable_to_grade (market=' + (sel.market||'-') + ' pick="' + (sel.pick||'-') + '")');
+      console.log('[grade skipped]\n' +
+        '  reason:     leg_unable_to_grade\n' +
+        '  ticketId:   ' + (ticket.id || '?') + '\n' +
+        '  pick:       ' + (sel.pick || '-') + '\n' +
+        '  gameStatus: ' + (gameResult.status || '-'));
       return null;
     }
     legResults.push(legResult);
@@ -3622,6 +3660,33 @@ window._buildFinalScoreObject = _buildFinalScoreObject;
 window._findGameForSelection = _findGameForSelection;
 window._fetchAndNormalizeScores = _fetchAndNormalizeScores;
 
+// One-shot SportsDataIO ground-truth dump. Lists every game returned
+// across the fetched date window with status + score + gameId so we can
+// see exactly what the upstream considers Final right now — independent
+// of any scores app screenshot. Source of truth = SportsDataIO only.
+function _logSportsDataIOFinals(scores) {
+  if (!scores) return;
+  var games   = Array.isArray(scores.games) ? scores.games : [];
+  var finals  = games.filter(function(g){ return g && g.completed; });
+  var dates   = (scores.datesFetched || []).join(', ');
+  var lines = ['[SportsDataIO finals today]',
+               '  date:         ' + dates,
+               '  totalGames:   ' + games.length,
+               '  finalGames:   ' + finals.length,
+               '  games:'];
+  for (var i = 0; i < games.length; i++) {
+    var g = games[i] || {};
+    lines.push('    - ' + (g.away || '?') + ' ' +
+               (g.away_score != null ? g.away_score : '-') + ' @ ' +
+               (g.home || '?') + ' ' +
+               (g.home_score != null ? g.home_score : '-') +
+               ' | status=' + (g.status || '-') +
+               ' | gameId=' + (g.id || '-'));
+  }
+  console.log(lines.join('\n'));
+}
+window._logSportsDataIOFinals = _logSportsDataIOFinals;
+
 // Main grading entry point — called by Check Results button
 async function checkOpenTickets() {
   console.log('[grading start] checking active tickets');
@@ -3649,6 +3714,7 @@ async function checkOpenTickets() {
       console.warn('[grading] scores fetch error:', scores.error);
       throw new Error('Scores unavailable: ' + scores.error);
     }
+    _logSportsDataIOFinals(scores);
     console.log('[auto finalize pass]\n' +
       '  source:         sportsdataio\n' +
       '  datesFetched:   ' + (scores.datesFetched || []).join(', ') + '\n' +
@@ -3841,6 +3907,7 @@ async function _autoGradePoll() {
     var resultsMap     = scores.resultsMap;
     var completedGames = scores.completedGames || [];
 
+    _logSportsDataIOFinals(scores);
     console.log('[auto finalize pass]\n' +
       '  source:         sportsdataio\n' +
       '  datesFetched:   ' + (scores.datesFetched || []).join(', ') + '\n' +
