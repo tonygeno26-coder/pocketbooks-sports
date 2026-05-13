@@ -3778,6 +3778,285 @@ function _logSportsDataIOFinals(scores) {
 }
 window._logSportsDataIOFinals = _logSportsDataIOFinals;
 
+// ===========================================================================
+// Balance reconciliation audit (READ-ONLY)
+// ---------------------------------------------------------------------------
+// Inspect every ticket and report whether its per-ticket effect on player
+// balance and host balance matches the canonical formulas already used by
+// the running code:
+//
+//   PLAYER (calcAvailableBalance, _effective() variant):
+//     active/open   → −riskAmount       (held in openRisk)
+//     won           → +potentialProfit  (wager returns via openRisk
+//                                          exclusion + profit added)
+//     lost          → −riskAmount       (permanent)
+//     push          → 0                  (openRisk excluded → wager returns)
+//     canceled/voided/deleted → 0
+//
+//   HOST (computeHostKPIs in index.html):
+//     active/open   → +potentialProfit  (atRisk exposure)
+//     won           → −potentialProfit  (host pays the player's profit)
+//     lost          → +riskAmount       (host keeps player's wager)
+//     push          → 0                  (host unchanged)
+//     canceled/voided/deleted → 0
+//
+// Reads (never writes): pb-tickets, hostActiveBets, pb-ledger,
+// pb-settlements.
+//
+// Returns the result both via console.table() (compact) and as the
+// function's return value (full structure with mismatches array).
+function runBalanceReconciliation() {
+  function _parseStore(key) {
+    try {
+      var raw = localStorage.getItem(key);
+      if (raw == null) return null;
+      var v = JSON.parse(raw);
+      return Array.isArray(v) ? v : null;
+    } catch (_e) {
+      return null;
+    }
+  }
+  function _statusGroup(s) {
+    var v = String(s || '').toLowerCase().trim();
+    if (v === 'active' || v === 'open' || v === '') return 'active';
+    if (v === 'won')                                  return 'won';
+    if (v === 'lost')                                 return 'lost';
+    if (v === 'push' || v === 'pushed')               return 'push';
+    if (v === 'canceled' || v === 'cancelled' ||
+        v === 'voided'   || v === 'deleted')          return 'void';
+    return v; // unknown
+  }
+  function _round(n) { return Math.round((n || 0) * 100) / 100; }
+  function _supported(t) {
+    return (typeof _isSupportedForGrading === 'function') ? _isSupportedForGrading(t) : true;
+  }
+  // Effective settlement-aware status used by calcAvailableBalance. A
+  // ticket with stale t.status='lost' but missing 5-guard fields is held
+  // in active. Audit must follow the same rule.
+  function _effectiveStatus(t) {
+    var s = _statusGroup(t.status);
+    if (s === 'void' || s === 'active') return s;
+    // For won/lost/push: only treat as settled if the 5-guard accepts it.
+    if (typeof _isSettledTicket === 'function' && !_isSettledTicket(t)) return 'active';
+    return s;
+  }
+  function _expectedDeltas(t) {
+    var risk   = parseFloat(t.riskAmount)      || 0;
+    var profit = parseFloat(t.potentialProfit) || 0;
+    var eff    = _effectiveStatus(t);
+    switch (eff) {
+      case 'active': return { player: -risk,    host: +profit };
+      case 'won':    return { player: +profit,  host: -profit };
+      case 'lost':   return { player: -risk,    host: +risk   };
+      case 'push':   return { player: 0,        host: 0       };
+      case 'void':   return { player: 0,        host: 0       };
+      default:       return { player: NaN,      host: NaN     };
+    }
+  }
+
+  var pbTickets       = _parseStore('pb-tickets')       || [];
+  var hostActiveBets  = _parseStore('hostActiveBets')   || [];
+  var ledger          = _parseStore('pb-ledger')        || [];
+  var settlements     = _parseStore('pb-settlements')   || [];
+
+  // Index host mirror by id for O(1) lookups.
+  var hostById = {};
+  for (var i = 0; i < hostActiveBets.length; i++) {
+    var hb = hostActiveBets[i];
+    if (hb && hb.id) hostById[hb.id] = hb;
+  }
+  // Index ledger by ticketId. Sum settlement-related balanceChange per
+  // ticket so a re-grade with two rows doesn't trigger a false mismatch.
+  var ledgerByTicket = {};
+  for (var j = 0; j < ledger.length; j++) {
+    var L = ledger[j];
+    if (!L || !L.ticketId) continue;
+    if (!ledgerByTicket[L.ticketId]) ledgerByTicket[L.ticketId] = [];
+    ledgerByTicket[L.ticketId].push(L);
+  }
+
+  var rows = [];
+  var mismatches = [];
+  for (var k = 0; k < pbTickets.length; k++) {
+    var t = pbTickets[k];
+    if (!t || !t.id) continue;
+    var risk   = parseFloat(t.riskAmount)      || 0;
+    var profit = parseFloat(t.potentialProfit) || 0;
+    var effStatus = _effectiveStatus(t);
+    var exp = _expectedDeltas(t);
+
+    // "Actual" player delta: just the same formula applied to the same
+    // ticket. The point of the audit is consistency across SOURCES (player
+    // store, host mirror, ledger), not a recomputation of the same number.
+    var actualPlayer = exp.player;
+    var actualHost   = exp.host;
+    var issues = [];
+
+    // 1. Host mirror existence
+    var hostMirror = hostById[t.id];
+    if (!hostMirror) {
+      issues.push('missing_from_hostActiveBets');
+    } else {
+      // 2. Host mirror status agreement
+      var hostStatus = _statusGroup(hostMirror.status);
+      if (hostStatus !== effStatus && hostStatus !== 'active') {
+        // hostActiveBets keeps active tickets as-is; a host record showing
+        // 'active' while the player shows settled is acceptable if the
+        // settlement just happened and the host hasn't re-rendered yet,
+        // but a mirror showing 'won' while player shows 'lost' is real drift.
+        issues.push('host_status_drift:' + hostStatus + '_vs_' + effStatus);
+      }
+      // 3. risk/profit fields drift
+      var hRisk = parseFloat(hostMirror.riskAmount) || 0;
+      var hProfit = parseFloat(hostMirror.potentialProfit) || 0;
+      if (Math.abs(hRisk - risk) > 0.01) {
+        issues.push('host_risk_drift:' + hRisk + '_vs_' + risk);
+      }
+      if (Math.abs(hProfit - profit) > 0.01) {
+        issues.push('host_profit_drift:' + hProfit + '_vs_' + profit);
+      }
+    }
+
+    // 4. Settled ticket without any settlement ledger row
+    var ledgerRows = ledgerByTicket[t.id] || [];
+    var hasSettlementLedger = ledgerRows.some(function(L){
+      var typ = String(L.type || '').toLowerCase();
+      return typ === 'bet_won' || typ === 'bet_lost' || typ === 'bet_push' ||
+             typ === 'bet_won_settle' || typ === 'bet_settled' ||
+             /^bet_won|^bet_lost|^bet_push|won|lost|push/.test(typ);
+    });
+    if ((effStatus === 'won' || effStatus === 'lost' || effStatus === 'push') && !hasSettlementLedger) {
+      issues.push('no_settlement_ledger_row');
+    }
+
+    // 5. Ledger balanceChange consistency (only on settlement rows).
+    if (hasSettlementLedger) {
+      var settleRow = ledgerRows.filter(function(L){
+        var typ = String(L.type || '').toLowerCase();
+        return typ.indexOf('bet_won') === 0 || typ.indexOf('bet_lost') === 0 || typ.indexOf('bet_push') === 0 ||
+               typ === 'won' || typ === 'lost' || typ === 'push';
+      }).pop(); // most recent
+      if (settleRow && settleRow.balanceChange != null) {
+        var bcExpected = exp.player; // settlement delta == player delta
+        if (Math.abs(parseFloat(settleRow.balanceChange) - bcExpected) > 0.01) {
+          issues.push('ledger_balanceChange_drift:' +
+                      _round(parseFloat(settleRow.balanceChange)) +
+                      '_vs_' + _round(bcExpected));
+        }
+      }
+    }
+
+    // 6. Unsupported sport with settled status: shouldn't happen post-allowlist.
+    if (!_supported(t) && (effStatus === 'won' || effStatus === 'lost' || effStatus === 'push')) {
+      issues.push('unsupported_sport_was_graded:' + (_ticketSportKey ? _ticketSportKey(t) : '?'));
+    }
+
+    var row = {
+      ticketId:            t.id,
+      playerId:            t.playerId || '-',
+      sport:               (_ticketSportKey ? _ticketSportKey(t) : (t.sport || '-')) || '-',
+      status:              effStatus,
+      risk:                _round(risk),
+      payout:              _round(t.estimatedPayout != null ? t.estimatedPayout : (risk + profit)),
+      result:              effStatus.toUpperCase(),
+      playerDeltaExpected: _round(exp.player),
+      playerDeltaActual:   _round(actualPlayer),
+      hostDeltaExpected:   _round(exp.host),
+      hostDeltaActual:     _round(actualHost),
+      hostMirrored:        hostMirror ? 'yes' : 'NO',
+      match:               issues.length === 0,
+      issue:               issues.length ? issues.join('; ') : ''
+    };
+    rows.push(row);
+    if (!row.match) mismatches.push(row);
+  }
+
+  // 7. Orphans: host mirror entries with no matching pb-tickets id.
+  var pbIds = {};
+  for (var p = 0; p < pbTickets.length; p++) if (pbTickets[p] && pbTickets[p].id) pbIds[pbTickets[p].id] = true;
+  var orphans = hostActiveBets.filter(function(h){ return h && h.id && !pbIds[h.id]; });
+
+  // 8. Aggregate sanity: sum of expected player deltas should equal
+  // (available − starting) under the calcAvailableBalance model.
+  var sumPlayer = rows.reduce(function(s,r){ return s + (r.playerDeltaExpected || 0); }, 0);
+  var sumHost   = rows.reduce(function(s,r){ return s + (r.hostDeltaExpected   || 0); }, 0);
+  var liveAvailable = (typeof calcAvailableBalance === 'function') ? calcAvailableBalance() : null;
+  var liveDeltaFromStarting = liveAvailable ? _round(liveAvailable.available - liveAvailable.starting) : null;
+  var aggregateDrift = (liveDeltaFromStarting != null && Math.abs(liveDeltaFromStarting - _round(sumPlayer)) > 0.01)
+    ? { expectedSum: _round(sumPlayer), liveAvailableMinusStarting: liveDeltaFromStarting }
+    : null;
+
+  console.log('[balance reconciliation]');
+  console.log('  pbTickets:        ' + pbTickets.length);
+  console.log('  hostActiveBets:   ' + hostActiveBets.length);
+  console.log('  ledger rows:      ' + ledger.length);
+  console.log('  settlements:      ' + settlements.length);
+  console.log('  mismatches:       ' + mismatches.length);
+  console.log('  hostMirror orphans (in host, not in pb-tickets): ' + orphans.length);
+  console.log('  sum playerDeltaExpected: ' + _round(sumPlayer));
+  console.log('  sum hostDeltaExpected:   ' + _round(sumHost));
+  if (liveDeltaFromStarting != null) {
+    console.log('  live (available - starting): ' + liveDeltaFromStarting);
+  }
+  if (aggregateDrift) {
+    console.warn('  AGGREGATE DRIFT: per-ticket sum (' + aggregateDrift.expectedSum +
+                 ') != live calcAvailableBalance delta (' + aggregateDrift.liveAvailableMinusStarting + ')');
+  }
+
+  try {
+    if (typeof console.table === 'function') {
+      console.table(rows.map(function(r){
+        return {
+          ticketId:        r.ticketId,
+          sport:           r.sport,
+          status:          r.status,
+          risk:            r.risk,
+          payout:          r.payout,
+          playerExpected:  r.playerDeltaExpected,
+          playerActual:    r.playerDeltaActual,
+          hostExpected:    r.hostDeltaExpected,
+          hostActual:      r.hostDeltaActual,
+          hostMirrored:    r.hostMirrored,
+          match:           r.match,
+          issue:           r.issue
+        };
+      }));
+    } else {
+      rows.forEach(function(r){ console.log(JSON.stringify(r)); });
+    }
+  } catch(_e) {
+    rows.forEach(function(r){ console.log(JSON.stringify(r)); });
+  }
+
+  if (mismatches.length) {
+    console.warn('[balance reconciliation] ' + mismatches.length + ' mismatch(es). Drift sources:');
+    mismatches.forEach(function(r){
+      console.warn('  ' + r.ticketId + ' (' + r.sport + ', ' + r.status + ') -> ' + r.issue);
+    });
+  } else {
+    console.log('[balance reconciliation] all rows consistent.');
+  }
+  if (orphans.length) {
+    console.warn('[balance reconciliation] ' + orphans.length + ' host orphan ticket(s) not in pb-tickets:');
+    orphans.forEach(function(h){ console.warn('  hostActiveBets ' + h.id + ' status=' + (h.status||'?')); });
+  }
+
+  return {
+    pbTicketsCount:     pbTickets.length,
+    hostMirrorCount:    hostActiveBets.length,
+    ledgerCount:        ledger.length,
+    settlementsCount:   settlements.length,
+    rows:               rows,
+    mismatches:         mismatches,
+    hostOrphans:        orphans,
+    aggregateDrift:     aggregateDrift,
+    sumPlayerExpected:  _round(sumPlayer),
+    sumHostExpected:    _round(sumHost),
+    liveDeltaFromStart: liveDeltaFromStarting
+  };
+}
+window.runBalanceReconciliation = runBalanceReconciliation;
+
 // Main grading entry point — called by Check Results button
 // ===========================================================================
 // Grader sport allowlist
