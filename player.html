@@ -4774,33 +4774,49 @@ function renderMyBets() {
     var d = new Date(t.placedAt);
     var dateStr = isNaN(d) ? t.placedAt : d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
 
-    // Build a list of leg-like objects. New code uses t.selections; older
-    // shapes may use t.legs, a single t.pick, or just a top-level matchup.
-    // Whatever exists, normalize each leg into { pick, odds, market }
-    // strings the renderer can safely concatenate.
+    // Build a list of leg-like objects. Field-name reality check, from
+    // ACTUAL writers in this codebase:
+    //   _makeSelection (live placement) → { pick, market, matchup,
+    //                                       homeTeam, awayTeam, odds,
+    //                                       sport, gameId, side }
+    //   _resSeedMockIfEmpty             → { label }                only
+    //   bet-slip groups (place-bet)     → { name, pick, market,
+    //                                       game, odds, id, time }
+    //   _recoverTicketsFromHostMirror   → whatever host-side wrote
+    // So the fallback chain MUST include label, name, game in addition
+    // to pick/matchup/description.
     var rawLegs = [];
     if (Array.isArray(t.selections) && t.selections.length) rawLegs = t.selections;
     else if (Array.isArray(t.legs) && t.legs.length) rawLegs = t.legs;
-    else if (t.pick || t.matchup || t.description || t.team || t.homeTeam || t.awayTeam) {
+    else if (t.pick || t.matchup || t.description || t.team ||
+             t.homeTeam || t.awayTeam || t.label || t.name || t.game) {
       // Single-leg fallback synthesized from top-level fields.
       rawLegs = [{
-        pick:     t.pick,
-        team:    t.team,
-        matchup:  t.matchup,
+        pick:        t.pick,
+        team:        t.team,
+        matchup:     t.matchup || t.game,
         description: t.description,
-        homeTeam: t.homeTeam, awayTeam: t.awayTeam,
-        odds:     t.odds, market: t.market
+        homeTeam:    t.homeTeam, awayTeam: t.awayTeam,
+        odds:        t.odds, market: t.market || t.marketType || t.betType,
+        label:       t.label,
+        name:        t.name,
+        game:        t.game,
+        sport:       t.sport
       }];
     }
     function _legPickText(s) {
       if (!s) return 'Unknown matchup';
       // Order of preference: explicit pick, team+market combo, matchup,
-      // description, away/home, team alone. Never emit 'undefined'.
+      // description, slip-leg label/name, game, away/home, team alone.
+      // Never emit 'undefined' or an empty string.
       var candidates = [
         s.pick,
         (s.team && s.market) ? (s.team + ' ' + s.market) : null,
         s.matchup,
         s.description,
+        s.label,                                                    // mock seeder
+        s.name,                                                     // bet-slip group
+        s.game,                                                     // legacy slip-leg
         (s.awayTeam && s.homeTeam) ? (s.awayTeam + ' @ ' + s.homeTeam) : null,
         s.awayTeam,
         s.homeTeam,
@@ -4814,6 +4830,24 @@ function renderMyBets() {
       }
       return 'Unknown matchup';
     }
+    function _legMatchupText(s) {
+      // The game / matchup string, separate from the pick. Falls back
+      // across alternate field names. Returns '' when nothing available
+      // so the UI can omit the row instead of showing a blank.
+      if (!s) return '';
+      var candidates = [
+        s.matchup,
+        s.game,
+        (s.awayTeam && s.homeTeam) ? (s.awayTeam + ' @ ' + s.homeTeam) : null
+      ];
+      for (var i = 0; i < candidates.length; i++) {
+        var v = candidates[i];
+        if (v != null && String(v).trim() !== '' && String(v).toLowerCase() !== 'undefined') {
+          return String(v);
+        }
+      }
+      return '';
+    }
     function _legOddsText(s) {
       if (!s) return '';
       var raw = (s.odds != null) ? s.odds : (s.line != null ? s.line : null);
@@ -4824,24 +4858,44 @@ function renderMyBets() {
     }
     function _legMarketText(s) {
       if (!s) return '';
-      var m = s.market || s.marketType || s.betType || '';
+      var m = s.market || s.marketType || s.betType || s.market_type || '';
       m = String(m || '').trim();
       if (!m || m.toLowerCase() === 'undefined') return '';
       return m;
     }
+    function _ticketSportLabel(t, firstLeg) {
+      var raw = (t && t.sport) ||
+                (firstLeg && firstLeg.sport) ||
+                (typeof _ticketSportKey === 'function' ? _ticketSportKey(t) : '');
+      var v = String(raw || '').trim();
+      if (!v || v.toLowerCase() === 'undefined') return '';
+      var map = { 'mlb':'MLB','baseball_mlb':'MLB',
+                  'nfl':'NFL','americanfootball_nfl':'NFL',
+                  'nba':'NBA','basketball_nba':'NBA',
+                  'nhl':'NHL','icehockey_nhl':'NHL',
+                  'ncaaf':'NCAAF','ncaab':'NCAAB',
+                  'soccer':'Soccer','tennis':'Tennis','golf':'Golf' };
+      return map[v.toLowerCase()] || v.toUpperCase();
+    }
     var picks = rawLegs.slice(0, 3).map(function(s){
-      var pickText   = _legPickText(s);
-      var oddsText   = _legOddsText(s);
-      var marketText = _legMarketText(s);
-      var oddsBlock  = oddsText   ? ' <span style="color:#0064c8;font-size:0.7rem">'+oddsText+'</span>' : '';
-      var marketBlock= marketText ? ' <span style="color:#aaa;font-size:0.68rem">· '+marketText+'</span>' : '';
+      var pickText    = _legPickText(s);
+      var matchupText = _legMatchupText(s);
+      var oddsText    = _legOddsText(s);
+      var marketText  = _legMarketText(s);
+      var oddsBlock   = oddsText   ? ' <span style="color:#0064c8;font-size:0.7rem">'+oddsText+'</span>' : '';
+      var marketBlock = marketText ? ' <span style="color:#aaa;font-size:0.68rem">· '+marketText+'</span>' : '';
+      // Show the matchup as a quieter second line when it's distinct from
+      // the pick text. Avoids redundancy like 'Cleveland Guardians ML'
+      // duplicated as a subtitle.
+      var matchupBlock = (matchupText && matchupText.toLowerCase() !== pickText.toLowerCase())
+        ? '<div style="font-size:0.66rem;color:#888;margin-top:2px">' + matchupText + '</div>'
+        : '';
       return '<div style="font-size:0.78rem;color:#333;padding:4px 0;border-bottom:1px solid #f0f0f0">' +
         '<span style="font-weight:800">'+pickText+'</span>' +
         oddsBlock + marketBlock +
+        matchupBlock +
         '</div>';
     }).join('');
-    // Empty-state guard: no synthesizable legs at all. Show 'Unknown
-    // matchup' rather than an empty card body.
     if (!picks) {
       picks = '<div style="font-size:0.78rem;color:#333;padding:4px 0;border-bottom:1px solid #f0f0f0">' +
               '<span style="font-weight:800">Unknown matchup</span>' +
@@ -4849,21 +4903,24 @@ function renderMyBets() {
     }
     var morePicks = rawLegs.length > 3 ? '<div style="font-size:0.68rem;color:#aaa;padding-top:4px">+'+(rawLegs.length-3)+' more picks</div>' : '';
 
-    // TEMP DEBUG — emit per ticket so we can spot any remaining shape
-    // problems. Strip when the regression is verified closed.
+    var __firstLeg   = rawLegs[0] || {};
+    var ticketSport  = _ticketSportLabel(t, __firstLeg);
+    var sportBadge   = ticketSport
+      ? '<span style="font-size:0.6rem;font-weight:800;letter-spacing:0.4px;color:#0064c8;background:#eef4ff;border:1px solid #cfe0ff;border-radius:6px;padding:1px 6px;margin-right:6px;text-transform:uppercase">'+ticketSport+'</span>'
+      : '';
+
+    // TEMP DEBUG — spec'd log block. One per ticket render.
     try {
-      var __firstLeg = rawLegs[0] || {};
-      console.log('[ticket display fields]\n' +
-        '  ticketId:    ' + (t.id || '-') + '\n' +
-        '  type:        ' + (t.type || '-') + '\n' +
-        '  status:      ' + (t.status || '-') + '\n' +
-        '  selections:  ' + (Array.isArray(t.selections) ? t.selections.length : 'n/a') + '\n' +
-        '  legs:        ' + (Array.isArray(t.legs) ? t.legs.length : 'n/a') + '\n' +
-        '  pick:        ' + (__firstLeg.pick || t.pick || '-') + '\n' +
-        '  matchup:     ' + (__firstLeg.matchup || t.matchup || '-') + '\n' +
-        '  homeTeam:    ' + (__firstLeg.homeTeam || t.homeTeam || '-') + '\n' +
-        '  awayTeam:    ' + (__firstLeg.awayTeam || t.awayTeam || '-') + '\n' +
-        '  renderedText:' + _legPickText(__firstLeg));
+      var __rawFields = Object.keys(__firstLeg).filter(function(k){
+        var v = __firstLeg[k]; return v != null && v !== '';
+      }).map(function(k){ return k+'='+String(__firstLeg[k]).slice(0,40); }).join(' | ');
+      console.log('[ticket render resolved]\n' +
+        '  ticketId:         ' + (t.id || '-') + '\n' +
+        '  rawFields:        ' + (__rawFields || '(empty leg)') + '\n' +
+        '  renderedMatchup:  ' + (_legMatchupText(__firstLeg) || '(omitted)') + '\n' +
+        '  renderedPick:     ' + _legPickText(__firstLeg) + '\n' +
+        '  renderedMarket:   ' + (_legMarketText(__firstLeg) || '(omitted)') + '\n' +
+        '  renderedSport:    ' + (ticketSport || '(omitted)'));
     } catch(_e){}
     var isDeletePending = t.deleteRequestStatus === 'pending';
     var isDeleteDenied  = t.deleteRequestStatus === 'denied';
@@ -4898,7 +4955,7 @@ function renderMyBets() {
     return '<div style="background:#fff;border-radius:14px;margin:8px 0;padding:16px;border:1px solid #e8e8e8;box-shadow:0 1px 4px rgba(0,0,0,0.06)">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
         '<div>' +
-          '<div style="font-size:0.88rem;font-weight:900;color:#111">'+typeLabel+'</div>' +
+          '<div style="font-size:0.88rem;font-weight:900;color:#111">' + sportBadge + typeLabel+'</div>' +
           '<div style="font-size:0.62rem;color:#aaa;margin-top:2px">'+dateStr+'</div>' +
         '</div>' +
         statusBadge +
