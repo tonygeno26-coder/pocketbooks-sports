@@ -3867,8 +3867,10 @@ async function checkOpenTickets() {
 }
 // ════════════════════════════════════════════════════════════════════════════
 // AUTO-GRADE DAEMON
-// Polls /api/scores/mlb every 60 s. Only grades COMPLETED games.
-// Reuses existing _gradeSingleLeg / _gradeTicket / balance model.
+// Polls /api/sportsdataio/mlb every 60 s via _fetchAndNormalizeScores.
+// Only grades games with status in the final family (Final, F/9, Completed).
+// Legacy /api/scores/mlb (Railway, 402 Payment Required) is no longer used
+// anywhere. Reuses _gradeSingleLeg / _gradeTicket / balance model.
 // ════════════════════════════════════════════════════════════════════════════
 var _autoGradeInterval = null;
 var _autoGradeRunning  = false;
@@ -5670,18 +5672,26 @@ function _settledReason(t){
   if (s !== 'won' && s !== 'lost' && s !== 'push' && s !== 'pushed') {
     return 'status_not_settled';
   }
-  if (!t.gradedAt)      return 'no_gradedAt';
-  if (!t.gradingSource) return 'no_gradingSource';
-  // Hard refuse path: if upstream EXPLICITLY says the game is not final
-  // (e.g. lastSeenGameStatus = 'InProgress' or 'Scheduled') we still
-  // refuse, because that means whoever stamped status=won did so against
-  // bad data. This is a narrow check — only fires when we have an
-  // explicit non-final upstream signal.
-  var src = _sourceGameStatus(t);
-  if (src && !_isFinalSourceStatus(src)) {
-    return 'upstream_not_final:' + src;
-  }
+  if (!t.gradedAt) return 'no_gradedAt';
+  // Policy: once status=won|lost|push AND gradedAt exists, trust the
+  // grader. Legacy fields (missing gradingSource, string finalScore,
+  // stale or missing lastSeenGameStatus) MUST NOT force a settled
+  // ticket back to ACTIVE. The old strict-mode checks moved into
+  // _settledAdvisoryNote() and surface in the diagnostic log only.
   return 'pass';
+}
+// Advisory: would the previous strict guard have refused this ticket?
+// Returns a human-readable description of which legacy fields are missing
+// or contradictory. NEVER affects displayStatus — surfaces in the
+// [settled display guard] log only so we can spot data shape drift.
+function _settledAdvisoryNote(t){
+  if (!t) return null;
+  var notes = [];
+  if (!t.gradingSource) notes.push('no_gradingSource');
+  var src = _sourceGameStatus(t);
+  if (src && !_isFinalSourceStatus(src)) notes.push('upstream_not_final:' + src);
+  if (!_hasFinalScore(t)) notes.push('no_structured_finalScore');
+  return notes.length ? notes.join(' | ') : null;
 }
 function _isSettledTicket(t){
   return _settledReason(t) === 'pass';
@@ -5700,6 +5710,7 @@ function _logSettledDisplayGuard(t){
     var display = _displayStatus(t);
     var src     = _sourceGameStatus(t);
     var reason  = _settledReason(t);
+    var advisory= _settledAdvisoryNote(t);
     var teams = '';
     if (Array.isArray(t.teams) && t.teams.length) teams = t.teams.join(' | ');
     else if (t.selections && t.selections[0]) {
@@ -5723,6 +5734,7 @@ function _logSettledDisplayGuard(t){
                 '  hasFinalScore:    ' + (_hasFinalScore(t) ? 'yes' : 'no') + '\n' +
                 '  sourceGameStatus: ' + (src || '-') + '\n' +
                 '  reason:           ' + reason + '\n' +
+                '  advisoryNotes:    ' + (advisory || 'none') + '\n' +
                 '  displayStatus:    ' + display + (stored !== display ? ' (FORCED ACTIVE because ' + reason + ')' : ''));
   } catch(_e){}
 }
@@ -5733,6 +5745,7 @@ window._isSettledTicket   = _isSettledTicket;
 window._displayStatus     = _displayStatus;
 window._logSettledDisplayGuard = _logSettledDisplayGuard;
 window._settledReason     = _settledReason;
+window._settledAdvisoryNote = _settledAdvisoryNote;
 
 // One-shot back-fill for tickets graded under earlier code paths that
 // wrote finalScore as a string (the old bug) and never stamped
