@@ -4978,61 +4978,79 @@ function renderMyBets() {
     }
     // Defensive wrapper around the existing teamAvatar() so a missing or
     // bad name never throws. teamAvatar(name) does name.split(' ').slice(-1)
-    // which crashes on null/empty.
-    function _safeTeamAvatar(name, size) {
-      var px = (typeof size === 'number' && size > 0) ? size : 24;
+    // which crashes on null/empty. Returns the raw teamAvatar() HTML
+    // (a .mc-jersey div) so consumers can drop it into the sportsbook
+    // .mc-team layout pattern unchanged.
+    function _safeTeamAvatar(name) {
       var clean = (name != null) ? String(name).trim() : '';
       if (!clean) return '';
-      var inner;
       try {
-        inner = teamAvatar(clean);
+        return teamAvatar(clean);
       } catch (_e) {
-        // Defensive: any unexpected throw inside teamAvatar still produces
-        // a renderable badge from the team's initials.
         var abbr = clean.split(' ').slice(-1)[0].slice(0,3).toUpperCase();
-        inner = '<div class="mc-jersey">' + abbr + '</div>';
+        return '<div class="mc-jersey">' + abbr + '</div>';
       }
-      // Wrap in a sized container so the existing .mc-jersey styling is
-      // honored but the card can constrain it. Inline-block so flex rows
-      // align cleanly with the pick text.
-      return '<span style="display:inline-flex;align-items:center;justify-content:center;' +
-             'width:'+px+'px;height:'+px+'px;flex:0 0 '+px+'px;margin-right:8px;' +
-             'border-radius:50%;overflow:hidden;background:#f0f0f0;font-size:0.62rem;' +
-             'font-weight:800;color:#555">' + inner + '</span>';
+    }
+    // Split a full team name into the sportsbook's city / short-name pair.
+    // 'Los Angeles Angels' -> { city:'Los Angeles', name:'Angels' }.
+    // Single-word names just become { city:'', name:'Yankees' }.
+    function _splitCityName(full) {
+      var s = String(full || '').trim();
+      if (!s) return { city: '', name: '' };
+      var parts = s.split(' ');
+      if (parts.length === 1) return { city: '', name: parts[0] };
+      return {
+        city: parts.slice(0, -1).join(' '),
+        name: parts.slice(-1)[0]
+      };
     }
     var picks = rawLegs.slice(0, 3).map(function(s){
       var pickText    = _legPickText(s);
       var matchupText = _legMatchupText(s);
       var oddsText    = _legOddsText(s);
       var marketText  = _legMarketText(s);
-      var oddsBlock   = oddsText   ? ' <span style="color:#0064c8;font-size:0.7rem">'+oddsText+'</span>' : '';
+      var oddsBlock   = oddsText   ? ' <span style="color:#0064c8;font-size:0.7rem;font-weight:800">'+oddsText+'</span>' : '';
       var marketBlock = marketText ? ' <span style="color:#aaa;font-size:0.68rem">· '+marketText+'</span>' : '';
-      // Selected-team logo. Falls back to initials inside _safeTeamAvatar,
-      // and to '' when no team can be derived (e.g. Over/Under picks).
-      var pickedTeam  = _legPickedTeamName(s);
-      var pickAvatar  = _safeTeamAvatar(pickedTeam, 26);
-      // Matchup row — quieter second line when the matchup string is
-      // distinct from the pick text. When we have BOTH homeTeam and
-      // awayTeam we show a small pair of avatars left of the matchup text.
-      var awayAvatar = '';
-      var homeAvatar = '';
-      if (s && s.awayTeam && s.homeTeam) {
-        awayAvatar = _safeTeamAvatar(s.awayTeam, 16);
-        homeAvatar = _safeTeamAvatar(s.homeTeam, 16);
-      }
+      // Selected team for the logo, derived from pick text + home/away.
+      // Returns null for non-team picks (Over/Under) — we then omit the
+      // .mc-jersey entirely rather than show a placeholder.
+      var pickedTeam   = _legPickedTeamName(s);
+      var teamSplit    = _splitCityName(pickedTeam || '');
+      var jerseyHtml   = pickedTeam ? _safeTeamAvatar(pickedTeam) : '';
+      // Matchup text on a quiet second line, sportsbook-time style.
       var matchupBlock = (matchupText && matchupText.toLowerCase() !== pickText.toLowerCase())
-        ? '<div style="font-size:0.66rem;color:#888;margin-top:4px;display:flex;align-items:center;gap:2px">' +
-            awayAvatar + homeAvatar +
-            '<span style="margin-left:'+((awayAvatar||homeAvatar)?'4px':'0')+'">' + matchupText + '</span>' +
-          '</div>'
+        ? '<div style="font-size:0.66rem;color:#888;margin-top:2px">' + matchupText + '</div>'
         : '';
-      return '<div style="font-size:0.78rem;color:#333;padding:6px 0;border-bottom:1px solid #f0f0f0;display:flex;align-items:flex-start">' +
-        pickAvatar +
-        '<div style="flex:1;min-width:0">' +
-          '<div><span style="font-weight:800">'+pickText+'</span>' + oddsBlock + marketBlock + '</div>' +
-          matchupBlock +
-        '</div>' +
+      // Match the sportsbook .mc-team / .mc-city / .mc-name pattern
+      // exactly so the avatar inherits the same jersey gradient, size,
+      // and responsive breakpoints used on the home odds cards. When the
+      // pick has no team (totals), fall back to a clean pick-only row.
+      if (jerseyHtml) {
+        return '<div style="padding:8px 0;border-bottom:1px solid #f0f0f0">' +
+          '<div class="mc-team" style="gap:10px">' +
+            jerseyHtml +
+            '<div style="flex:1;min-width:0">' +
+              (teamSplit.city ? '<div class="mc-city">'+teamSplit.city+'</div>' : '') +
+              '<div class="mc-name" style="color:#111">'+pickText+'</div>' +
+              '<div style="font-size:0.7rem;color:#555;margin-top:2px">'+
+                (oddsText ? '<span style="color:#0064c8;font-weight:800">'+oddsText+'</span>' : '') +
+                (marketText ? (oddsText?' · ':'')+'<span style="color:#888">'+marketText+'</span>' : '') +
+              '</div>' +
+              matchupBlock +
+            '</div>' +
+          '</div>' +
         '</div>';
+      }
+      // No team-specific avatar (Over/Under, totals, etc.). Keep the row
+      // tidy with just the pick text + odds + market + matchup line.
+      return '<div style="padding:8px 0;border-bottom:1px solid #f0f0f0">' +
+        '<div class="mc-name" style="color:#111">'+pickText+'</div>' +
+        '<div style="font-size:0.7rem;color:#555;margin-top:2px">'+
+          (oddsText ? '<span style="color:#0064c8;font-weight:800">'+oddsText+'</span>' : '') +
+          (marketText ? (oddsText?' · ':'')+'<span style="color:#888">'+marketText+'</span>' : '') +
+        '</div>' +
+        matchupBlock +
+      '</div>';
     }).join('');
     if (!picks) {
       picks = '<div style="font-size:0.78rem;color:#333;padding:4px 0;border-bottom:1px solid #f0f0f0">' +

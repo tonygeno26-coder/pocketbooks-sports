@@ -891,6 +891,266 @@ function renderHostStats() {
 }
 // ══════════════════════════════════════════════════════════════════════════════
 
+// ===========================================================================
+// runHostStatsAudit() — READ-ONLY host KPI audit
+// ---------------------------------------------------------------------------
+// Re-derives the host stat table from hostActiveBets and prints a per-status
+// breakdown so we can verify that:
+//   ACTIVE  -> Active Bets +1, Handle += risk, At Risk += potentialProfit
+//   LOST    -> Handle += risk, Host Profit += risk
+//   WON     -> Handle += risk, Host Profit -= potentialProfit
+//   PUSH    -> Handle += risk, Host Profit unchanged
+//   VOID/CANCELED/DELETED -> excluded from Handle, At Risk, Host Profit
+//
+// Then compares each hostActiveBets row against the matching pb-tickets row
+// to flag any drift between host mirror and player canonical source:
+//   missing_from_pb_tickets    (host has it, player canonical doesn't)
+//   missing_from_host_mirror   (player has it, host doesn't)
+//   status_drift               (statuses differ)
+//   risk_drift / profit_drift  (numeric divergence > 1 cent)
+//
+// Read-only: no writes to any localStorage key, no math touched.
+function runHostStatsAudit() {
+  function _parseStore(key) {
+    try { var raw = localStorage.getItem(key); if (raw == null) return null;
+          var v = JSON.parse(raw); return Array.isArray(v) ? v : null; }
+    catch (_e) { return null; }
+  }
+  function _round(n) { return Math.round((n || 0) * 100) / 100; }
+  function _status(t) {
+    var s = String(t && t.status || '').toLowerCase().trim();
+    if (s === '' || s === 'active' || s === 'open') return 'active';
+    if (s === 'canceled' || s === 'cancelled' || s === 'voided' || s === 'deleted') return 'void';
+    if (s === 'pushed') return 'push';
+    return s;
+  }
+
+  var hostBets  = _parseStore('hostActiveBets') || [];
+  var pbTickets = _parseStore('pb-tickets')     || [];
+
+  var pbById = {};
+  pbTickets.forEach(function(t){ if (t && t.id) pbById[t.id] = t; });
+  var hostById = {};
+  hostBets.forEach(function(t){ if (t && t.id) hostById[t.id] = t; });
+
+  var byStatus = {
+    active: { count:0, riskSum:0, profitSum:0 },
+    won:    { count:0, riskSum:0, profitSum:0, hostPaysSum:0 },
+    lost:   { count:0, riskSum:0, profitSum:0, hostKeepsSum:0 },
+    push:   { count:0, riskSum:0, profitSum:0 },
+    void:   { count:0, riskSum:0, profitSum:0 }
+  };
+
+  var mismatches = [];
+  for (var i = 0; i < hostBets.length; i++) {
+    var t = hostBets[i];
+    if (!t || !t.id) continue;
+    var risk   = parseFloat(t.riskAmount)      || 0;
+    var profit = parseFloat(t.potentialProfit) || 0;
+    var st     = _status(t);
+    var bucket = byStatus[st] || (byStatus[st] = { count:0, riskSum:0, profitSum:0 });
+    bucket.count++;
+    bucket.riskSum   += risk;
+    bucket.profitSum += profit;
+    if (st === 'won')  bucket.hostPaysSum  = (bucket.hostPaysSum  || 0) + profit;
+    if (st === 'lost') bucket.hostKeepsSum = (bucket.hostKeepsSum || 0) + risk;
+
+    var pb = pbById[t.id];
+    if (!pb) {
+      mismatches.push({ ticketId: t.id, issue: 'missing_from_pb_tickets' });
+      continue;
+    }
+    var pbRisk   = parseFloat(pb.riskAmount)      || 0;
+    var pbProfit = parseFloat(pb.potentialProfit) || 0;
+    if (_status(pb) !== st) {
+      mismatches.push({ ticketId: t.id, issue: 'status_drift:host=' + st + '_pb=' + _status(pb) });
+    }
+    if (Math.abs(pbRisk - risk) > 0.01) {
+      mismatches.push({ ticketId: t.id, issue: 'risk_drift:host=' + risk + '_pb=' + pbRisk });
+    }
+    if (Math.abs(pbProfit - profit) > 0.01) {
+      mismatches.push({ ticketId: t.id, issue: 'profit_drift:host=' + profit + '_pb=' + pbProfit });
+    }
+  }
+
+  for (var j = 0; j < pbTickets.length; j++) {
+    var p = pbTickets[j];
+    if (!p || !p.id) continue;
+    if (!hostById[p.id]) mismatches.push({ ticketId: p.id, issue: 'missing_from_host_mirror' });
+  }
+
+  var auditHandle  = _round(byStatus.active.riskSum + byStatus.won.riskSum +
+                            byStatus.lost.riskSum  + byStatus.push.riskSum);
+  var auditAtRisk  = _round(byStatus.active.profitSum);
+  var auditProfit  = _round((byStatus.lost.hostKeepsSum || 0) -
+                            (byStatus.won.hostPaysSum   || 0));
+  var auditSettledHandle = _round(byStatus.won.riskSum + byStatus.lost.riskSum + byStatus.push.riskSum);
+  var auditHoldPct = auditSettledHandle > 0 ? _round(auditProfit / auditSettledHandle * 100) : null;
+
+  var live = (typeof calcHostStats === 'function') ? calcHostStats() : null;
+  var deltas = live ? {
+    handle:        _round(auditHandle  - live.handle),
+    atRisk:        _round(auditAtRisk  - live.atRisk),
+    hostProfit:    _round(auditProfit  - live.hostProfit),
+    settledHandle: _round(auditSettledHandle - live.settledHandle)
+  } : null;
+
+  console.log('[host stats audit]');
+  console.log('  hostActiveBets:        ' + hostBets.length);
+  console.log('  pb-tickets:            ' + pbTickets.length);
+  console.log('  by status:');
+  Object.keys(byStatus).forEach(function(k){
+    var b = byStatus[k];
+    if (b.count === 0) return;
+    console.log('    ' + k +
+                ' count=' + b.count +
+                ' risk=$' + _round(b.riskSum).toFixed(2) +
+                ' profit=$' + _round(b.profitSum).toFixed(2));
+  });
+  console.log('  derived (audit math):');
+  console.log('    Handle:            $' + auditHandle.toFixed(2));
+  console.log('    Active At Risk:    $' + auditAtRisk.toFixed(2));
+  console.log('    Host Profit:       $' + auditProfit.toFixed(2));
+  console.log('    Settled Handle:    $' + auditSettledHandle.toFixed(2));
+  console.log('    Hold %:            ' + (auditHoldPct != null ? auditHoldPct.toFixed(2) + '%' : '—'));
+  if (live) {
+    console.log('  live (calcHostStats):');
+    console.log('    Handle:            $' + live.handle.toFixed(2));
+    console.log('    Active At Risk:    $' + live.atRisk.toFixed(2));
+    console.log('    Host Profit:       $' + live.hostProfit.toFixed(2));
+    console.log('    Settled Handle:    $' + live.settledHandle.toFixed(2));
+    console.log('    Hold %:            ' + (live.holdPct != null ? live.holdPct.toFixed(2) + '%' : '—'));
+    var anyDrift = ['handle','atRisk','hostProfit','settledHandle'].some(function(k){ return Math.abs(deltas[k]) > 0.01; });
+    if (anyDrift) {
+      console.warn('  AUDIT VS LIVE DRIFT:');
+      console.warn('    handleDelta:        ' + deltas.handle);
+      console.warn('    atRiskDelta:        ' + deltas.atRisk);
+      console.warn('    hostProfitDelta:    ' + deltas.hostProfit);
+      console.warn('    settledHandleDelta: ' + deltas.settledHandle);
+    }
+  }
+
+  if (mismatches.length) {
+    console.warn('[host stats audit] ' + mismatches.length + ' mismatch(es) vs pb-tickets:');
+    mismatches.forEach(function(m){ console.warn('  ' + m.ticketId + ' -> ' + m.issue); });
+  } else {
+    console.log('[host stats audit] no host vs pb-tickets drift');
+  }
+
+  return {
+    hostBetsCount:  hostBets.length,
+    pbTicketsCount: pbTickets.length,
+    byStatus:       byStatus,
+    derived: {
+      handle:        auditHandle,
+      atRisk:        auditAtRisk,
+      hostProfit:    auditProfit,
+      settledHandle: auditSettledHandle,
+      holdPct:       auditHoldPct
+    },
+    live:           live,
+    deltas:         deltas,
+    mismatches:     mismatches
+  };
+}
+window.runHostStatsAudit = runHostStatsAudit;
+
+// ===========================================================================
+// getLiveCreditPosition() — READ-ONLY live credit positions per player
+// ---------------------------------------------------------------------------
+// Real-time "Players owe you / You owe players" from hostActiveBets,
+// independent of any weekly settlement record. Same sign convention as
+// runWeeklySettlement (host-POV):
+//
+//   playerOwesHost = max(0, playerLost - playerWon)
+//   hostOwesPlayer = max(0, playerWon - playerLost)
+//
+// Read-only: no localStorage writes. Optional weekStart/weekEnd args to
+// scope to a date window; default is ALL hostActiveBets.
+function getLiveCreditPosition(opts) {
+  opts = opts || {};
+  var ws = opts.weekStart ? new Date(opts.weekStart).getTime() : null;
+  var we = opts.weekEnd   ? new Date(opts.weekEnd).getTime()   : null;
+  function _round(n) { return Math.round((n || 0) * 100) / 100; }
+
+  var bets;
+  try { bets = JSON.parse(localStorage.getItem('hostActiveBets') || '[]'); }
+  catch (_e) { bets = []; }
+  if (!Array.isArray(bets)) bets = [];
+
+  var perPlayer = {};
+  for (var i = 0; i < bets.length; i++) {
+    var t = bets[i];
+    if (!t || !t.playerId) continue;
+    if (ws != null) {
+      var ts = new Date(t.placedAt).getTime();
+      if (isNaN(ts) || ts < ws || (we != null && ts >= we)) continue;
+    }
+    var pid = t.playerId;
+    if (!perPlayer[pid]) {
+      perPlayer[pid] = { playerId: pid, won: 0, lost: 0, weeklyNet: 0,
+                         playerOwesHost: 0, hostOwesPlayer: 0,
+                         activeRisk: 0, activeExposure: 0, tickets: 0 };
+    }
+    var p = perPlayer[pid];
+    p.tickets++;
+    var risk   = parseFloat(t.riskAmount)      || 0;
+    var profit = parseFloat(t.potentialProfit) || 0;
+    var st = String(t.status||'').toLowerCase();
+    if (st === 'won')                          p.won  += profit;
+    else if (st === 'lost')                    p.lost += risk;
+    else if (st === 'active' || st === 'open') { p.activeRisk += risk; p.activeExposure += profit; }
+  }
+
+  var rows = Object.keys(perPlayer).map(function(pid){
+    var p = perPlayer[pid];
+    p.won  = _round(p.won);
+    p.lost = _round(p.lost);
+    p.weeklyNet = _round(p.lost - p.won);
+    p.playerOwesHost = p.weeklyNet > 0 ? p.weeklyNet : 0;
+    p.hostOwesPlayer = p.weeklyNet < 0 ? _round(-p.weeklyNet) : 0;
+    p.activeRisk     = _round(p.activeRisk);
+    p.activeExposure = _round(p.activeExposure);
+    return p;
+  });
+
+  var totals = rows.reduce(function(acc, r){
+    acc.playerOwesHost += r.playerOwesHost;
+    acc.hostOwesPlayer += r.hostOwesPlayer;
+    acc.activeRisk     += r.activeRisk;
+    acc.activeExposure += r.activeExposure;
+    return acc;
+  }, { playerOwesHost:0, hostOwesPlayer:0, activeRisk:0, activeExposure:0 });
+  Object.keys(totals).forEach(function(k){ totals[k] = _round(totals[k]); });
+  totals.netPosition = _round(totals.playerOwesHost - totals.hostOwesPlayer);
+
+  console.log('[live credit position]');
+  console.log('  scope: ' + (ws != null ? (new Date(ws).toISOString() + ' -> ' + (we != null ? new Date(we).toISOString() : 'now')) : 'all hostActiveBets'));
+  console.log('  players:           ' + rows.length);
+  console.log('  Players owe you:   $' + totals.playerOwesHost.toFixed(2));
+  console.log('  You owe players:   $' + totals.hostOwesPlayer.toFixed(2));
+  console.log('  Net position:      ' + (totals.netPosition >= 0 ? '+$' : '-$') + Math.abs(totals.netPosition).toFixed(2));
+  console.log('  Active risk:       $' + totals.activeRisk.toFixed(2));
+  console.log('  Active exposure:   $' + totals.activeExposure.toFixed(2));
+  if (typeof console.table === 'function' && rows.length) {
+    console.table(rows.map(function(r){
+      return {
+        playerId:       r.playerId,
+        tickets:        r.tickets,
+        won:            r.won,
+        lost:           r.lost,
+        playerOwesHost: r.playerOwesHost,
+        hostOwesPlayer: r.hostOwesPlayer,
+        activeRisk:     r.activeRisk,
+        activeExposure: r.activeExposure
+      };
+    }));
+  }
+
+  return { rows: rows, totals: totals };
+}
+window.getLiveCreditPosition = getLiveCreditPosition;
+
 function loadHostActiveBets(){
   var raw=JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
   // Deduplicate by ticket id
