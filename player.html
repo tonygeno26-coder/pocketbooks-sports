@@ -755,6 +755,97 @@ function saveTickets(){
   } catch(_e) {}
 }
 
+// ===========================================================================
+// One-shot recovery: pb-tickets <- hostActiveBets
+// ---------------------------------------------------------------------------
+// Some browser origins (preview deploys, or post-clear-all sessions) ended up
+// with an empty pb-tickets while hostActiveBets retained the player's tickets.
+// confirmBet writes the SAME ticket object to both, and the auto-grade mirror
+// only Object.assign()s additional fields onto host records — so host entries
+// carry the full player-ticket schema. We can safely restore.
+//
+// Rules:
+//   - Migrate only records that look like player tickets (object with id and
+//     selections[] or riskAmount).
+//   - Skip any record whose id already exists in pb-tickets (de-dup).
+//   - Never modify hostActiveBets. It stays as host mirror.
+//   - Never touch balance writes directly; calcAvailableBalance derives from
+//     the restored pb-tickets in the normal way.
+//   - Idempotent: re-running does nothing once pb-tickets has the entries.
+//   - Marks each migrated ticket with _recoveredFrom='hostActiveBets' and
+//     _recoveredAt timestamp for forensic visibility. Never used for logic.
+function _recoverTicketsFromHostMirror() {
+  try {
+    var hostRaw = localStorage.getItem('hostActiveBets');
+    if (!hostRaw) return { recovered: 0, reason: 'no_host_mirror' };
+    var hostBets;
+    try { hostBets = JSON.parse(hostRaw); } catch(_e){ return { recovered: 0, reason: 'host_mirror_parse_error' }; }
+    if (!Array.isArray(hostBets) || !hostBets.length) return { recovered: 0, reason: 'host_mirror_empty' };
+
+    // Current player tickets (de-dup source).
+    var current = Array.isArray(betTickets) ? betTickets.slice() : [];
+    var existingIds = {};
+    for (var i = 0; i < current.length; i++) {
+      if (current[i] && current[i].id) existingIds[current[i].id] = true;
+    }
+
+    var added = 0;
+    var skippedNotTicket = 0;
+    var skippedDuplicate = 0;
+    var nowIso = new Date().toISOString();
+    for (var j = 0; j < hostBets.length; j++) {
+      var h = hostBets[j];
+      if (!h || typeof h !== 'object' || !h.id) { skippedNotTicket++; continue; }
+      var looksLikeTicket = (Array.isArray(h.selections) && h.selections.length > 0) ||
+                            (h.riskAmount != null);
+      if (!looksLikeTicket) { skippedNotTicket++; continue; }
+      if (existingIds[h.id]) { skippedDuplicate++; continue; }
+      // Shallow clone so future mutations to host or player records don't alias.
+      var copy = {};
+      for (var k in h) if (Object.prototype.hasOwnProperty.call(h, k)) copy[k] = h[k];
+      copy._recoveredFrom = 'hostActiveBets';
+      copy._recoveredAt   = nowIso;
+      current.push(copy);
+      existingIds[h.id] = true;
+      added++;
+    }
+
+    if (!added) return { recovered: 0, reason: 'nothing_new', skippedNotTicket: skippedNotTicket, skippedDuplicate: skippedDuplicate };
+
+    // Commit through the existing write path. saveTickets() handles
+    // pb-tickets + pb-tickets-version bump. Update the global in-memory
+    // mirror first so saveTickets persists the merged set.
+    betTickets = current;
+    try { saveTickets(); } catch(_e) {
+      // Fallback if saveTickets isn't ready yet (script-load ordering).
+      try {
+        localStorage.setItem('pb-tickets', JSON.stringify(betTickets));
+        var _vv = parseInt(localStorage.getItem('pb-tickets-version')||'0',10)||0;
+        localStorage.setItem('pb-tickets-version', String(_vv + 1));
+      } catch(_e2){}
+    }
+    return {
+      recovered:        added,
+      reason:           'merged_into_pb_tickets',
+      skippedNotTicket: skippedNotTicket,
+      skippedDuplicate: skippedDuplicate,
+      pbTicketsTotal:   betTickets.length,
+      hostMirrorTotal:  hostBets.length
+    };
+  } catch(err) {
+    return { recovered: 0, reason: 'exception', error: String(err && err.message || err) };
+  }
+}
+window._recoverTicketsFromHostMirror = _recoverTicketsFromHostMirror;
+// Run immediately at script load — BEFORE any rendering, grading, or balance
+// derivation — so the rest of player.html sees the canonical merged set.
+try {
+  var _recoveryResult = _recoverTicketsFromHostMirror();
+  console.log('[ticket recovery] ' + JSON.stringify(_recoveryResult));
+} catch(_e) {
+  console.warn('[ticket recovery] failed:', _e && _e.message || _e);
+}
+
 // ═══ CENTRALIZED BALANCE ENGINE ══════════════════════════════════════════════
 // availableBalance = startingBalance - openRisk + settledWinnings + refunds
 // Source of truth: localStorage['pb-balance-start'] + localStorage['pb-tickets']
