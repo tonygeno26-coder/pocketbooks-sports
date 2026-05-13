@@ -5107,6 +5107,26 @@ function renderMyBets() {
       '  settledHidden:       ' + hiddenSettledCount + ' (older than 12h, still in pb-tickets, visible in Results)\n' +
       '  ttlHours:            12');
   } catch(_e){}
+  // [render source] — explicit attribution so we never again wonder
+  // 'is My Bets rendering from somewhere other than pb-tickets?'.
+  // renderMyBets ALWAYS reloads betTickets from pb-tickets at the top of
+  // its body; the active/settled arrays below are derived from that
+  // reload. Any ticket appearing in the UI MUST have an id that exists
+  // in pb-tickets at this moment. No mock seeder, no in-memory fixture,
+  // no host-mirror direct rendering.
+  try {
+    function _firstId(arr) { return (Array.isArray(arr) && arr[0] && arr[0].id) ? String(arr[0].id) : '—'; }
+    console.log('[render source]\n' +
+      '  section:        active\n' +
+      '  sourceName:     pb-tickets (via betTickets, reloaded in renderMyBets body)\n' +
+      '  ticketCount:    ' + active.length + '\n' +
+      '  firstTicketId:  ' + _firstId(active));
+    console.log('[render source]\n' +
+      '  section:        settled\n' +
+      '  sourceName:     pb-tickets (via betTickets, reloaded in renderMyBets body)\n' +
+      '  ticketCount:    ' + settled.length + '\n' +
+      '  firstTicketId:  ' + _firstId(settled));
+  } catch(_e){}
   // TEMP DEBUG — dump real persisted schema for one active + one settled
   // ticket so we can see EXACTLY what confirmBet/saveTickets writes,
   // independent of any defensive rendering helpers. Strip after the
@@ -5829,27 +5849,62 @@ function _resGetTickets(){
   try { return JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(_e){ return []; }
 }
 // Seed mock tickets for current week if no tickets exist (acceptance criterion).
+// REMOVED: _resSeedMockIfEmpty used to write 10 MOCK-* tickets directly
+// into pb-tickets when the store was empty, contaminating the player's
+// canonical ticket source with demo data. Side effects observed:
+//   - My Bets rendered MOCK-W6 as an active 'Celtics +6.5' card even
+//     though the ticket existed nowhere in any auditable store after a
+//     subsequent storage event.
+//   - calcAvailableBalance subtracted the MOCK-* lost-status risk and
+//     added the won-status profit — affecting the real available
+//     balance display.
+//   - dumpTicketById / runBalanceReconciliation / audit panel reported
+//     'not found' because by the time we inspected, another path had
+//     cleared the key.
+//
+// Kept as a no-op so the existing call site (renderPlayerResults) does
+// not break. The Results page will simply show empty / zero-state when
+// pb-tickets is empty, which is the correct behavior.
 function _resSeedMockIfEmpty(){
-  var existing = _resGetTickets();
-  if (existing.length) return;
-  var now = new Date();
-  var ws  = _resSundayMidnight(now);
-  function dayTs(dayIdx, hour){ var d = new Date(ws); d.setDate(d.getDate()+dayIdx); d.setHours(hour||14,0,0,0); return d.toISOString(); }
-  var mock = [
-    { id:'MOCK-W1', type:'Single',  status:'won',    placedAt:dayTs(1,13), riskAmount:50,  potentialProfit:45,  estimatedPayout:95,  odds:'-110', selections:[{label:'Lakers ML'}] },
-    { id:'MOCK-W2', type:'Single',  status:'lost',   placedAt:dayTs(2,19), riskAmount:75,  potentialProfit:68,  estimatedPayout:143, odds:'-110', selections:[{label:'Yankees -1.5'}] },
-    { id:'MOCK-W3', type:'Parlay',  status:'won',    placedAt:dayTs(3,12), riskAmount:25,  potentialProfit:165, estimatedPayout:190, odds:'+660', selections:[{label:'Leg A'},{label:'Leg B'},{label:'Leg C'}] },
-    { id:'MOCK-W4', type:'Single',  status:'lost',   placedAt:dayTs(4,21), riskAmount:100, potentialProfit:91,  estimatedPayout:191, odds:'-110', selections:[{label:'Cowboys -3.5'}] },
-    { id:'MOCK-W5', type:'Single',  status:'won',    placedAt:dayTs(5,17), riskAmount:60,  potentialProfit:54,  estimatedPayout:114, odds:'-110', selections:[{label:'Over 8.5'}] },
-    { id:'MOCK-W6', type:'Single',  status:'active', placedAt:dayTs(6,11), riskAmount:40,  potentialProfit:36,  estimatedPayout:76,  odds:'-110', selections:[{label:'Celtics +6.5'}] },
-    { id:'MOCK-W7', type:'Single',  status:'canceled',placedAt:dayTs(2,15), riskAmount:30,  potentialProfit:27,  estimatedPayout:57,  odds:'-110', selections:[{label:'Voided market'}] },
-    { id:'MOCK-P1', type:'Single',  status:'won',    placedAt:(function(){var d=new Date(ws);d.setDate(d.getDate()-7+2);d.setHours(14);return d.toISOString();})(), riskAmount:80, potentialProfit:73, estimatedPayout:153, odds:'-110', selections:[{label:'Bucks ML'}] },
-    { id:'MOCK-P2', type:'Single',  status:'lost',   placedAt:(function(){var d=new Date(ws);d.setDate(d.getDate()-7+5);d.setHours(20);return d.toISOString();})(), riskAmount:120,potentialProfit:109,estimatedPayout:229, odds:'-110', selections:[{label:'Eagles -7'}] },
-    { id:'MOCK-P3', type:'Parlay',  status:'won',    placedAt:(function(){var d=new Date(ws);d.setDate(d.getDate()-7+6);d.setHours(18);return d.toISOString();})(), riskAmount:25, potentialProfit:240,estimatedPayout:265, odds:'+960', selections:[{label:'L1'},{label:'L2'},{label:'L3'},{label:'L4'}] }
-  ];
-  try { localStorage.setItem('pb-tickets', JSON.stringify(mock)); } catch(_e){}
-  betTickets = mock;
+  // intentionally empty — see comment above. Do NOT write demo tickets
+  // to localStorage; My Bets must be 100% driven by canonical pb-tickets.
 }
+
+// One-shot cleanup at script load: purge any MOCK-* tickets that a prior
+// run of the seeder already wrote to pb-tickets. Idempotent. Read-only
+// against any non-MOCK ticket.
+function _purgeMockTickets(){
+  try {
+    var raw = localStorage.getItem('pb-tickets');
+    if (raw == null) return { purged: 0, reason: 'pb-tickets missing' };
+    var arr;
+    try { arr = JSON.parse(raw); } catch(_e){ return { purged: 0, reason: 'pb-tickets parse error' }; }
+    if (!Array.isArray(arr) || !arr.length) return { purged: 0, reason: 'pb-tickets empty' };
+    var before = arr.length;
+    var cleaned = arr.filter(function(t){
+      if (!t || !t.id) return true;                // keep malformed but ID-less rows for the next layer
+      return String(t.id).indexOf('MOCK-') !== 0;   // drop only MOCK-* ids
+    });
+    var purged = before - cleaned.length;
+    if (purged > 0) {
+      localStorage.setItem('pb-tickets', JSON.stringify(cleaned));
+      try {
+        var _v = parseInt(localStorage.getItem('pb-tickets-version')||'0',10)||0;
+        localStorage.setItem('pb-tickets-version', String(_v + 1));
+      } catch(_e){}
+      try { betTickets = cleaned; } catch(_e){}
+      console.log('[mock purge] removed ' + purged + ' MOCK-* ticket(s) from pb-tickets');
+    }
+    return { purged: purged, before: before, after: cleaned.length };
+  } catch(err) {
+    return { purged: 0, reason: 'exception', error: String(err && err.message || err) };
+  }
+}
+window._purgeMockTickets = _purgeMockTickets;
+// Run at script load. Anything _recoverTicketsFromHostMirror restores
+// later runs AFTER this, but that recovery only pulls from hostActiveBets,
+// which has never carried MOCK-* tickets.
+try { _purgeMockTickets(); } catch(_e){}
 function _resWeekAggregates(weekStart, weekEnd){
   var bets = _resGetTickets();
   var wsT = weekStart.getTime(), weT = weekEnd.getTime();
