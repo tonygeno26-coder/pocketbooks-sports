@@ -1102,23 +1102,12 @@ function teamAvatar(name) {
 // flagged but cards exist, the first 2 are tagged _mockLive=true and
 // rendered as live placeholders so the tab demos correctly until
 // SportsDataIO live data is wired (existing odds-card layout reused).
-// ── Build fingerprint (TEMP DEBUG) ────────────────────────────────────────
-// Prints on every page load so we can confirm in DevTools Console which
-// bundle is actually running. If you don't see this line, the browser is
-// serving a stale or different deployment.
-try { console.log('[PBS build] player.html commit=f48351c+local-debug — sportsbook routes MLB to /api/odds/mlb'); } catch(_e){}
-
 async function loadGames(sport, opts){
-  // ── TEMP DEBUG: prove loadGames is being called and with what args ─────
-  try { console.log('[loadGames CALLED] sport=', sport, 'opts=', opts); } catch(_e){}
   opts = opts || {};
   const _targetId = opts.targetId || 'games-list';
   const _liveOnly = !!opts.liveOnly;
   const el=document.getElementById(_targetId);
-  if (!el) {
-    try { console.warn('[loadGames EARLY-RETURN] reason=target_missing targetId=' + _targetId); } catch(_e){}
-    return;
-  }
+  if (!el) return;
   el.innerHTML='<div class="empty">Loading...</div>';
   try{
     // Normalize sport key. Accept 'mlb' or 'baseball_mlb' — both map to the
@@ -1133,19 +1122,15 @@ async function loadGames(sport, opts){
     // /api/odds/mlb. Never /api/odds/baseball_mlb, never api.the-odds-api.com
     // directly, never the legacy Railway path for MLB.
     const _url = _isMlb ? '/api/odds/mlb' : ('/api/odds/' + _sport);
-    // Per-request log Tony requested. Emit on MLB sportsbook path only.
+    // MLB sportsbook fetch marker (kept post-cleanup — useful operational
+    // signal that loadGames is wired to the local MLB proxy).
     if (_isMlb && !_liveOnly) {
-      console.log('[sportsbook fetch] url=/api/odds/mlb sport=baseball_mlb');
+      console.log('[sportsbook fetch] sport=baseball_mlb url=/api/odds/mlb');
     }
-    // Always log the actual url immediately before fetch so we can prove
-    // exactly what hits the network, for every sport, every call.
-    console.log('[sportsbook fetch] url=' + _url);
     console.log('[PBS fetch start] sport:', _sport, 'url:', _url, 'live:', _liveOnly);
     let _res;
     try {
-      console.log('[sportsbook fetch] about-to-fetch ' + _url);
       _res = await fetch(_url);
-      console.log('[sportsbook fetch] fetch-returned status=' + _res.status + ' url=' + _url);
     } catch(fetchErr) {
       console.error('[sportsbook fetch failed] network error url=' + _url + ' err=' + fetchErr.message);
       throw new Error('Backend unreachable: '+fetchErr.message);
@@ -3486,30 +3471,8 @@ function renderMyBets() {
     if (!s || s === 'active' || s === 'open') return 'active';
     return s;
   }
-  var displayStatuses = betTickets.map(function(t){ return _safeDisplayStatus(t); });
   var active   = betTickets.filter(function(t){ var ds = _safeDisplayStatus(t); return ds === 'active' || ds === 'open'; });
   var settled  = betTickets.filter(function(t){ var ds = _safeDisplayStatus(t); return ds !== 'active' && ds !== 'open'; });
-  console.log('[renderMyBets]\n' +
-    '  totalTickets: '    + betTickets.length + '\n' +
-    '  active: '          + active.length + '\n' +
-    '  settled: '         + settled.length + '\n' +
-    '  displayStatuses: ' + JSON.stringify(displayStatuses));
-  // TEMP DEBUG — first ticket field dump (remove once My Bets regression is closed)
-  if (betTickets.length) {
-    var _st = betTickets[0];
-    var _hfs = false;
-    try { _hfs = (typeof _hasFinalScore === 'function') ? _hasFinalScore(_st) : false; } catch(_e){}
-    console.log('[renderMyBets sample ticket]\n' +
-      '  ticketId: '           + (_st && _st.id || '-') + '\n' +
-      '  status: '             + (_st && _st.status || '-') + '\n' +
-      '  displayStatus: '      + _safeDisplayStatus(_st) + '\n' +
-      '  gradedAt: '           + (_st && _st.gradedAt || '-') + '\n' +
-      '  gradingSource: '      + (_st && _st.gradingSource || '-') + '\n' +
-      '  hasFinalScore: '      + (_hfs ? 'yes' : 'no') + '\n' +
-      '  lastSeenGameStatus: ' + (_st && _st.lastSeenGameStatus || '-') + '\n' +
-      '  riskAmount: '         + (_st && _st.riskAmount != null ? _st.riskAmount : '-') + '\n' +
-      '  selectionsCount: '    + (_st && Array.isArray(_st.selections) ? _st.selections.length : 0));
-  }
   var html =
     '<div style="padding:16px 14px 8px;display:flex;justify-content:space-between;align-items:center">' +
       '<span style="font-size:1rem;font-weight:900;color:#111">My Bets</span>' +
@@ -3544,7 +3507,6 @@ function renderMyBets() {
   el.innerHTML = html;
   el.style.background = '#f5f5f5';
   el.style.minHeight = '100vh';
-  console.log('[renderMyBets] DOM updated — innerHTML length=', el.innerHTML.length);
   } catch (err) {
     // CRITICAL: never let a thrown error leave My Bets blank without a trace.
     console.error('[renderMyBets] FATAL — render aborted, tab will appear blank:', err);
