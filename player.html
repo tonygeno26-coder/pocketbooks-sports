@@ -4946,6 +4946,60 @@ function renderMyBets() {
                   'soccer':'Soccer','tennis':'Tennis','golf':'Golf' };
       return map[v.toLowerCase()] || v.toUpperCase();
     }
+    // Derive WHICH team the user picked (so we can show that team's logo
+    // next to the pick text). Strategy: scan pick text against homeTeam
+    // and awayTeam (full name OR last-word) and return whichever is
+    // mentioned. Falls back to homeTeam, awayTeam, or s.team when the pick
+    // is non-team-specific (Over/Under). Returns null when nothing useful
+    // is available so the renderer can omit the avatar.
+    function _legPickedTeamName(s) {
+      if (!s) return null;
+      var pick = String(s.pick || '').toLowerCase().trim();
+      var home = String(s.homeTeam || '').trim();
+      var away = String(s.awayTeam || '').trim();
+      function _mentions(teamName) {
+        if (!teamName) return false;
+        var lower = teamName.toLowerCase();
+        if (pick.indexOf(lower) !== -1) return true;
+        var last = lower.split(' ').slice(-1)[0];
+        return !!(last && last.length >= 3 && pick.indexOf(last) !== -1);
+      }
+      if (pick) {
+        if (_mentions(home)) return home;
+        if (_mentions(away)) return away;
+      }
+      // Over/Under / total etc — no team-specific avatar to show.
+      if (pick && (pick.indexOf('over') !== -1 || pick.indexOf('under') !== -1 ||
+                   pick.indexOf('o ') === 0 || pick.indexOf('u ') === 0)) {
+        return null;
+      }
+      // Falls: explicit team field, then either side of the matchup.
+      return s.team || home || away || null;
+    }
+    // Defensive wrapper around the existing teamAvatar() so a missing or
+    // bad name never throws. teamAvatar(name) does name.split(' ').slice(-1)
+    // which crashes on null/empty.
+    function _safeTeamAvatar(name, size) {
+      var px = (typeof size === 'number' && size > 0) ? size : 24;
+      var clean = (name != null) ? String(name).trim() : '';
+      if (!clean) return '';
+      var inner;
+      try {
+        inner = teamAvatar(clean);
+      } catch (_e) {
+        // Defensive: any unexpected throw inside teamAvatar still produces
+        // a renderable badge from the team's initials.
+        var abbr = clean.split(' ').slice(-1)[0].slice(0,3).toUpperCase();
+        inner = '<div class="mc-jersey">' + abbr + '</div>';
+      }
+      // Wrap in a sized container so the existing .mc-jersey styling is
+      // honored but the card can constrain it. Inline-block so flex rows
+      // align cleanly with the pick text.
+      return '<span style="display:inline-flex;align-items:center;justify-content:center;' +
+             'width:'+px+'px;height:'+px+'px;flex:0 0 '+px+'px;margin-right:8px;' +
+             'border-radius:50%;overflow:hidden;background:#f0f0f0;font-size:0.62rem;' +
+             'font-weight:800;color:#555">' + inner + '</span>';
+    }
     var picks = rawLegs.slice(0, 3).map(function(s){
       var pickText    = _legPickText(s);
       var matchupText = _legMatchupText(s);
@@ -4953,16 +5007,31 @@ function renderMyBets() {
       var marketText  = _legMarketText(s);
       var oddsBlock   = oddsText   ? ' <span style="color:#0064c8;font-size:0.7rem">'+oddsText+'</span>' : '';
       var marketBlock = marketText ? ' <span style="color:#aaa;font-size:0.68rem">· '+marketText+'</span>' : '';
-      // Show the matchup as a quieter second line when it's distinct from
-      // the pick text. Avoids redundancy like 'Cleveland Guardians ML'
-      // duplicated as a subtitle.
+      // Selected-team logo. Falls back to initials inside _safeTeamAvatar,
+      // and to '' when no team can be derived (e.g. Over/Under picks).
+      var pickedTeam  = _legPickedTeamName(s);
+      var pickAvatar  = _safeTeamAvatar(pickedTeam, 26);
+      // Matchup row — quieter second line when the matchup string is
+      // distinct from the pick text. When we have BOTH homeTeam and
+      // awayTeam we show a small pair of avatars left of the matchup text.
+      var awayAvatar = '';
+      var homeAvatar = '';
+      if (s && s.awayTeam && s.homeTeam) {
+        awayAvatar = _safeTeamAvatar(s.awayTeam, 16);
+        homeAvatar = _safeTeamAvatar(s.homeTeam, 16);
+      }
       var matchupBlock = (matchupText && matchupText.toLowerCase() !== pickText.toLowerCase())
-        ? '<div style="font-size:0.66rem;color:#888;margin-top:2px">' + matchupText + '</div>'
+        ? '<div style="font-size:0.66rem;color:#888;margin-top:4px;display:flex;align-items:center;gap:2px">' +
+            awayAvatar + homeAvatar +
+            '<span style="margin-left:'+((awayAvatar||homeAvatar)?'4px':'0')+'">' + matchupText + '</span>' +
+          '</div>'
         : '';
-      return '<div style="font-size:0.78rem;color:#333;padding:4px 0;border-bottom:1px solid #f0f0f0">' +
-        '<span style="font-weight:800">'+pickText+'</span>' +
-        oddsBlock + marketBlock +
-        matchupBlock +
+      return '<div style="font-size:0.78rem;color:#333;padding:6px 0;border-bottom:1px solid #f0f0f0;display:flex;align-items:flex-start">' +
+        pickAvatar +
+        '<div style="flex:1;min-width:0">' +
+          '<div><span style="font-weight:800">'+pickText+'</span>' + oddsBlock + marketBlock + '</div>' +
+          matchupBlock +
+        '</div>' +
         '</div>';
     }).join('');
     if (!picks) {
