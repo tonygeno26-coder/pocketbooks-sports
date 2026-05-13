@@ -3068,7 +3068,12 @@ function _gradeTicket(ticket, resultsMap, normalizedGames) {
         ));
       return null;
     }
-    var legResult = _gradeSingleLeg(sel, gameResult);
+    // Normalize team aliases on BOTH sides before handing to the grading
+    // math. _gradeSingleLeg is untouched; we only canonicalize the inputs
+    // so 'Cleveland ML' / 'Guardians ML' / 'CLE ML' / 'Los Angeles Angels
+    // ML' / 'LAA ML' all resolve identically against the same final game.
+    var prepared = _prepareGradingInputs(sel, gameResult);
+    var legResult = _gradeSingleLeg(prepared.sel, prepared.game);
     if (!legResult) {
       console.log('[active ticket final check]\n' +
         '  ticketId:     ' + (ticket.id || '?') + '\n' +
@@ -3142,17 +3147,17 @@ var MLB_TEAM_ALIASES = {
   CHC: ['chicago cubs','cubs','chc'],
   CWS: ['chicago white sox','white sox','cws','chw'],
   CHW: ['chicago white sox','white sox','cws','chw'],
-  SF:  ['san francisco giants','sf giants','giants','sf','sfg'],
-  SFG: ['san francisco giants','sf giants','giants','sf','sfg'],
-  SD:  ['san diego padres','sd padres','padres','sd','sdp'],
-  SDP: ['san diego padres','sd padres','padres','sd','sdp'],
-  TB:  ['tampa bay rays','tampa rays','rays','tb','tbr'],
-  TBR: ['tampa bay rays','tampa rays','rays','tb','tbr'],
-  KC:  ['kansas city royals','kc royals','royals','kc','kcr'],
-  KCR: ['kansas city royals','kc royals','royals','kc','kcr'],
+  SF:  ['san francisco giants','san francisco','sf giants','giants','sf','sfg'],
+  SFG: ['san francisco giants','san francisco','sf giants','giants','sf','sfg'],
+  SD:  ['san diego padres','san diego','sd padres','padres','sd','sdp'],
+  SDP: ['san diego padres','san diego','sd padres','padres','sd','sdp'],
+  TB:  ['tampa bay rays','tampa bay','tampa rays','rays','tb','tbr'],
+  TBR: ['tampa bay rays','tampa bay','tampa rays','rays','tb','tbr'],
+  KC:  ['kansas city royals','kansas city','kc royals','royals','kc','kcr'],
+  KCR: ['kansas city royals','kansas city','kc royals','royals','kc','kcr'],
   WSH: ['washington nationals','nationals','wsh','was'],
   WAS: ['washington nationals','nationals','wsh','was'],
-  STL: ['st. louis cardinals','st louis cardinals','cardinals','stl'],
+  STL: ['st. louis cardinals','st louis cardinals','st. louis','st louis','cardinals','stl'],
   OAK: ['oakland athletics','oakland as','athletics','as','oak','ath'],
   ATH: ['oakland athletics','oakland as','athletics','as','oak','ath'],
   ARI: ['arizona diamondbacks','diamondbacks','dbacks','d-backs','ari'],
@@ -3393,6 +3398,121 @@ function _findGameForSelection(sel, normalizedGames, resultsMap) {
   }
   return null;
 }
+
+// Canonicalize team identifiers within `pick` and within the game's
+// home/away fields to the same full names, so the substring matcher
+// inside _gradeSingleLeg (`pick.includes(winner)`) always has stable
+// inputs to compare.
+//
+// The grading math is NOT touched. We clone sel + gameResult, rewrite
+// only the fields _gradeSingleLeg reads, and return the clones.
+//
+// Rewrites performed (lowercased):
+//   1. pick: every token that resolves to a known TLA is replaced with
+//      that TLA's canonical full team name from MLB_TEAM_BY_TLA. So:
+//        'cleveland ml'           -> 'cleveland guardians ml'
+//        'guardians ml'           -> 'cleveland guardians ml'
+//        'cle ml'                 -> 'cleveland guardians ml'
+//        'la angels +1.5'         -> 'los angeles angels +1.5'
+//        'laa ml'                 -> 'los angeles angels ml'
+//   2. gameResult.home / gameResult.away: same TLA -> canonical full
+//      name expansion, using SDIO HomeTeam/AwayTeam codes as ground
+//      truth. Falls back to the raw value if no TLA is resolvable.
+function _canonicalizePickString(pickRaw) {
+  if (!pickRaw) return '';
+  var pick = String(pickRaw).toLowerCase();
+  // 1) Direct alias hit on the FULL pick (handles 'guardians ml',
+  //    'la angels +1.5', etc. without splitting). Scan known aliases
+  //    longest-first so 'los angeles angels' wins over 'angels'.
+  var aliasKeys = Object.keys(MLB_TEAM_ALIASES);
+  var allAliases = [];
+  for (var i = 0; i < aliasKeys.length; i++) {
+    var tla = aliasKeys[i];
+    var list = MLB_TEAM_ALIASES[tla] || [];
+    for (var j = 0; j < list.length; j++) allAliases.push({ alias:list[j], tla:tla });
+    // also include the canonical full name from MLB_TEAM_BY_TLA
+    if (MLB_TEAM_BY_TLA[tla]) {
+      allAliases.push({ alias: MLB_TEAM_BY_TLA[tla].toLowerCase(), tla:tla });
+    }
+  }
+  allAliases.sort(function(a,b){ return b.alias.length - a.alias.length; });
+  // Word-boundary substitution. Each alias matches when surrounded by
+  // start/end-of-string or non-letter chars. First match wins; we replace
+  // and stop so we don't double-substitute a phrase.
+  for (var k = 0; k < allAliases.length; k++) {
+    var a = allAliases[k];
+    if (!a.alias) continue;
+    var canonical = (MLB_TEAM_BY_TLA[a.tla] || a.alias).toLowerCase();
+    if (a.alias === canonical) continue; // no-op rewrite
+    // If the canonical full name is ALREADY present in the pick (e.g. user
+    // wrote 'St. Louis Cardinals ML'), skip — a shorter alias like
+    // 'cardinals' would otherwise produce 'st. louis st. louis cardinals'.
+    if (pick.indexOf(canonical) !== -1) continue;
+    var escaped = a.alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    var re = new RegExp('(^|[^a-z])' + escaped + '(?=$|[^a-z])', 'i');
+    if (re.test(pick)) {
+      pick = pick.replace(re, '$1' + canonical);
+      break;
+    }
+  }
+  return pick;
+}
+
+function _canonicalizeTeamString(rawName) {
+  if (!rawName) return '';
+  var tla = _tlaForName(rawName);
+  if (tla && MLB_TEAM_BY_TLA[tla]) return MLB_TEAM_BY_TLA[tla];
+  return String(rawName);
+}
+
+function _prepareGradingInputs(sel, gameResult) {
+  if (!sel || !gameResult) return { sel: sel, game: gameResult };
+  var pickIn  = String(sel.pick || '');
+  var pickOut = _canonicalizePickString(pickIn);
+  var raw     = gameResult._sdioRaw || {};
+  // Use SDIO TLA as ground truth for team name expansion when present.
+  var homeOut = (raw.HomeTeam && MLB_TEAM_BY_TLA[raw.HomeTeam.toUpperCase()])
+    ? MLB_TEAM_BY_TLA[raw.HomeTeam.toUpperCase()]
+    : _canonicalizeTeamString(gameResult.home);
+  var awayOut = (raw.AwayTeam && MLB_TEAM_BY_TLA[raw.AwayTeam.toUpperCase()])
+    ? MLB_TEAM_BY_TLA[raw.AwayTeam.toUpperCase()]
+    : _canonicalizeTeamString(gameResult.away);
+
+  // TEMP DEBUG — prove the rewrite is what we expect.
+  try {
+    var hs = gameResult.home_score;
+    var as = gameResult.away_score;
+    var winnerRaw = (hs != null && as != null)
+      ? (hs > as ? String(gameResult.home || '').toLowerCase()
+                 : (as > hs ? String(gameResult.away || '').toLowerCase() : 'push'))
+      : 'pending';
+    var winnerCanon = (hs != null && as != null)
+      ? (hs > as ? homeOut.toLowerCase()
+                 : (as > hs ? awayOut.toLowerCase() : 'push'))
+      : 'pending';
+    console.log('[grade normalize]\n' +
+      '  ticketSel:        ' + (sel.matchup || sel.game || '-') + '\n' +
+      '  originalPick:     ' + pickIn + '\n' +
+      '  normalizedPick:   ' + pickOut + '\n' +
+      '  winner:           ' + winnerRaw + '\n' +
+      '  normalizedWinner: ' + winnerCanon + '\n' +
+      '  gameHomeRaw:      ' + (gameResult.home || '-') + ' -> ' + homeOut + '\n' +
+      '  gameAwayRaw:      ' + (gameResult.away || '-') + ' -> ' + awayOut);
+  } catch(_e){}
+
+  // Clone shallowly; only override the fields _gradeSingleLeg reads.
+  var selOut = {};
+  for (var k in sel) if (Object.prototype.hasOwnProperty.call(sel,k)) selOut[k] = sel[k];
+  selOut.pick = pickOut;
+  var gameOut = {};
+  for (var k2 in gameResult) if (Object.prototype.hasOwnProperty.call(gameResult,k2)) gameOut[k2] = gameResult[k2];
+  gameOut.home = homeOut;
+  gameOut.away = awayOut;
+  return { sel: selOut, game: gameOut };
+}
+window._canonicalizePickString = _canonicalizePickString;
+window._canonicalizeTeamString = _canonicalizeTeamString;
+window._prepareGradingInputs   = _prepareGradingInputs;
 
 // Closest game on the slate for diagnostics. Used only by the failure log
 // so we can see which game the matcher "almost" hit.
