@@ -4057,6 +4057,256 @@ function runBalanceReconciliation() {
 }
 window.runBalanceReconciliation = runBalanceReconciliation;
 
+// ===========================================================================
+// Per-player balance audit (READ-ONLY)
+// ---------------------------------------------------------------------------
+// Verifies that tickets belonging to ONE player produce the right effect on:
+//   - that player's starting balance (pb-balance-start:<playerId> with
+//     fallback to global pb-balance-start, then _BASE_BALANCE)
+//   - host exposure for that player (sum of potentialProfit over active
+//     hostActiveBets where playerId matches)
+//   - host profit for that player (sum of +riskAmount for lost,
+//     -potentialProfit for won, 0 for push over settled tickets)
+//
+// Uses the SAME formulas as the running code so the audit can't disagree
+// by design.
+function runSinglePlayerBetAudit(playerId) {
+  function _parseStore(key) {
+    try { var raw = localStorage.getItem(key); if (raw == null) return null;
+          var v = JSON.parse(raw); return Array.isArray(v) ? v : null; }
+    catch (_e) { return null; }
+  }
+  function _round(n) { return Math.round((n || 0) * 100) / 100; }
+  function _effStatus(t) {
+    var s = String(t && t.status || '').toLowerCase().trim();
+    if (s === '' || s === 'active' || s === 'open') return 'active';
+    if (s === 'canceled' || s === 'cancelled' || s === 'voided' || s === 'deleted') return 'void';
+    if (typeof _isSettledTicket === 'function' && !_isSettledTicket(t)) return 'active';
+    if (s === 'won')                       return 'won';
+    if (s === 'lost')                      return 'lost';
+    if (s === 'push' || s === 'pushed')    return 'push';
+    return s;
+  }
+  function _startingFor(pid) {
+    var per = parseFloat(localStorage.getItem('pb-balance-start:' + pid));
+    if (!isNaN(per) && per > 0) return per;
+    var glb = parseFloat(localStorage.getItem('pb-balance-start'));
+    if (!isNaN(glb) && glb > 0) return glb;
+    return (typeof _BASE_BALANCE !== 'undefined') ? _BASE_BALANCE : 1000;
+  }
+  function _currentPlayerId() {
+    try {
+      var pl = JSON.parse(localStorage.getItem('pb-player') || 'null') || {};
+      return pl.id || pl.username || null;
+    } catch (_e) { return null; }
+  }
+
+  if (!playerId) {
+    console.warn('[player audit] missing playerId argument');
+    return { error: 'missing_playerId' };
+  }
+  var pbTickets      = _parseStore('pb-tickets')      || [];
+  var hostActiveBets = _parseStore('hostActiveBets')  || [];
+
+  var minePb   = pbTickets.filter(function(t){      return t && t.playerId === playerId; });
+  var mineHost = hostActiveBets.filter(function(t){ return t && t.playerId === playerId; });
+  var orphanPb = pbTickets.filter(function(t){      return t && t.id && t.playerId == null; });
+
+  var starting    = _round(_startingFor(playerId));
+  var activeRisk  = 0;
+  var settledWon  = 0;
+  var settledLost = 0;
+  var pushVoid    = 0;
+  var settledGains  = 0;
+  var settledLosses = 0;
+  var sports = {};
+  for (var i = 0; i < minePb.length; i++) {
+    var t = minePb[i];
+    var risk   = parseFloat(t.riskAmount)      || 0;
+    var profit = parseFloat(t.potentialProfit) || 0;
+    var eff    = _effStatus(t);
+    var sport  = (typeof _ticketSportKey === 'function') ? _ticketSportKey(t) : (t.sport || '');
+    if (sport) sports[sport] = (sports[sport] || 0) + 1;
+    switch (eff) {
+      case 'active': activeRisk    += risk;   break;
+      case 'won':    settledWon    += profit; settledGains  += profit; break;
+      case 'lost':   settledLost   += risk;   settledLosses += risk;   break;
+      case 'push':
+      case 'void':   pushVoid      += risk;   break;
+      default: break;
+    }
+  }
+  var balanceExpected = _round(starting - activeRisk - settledLosses + settledGains);
+
+  var currentPid = _currentPlayerId();
+  var balanceDisplayed = null;
+  if (currentPid === playerId && typeof calcAvailableBalance === 'function') {
+    try { balanceDisplayed = _round(calcAvailableBalance().available); } catch (_e) {}
+  }
+
+  var hostAtRiskFromPlayer = 0;
+  var hostPnlFromPlayer    = 0;
+  for (var j = 0; j < mineHost.length; j++) {
+    var h = mineHost[j];
+    var hRisk   = parseFloat(h.riskAmount)      || 0;
+    var hProfit = parseFloat(h.potentialProfit) || 0;
+    var hEff    = _effStatus(h);
+    if (hEff === 'active') hostAtRiskFromPlayer += hProfit;
+    else if (hEff === 'lost') hostPnlFromPlayer += hRisk;
+    else if (hEff === 'won')  hostPnlFromPlayer -= hProfit;
+  }
+
+  var issues = [];
+  if (balanceDisplayed != null && Math.abs(balanceExpected - balanceDisplayed) > 0.01) {
+    issues.push('balance_drift:expected=' + balanceExpected + '_displayed=' + balanceDisplayed);
+  }
+  if (minePb.length !== mineHost.length) {
+    issues.push('ticket_count_drift:pb=' + minePb.length + '_host=' + mineHost.length);
+  }
+  var hostIdsForPlayer = {};
+  mineHost.forEach(function(h){ if (h && h.id) hostIdsForPlayer[h.id] = true; });
+  var missingFromHost = minePb.filter(function(t){ return t.id && !hostIdsForPlayer[t.id]; }).map(function(t){ return t.id; });
+  if (missingFromHost.length) issues.push('missing_from_hostActiveBets:' + missingFromHost.join(','));
+  var pbIdsForPlayer = {};
+  minePb.forEach(function(t){ if (t && t.id) pbIdsForPlayer[t.id] = true; });
+  var hostOnlyForPlayer = mineHost.filter(function(h){ return h.id && !pbIdsForPlayer[h.id]; }).map(function(h){ return h.id; });
+  if (hostOnlyForPlayer.length) issues.push('host_only_no_pb:' + hostOnlyForPlayer.join(','));
+  if (orphanPb.length) issues.push('unowned_tickets_in_pb:' + orphanPb.length + ' (no playerId)');
+
+  var report = {
+    playerId:             playerId,
+    isCurrentPlayer:      currentPid === playerId,
+    startingBalance:      starting,
+    activeRisk:           _round(activeRisk),
+    settledWins:          _round(settledWon),
+    settledLosses:        _round(settledLost),
+    pushVoidRisk:         _round(pushVoid),
+    balanceExpected:      balanceExpected,
+    balanceDisplayed:     balanceDisplayed,
+    hostAtRiskFromPlayer: _round(hostAtRiskFromPlayer),
+    hostPnlFromPlayer:    _round(hostPnlFromPlayer),
+    ticketCount:          minePb.length,
+    hostTicketCount:      mineHost.length,
+    sports:               sports,
+    issues:               issues,
+    match:                issues.length === 0
+  };
+
+  console.log('[player audit] ' + playerId);
+  console.log('  startingBalance:       $' + report.startingBalance.toFixed(2));
+  console.log('  activeRisk:            $' + report.activeRisk.toFixed(2));
+  console.log('  settledWins (profit):  $' + report.settledWins.toFixed(2));
+  console.log('  settledLosses (risk):  $' + report.settledLosses.toFixed(2));
+  console.log('  pushVoidRisk:          $' + report.pushVoidRisk.toFixed(2));
+  console.log('  balanceExpected:       $' + report.balanceExpected.toFixed(2));
+  if (report.balanceDisplayed != null) {
+    console.log('  balanceDisplayed:      $' + report.balanceDisplayed.toFixed(2) + (report.isCurrentPlayer ? '' : ' (not current player)'));
+  } else {
+    console.log('  balanceDisplayed:      (not current player — cannot compare to live)');
+  }
+  console.log('  hostAtRiskFromPlayer:  $' + report.hostAtRiskFromPlayer.toFixed(2));
+  console.log('  hostPnlFromPlayer:     ' + (report.hostPnlFromPlayer >= 0 ? '+$' : '-$') + Math.abs(report.hostPnlFromPlayer).toFixed(2));
+  console.log('  ticketCount (pb):      ' + report.ticketCount);
+  console.log('  ticketCount (host):    ' + report.hostTicketCount);
+  console.log('  sports:                ' + (Object.keys(sports).length ? JSON.stringify(sports) : '(none)'));
+  if (issues.length) {
+    console.warn('  issues:');
+    issues.forEach(function(x){ console.warn('    - ' + x); });
+  } else {
+    console.log('  match:                 true');
+  }
+  return report;
+}
+window.runSinglePlayerBetAudit = runSinglePlayerBetAudit;
+
+// ===========================================================================
+// Multi-player rollup (READ-ONLY)
+// ---------------------------------------------------------------------------
+function runMultiPlayerBetAudit() {
+  function _parseStore(key) {
+    try { var raw = localStorage.getItem(key); if (raw == null) return null;
+          var v = JSON.parse(raw); return Array.isArray(v) ? v : null; }
+    catch (_e) { return null; }
+  }
+  var pbTickets      = _parseStore('pb-tickets')      || [];
+  var hostActiveBets = _parseStore('hostActiveBets')  || [];
+
+  var idCounts = {};
+  for (var i = 0; i < pbTickets.length; i++) {
+    var id = pbTickets[i] && pbTickets[i].id;
+    if (!id) continue;
+    idCounts[id] = (idCounts[id] || 0) + 1;
+  }
+  var duplicateIds = Object.keys(idCounts).filter(function(k){ return idCounts[k] > 1; });
+
+  var pidSet = {};
+  pbTickets.forEach(function(t){      if (t && t.playerId) pidSet[t.playerId] = true; });
+  hostActiveBets.forEach(function(t){ if (t && t.playerId) pidSet[t.playerId] = true; });
+  var pids = Object.keys(pidSet);
+
+  var unownedPb   = pbTickets.filter(function(t){ return t && !t.playerId; }).length;
+  var unownedHost = hostActiveBets.filter(function(t){ return t && !t.playerId; }).length;
+
+  console.log('[multi-player audit]');
+  console.log('  distinctPlayerIds:    ' + pids.length + ' (' + (pids.join(', ') || 'none') + ')');
+  console.log('  pbTicketsTotal:       ' + pbTickets.length);
+  console.log('  hostActiveBetsTotal:  ' + hostActiveBets.length);
+  console.log('  unowned pb (no pid):  ' + unownedPb);
+  console.log('  unowned host (no pid):' + unownedHost);
+  console.log('  duplicate ticket ids: ' + duplicateIds.length + (duplicateIds.length ? ' (' + duplicateIds.join(', ') + ')' : ''));
+
+  var rows = [];
+  pids.forEach(function(pid){
+    var r = runSinglePlayerBetAudit(pid);
+    rows.push({
+      playerId:         pid,
+      tickets:          r.ticketCount,
+      activeRisk:       r.activeRisk,
+      settledWon:       r.settledWins,
+      settledLost:      r.settledLosses,
+      balanceExpected:  r.balanceExpected,
+      balanceDisplayed: r.balanceDisplayed != null ? r.balanceDisplayed : '—',
+      hostExposure:     r.hostAtRiskFromPlayer,
+      match:            r.match,
+      issues:           r.issues.length ? r.issues.join('; ') : ''
+    });
+  });
+
+  try {
+    if (typeof console.table === 'function') console.table(rows);
+    else rows.forEach(function(r){ console.log(JSON.stringify(r)); });
+  } catch (_e) {
+    rows.forEach(function(r){ console.log(JSON.stringify(r)); });
+  }
+
+  // Cross-player ID bleed check
+  var idToPlayers = {};
+  function track(t) {
+    if (!t || !t.id || !t.playerId) return;
+    if (!idToPlayers[t.id]) idToPlayers[t.id] = {};
+    idToPlayers[t.id][t.playerId] = true;
+  }
+  pbTickets.forEach(track);
+  hostActiveBets.forEach(track);
+  var crossPlayer = Object.keys(idToPlayers).filter(function(id){ return Object.keys(idToPlayers[id]).length > 1; });
+  if (crossPlayer.length) {
+    console.warn('[multi-player audit] BLEED — same ticket id under multiple playerIds:');
+    crossPlayer.forEach(function(id){
+      console.warn('  ' + id + ' → ' + Object.keys(idToPlayers[id]).join(', '));
+    });
+  }
+
+  return {
+    distinctPlayerIds:  pids,
+    rows:               rows,
+    unownedPb:          unownedPb,
+    unownedHost:        unownedHost,
+    duplicateIds:       duplicateIds,
+    crossPlayerBleed:   crossPlayer
+  };
+}
+window.runMultiPlayerBetAudit = runMultiPlayerBetAudit;
+
 // Main grading entry point — called by Check Results button
 // ===========================================================================
 // Grader sport allowlist
