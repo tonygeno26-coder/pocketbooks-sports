@@ -4307,6 +4307,75 @@ function runMultiPlayerBetAudit() {
 }
 window.runMultiPlayerBetAudit = runMultiPlayerBetAudit;
 
+// ===========================================================================
+// dumpTicketById(id) — read-only ticket-shape inspector
+// ---------------------------------------------------------------------------
+// Prints the FULL stored ticket object from pb-tickets, plus a per-leg
+// view of every field name actually present. Use this when the renderer
+// claims a ticket has no displayable text but the ticket clearly exists
+// in storage. Output answers the question "what fields does this ticket
+// actually carry" without any guessing.
+//
+// Also dumps the matching hostActiveBets mirror entry (if any) and any
+// ledger rows scoped to this ticket id, so we can see whether the host
+// mirror has different fields than pb-tickets does.
+function dumpTicketById(ticketId) {
+  if (!ticketId) {
+    console.warn('[dumpTicketById] missing ticketId argument');
+    return null;
+  }
+  function _parseStore(key) {
+    try { var raw = localStorage.getItem(key); if (raw == null) return null;
+          var v = JSON.parse(raw); return Array.isArray(v) ? v : null; }
+    catch (_e) { return null; }
+  }
+  var pbTickets   = _parseStore('pb-tickets')      || [];
+  var hostMirror  = _parseStore('hostActiveBets')  || [];
+  var ledger      = _parseStore('pb-ledger')       || [];
+
+  var pb   = pbTickets.find(function(t){  return t && t.id === ticketId; }) || null;
+  var host = hostMirror.find(function(t){ return t && t.id === ticketId; }) || null;
+  var rows = ledger.filter(function(L){ return L && L.ticketId === ticketId; });
+
+  console.log('[dumpTicketById] ' + ticketId);
+  if (pb) {
+    console.log('--- pb-tickets entry ---');
+    console.log(JSON.stringify(pb, null, 2));
+    var legs = Array.isArray(pb.selections) ? pb.selections : (Array.isArray(pb.legs) ? pb.legs : []);
+    console.log('--- legs (' + legs.length + ') ---');
+    legs.forEach(function(s, i){
+      var keys = (s && typeof s === 'object') ? Object.keys(s) : [];
+      console.log('  leg[' + i + '] keys: ' + (keys.length ? keys.join(', ') : '(none)'));
+      console.log('  leg[' + i + '] json: ' + JSON.stringify(s));
+    });
+  } else {
+    console.warn('--- not found in pb-tickets ---');
+  }
+  if (host) {
+    console.log('--- hostActiveBets mirror entry ---');
+    console.log(JSON.stringify(host, null, 2));
+  } else {
+    console.log('--- no hostActiveBets mirror entry ---');
+  }
+  if (rows.length) {
+    console.log('--- pb-ledger rows for this ticket (' + rows.length + ') ---');
+    rows.forEach(function(L, i){ console.log('  [' + i + '] ' + JSON.stringify(L)); });
+  } else {
+    console.log('--- no pb-ledger rows for this ticket ---');
+  }
+  return { pb: pb, host: host, ledger: rows };
+}
+window.dumpTicketById = dumpTicketById;
+
+// ===========================================================================
+// Bundle identity log — one line at script load so we can settle the
+// "is this preview running the new code?" question instantly. The string
+// is hard-coded per push so it changes commit-over-commit.
+// ---------------------------------------------------------------------------
+try {
+  console.log('[my bets bundle] commit=9ab4da5+display — ticketCard supports {label,name,game} legs; dumpTicketById available');
+} catch(_e){}
+
 // Main grading entry point — called by Check Results button
 // ===========================================================================
 // Grader sport allowlist
