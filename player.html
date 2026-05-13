@@ -3045,24 +3045,44 @@ function _gradeTicket(ticket, resultsMap, normalizedGames) {
     var sel = ticket.selections[i];
     var gameResult = _findGameForSelection(sel, games, resultsMap || {});
     if (!gameResult) {
+      var nearest = _closestGameDiagnostic(sel, games);
+      var selHomeTla2 = _tlaForName(sel.homeTeam);
+      var selAwayTla2 = _tlaForName(sel.awayTeam);
       console.log('[active ticket final check]\n' +
-        '  ticketId:    ' + (ticket.id || '?') + '\n' +
-        '  legIndex:    ' + i + '\n' +
-        '  matchup:     ' + (sel.matchup || sel.game || '-') + '\n' +
-        '  selHome:     ' + (sel.homeTeam || '-') + '\n' +
-        '  selAway:     ' + (sel.awayTeam || '-') + '\n' +
-        '  gameId:      ' + (sel.gameId  || '-') + '\n' +
-        '  matched:     no');
+        '  ticketId:     ' + (ticket.id || '?') + '\n' +
+        '  selection:    ' + (sel.pick || '-') + '\n' +
+        '  matchup:      ' + (sel.matchup || sel.game || '-') + '\n' +
+        '  gameId:       ' + (sel.gameId  || '-') + '\n' +
+        '  selHome:      ' + (sel.homeTeam || '-') + ' (TLA=' + (selHomeTla2 || '?') + ')\n' +
+        '  selAway:      ' + (sel.awayTeam || '-') + ' (TLA=' + (selAwayTla2 || '?') + ')\n' +
+        '  matchedGame:  ' + (nearest ? (nearest.away + ' @ ' + nearest.home) : 'none') + '\n' +
+        '  matched:      no\n' +
+        '  gameStatus:   ' + (nearest ? (nearest.status || '-') : '-') + '\n' +
+        '  homeScore:    ' + (nearest && nearest.home_score != null ? nearest.home_score : '-') + '\n' +
+        '  awayScore:    ' + (nearest && nearest.away_score != null ? nearest.away_score : '-') + '\n' +
+        '  skipReason:   ' + (
+          !games.length         ? 'no_completed_games_in_window' :
+          (!selHomeTla2 || !selAwayTla2) ? 'team_tla_unresolved (extend MLB_TEAM_ALIASES)' :
+          nearest               ? 'tla_pair_mismatch_with_nearest' :
+          'no_candidate_in_window'
+        ));
       return null;
     }
     var legResult = _gradeSingleLeg(sel, gameResult);
     if (!legResult) {
       console.log('[active ticket final check]\n' +
-        '  ticketId:    ' + (ticket.id || '?') + '\n' +
-        '  legIndex:    ' + i + '\n' +
-        '  matchup:     ' + (sel.matchup || sel.game || '-') + '\n' +
-        '  matched:     yes\n' +
-        '  leg result:  unable_to_grade');
+        '  ticketId:     ' + (ticket.id || '?') + '\n' +
+        '  selection:    ' + (sel.pick || '-') + '\n' +
+        '  matchup:      ' + (sel.matchup || sel.game || '-') + '\n' +
+        '  gameId:       ' + (sel.gameId  || '-') + '\n' +
+        '  selHome:      ' + (sel.homeTeam || '-') + '\n' +
+        '  selAway:      ' + (sel.awayTeam || '-') + '\n' +
+        '  matchedGame:  ' + (gameResult.away || '?') + ' @ ' + (gameResult.home || '?') + '\n' +
+        '  matched:      yes\n' +
+        '  gameStatus:   ' + (gameResult.status || '-') + '\n' +
+        '  homeScore:    ' + (gameResult.home_score != null ? gameResult.home_score : '-') + '\n' +
+        '  awayScore:    ' + (gameResult.away_score != null ? gameResult.away_score : '-') + '\n' +
+        '  skipReason:   leg_unable_to_grade (market=' + (sel.market||'-') + ' pick="' + (sel.pick||'-') + '")');
       return null;
     }
     legResults.push(legResult);
@@ -3110,6 +3130,86 @@ var MLB_TEAM_BY_TLA = {
   WAS:'Washington Nationals'
 };
 window.MLB_TEAM_BY_TLA = MLB_TEAM_BY_TLA;
+
+// Common alternate ways tickets / odds feeds may name MLB teams. The matcher
+// reduces every input to a set of canonical tokens before comparing, so
+// 'LA Angels' / 'Anaheim Angels' / 'Angels' all canonicalize to LAA.
+var MLB_TEAM_ALIASES = {
+  LAA: ['los angeles angels','la angels','anaheim angels','los angeles angels of anaheim','angels','laa'],
+  LAD: ['los angeles dodgers','la dodgers','dodgers','lad'],
+  NYY: ['new york yankees','ny yankees','yankees','nyy'],
+  NYM: ['new york mets','ny mets','mets','nym'],
+  CHC: ['chicago cubs','cubs','chc'],
+  CWS: ['chicago white sox','white sox','cws','chw'],
+  CHW: ['chicago white sox','white sox','cws','chw'],
+  SF:  ['san francisco giants','sf giants','giants','sf','sfg'],
+  SFG: ['san francisco giants','sf giants','giants','sf','sfg'],
+  SD:  ['san diego padres','sd padres','padres','sd','sdp'],
+  SDP: ['san diego padres','sd padres','padres','sd','sdp'],
+  TB:  ['tampa bay rays','tampa rays','rays','tb','tbr'],
+  TBR: ['tampa bay rays','tampa rays','rays','tb','tbr'],
+  KC:  ['kansas city royals','kc royals','royals','kc','kcr'],
+  KCR: ['kansas city royals','kc royals','royals','kc','kcr'],
+  WSH: ['washington nationals','nationals','wsh','was'],
+  WAS: ['washington nationals','nationals','wsh','was'],
+  STL: ['st. louis cardinals','st louis cardinals','cardinals','stl'],
+  OAK: ['oakland athletics','oakland as','athletics','as','oak','ath'],
+  ATH: ['oakland athletics','oakland as','athletics','as','oak','ath'],
+  ARI: ['arizona diamondbacks','diamondbacks','dbacks','d-backs','ari'],
+  CLE: ['cleveland guardians','guardians','cleveland','cle'],
+  BOS: ['boston red sox','red sox','boston','bos'],
+  PHI: ['philadelphia phillies','phillies','philadelphia','phi'],
+  TOR: ['toronto blue jays','blue jays','toronto','tor'],
+  DET: ['detroit tigers','tigers','detroit','det'],
+  HOU: ['houston astros','astros','houston','hou'],
+  MIA: ['miami marlins','marlins','miami','mia'],
+  ATL: ['atlanta braves','braves','atlanta','atl'],
+  BAL: ['baltimore orioles','orioles','baltimore','bal'],
+  CIN: ['cincinnati reds','reds','cincinnati','cin'],
+  COL: ['colorado rockies','rockies','colorado','col'],
+  MIL: ['milwaukee brewers','brewers','milwaukee','mil'],
+  MIN: ['minnesota twins','twins','minnesota','min'],
+  PIT: ['pittsburgh pirates','pirates','pittsburgh','pit'],
+  SEA: ['seattle mariners','mariners','seattle','sea'],
+  TEX: ['texas rangers','rangers','texas','tex']
+};
+window.MLB_TEAM_ALIASES = MLB_TEAM_ALIASES;
+
+// Canonicalize any name/abbreviation to a TLA (or null if unknown).
+// Tries: direct TLA lookup, full-name dictionary reverse, then alias scan.
+function _tlaForName(name) {
+  if (!name) return null;
+  var raw = String(name).trim();
+  if (!raw) return null;
+  var upper = raw.toUpperCase();
+  if (MLB_TEAM_BY_TLA[upper]) return upper;
+  var lower = raw.toLowerCase()
+    .replace(/[.,]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  // Reverse lookup against full names
+  var tlas = Object.keys(MLB_TEAM_BY_TLA);
+  for (var i = 0; i < tlas.length; i++) {
+    if (MLB_TEAM_BY_TLA[tlas[i]].toLowerCase() === lower) return tlas[i];
+  }
+  // Alias dictionary
+  var aliasKeys = Object.keys(MLB_TEAM_ALIASES);
+  for (var j = 0; j < aliasKeys.length; j++) {
+    var aliases = MLB_TEAM_ALIASES[aliasKeys[j]];
+    for (var k = 0; k < aliases.length; k++) {
+      if (aliases[k] === lower) return aliasKeys[j];
+    }
+  }
+  // Last-resort: substring match against full names (handles "Anaheim
+  // Angels" -> Angels found inside 'Los Angeles Angels')
+  for (var m = 0; m < tlas.length; m++) {
+    var full = MLB_TEAM_BY_TLA[tlas[m]].toLowerCase();
+    var fullLast = full.split(' ').slice(-1)[0];
+    if (lower.indexOf(fullLast) !== -1 && fullLast.length >= 4) return tlas[m];
+  }
+  return null;
+}
+window._tlaForName = _tlaForName;
 
 // Resolve SportsDataIO team identifiers (TLA + short Name + City) into the
 // full team name the rest of the codebase uses. Falls back to whatever
@@ -3219,6 +3319,9 @@ function _buildFinalScoreObject(gameResult) {
 // Bidirectional substring match — so a selection "Cleveland Guardians @ ..."
 // matches a game with home="Cleveland Guardians"/TLA="CLE"/name="Guardians",
 // and vice versa.
+// TLA-first matcher. Resolves both the selection and every candidate game
+// to TLAs via the alias dictionary, then matches on the unordered TLA pair.
+// Falls back to the older substring strategy only if no TLA can be derived.
 function _findGameForSelection(sel, normalizedGames, resultsMap) {
   if (!sel) return null;
   // 1. Direct gameId hit
@@ -3226,68 +3329,167 @@ function _findGameForSelection(sel, normalizedGames, resultsMap) {
     return resultsMap[String(sel.gameId).toLowerCase()];
   }
   var matchup = String(sel.matchup || sel.game || '').toLowerCase();
-  var selHome = String(sel.homeTeam || '').toLowerCase();
-  var selAway = String(sel.awayTeam || '').toLowerCase();
-  for (var i = 0; i < normalizedGames.length; i++) {
-    var g = normalizedGames[i];
-    if (!g) continue;
-    var gh = String(g.home || '').toLowerCase();
-    var ga = String(g.away || '').toLowerCase();
-    var raw = g._sdioRaw || {};
-    var gTlas = [String(raw.HomeTeam||'').toLowerCase(), String(raw.AwayTeam||'').toLowerCase()];
-    var gShort = [String(raw.HomeTeamName||'').toLowerCase(), String(raw.AwayTeamName||'').toLowerCase()];
+  var selHomeRaw = String(sel.homeTeam || '').trim();
+  var selAwayRaw = String(sel.awayTeam || '').trim();
+  // Try TLA resolution against homeTeam, awayTeam, and also any tokens
+  // pulled out of the matchup string ("Angels @ Guardians").
+  var selHomeTla = _tlaForName(selHomeRaw);
+  var selAwayTla = _tlaForName(selAwayRaw);
+  if ((!selHomeTla || !selAwayTla) && matchup) {
+    // Split on ' vs ', ' @ ', or '@'
+    var parts = matchup.split(/\s+(?:vs|@)\s+|@/).map(function(s){ return s.trim(); }).filter(Boolean);
+    if (parts.length === 2) {
+      if (!selAwayTla) selAwayTla = _tlaForName(parts[0]);
+      if (!selHomeTla) selHomeTla = _tlaForName(parts[1]);
+    }
+  }
+
+  // 2. TLA pair match (unordered — we don't trust away/home order from
+  // the matchup string).
+  if (selHomeTla && selAwayTla) {
+    for (var i = 0; i < normalizedGames.length; i++) {
+      var g = normalizedGames[i];
+      if (!g) continue;
+      var raw = g._sdioRaw || {};
+      var hTla = String(raw.HomeTeam || '').toUpperCase();
+      var aTla = String(raw.AwayTeam || '').toUpperCase();
+      if (!hTla || !aTla) continue;
+      var pair = [hTla, aTla].sort().join('|');
+      var selPair = [selHomeTla, selAwayTla].sort().join('|');
+      if (pair === selPair) return g;
+    }
+  }
+
+  // 3. Substring fallback (legacy path) for tickets where TLA resolution
+  // somehow fails. Bidirectional substring against full / short / TLA.
+  var selHome = selHomeRaw.toLowerCase();
+  var selAway = selAwayRaw.toLowerCase();
+  function _bidir(needle, hay) {
+    if (!needle || !hay) return false;
+    return needle.indexOf(hay) !== -1 || hay.indexOf(needle) !== -1;
+  }
+  for (var k = 0; k < normalizedGames.length; k++) {
+    var g2 = normalizedGames[k];
+    if (!g2) continue;
+    var gh = String(g2.home || '').toLowerCase();
+    var ga = String(g2.away || '').toLowerCase();
+    var raw2 = g2._sdioRaw || {};
+    var gTlas = [String(raw2.HomeTeam||'').toLowerCase(), String(raw2.AwayTeam||'').toLowerCase()];
+    var gShort = [String(raw2.HomeTeamName||'').toLowerCase(), String(raw2.AwayTeamName||'').toLowerCase()];
     var ghLast = gh.split(' ').slice(-1)[0];
     var gaLast = ga.split(' ').slice(-1)[0];
-
-    // 2. Selection homeTeam/awayTeam contains the game's full / short / TLA name (or vice versa)
-    function _bidir(needle, hay) {
-      if (!needle || !hay) return false;
-      return needle.indexOf(hay) !== -1 || hay.indexOf(needle) !== -1;
-    }
     if (selHome && (_bidir(selHome, gh) || _bidir(selHome, gShort[0]) || (gTlas[0] && selHome === gTlas[0]))) {
       if (selAway && (_bidir(selAway, ga) || _bidir(selAway, gShort[1]) || (gTlas[1] && selAway === gTlas[1]))) {
-        return g;
+        return g2;
       }
     }
-    // 3. matchup string contains either team identifier
     if (matchup && (matchup.indexOf(gh) !== -1 || matchup.indexOf(ga) !== -1 ||
                     (gShort[0] && matchup.indexOf(gShort[0]) !== -1) ||
                     (gShort[1] && matchup.indexOf(gShort[1]) !== -1) ||
                     (ghLast && matchup.indexOf(ghLast) !== -1) ||
                     (gaLast && matchup.indexOf(gaLast) !== -1))) {
-      return g;
+      return g2;
     }
   }
   return null;
 }
 
+// Closest game on the slate for diagnostics. Used only by the failure log
+// so we can see which game the matcher "almost" hit.
+function _closestGameDiagnostic(sel, normalizedGames) {
+  if (!sel || !Array.isArray(normalizedGames) || !normalizedGames.length) return null;
+  var selHomeTla = _tlaForName(sel.homeTeam);
+  var selAwayTla = _tlaForName(sel.awayTeam);
+  var matchup    = String(sel.matchup || sel.game || '').toLowerCase();
+  var best = null;
+  var bestScore = -1;
+  for (var i = 0; i < normalizedGames.length; i++) {
+    var g = normalizedGames[i];
+    if (!g) continue;
+    var raw = g._sdioRaw || {};
+    var hTla = String(raw.HomeTeam || '').toUpperCase();
+    var aTla = String(raw.AwayTeam || '').toUpperCase();
+    var score = 0;
+    if (selHomeTla && (hTla === selHomeTla || aTla === selHomeTla)) score += 2;
+    if (selAwayTla && (hTla === selAwayTla || aTla === selAwayTla)) score += 2;
+    var gh = String(g.home || '').toLowerCase();
+    var ga = String(g.away || '').toLowerCase();
+    if (matchup && (matchup.indexOf(gh.split(' ').slice(-1)[0]) !== -1 ||
+                    matchup.indexOf(ga.split(' ').slice(-1)[0]) !== -1)) score += 1;
+    if (score > bestScore) { bestScore = score; best = g; }
+  }
+  return bestScore > 0 ? best : null;
+}
+
 // Fetch + normalize today's SportsDataIO MLB games. Returns
 // { games: [normalized...], resultsMap: {...}, completedCount, error: null|string }.
 // NEVER throws — callers must always get a usable object back.
-async function _fetchAndNormalizeScores() {
+// Format a Date as the SportsDataIO date string: YYYY-MMM-DD (uppercase).
+function _sdioDateString(d) {
+  var months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  return d.getUTCFullYear() + '-' + months[d.getUTCMonth()] + '-' +
+         String(d.getUTCDate()).padStart(2, '0');
+}
+
+// Fetch a single SportsDataIO GamesByDate bucket. Returns normalized array
+// (possibly empty) plus the actual sub-path used so the caller can log it.
+async function _fetchSdioByDate(dateStr) {
+  var subPath = 'scores/json/GamesByDate/' + dateStr;
+  var url = '/api/sportsdataio/mlb?path=' + encodeURIComponent(subPath);
+  var res = await fetch(url);
+  if (!res.ok) return { games: [], error: 'sdio_http_' + res.status, subPath: subPath };
+  var raw = await res.json();
+  if (!Array.isArray(raw)) return { games: [], error: 'sdio_not_array', subPath: subPath };
+  var normalized = [];
+  for (var i = 0; i < raw.length; i++) {
+    var n = _normalizeSdioGame(raw[i]);
+    if (n) normalized.push(n);
+  }
+  return { games: normalized, error: null, subPath: subPath };
+}
+
+// Fetch + normalize SportsDataIO MLB games across a date window (default: last 3 days).
+// Returns { games, resultsMap, completedCount, completedGames, error, datesFetched, gamesByDate }.
+// Multi-day window matters: a game that ended last night PDT may live in
+// yesterday OR today's UTC bucket depending on first-pitch time.
+async function _fetchAndNormalizeScores(opts) {
+  opts = opts || {};
+  var daysBack = (typeof opts.daysBack === 'number' && opts.daysBack >= 0) ? opts.daysBack : 2;
   try {
     if (typeof _isScoresGradingSuspended === 'function' && _isScoresGradingSuspended()) {
       return { games: [], resultsMap: {}, completedCount: 0, error: 'scores_grading_suspended' };
     }
-    var res = await fetch('/api/sportsdataio/mlb?endpoint=today');
-    if (!res.ok) {
-      return { games: [], resultsMap: {}, completedCount: 0, error: 'sdio_http_' + res.status };
+    var today = new Date();
+    var dates = [];
+    // today first, then walk backwards so the freshest data wins on de-dupe.
+    for (var d = 0; d <= daysBack; d++) {
+      var dt = new Date(today.getTime() - d * 86400000);
+      dates.push(_sdioDateString(dt));
     }
-    var raw = await res.json();
-    if (!Array.isArray(raw)) {
-      return { games: [], resultsMap: {}, completedCount: 0, error: 'sdio_not_array' };
+    var fetches = await Promise.all(dates.map(function(ds){ return _fetchSdioByDate(ds); }));
+    var all = [];
+    var seen = {};
+    var perDate = {};
+    for (var f = 0; f < fetches.length; f++) {
+      var result = fetches[f];
+      perDate[dates[f]] = { count: result.games.length, error: result.error || null };
+      if (result.error) continue;
+      for (var g = 0; g < result.games.length; g++) {
+        var game = result.games[g];
+        var key = String(game.id || (game.away + '@' + game.home));
+        if (seen[key]) continue;
+        seen[key] = 1;
+        all.push(game);
+      }
     }
-    var normalized = [];
-    for (var i = 0; i < raw.length; i++) {
-      var n = _normalizeSdioGame(raw[i]);
-      if (n) normalized.push(n);
-    }
-    var completed = normalized.filter(function(g){ return g.completed; });
+    var completed = all.filter(function(g){ return g.completed; });
     return {
-      games:           normalized,
+      games:           all,
       resultsMap:      _buildResultsMap(completed),
       completedCount:  completed.length,
       completedGames:  completed,
+      datesFetched:    dates,
+      gamesByDate:     perDate,
       error:           null
     };
   } catch (err) {
@@ -3322,13 +3524,15 @@ async function checkOpenTickets() {
     }
 
     // SportsDataIO ONLY — grading never reads from the Odds API.
-    var scores = await _fetchAndNormalizeScores();
+    var scores = await _fetchAndNormalizeScores({ daysBack: 2 });
     if (scores.error) {
       console.warn('[grading] scores fetch error:', scores.error);
       throw new Error('Scores unavailable: ' + scores.error);
     }
     console.log('[auto finalize pass]\n' +
       '  source:         sportsdataio\n' +
+      '  datesFetched:   ' + (scores.datesFetched || []).join(', ') + '\n' +
+      '  gamesByDate:    ' + JSON.stringify(scores.gamesByDate || {}) + '\n' +
       '  totalGames:     ' + scores.games.length + '\n' +
       '  completedGames: ' + scores.completedCount + '\n' +
       '  activeTickets:  ' + activeTickets.length);
@@ -3507,7 +3711,7 @@ async function _autoGradePoll() {
     }
 
     // SportsDataIO ONLY — grading never reads from the Odds API.
-    var scores = await _fetchAndNormalizeScores();
+    var scores = await _fetchAndNormalizeScores({ daysBack: 2 });
     if (scores.error) {
       console.log('[auto grade poll] scores unavailable:', scores.error);
       _autoGradeRunning = false;
@@ -3519,6 +3723,8 @@ async function _autoGradePoll() {
 
     console.log('[auto finalize pass]\n' +
       '  source:         sportsdataio\n' +
+      '  datesFetched:   ' + (scores.datesFetched || []).join(', ') + '\n' +
+      '  gamesByDate:    ' + JSON.stringify(scores.gamesByDate || {}) + '\n' +
       '  totalGames:     ' + scores.games.length + '\n' +
       '  completedGames: ' + completedGames.length + '\n' +
       '  activeTickets:  ' + activeMLB.length);
