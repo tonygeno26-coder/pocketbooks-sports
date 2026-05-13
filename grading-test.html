@@ -197,12 +197,39 @@ async function runLiveTest() {
   _log = [];
   document.getElementById('log').textContent = '';
   document.getElementById('results').innerHTML = '<div style="color:#aaa;padding:10px">Fetching live MLB scores…</div>';
-  log('info', '[live test] fetching /api/scores/mlb?daysFrom=3');
+  // Switched off legacy /api/scores/mlb (Railway, 402 Payment Required). The
+  // live test now reads from the same SportsDataIO proxy + normalizer the
+  // grader uses in player.html. Mock ticket data here is unchanged.
+  log('info', '[live test] fetching /api/sportsdataio/mlb?endpoint=today');
   try {
-    var r = await fetch('/api/scores/mlb?daysFrom=3');
+    var r = await fetch('/api/sportsdataio/mlb?endpoint=today');
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    var games = await r.json();
-    if (games.error_code) throw new Error(games.error || 'Quota error');
+    var rawGames = await r.json();
+    if (!Array.isArray(rawGames)) throw new Error('SDIO response not an array');
+    // Inline SDIO -> flat shape (mirrors _normalizeSdioGame from player.html;
+    // duplicated here so this test page can run standalone without pulling
+    // in the production bundle).
+    var TLA = {LAA:'Los Angeles Angels',LAD:'Los Angeles Dodgers',NYY:'New York Yankees',NYM:'New York Mets',CHC:'Chicago Cubs',CWS:'Chicago White Sox',CHW:'Chicago White Sox',SF:'San Francisco Giants',SFG:'San Francisco Giants',SD:'San Diego Padres',SDP:'San Diego Padres',TB:'Tampa Bay Rays',TBR:'Tampa Bay Rays',KC:'Kansas City Royals',KCR:'Kansas City Royals',WSH:'Washington Nationals',WAS:'Washington Nationals',STL:'St. Louis Cardinals',OAK:'Oakland Athletics',ATH:'Oakland Athletics',ARI:'Arizona Diamondbacks',CLE:'Cleveland Guardians',BOS:'Boston Red Sox',PHI:'Philadelphia Phillies',TOR:'Toronto Blue Jays',DET:'Detroit Tigers',HOU:'Houston Astros',MIA:'Miami Marlins',ATL:'Atlanta Braves',BAL:'Baltimore Orioles',CIN:'Cincinnati Reds',COL:'Colorado Rockies',MIL:'Milwaukee Brewers',MIN:'Minnesota Twins',PIT:'Pittsburgh Pirates',SEA:'Seattle Mariners',TEX:'Texas Rangers'};
+    function _full(tla, short, city) {
+      var t = String(tla||'').toUpperCase();
+      if (t && TLA[t]) return TLA[t];
+      if (city && short) return city + ' ' + short;
+      return short || city || t || '';
+    }
+    function _isFinal(s){
+      var v = String(s||'').toLowerCase().trim();
+      return v==='final' || v.indexOf('final')===0 || v==='f' || v.indexOf('f/')===0 || v==='completed' || v==='complete';
+    }
+    var games = rawGames.map(function(g){
+      var away = _full(g.AwayTeam, g.AwayTeamName, g.AwayTeamCity);
+      var home = _full(g.HomeTeam, g.HomeTeamName, g.HomeTeamCity);
+      var as = g.AwayTeamRuns != null ? g.AwayTeamRuns : g.AwayTeamScore;
+      var hs = g.HomeTeamRuns != null ? g.HomeTeamRuns : g.HomeTeamScore;
+      var status = String(g.Status || g.GameStatus || '').trim();
+      return { id:g.GameID||g.GameId||(away+'@'+home), home:home, away:away,
+               home_score:hs, away_score:as, status:status,
+               completed:_isFinal(status) && hs!=null && as!=null };
+    }).filter(function(g){ return g.completed; });
     log('info', '[live test] completed games: ' + games.length);
     games.slice(0,3).forEach(function(g){ log('info', '  [game final] ' + g.away + ' ' + g.away_score + ' @ ' + g.home + ' ' + g.home_score); });
     _runGrading(MOCK_TICKETS, games, 1000);
