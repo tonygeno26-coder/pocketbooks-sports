@@ -1636,7 +1636,17 @@ if (isPreview && !_isAuthScreen) {
   checkAuthGate();
   loadUser();
 }
-if (userClubs.length) { renderClubsList(); document.getElementById('club-count-lbl').textContent = userClubs.length + ' clubs'; updateClubsTilePreview(); }
+if (userClubs.length) {
+  renderClubsList();
+  // Preview screens (preview=1 with create/settings/etc. templates) can mount
+  // a layout that does not include #club-count-lbl. Guard against null so the
+  // profile/settings icon click path no longer crashes with
+  // "Cannot set properties of null (setting 'textContent')".
+  var _ccl = document.getElementById('club-count-lbl');
+  if (_ccl) { _ccl.textContent = userClubs.length + ' clubs'; }
+  else { console.warn('[lobby] #club-count-lbl missing at script-load club-count update (preview=' + isPreview + ', screen=' + _screen + ')'); }
+  updateClubsTilePreview();
+}
 if (activeClub) setActiveClub(activeClub);
 
 // ── MOCK CLUBS SEED ───────────────────────────────────────────────────────────
