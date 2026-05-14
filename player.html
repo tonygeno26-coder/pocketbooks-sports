@@ -4384,6 +4384,249 @@ function runMultiPlayerBetAudit() {
 window.runMultiPlayerBetAudit = runMultiPlayerBetAudit;
 
 // ===========================================================================
+// runUngradedFinishedTicketAudit() — READ-ONLY grading-block audit
+// ---------------------------------------------------------------------------
+// Diagnoses why active/open tickets aren't flipping to settled. Does NOT
+// touch grading math, ticket status, balances, host stats, or storage.
+// Pure observation.
+//
+// For every active+open ticket in pb-tickets, it:
+//   1. Checks if the sport is on the GRADER_SUPPORTED_SPORTS allowlist.
+//   2. Reads the suspended-scores flag.
+//   3. Pulls today + N days back of SportsDataIO GamesByDate (same code
+//      path the auto-grader uses).
+//   4. Tries _findGameForSelection() to see if the ticket's leg matches
+//      any normalized game (by gameId, TLA pair, or substring fallback).
+//   5. Reports SportsDataIO's status string, scores, and the precise
+//      skipReason in the exact shape requested.
+//
+// Print shape per ticket:
+//   [ungraded finished ticket audit]
+//     ticketId:
+//     sport:
+//     status:
+//     pick:
+//     matchup:
+//     homeTeam:
+//     awayTeam:
+//     gameId:
+//     commenceTime:
+//     matchedSportsDataIOGame:
+//     sportsDataIOStatus:
+//     homeScore:
+//     awayScore:
+//     skipReason:
+//
+// Possible skipReason values:
+//   ok_should_grade                  — final game found; ticket SHOULD have graded
+//   scores_grading_suspended         — fetch backoff is active
+//   unsupported_sport                — sport not on allowlist (NFL/NBA/etc.)
+//   sdio_fetch_error:<msg>           — SportsDataIO endpoint failed
+//   no_completed_games_in_window     — endpoint returned but no Final games in window
+//   team_tla_unresolved              — team name(s) don't resolve to TLAs
+//   no_match_in_window               — fetched games exist but none match this ticket
+//   matched_but_not_final            — game matched but its status isn't Final
+//   already_graded                   — ticket already settled (shouldn't appear in audit)
+//   pre_first_pitch                  — commenceTime is still in the future
+//
+// Usage from devtools console:
+//   await runUngradedFinishedTicketAudit()
+//   await runUngradedFinishedTicketAudit({ daysBack: 3 })
+async function runUngradedFinishedTicketAudit(opts) {
+  opts = opts || {};
+  var daysBack = (typeof opts.daysBack === 'number' && opts.daysBack >= 0) ? opts.daysBack : 2;
+
+  function _safe(v) { return (v == null || v === '') ? '-' : String(v); }
+
+  // 1. Load tickets fresh.
+  var tickets = [];
+  try { tickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]'); } catch(_e){}
+  if (!Array.isArray(tickets)) tickets = [];
+
+  var active = tickets.filter(function(t){
+    var s = String(t && t.status || '').toLowerCase();
+    return (s === 'active' || s === 'open') && !t.gradedAt;
+  });
+
+  // 2. Snapshot global state.
+  var suspended = (typeof _isScoresGradingSuspended === 'function') ? _isScoresGradingSuspended() : false;
+  var suspensionReason = (typeof _SCORES_SUSPENSION_REASON !== 'undefined') ? _SCORES_SUSPENSION_REASON : '';
+  var daemonRunning = (typeof _autoGradeInterval !== 'undefined') && !!_autoGradeInterval;
+
+  // 3. Pull SportsDataIO snapshot. Bypass suspension for the audit only —
+  // we want to SEE what the upstream actually returns even if the live
+  // grader is currently backed off. We do this by calling _fetchSdioByDate
+  // directly (the daily fetch, not the suspended-gate wrapper).
+  var today = new Date();
+  var dates = [];
+  for (var d = 0; d <= daysBack; d++) {
+    dates.push(_sdioDateString(new Date(today.getTime() - d*86400000)));
+  }
+  var fetchResults = await Promise.all(dates.map(function(ds){ return _fetchSdioByDate(ds); }));
+  var allGames = [];
+  var seenIds = {};
+  var perDate = {};
+  var fetchErrors = [];
+  for (var f = 0; f < fetchResults.length; f++) {
+    var r = fetchResults[f];
+    perDate[dates[f]] = { count: r.games.length, error: r.error || null };
+    if (r.error) fetchErrors.push(dates[f] + ':' + r.error);
+    for (var g = 0; g < r.games.length; g++) {
+      var game = r.games[g];
+      var key = String(game.id || (game.away + '@' + game.home));
+      if (seenIds[key]) continue;
+      seenIds[key] = 1;
+      allGames.push(game);
+    }
+  }
+  var completedGames = allGames.filter(function(g){ return g && g.completed; });
+  var resultsMap = (typeof _buildResultsMap === 'function') ? _buildResultsMap(completedGames) : {};
+
+  // 4. Per-ticket analysis.
+  var rows = [];
+  var nowMs = Date.now();
+
+  active.forEach(function(t){
+    var sel    = (t.selections && t.selections[0]) || {};
+    var legs   = Array.isArray(t.selections) ? t.selections : [];
+    var sportKey = (typeof _ticketSportKey === 'function') ? _ticketSportKey(t) : String(t.sport || '').toLowerCase().trim();
+    var supported = (typeof _isSupportedForGrading === 'function') ? _isSupportedForGrading(t) : true;
+
+    // Earliest known leg commenceTime (matches evaluateCancelEligibility).
+    var earliest = Infinity, anyKnown = false;
+    for (var li = 0; li < legs.length; li++) {
+      var l = legs[li] || {};
+      var raw = (l.commenceTime != null && l.commenceTime !== '') ? l.commenceTime
+              : (l.time != null && l.time !== '' ? l.time : null);
+      if (raw == null) continue;
+      var ms = (typeof raw === 'number') ? raw : Date.parse(raw);
+      if (!isFinite(ms) || isNaN(ms)) continue;
+      anyKnown = true;
+      if (ms < earliest) earliest = ms;
+    }
+    var commenceISO = anyKnown ? new Date(earliest).toISOString() : '';
+
+    // Match attempt against the union of fetched games (completed or not).
+    var matched = null;
+    try {
+      // Match against ALL fetched games first (including non-final), so we
+      // can distinguish "no match" from "matched but not final".
+      var allMap = {};
+      for (var ai = 0; ai < allGames.length; ai++) {
+        var ag = allGames[ai];
+        if (ag && ag.id) allMap[String(ag.id).toLowerCase()] = ag;
+      }
+      matched = (typeof _findGameForSelection === 'function')
+        ? _findGameForSelection(sel, allGames, allMap)
+        : null;
+    } catch(_e){ matched = null; }
+
+    // Determine skipReason.
+    var skipReason;
+    if (!supported) {
+      skipReason = 'unsupported_sport (sport="' + (sportKey || '(empty)') + '", allowlist=' + JSON.stringify(GRADER_SUPPORTED_SPORTS) + ')';
+    } else if (suspended) {
+      skipReason = 'scores_grading_suspended (reason="' + suspensionReason + '")';
+    } else if (fetchErrors.length && !allGames.length) {
+      skipReason = 'sdio_fetch_error:' + fetchErrors.join(';');
+    } else if (!completedGames.length && !matched) {
+      skipReason = 'no_completed_games_in_window';
+    } else if (anyKnown && nowMs < earliest) {
+      skipReason = 'pre_first_pitch (commenceTime=' + commenceISO + ')';
+    } else if (!matched) {
+      // Try to surface the team-name issue more precisely.
+      var hTla = (typeof _tlaForName === 'function') ? _tlaForName(sel.homeTeam) : '';
+      var aTla = (typeof _tlaForName === 'function') ? _tlaForName(sel.awayTeam) : '';
+      if (!hTla || !aTla) {
+        skipReason = 'team_tla_unresolved (home="' + (sel.homeTeam||'-') + '" away="' + (sel.awayTeam||'-') + '")';
+      } else {
+        skipReason = 'no_match_in_window (homeTLA=' + hTla + ' awayTLA=' + aTla + ' fetched=' + allGames.length + ')';
+      }
+    } else if (!_isFinalSourceStatus(matched.status)) {
+      skipReason = 'matched_but_not_final (status="' + (matched.status || '-') + '")';
+    } else if (matched.home_score == null || matched.away_score == null) {
+      skipReason = 'matched_final_missing_scores (home=' + matched.home_score + ' away=' + matched.away_score + ')';
+    } else {
+      skipReason = 'ok_should_grade';
+    }
+
+    var row = {
+      ticketId:                _safe(t.id),
+      sport:                   _safe(sportKey || '(empty)'),
+      status:                  _safe(t.status),
+      pick:                    _safe(sel.pick || sel.name || sel.label),
+      matchup:                 _safe(sel.matchup || sel.game),
+      homeTeam:                _safe(sel.homeTeam),
+      awayTeam:                _safe(sel.awayTeam),
+      gameId:                  _safe(sel.gameId),
+      commenceTime:            _safe(commenceISO),
+      matchedSportsDataIOGame: matched ? (matched.away + ' @ ' + matched.home + ' [id=' + (matched.id||'?') + ']') : '-',
+      sportsDataIOStatus:      matched ? _safe(matched.status) : '-',
+      homeScore:               matched && matched.home_score != null ? matched.home_score : '-',
+      awayScore:               matched && matched.away_score != null ? matched.away_score : '-',
+      skipReason:              skipReason
+    };
+    rows.push(row);
+
+    console.log('[ungraded finished ticket audit]\n' +
+      '  ticketId:                ' + row.ticketId + '\n' +
+      '  sport:                   ' + row.sport + '\n' +
+      '  status:                  ' + row.status + '\n' +
+      '  pick:                    ' + row.pick + '\n' +
+      '  matchup:                 ' + row.matchup + '\n' +
+      '  homeTeam:                ' + row.homeTeam + '\n' +
+      '  awayTeam:                ' + row.awayTeam + '\n' +
+      '  gameId:                  ' + row.gameId + '\n' +
+      '  commenceTime:            ' + row.commenceTime + '\n' +
+      '  matchedSportsDataIOGame: ' + row.matchedSportsDataIOGame + '\n' +
+      '  sportsDataIOStatus:      ' + row.sportsDataIOStatus + '\n' +
+      '  homeScore:               ' + row.homeScore + '\n' +
+      '  awayScore:               ' + row.awayScore + '\n' +
+      '  skipReason:              ' + row.skipReason);
+  });
+
+  // Bucketed counts.
+  var buckets = {};
+  rows.forEach(function(r){
+    var key = r.skipReason.split(' ')[0].split(':')[0];
+    buckets[key] = (buckets[key] || 0) + 1;
+  });
+
+  console.log('[ungraded finished ticket audit — summary]\n' +
+    '  activeTickets:            ' + active.length + '\n' +
+    '  gradingSuspended:         ' + suspended + (suspended ? ' (reason="' + suspensionReason + '")' : '') + '\n' +
+    '  autoGradeDaemonRunning:   ' + daemonRunning + '\n' +
+    '  supportedSports:          ' + JSON.stringify(GRADER_SUPPORTED_SPORTS) + '\n' +
+    '  sdioDatesFetched:         ' + dates.join(', ') + '\n' +
+    '  sdioPerDate:              ' + JSON.stringify(perDate) + '\n' +
+    '  sdioTotalGames:           ' + allGames.length + '\n' +
+    '  sdioCompletedGames:       ' + completedGames.length + '\n' +
+    '  sdioFetchErrors:          ' + (fetchErrors.length ? fetchErrors.join('; ') : 'none') + '\n' +
+    '  bucketsBySkipReason:      ' + JSON.stringify(buckets));
+
+  // Also surface a table for at-a-glance reading.
+  try { if (typeof console.table === 'function' && rows.length) console.table(rows); } catch(_e){}
+
+  return {
+    rows: rows,
+    summary: {
+      activeTickets: active.length,
+      gradingSuspended: suspended,
+      suspensionReason: suspensionReason,
+      autoGradeDaemonRunning: daemonRunning,
+      supportedSports: GRADER_SUPPORTED_SPORTS,
+      sdioDatesFetched: dates,
+      sdioPerDate: perDate,
+      sdioTotalGames: allGames.length,
+      sdioCompletedGames: completedGames.length,
+      sdioFetchErrors: fetchErrors,
+      bucketsBySkipReason: buckets
+    }
+  };
+}
+window.runUngradedFinishedTicketAudit = runUngradedFinishedTicketAudit;
+
+// ===========================================================================
 // dumpTicketById(id) — read-only ticket-shape inspector
 // ---------------------------------------------------------------------------
 // Prints the FULL stored ticket object from pb-tickets, plus a per-leg
