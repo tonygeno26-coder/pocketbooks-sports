@@ -597,6 +597,15 @@ function renderAdminCrypto() {
   </div>
 </div>
 
+<!-- ACTIVE CLUB IDENTITY (display-only, top-center)
+     Updated by _renderActiveClubIdentity() whenever switchClub() runs or the
+     demo club is assigned. Logo prefers currentClub.logo_url; falls back to
+     2-letter initials in a deterministic color. No balance / ticket logic. -->
+<div id="host-active-club" style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:10px 16px 4px;text-align:center">
+  <div id="host-active-club-logo" style="width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.95rem;font-weight:900;color:#000;background:#00c2ff;overflow:hidden;flex-shrink:0" aria-hidden="true"></div>
+  <div id="host-active-club-name" style="font-size:0.9rem;font-weight:900;letter-spacing:0.2px;color:#fff;line-height:1.1;max-width:80vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+</div>
+
 <!-- CLUB BAR -->
 <div class="club-bar" style="display:none">
   <div class="club-select-wrap">
@@ -2011,15 +2020,73 @@ async function loadClubs() {
   } catch(e) { /* offline - use demo */ }
 }
 
+// Render the top-center active-club identity strip. Display-only. Reads
+// currentClub.{name,logo_url,id}. If logo_url is missing or fails to load,
+// falls back to 2-letter initials in a deterministic color from a 5-color
+// palette keyed off the club id (same palette used for player avatars).
+//
+// No balance, ticket, exposure, or stats logic. Pure DOM update.
+function _renderActiveClubIdentity() {
+  var wrap   = document.getElementById('host-active-club');
+  var logoEl = document.getElementById('host-active-club-logo');
+  var nameEl = document.getElementById('host-active-club-name');
+  if (!wrap || !logoEl || !nameEl) return;
+
+  if (!currentClub) {
+    wrap.style.display = 'none';
+    logoEl.innerHTML = '';
+    nameEl.textContent = '';
+    return;
+  }
+
+  var name = String(currentClub.name || 'Club');
+  nameEl.textContent = name;
+
+  // Deterministic fallback color from club id (same palette as G.players avatars).
+  var palette = ['#00c2ff','#00ff88','#f5c842','#ff3d57','#e879f9'];
+  var idNum = parseInt(currentClub.id, 10);
+  if (isNaN(idNum)) {
+    // Hash string ids to a stable bucket.
+    idNum = 0;
+    var s = String(currentClub.id || name);
+    for (var i = 0; i < s.length; i++) idNum = (idNum * 31 + s.charCodeAt(i)) >>> 0;
+  }
+  var bg = palette[Math.abs(idNum) % palette.length];
+
+  // Initials: first letter of first two words, or first 2 letters of single word.
+  var parts = name.trim().split(/\s+/);
+  var initials = parts.length >= 2
+    ? (parts[0][0] + parts[1][0])
+    : name.replace(/[^A-Za-z0-9]/g,'').slice(0,2);
+  initials = (initials || 'CL').toUpperCase();
+
+  var logoUrl = currentClub.logo_url || currentClub.logoUrl || currentClub.logo || '';
+  if (logoUrl) {
+    // Image path; fall back to initials on error.
+    logoEl.style.background = bg;
+    logoEl.innerHTML = '<img src="' + String(logoUrl).replace(/"/g,'&quot;') +
+      '" alt="" style="width:100%;height:100%;object-fit:cover;display:block" ' +
+      'onerror="this.parentNode.innerHTML=\'' + initials.replace(/'/g,"\\'") + '\';">';
+  } else {
+    logoEl.style.background = bg;
+    logoEl.textContent = initials;
+  }
+
+  wrap.style.display = 'flex';
+}
+window._renderActiveClubIdentity = _renderActiveClubIdentity;
+
 function switchClub(id) {
   currentClub = clubs.find(c=>c.id==id) || null;
   const codeEl = document.getElementById('club-code-display');
   if (currentClub) {
     codeEl.textContent = currentClub.code;
+    _renderActiveClubIdentity();
     loadClubMembers(id);
     loadRequests();
   } else {
     codeEl.textContent = 'Copy Code';
+    _renderActiveClubIdentity();
     // Preview mode — standardized params
 const _hp = new URLSearchParams(window.location.search);
 const _hPreview = _hp.get('preview') === '1';
@@ -2112,6 +2179,7 @@ async function createClub() {
     sel.value = demoClub.id;
     currentClub = demoClub;
     document.getElementById('club-code-display').textContent = demoClub.code;
+    _renderActiveClubIdentity();
     closeCreateClub();
     showToast('✅ Club created! Code: ' + demoClub.code);
   }
