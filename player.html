@@ -2700,6 +2700,75 @@ function _resolvePlayer() {
     clubName: _clubData.name || ''
   };
 }
+// ─────────────────────────────────────────────────────────────────────────
+// evaluateCancelEligibility(t, now)
+// ─────────────────────────────────────────────────────────────────────────
+// Pure UI-gating rule. Does NOT cancel anything, does NOT touch grading,
+// payouts, balances, or ticket schema.
+//
+//   eligible          → show "Request Cancel"
+//   game_started      → hide button, show disabled chip
+//                       "Cancel unavailable — game started"
+//   already_settled   → won/lost/push/voided/canceled → no button (today's UI)
+//   pending_request   → existing delete-request flow owns the row
+//   unknown_start     → LEGACY tickets without commenceTime → treat as
+//                       eligible (keep button visible — matches behavior
+//                       prior to this commit; we do not hide old tickets
+//                       just because their selections lack time data).
+//
+// Multi-leg tickets: a ticket becomes ineligible as soon as the EARLIEST
+// leg's game has started. Standard sportsbook rule — once any leg locks,
+// the whole parlay locks.
+function evaluateCancelEligibility(t, now) {
+  if (!t) return { canRequestCancel: false, reason: 'already_settled' };
+  var nowMs = (now instanceof Date ? now : new Date()).getTime();
+
+  // Settled / voided / pending-request states are already handled by the
+  // existing render path; surface a stable reason so callers can branch.
+  var s = String(t.status || '').toLowerCase();
+  if (s && s !== 'active' && s !== 'open') {
+    return { canRequestCancel: false, reason: 'already_settled' };
+  }
+  if (t.deleteRequestStatus === 'pending' || t.deleteRequestStatus === 'denied') {
+    return { canRequestCancel: false, reason: 'pending_request' };
+  }
+
+  var legs = Array.isArray(t.selections) ? t.selections : [];
+  if (!legs.length) {
+    // No legs to evaluate — keep today's behavior (visible).
+    return { canRequestCancel: true, reason: 'unknown_start' };
+  }
+
+  // Earliest known leg start. Legs without a parseable commenceTime are
+  // ignored when picking the earliest (we don't want a missing-time leg
+  // to suppress the button on its own).
+  var earliest = Infinity;
+  var anyKnown = false;
+  for (var i = 0; i < legs.length; i++) {
+    var leg = legs[i] || {};
+    var raw = leg.commenceTime != null && leg.commenceTime !== ''
+      ? leg.commenceTime
+      : (leg.time != null && leg.time !== '' ? leg.time : null);
+    if (raw == null) continue;
+    var ms = (typeof raw === 'number') ? raw : Date.parse(raw);
+    if (!isFinite(ms) || isNaN(ms)) continue;
+    anyKnown = true;
+    if (ms < earliest) earliest = ms;
+  }
+
+  if (!anyKnown) {
+    // LEGACY: ticket has no start-time data anywhere — keep button visible.
+    return { canRequestCancel: true, reason: 'unknown_start' };
+  }
+
+  if (nowMs >= earliest) {
+    return { canRequestCancel: false, reason: 'game_started' };
+  }
+  return { canRequestCancel: true, reason: 'eligible' };
+}
+window.evaluateCancelEligibility = evaluateCancelEligibility;
+var CANCEL_DISABLED_LABEL = 'Cancel unavailable — game started';
+
 function _makeSelection(b) {
   // Parse 'Away Team vs Home Team' into structured pieces so the grader
   // can match against SportsDataIO games (which key by AwayTeamName /
@@ -2714,6 +2783,12 @@ function _makeSelection(b) {
   // YYYY-MM-DD (UTC) of the moment the bet was placed — used by the grader
   // to look up the right /scores/json/GamesByDate/<date> bucket.
   var placedDate = new Date().toISOString().slice(0,10);
+  // Snapshotted game start time at placement (raw ISO/epoch from the
+  // sportsbook board's g.time / g.commence_time). Used ONLY by
+  // evaluateCancelEligibility() to hide Request Cancel once a leg's
+  // game has started. Optional field; legacy selections without this
+  // value fall back to "keep button visible" (today's behavior).
+  var commenceTime = (b.time != null && b.time !== '') ? b.time : null;
   return {
     gameId:     b.cellId ? b.cellId.split('-').slice(0,4).join('-') : b.game,
     sport:      b.sport||'',
@@ -2721,6 +2796,7 @@ function _makeSelection(b) {
     awayTeam:   awayTeam,
     homeTeam:   homeTeam,
     placedDate: placedDate,
+    commenceTime: commenceTime,
     pick:       b.pick||'',
     market:     b.market||'',
     odds:       b.odds,
@@ -5090,9 +5166,23 @@ function renderMyBets() {
           : isVoided
             ? '<span style="font-size:0.68rem;font-weight:800;color:#888;background:#f5f5f5;padding:4px 10px;border-radius:20px;border:1px solid #ddd">VOIDED</span>'
           : '<span style="font-size:0.68rem;font-weight:800;color:'+color+';background:'+(displayStatus==='lost'?'#fff0f0':displayStatus==='won'?'#f0fff4':'#f0f4ff')+';padding:4px 10px;border-radius:20px;border:1px solid '+color+'">'+displayStatus.toUpperCase()+'</span>';
-    var canRequestDelete = (displayStatus==='active'||displayStatus==='open') && !isDeletePending && !isVoided;
+    // Cancel eligibility: pure UI gating. evaluateCancelEligibility() owns
+    // the rule. Status-based suppression (settled/voided/pending-request)
+    // continues to take precedence so the existing badges keep rendering.
+    var _cancelElig = (typeof evaluateCancelEligibility === 'function')
+      ? evaluateCancelEligibility(t, new Date())
+      : { canRequestCancel: (displayStatus==='active'||displayStatus==='open') && !isDeletePending && !isVoided, reason: 'eligible' };
+    var canRequestDelete = _cancelElig.canRequestCancel
+      && (displayStatus==='active'||displayStatus==='open')
+      && !isDeletePending && !isVoided;
+    var cancelDisabledByGame = !canRequestDelete
+      && _cancelElig.reason === 'game_started'
+      && (displayStatus==='active'||displayStatus==='open')
+      && !isDeletePending && !isVoided;
     var deleteBtn = canRequestDelete
       ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;text-align:right"><button data-reqdelete="'+t.id+'" onclick="event.stopPropagation();requestBetDelete(\''+t.id+'\',event)" style="font-size:0.72rem;font-weight:700;color:#cc0000;background:none;border:1.5px solid #cc0000;border-radius:20px;padding:5px 14px;cursor:pointer;pointer-events:auto;position:relative;z-index:50">✕ Request Cancel</button></div>'
+      : cancelDisabledByGame
+        ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;text-align:right"><span title="Once a game starts, the ticket is no longer eligible for Request Cancel." style="font-size:0.72rem;font-weight:700;color:#888;background:#f5f5f5;border:1.5px solid #ddd;border-radius:20px;padding:5px 14px;cursor:not-allowed;display:inline-block">✕ '+CANCEL_DISABLED_LABEL+'</span></div>'
       : isDeletePending
         ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;font-size:0.72rem;color:#f59e0b;font-weight:700;text-align:center">⏳ Waiting for host approval…</div>'
         : isDeleteDenied
