@@ -6025,6 +6025,128 @@ function _resSundayMidnight(d){
 function _resGetTickets(){
   try { return JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(_e){ return []; }
 }
+
+// Module-level state for the Results day-expansion. Holds a Mon-first
+// display index 0..6 of the currently-expanded day, or null when no day
+// is expanded. Reset on week navigation so we never show day-N of one
+// week while looking at another week.
+var _resultsExpandedDay = null;
+
+// Return tickets that fall inside the [dayStart, dayEnd) window. Uses
+// gradedAt for settled/canceled tickets (the moment the outcome was
+// decided) and falls back to placedAt for pending/active tickets so a
+// just-placed pending ticket appears under its placement day. Does not
+// mutate anything.
+function _resTicketsForDay(dayStart, dayEnd){
+  var dsT = dayStart.getTime(), deT = dayEnd.getTime();
+  var bets = _resGetTickets();
+  var out = [];
+  for (var i = 0; i < bets.length; i++) {
+    var t = bets[i]; if (!t) continue;
+    var s = String(t.status||'').toLowerCase();
+    var settled = (s === 'won' || s === 'lost' || s === 'push' || s === 'pushed' ||
+                   s === 'canceled' || s === 'voided' || s === 'deleted');
+    var iso = settled && t.gradedAt ? t.gradedAt : t.placedAt;
+    var ts  = iso ? Date.parse(iso) : NaN;
+    if (isNaN(ts)) continue;
+    if (ts >= dsT && ts < deT) out.push(t);
+  }
+  // Newest first within the day.
+  out.sort(function(a,b){
+    var ax = Date.parse((String(a.status||'').toLowerCase()!=='active' && a.gradedAt) ? a.gradedAt : a.placedAt) || 0;
+    var bx = Date.parse((String(b.status||'').toLowerCase()!=='active' && b.gradedAt) ? b.gradedAt : b.placedAt) || 0;
+    return bx - ax;
+  });
+  return out;
+}
+
+// Self-contained ticket card used by the Results day-expansion. Visually
+// mirrors the approved My Bets card (same CSS tokens — --green, --red,
+// --gray, --card, --border — and the same .mc-jersey logo treatment
+// via teamAvatar()) but does NOT share code with the My Bets card
+// renderer to avoid any risk of changing the My Bets layout.
+//
+// Fields shown (per Batch 2 spec D):
+//   logos, matchup, pick, odds, wager, payout, ticket ID, status.
+function _renderResultsTicketCard(t){
+  if (!t) return '';
+  var legs = Array.isArray(t.selections) ? t.selections : [];
+  var first = legs[0] || {};
+  var s = String(t.status||'').toLowerCase();
+  var statusLabel = (s || 'active').toUpperCase();
+  var statusColor = (s === 'won')  ? 'var(--green)' :
+                    (s === 'lost') ? 'var(--red)'   :
+                    (s === 'push' || s === 'pushed') ? 'var(--cyan)' :
+                    (s === 'canceled' || s === 'voided' || s === 'deleted') ? 'var(--gray)' :
+                    '#f5c842'; // pending/active
+
+  var matchup = String(first.matchup || first.game || '').trim();
+  var teams   = matchup ? matchup.split(' vs ') : ['',''];
+  var away    = (teams[0] || '').trim();
+  var home    = (teams[1] || '').trim();
+  var awayLogo = (typeof teamAvatar === 'function' && away) ? teamAvatar(away) : '';
+  var homeLogo = (typeof teamAvatar === 'function' && home) ? teamAvatar(home) : '';
+
+  var pick    = String(first.pick || first.name || first.label || '').trim() || '—';
+  var market  = String(first.market || '').trim();
+  var oddsRaw = (first.odds != null ? first.odds : t.odds);
+  var oddsTxt = '';
+  if (oddsRaw != null && oddsRaw !== '') {
+    if (typeof oddsRaw === 'number') oddsTxt = (oddsRaw > 0 ? '+' : '') + oddsRaw;
+    else oddsTxt = String(oddsRaw);
+  }
+
+  var risk    = parseFloat(t.riskAmount)      || 0;
+  var profit  = parseFloat(t.potentialProfit) || 0;
+  var payout  = (t.estimatedPayout != null && t.estimatedPayout !== '')
+                  ? (parseFloat(t.estimatedPayout) || 0)
+                  : Math.round((risk + profit) * 100) / 100;
+
+  var morePicks = legs.length > 1
+    ? '<div style="font-size:0.62rem;color:var(--gray);margin-top:4px">+'+(legs.length-1)+' more leg'+(legs.length-1===1?'':'s')+'</div>'
+    : '';
+
+  var typeLabel = t.type || t.betType || t.bet_type ||
+                  (legs.length > 1 ? 'Parlay' : legs.length === 1 ? 'Straight' : 'Bet');
+
+  // Card. Visually consistent with My Bets cards (same CSS vars, same
+  // .mc-jersey logos) but lives entirely in this function.
+  return ''+
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:8px">'+
+        '<div style="min-width:0">'+
+          '<div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">'+typeLabel+'</div>'+
+          '<div style="font-size:0.62rem;color:var(--gray);font-family:monospace">'+(t.id ? String(t.id) : '—')+'</div>'+
+        '</div>'+
+        '<span style="font-size:0.6rem;font-weight:900;color:'+statusColor+';background:rgba(255,255,255,0.04);border:1px solid '+statusColor+';padding:3px 10px;border-radius:20px;letter-spacing:0.4px;flex-shrink:0">'+statusLabel+'</span>'+
+      '</div>'+
+      (matchup
+        ? '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'+
+            (awayLogo || '')+
+            '<div style="font-size:0.78rem;color:#fff;font-weight:700;letter-spacing:0.2px">'+(away||'')+(away&&home?' @ ':'')+(home||'')+'</div>'+
+            (homeLogo || '')+
+          '</div>'
+        : '')+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;padding-top:10px;border-top:1px solid var(--border)">'+
+        '<div style="min-width:0;flex:1">'+
+          '<div style="font-size:0.85rem;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+pick+'</div>'+
+          (market ? '<div style="font-size:0.62rem;color:var(--gray);margin-top:2px">'+market+'</div>' : '')+
+          morePicks+
+        '</div>'+
+        (oddsTxt ? '<div style="font-size:0.95rem;font-weight:900;color:var(--cyan);flex-shrink:0">'+oddsTxt+'</div>' : '')+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">'+
+        '<div>'+
+          '<div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Wager</div>'+
+          '<div style="font-size:0.85rem;font-weight:900;color:#fff">$'+risk.toFixed(2)+'</div>'+
+        '</div>'+
+        '<div style="text-align:right">'+
+          '<div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Payout</div>'+
+          '<div style="font-size:0.85rem;font-weight:900;color:'+(s==='won'?'var(--green)':'#fff')+'">$'+payout.toFixed(2)+'</div>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+}
 // Seed mock tickets for current week if no tickets exist (acceptance criterion).
 // REMOVED: _resSeedMockIfEmpty used to write 10 MOCK-* tickets directly
 // into pb-tickets when the store was empty, contaminating the player's
@@ -6242,6 +6364,58 @@ function renderPlayerResults(){
     '</div>' +
   '</div>';
 
+  // Daily breakdown — clickable days for the active week. Tapping a day
+  // expands a cascade list of that day's tickets using the Results-only
+  // ticket card. Pure UI: no grading, balance, schema, or aggregate math
+  // change. The bar-chart math above is untouched.
+  //
+  // Storage order: dayNets[0]=Sun..dayNets[6]=Sat. Display order: Mon-first.
+  // _resultsExpandedDay is the Mon-first display index (0..6) or null.
+  var _dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  // Map Mon-first display index → storage Sun-first index used by dayNets.
+  var _displayToStorage = [1,2,3,4,5,6,0];
+  var dailyHtml = '<div style="padding:8px 16px 4px">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px">' +
+      '<div style="font-size:0.95rem;font-weight:900;letter-spacing:0.3px">Daily Breakdown</div>' +
+      '<div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px">Tap a day</div>' +
+    '</div>';
+  for (var di = 0; di < 7; di++) {
+    var stIdx     = _displayToStorage[di];
+    var dayNet    = agg.dailyNets[stIdx] || 0;
+    var dayStart  = new Date(ws); dayStart.setDate(dayStart.getDate() + stIdx);
+    var dayEnd    = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
+    var dayTix    = _resTicketsForDay(dayStart, dayEnd);
+    var hasTix    = dayTix.length > 0;
+    var isExp     = (_resultsExpandedDay === di) && hasTix;
+    var dCol      = (dayNet > 0) ? 'var(--green)' : (dayNet < 0) ? 'var(--red)' : 'var(--gray)';
+    var dAmt      = (Math.abs(dayNet) < 0.005)
+                      ? '—'
+                      : (dayNet > 0 ? '+$' : '−$') + Math.abs(dayNet).toFixed(2);
+    var dDate     = dayStart.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    var caret     = hasTix ? (isExp ? '▾' : '▸') : '';
+    var disabled  = hasTix ? '' : 'opacity:0.45;cursor:default;';
+    dailyHtml += '<div style="background:var(--card);border:1px solid '+(isExp?'var(--cyan)':'var(--border)')+';border-radius:14px;margin-bottom:8px;overflow:hidden">' +
+      '<button data-results-day="'+di+'" '+(hasTix?'':'disabled')+' style="width:100%;text-align:left;background:none;border:none;color:inherit;font-family:inherit;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:'+(hasTix?'pointer':'default')+';'+disabled+'">' +
+        '<div style="display:flex;align-items:center;gap:10px;min-width:0">' +
+          '<span style="font-size:0.8rem;color:var(--gray);width:14px;text-align:center">'+caret+'</span>' +
+          '<div style="min-width:0">' +
+            '<div style="font-size:0.85rem;font-weight:900;color:#fff">'+_dayLabels[di]+' <span style="color:var(--gray);font-weight:700;font-size:0.7rem;margin-left:4px">'+dDate+'</span></div>' +
+            '<div style="font-size:0.6rem;color:var(--gray);margin-top:2px">'+(hasTix ? (dayTix.length+' ticket'+(dayTix.length===1?'':'s')) : 'No tickets')+'</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="font-size:0.95rem;font-weight:900;color:'+dCol+';flex-shrink:0">'+dAmt+'</div>' +
+      '</button>';
+    if (isExp) {
+      dailyHtml += '<div style="padding:4px 12px 12px;background:rgba(255,255,255,0.02);border-top:1px solid var(--border)">';
+      for (var ti = 0; ti < dayTix.length; ti++) {
+        dailyHtml += _renderResultsTicketCard(dayTix[ti]);
+      }
+      dailyHtml += '</div>';
+    }
+    dailyHtml += '</div>';
+  }
+  dailyHtml += '</div>';
+
   // Weekly History — host-style cards, up to 8 prior weeks with activity.
   var historyHtml = '<div style="padding:8px 16px 24px">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px">' +
@@ -6283,7 +6457,7 @@ function renderPlayerResults(){
   }
   historyHtml += '</div>';
 
-  el.innerHTML = topHtml + historyHtml;
+  el.innerHTML = topHtml + dailyHtml + historyHtml;
   _wireResultsButtons(el);
 }
 function _wireResultsButtons(el){
@@ -6292,6 +6466,7 @@ function _wireResultsButtons(el){
       if (btn.disabled) return;
       _resultsWeekOffset += (btn.dataset.resultsWeek === 'next' ? 1 : -1);
       if (_resultsWeekOffset > 0) _resultsWeekOffset = 0;
+      _resultsExpandedDay = null; // collapse on week change
       renderPlayerResults();
     });
   });
@@ -6300,9 +6475,20 @@ function _wireResultsButtons(el){
       var k = parseInt(btn.dataset.resultsJump,10);
       if (isNaN(k)) return;
       _resultsWeekOffset = k;
+      _resultsExpandedDay = null; // collapse on week jump
       renderPlayerResults();
       var sec = document.getElementById('results-section');
       if (sec && sec.scrollIntoView) sec.scrollIntoView({behavior:'smooth', block:'start'});
+    });
+  });
+  // Day expansion: toggle the tapped day, collapse others.
+  Array.prototype.forEach.call(el.querySelectorAll('[data-results-day]'), function(btn){
+    btn.addEventListener('click', function(){
+      if (btn.disabled) return;
+      var di = parseInt(btn.dataset.resultsDay, 10);
+      if (isNaN(di) || di < 0 || di > 6) return;
+      _resultsExpandedDay = (_resultsExpandedDay === di) ? null : di;
+      renderPlayerResults();
     });
   });
 }
