@@ -2798,18 +2798,60 @@ function _makeSelection(b) {
   // never match anything downstream. Fix: take the first token only.
   // (Falls back to the matchup text if cellId is missing.)
   var rawGameId = b.cellId ? String(b.cellId).split('-')[0] : (b.game || '');
-  return {
-    gameId:     rawGameId,
-    sport:      b.sport||'',
-    matchup:    b.game||'',
-    awayTeam:   awayTeam,
-    homeTeam:   homeTeam,
-    placedDate: placedDate,
+
+  // Identify the upstream source of rawGameId. Today every line on the
+  // board comes from The Odds API; if a non-Odds-API source ever feeds
+  // into the slip it can stamp b.provider and we'll preserve it.
+  // providerGameId is a provider-namespaced identifier — do NOT compare
+  // it across providers (Odds API hex ≠ SportsDataIO GameID).
+  var provider       = b.provider || 'odds_api';
+  var providerGameId = rawGameId;
+
+  // canonicalGameKey — our internal permanent identity. Built from
+  // sport + sorted TLA pair + scheduled local date (+ HHMM when known).
+  // Persisted on the leg at placement so future grading can match by
+  // this key even after the upstream board has rolled past the game.
+  // _canonicalKeyForSelection() is also called at grade-time — we
+  // recompute then to be tolerant of any field drift, but the persisted
+  // value is what makes the identity permanent.
+  var _legShape = {
+    sport:        b.sport || '',
+    homeTeam:     homeTeam,
+    awayTeam:     awayTeam,
     commenceTime: commenceTime,
-    pick:       b.pick||'',
-    market:     b.market||'',
-    odds:       b.odds,
-    side:       side
+    time:         b.time || null
+  };
+  var _ck = (typeof _canonicalKeyForSelection === 'function')
+              ? _canonicalKeyForSelection(_legShape)
+              : null;
+  var canonicalKeyExact = (_ck && _ck.exact) || null;
+  var canonicalKeyLoose = (_ck && _ck.loose) || null;
+
+  return {
+    // ── Provider identity (source-of-truth from the board) ──
+    provider:           provider,
+    providerGameId:     providerGameId,
+    gameId:             providerGameId,   // back-compat alias for callers
+                                          // that still read sel.gameId
+
+    // ── Canonical (internal) identity — permanent across providers ──
+    canonicalKeyExact:  canonicalKeyExact,
+    canonicalKeyLoose:  canonicalKeyLoose,
+
+    // ── Game shape ──
+    sport:              b.sport || '',
+    matchup:            b.game || '',
+    awayTeam:           awayTeam,
+    homeTeam:           homeTeam,
+    commenceTime:       commenceTime,
+    scheduledStart:     commenceTime,     // explicit alias matching spec
+    placedDate:         placedDate,
+
+    // ── Pick ──
+    pick:               b.pick || '',
+    market:             b.market || '',
+    odds:               b.odds,
+    side:               side
   };
 }
 
