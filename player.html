@@ -2784,13 +2784,22 @@ function _makeSelection(b) {
   // to look up the right /scores/json/GamesByDate/<date> bucket.
   var placedDate = new Date().toISOString().slice(0,10);
   // Snapshotted game start time at placement (raw ISO/epoch from the
-  // sportsbook board's g.time / g.commence_time). Used ONLY by
-  // evaluateCancelEligibility() to hide Request Cancel once a leg's
-  // game has started. Optional field; legacy selections without this
-  // value fall back to "keep button visible" (today's behavior).
+  // sportsbook board's g.time / g.commence_time). Used by
+  // evaluateCancelEligibility() (Cancel gating) AND by
+  // _findGameForSelection's canonical-key matcher (series/doubleheader
+  // disambiguation). Optional. Legacy selections without this value
+  // fall through to the safer teams+date fallback.
   var commenceTime = (b.time != null && b.time !== '') ? b.time : null;
+  // Clean game id. The board builds cell ids as `<oddsApiId>-<marketTag>-<teamToken>`.
+  // Odds API v4 ids are 32-char hex with NO internal hyphens, so the
+  // leading dash-token IS the underlying game id. Earlier slice(0,4)
+  // logic accidentally re-joined the market+team tokens onto the id,
+  // producing per-cell ids that were never unique per GAME and could
+  // never match anything downstream. Fix: take the first token only.
+  // (Falls back to the matchup text if cellId is missing.)
+  var rawGameId = b.cellId ? String(b.cellId).split('-')[0] : (b.game || '');
   return {
-    gameId:     b.cellId ? b.cellId.split('-').slice(0,4).join('-') : b.game,
+    gameId:     rawGameId,
     sport:      b.sport||'',
     matchup:    b.game||'',
     awayTeam:   awayTeam,
@@ -2803,6 +2812,89 @@ function _makeSelection(b) {
     side:       side
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Canonical game-key helpers — Patch 1
+// ─────────────────────────────────────────────────────────────────────────
+// Build a deterministic, source-agnostic key that uniquely identifies a
+// game across Odds API (placement) and SportsDataIO (grading) namespaces.
+// Format:
+//   sport|TLA_LOW|TLA_HIGH|YYYY-MM-DD|HHMM
+//
+//   sport     normalized lowercase (mlb / baseball_mlb both → mlb)
+//   TLA pair  sorted lexicographically (unordered — we don't trust
+//             away/home order in the matchup string)
+//   date      LOCAL calendar date of scheduled start, US-Pacific-ish via
+//             toLocaleString tricks would be fragile; we read the local
+//             Date components on the runtime, same approach as
+//             _sdioDateString after the UTC fix
+//   time      HHMM of scheduled start (handles same-day doubleheaders)
+//
+// LOOSE variant (no HHMM, ends with '|') used as the fallback key for
+// legacy tickets where commenceTime is missing minutes.
+//
+// Returns null when the inputs are not enough to build any key safely.
+function _canonicalKeyParts(sportRaw, homeName, awayName, startIso) {
+  var sport = String(sportRaw||'').toLowerCase().trim();
+  if (sport === 'baseball_mlb') sport = 'mlb';
+  var homeTla = (typeof _tlaForName === 'function') ? _tlaForName(homeName) : null;
+  var awayTla = (typeof _tlaForName === 'function') ? _tlaForName(awayName) : null;
+  if (!homeTla || !awayTla) return null;
+  var lo = homeTla < awayTla ? homeTla : awayTla;
+  var hi = homeTla < awayTla ? awayTla : homeTla;
+  var ms = (startIso == null || startIso === '') ? NaN
+         : (typeof startIso === 'number' ? startIso : Date.parse(startIso));
+  var dateStr = '', timeStr = '';
+  if (isFinite(ms) && !isNaN(ms)) {
+    var dt = new Date(ms);
+    var mm = String(dt.getMonth()+1).padStart(2,'0');
+    var dd = String(dt.getDate()).padStart(2,'0');
+    dateStr = dt.getFullYear() + '-' + mm + '-' + dd;
+    var hh = String(dt.getHours()).padStart(2,'0');
+    var mi = String(dt.getMinutes()).padStart(2,'0');
+    timeStr = hh + mi;
+  }
+  return {
+    sport: sport || 'mlb',
+    lo:    lo,
+    hi:    hi,
+    date:  dateStr,
+    time:  timeStr
+  };
+}
+function _canonicalKeyForSelection(sel) {
+  if (!sel) return null;
+  var startIso = (sel.commenceTime != null && sel.commenceTime !== '')
+                  ? sel.commenceTime
+                  : (sel.time != null && sel.time !== '' ? sel.time : null);
+  var p = _canonicalKeyParts(sel.sport, sel.homeTeam, sel.awayTeam, startIso);
+  if (!p) return null;
+  // EXACT: requires date + time. LOOSE: requires date only.
+  return {
+    exact: (p.date && p.time) ? (p.sport + '|' + p.lo + '|' + p.hi + '|' + p.date + '|' + p.time) : null,
+    loose: p.date           ? (p.sport + '|' + p.lo + '|' + p.hi + '|' + p.date + '|') : null,
+    parts: p
+  };
+}
+function _canonicalKeyForSdioGame(g) {
+  if (!g) return null;
+  var raw = g._sdioRaw || {};
+  // Prefer DateTime (scheduled start with HH:MM); fall back to Day (date only).
+  var startIso = raw.DateTime || g.commenceTime || raw.Day || g.day || null;
+  // SDIO names — use HomeTeam/AwayTeam (TLA) directly when present, else
+  // full names. _canonicalKeyParts will TLA-resolve either way.
+  var homeName = raw.HomeTeam || g.home || '';
+  var awayName = raw.AwayTeam || g.away || '';
+  var p = _canonicalKeyParts(g.sport || 'mlb', homeName, awayName, startIso);
+  if (!p) return null;
+  return {
+    exact: (p.date && p.time) ? (p.sport + '|' + p.lo + '|' + p.hi + '|' + p.date + '|' + p.time) : null,
+    loose: p.date           ? (p.sport + '|' + p.lo + '|' + p.hi + '|' + p.date + '|') : null,
+    parts: p
+  };
+}
+window._canonicalKeyForSelection = _canonicalKeyForSelection;
+window._canonicalKeyForSdioGame  = _canonicalKeyForSdioGame;
 
 function confirmBet() {
   console.log("confirm bet clicked");
@@ -3210,11 +3302,27 @@ function _gradeTicket(ticket, resultsMap, normalizedGames) {
 
   for (var i = 0; i < ticket.selections.length; i++) {
     var sel = ticket.selections[i];
-    var gameResult = _findGameForSelection(sel, games, resultsMap || {});
+    var matchMeta = {};
+    var gameResult = _findGameForSelection(sel, games, resultsMap || {}, matchMeta);
     if (!gameResult) {
       var nearest = _closestGameDiagnostic(sel, games);
       var selHomeTla2 = _tlaForName(sel.homeTeam);
       var selAwayTla2 = _tlaForName(sel.awayTeam);
+      var isAmbiguous = matchMeta.matchReason === 'ambiguous_match';
+      // Build the canonical skipReason. Ambiguity takes priority — it
+      // is a safety refusal, not a missing-data failure.
+      var skipReason = isAmbiguous
+        ? ('ambiguous_match (tier=' + matchMeta.tier + ', candidates=' + (matchMeta.candidates||[]).length +
+           ': ' + (matchMeta.candidates||[]).map(function(c){
+             return (c.id||'?') + ' ' + (c.away||'?') + '@' + (c.home||'?') +
+                    (c.scheduledTime ? ' ['+c.scheduledTime+']' : (c.scheduledDate ? ' ['+c.scheduledDate+']' : ''));
+           }).join('; ') + ')')
+        : (
+          !games.length         ? 'no_completed_games_in_window' :
+          (!selHomeTla2 || !selAwayTla2) ? 'team_tla_unresolved (extend MLB_TEAM_ALIASES)' :
+          nearest               ? 'tla_pair_mismatch_with_nearest' :
+          'no_candidate_in_window'
+        );
       console.log('[active ticket final check]\n' +
         '  ticketId:     ' + (ticket.id || '?') + '\n' +
         '  selection:    ' + (sel.pick || '-') + '\n' +
@@ -3222,25 +3330,25 @@ function _gradeTicket(ticket, resultsMap, normalizedGames) {
         '  gameId:       ' + (sel.gameId  || '-') + '\n' +
         '  selHome:      ' + (sel.homeTeam || '-') + ' (TLA=' + (selHomeTla2 || '?') + ')\n' +
         '  selAway:      ' + (sel.awayTeam || '-') + ' (TLA=' + (selAwayTla2 || '?') + ')\n' +
+        '  selKeyExact:  ' + (matchMeta.selKeyExact || '-') + '\n' +
+        '  selKeyLoose:  ' + (matchMeta.selKeyLoose || '-') + '\n' +
         '  matchedGame:  ' + (nearest ? (nearest.away + ' @ ' + nearest.home) : 'none') + '\n' +
         '  matched:      no\n' +
         '  gameStatus:   ' + (nearest ? (nearest.status || '-') : '-') + '\n' +
         '  homeScore:    ' + (nearest && nearest.home_score != null ? nearest.home_score : '-') + '\n' +
         '  awayScore:    ' + (nearest && nearest.away_score != null ? nearest.away_score : '-') + '\n' +
-        '  skipReason:   ' + (
-          !games.length         ? 'no_completed_games_in_window' :
-          (!selHomeTla2 || !selAwayTla2) ? 'team_tla_unresolved (extend MLB_TEAM_ALIASES)' :
-          nearest               ? 'tla_pair_mismatch_with_nearest' :
-          'no_candidate_in_window'
-        ));
+        '  skipReason:   ' + skipReason);
       // Tony-spec mirror log so the skip path matches the requested shape.
-      console.log('[grade skipped]\n' +
-        '  reason:     ' + (
+      var shortReason = isAmbiguous
+        ? ('ambiguous_match (tier=' + matchMeta.tier + ', n=' + (matchMeta.candidates||[]).length + ')')
+        : (
           !games.length         ? 'no_completed_games_in_window' :
           (!selHomeTla2 || !selAwayTla2) ? 'team_tla_unresolved' :
           nearest               ? 'tla_pair_mismatch_with_nearest' :
           'no_candidate_in_window'
-        ) + '\n' +
+        );
+      console.log('[grade skipped]\n' +
+        '  reason:     ' + shortReason + '\n' +
         '  ticketId:   ' + (ticket.id || '?') + '\n' +
         '  pick:       ' + (sel.pick || '-') + '\n' +
         '  gameStatus: ' + (nearest ? (nearest.status || '-') : '-'));
@@ -3455,6 +3563,12 @@ function _normalizeSdioGame(g) {
                 : (g.AwayTeamScore != null ? g.AwayTeamScore : null);
   var homeRuns  = (g.HomeTeamRuns != null) ? g.HomeTeamRuns
                 : (g.HomeTeamScore != null ? g.HomeTeamScore : null);
+  // Scheduled-start fields used by canonical-key matching. SDIO
+  // GamesByDate payloads include Day (date-only, midnight) and DateTime
+  // (scheduled first pitch with HH:MM). Both arrive as naive local
+  // strings (no Z suffix) representing the stadium-local time.
+  var sdioDay      = g.Day      || g.day      || null;
+  var sdioDateTime = g.DateTime || g.dateTime || null;
   return {
     id:         g.GameID || g.GameId || g.id || (away + '@' + home),
     sport:      'MLB',
@@ -3471,7 +3585,9 @@ function _normalizeSdioGame(g) {
       HomeTeamName: homeShort,
       AwayTeamRuns: awayRuns,
       HomeTeamRuns: homeRuns,
-      Status:       rawStatus
+      Status:       rawStatus,
+      Day:          sdioDay,
+      DateTime:     sdioDateTime
     }
   };
 }
@@ -3532,75 +3648,196 @@ function _buildFinalScoreObject(gameResult) {
 // TLA-first matcher. Resolves both the selection and every candidate game
 // to TLAs via the alias dictionary, then matches on the unordered TLA pair.
 // Falls back to the older substring strategy only if no TLA can be derived.
-function _findGameForSelection(sel, normalizedGames, resultsMap) {
-  if (!sel) return null;
-  // 1. Direct gameId hit
-  if (sel.gameId && resultsMap[String(sel.gameId).toLowerCase()]) {
-    return resultsMap[String(sel.gameId).toLowerCase()];
+//
+// _findGameForSelection(sel, normalizedGames, resultsMap, outMeta?)
+//
+// Patch 1 match priority — safe for MLB series + doubleheaders.
+//
+//   P1  canonical-key EXACT     sport + TLA pair + local date + HHMM
+//   P2  canonical-key LOOSE     sport + TLA pair + local date
+//                               (legacy tickets missing minutes; doubleheaders
+//                               still get disambiguated by the ambiguity guard)
+//   P3  teams-only fallback     TLA pair OR substring — ONLY when exactly
+//                               one candidate exists in the window
+//
+// Ambiguity guard: at every tier, if 2+ candidates share the matcher's
+// key, refuse to match. We do NOT silently pick "the first one" — that
+// is the silent corruption bug. Callers see `null` plus, when outMeta
+// is provided, outMeta.matchReason='ambiguous_match' with the candidate
+// list so audit/grading logs can surface why.
+//
+// outMeta (optional) receives:
+//   {
+//     matchReason: 'canonical_exact' | 'canonical_loose' | 'teams_unique'
+//                | 'ambiguous_match' | 'no_match',
+//     tier:        1 | 2 | 3 | null,
+//     candidates:  [{ id, away, home, status, scheduledDate, scheduledTime }],
+//     selKeyExact: string|null,
+//     selKeyLoose: string|null,
+//     selHomeTla:  string|null,
+//     selAwayTla:  string|null
+//   }
+//
+// Callers that don't pass outMeta get the legacy behavior (game or null).
+function _findGameForSelection(sel, normalizedGames, resultsMap, outMeta) {
+  function _setMeta(reason, tier, candidates) {
+    if (!outMeta) return;
+    outMeta.matchReason = reason;
+    outMeta.tier        = tier;
+    outMeta.candidates  = candidates || [];
   }
-  var matchup = String(sel.matchup || sel.game || '').toLowerCase();
+  function _candidateSummary(g) {
+    var raw = g._sdioRaw || {};
+    return {
+      id:             g.id,
+      away:           g.away,
+      home:           g.home,
+      status:         g.status,
+      scheduledDate:  raw.Day      || null,
+      scheduledTime:  raw.DateTime || null
+    };
+  }
+  if (outMeta) {
+    outMeta.matchReason = 'no_match';
+    outMeta.tier        = null;
+    outMeta.candidates  = [];
+    outMeta.selKeyExact = null;
+    outMeta.selKeyLoose = null;
+    outMeta.selHomeTla  = null;
+    outMeta.selAwayTla  = null;
+  }
+  if (!sel || !Array.isArray(normalizedGames)) return null;
+
+  // Resolve sel TLAs once. Try sel.homeTeam/awayTeam first; fall back
+  // to parsing the matchup string. Same resolution path the legacy
+  // matcher used — unchanged.
+  var matchup    = String(sel.matchup || sel.game || '').toLowerCase();
   var selHomeRaw = String(sel.homeTeam || '').trim();
   var selAwayRaw = String(sel.awayTeam || '').trim();
-  // Try TLA resolution against homeTeam, awayTeam, and also any tokens
-  // pulled out of the matchup string ("Angels @ Guardians").
-  var selHomeTla = _tlaForName(selHomeRaw);
-  var selAwayTla = _tlaForName(selAwayRaw);
+  var selHomeTla = (typeof _tlaForName === 'function') ? _tlaForName(selHomeRaw) : null;
+  var selAwayTla = (typeof _tlaForName === 'function') ? _tlaForName(selAwayRaw) : null;
   if ((!selHomeTla || !selAwayTla) && matchup) {
-    // Split on ' vs ', ' @ ', or '@'
     var parts = matchup.split(/\s+(?:vs|@)\s+|@/).map(function(s){ return s.trim(); }).filter(Boolean);
     if (parts.length === 2) {
       if (!selAwayTla) selAwayTla = _tlaForName(parts[0]);
       if (!selHomeTla) selHomeTla = _tlaForName(parts[1]);
     }
   }
+  if (outMeta) {
+    outMeta.selHomeTla = selHomeTla;
+    outMeta.selAwayTla = selAwayTla;
+  }
 
-  // 2. TLA pair match (unordered — we don't trust away/home order from
-  // the matchup string).
+  // Canonical key for this selection.
+  var selKey = _canonicalKeyForSelection(sel);
+  if (outMeta && selKey) {
+    outMeta.selKeyExact = selKey.exact;
+    outMeta.selKeyLoose = selKey.loose;
+  }
+
+  // ── P1: canonical EXACT match (sport + TLA pair + date + HHMM) ──
+  if (selKey && selKey.exact) {
+    var p1 = [];
+    for (var i1 = 0; i1 < normalizedGames.length; i1++) {
+      var g1 = normalizedGames[i1]; if (!g1) continue;
+      var k1 = _canonicalKeyForSdioGame(g1);
+      if (k1 && k1.exact === selKey.exact) p1.push(g1);
+    }
+    if (p1.length === 1) {
+      _setMeta('canonical_exact', 1, p1.map(_candidateSummary));
+      return p1[0];
+    }
+    if (p1.length > 1) {
+      _setMeta('ambiguous_match', 1, p1.map(_candidateSummary));
+      return null;
+    }
+  }
+
+  // ── P2: canonical LOOSE match (sport + TLA pair + date) ──
+  // Used for legacy tickets that have a date but no HHMM, and as a
+  // safety net when minutes drift between Odds API and SDIO scheduling.
+  if (selKey && selKey.loose) {
+    var p2 = [];
+    for (var i2 = 0; i2 < normalizedGames.length; i2++) {
+      var g2 = normalizedGames[i2]; if (!g2) continue;
+      var k2 = _canonicalKeyForSdioGame(g2);
+      if (k2 && k2.loose === selKey.loose) p2.push(g2);
+    }
+    if (p2.length === 1) {
+      _setMeta('canonical_loose', 2, p2.map(_candidateSummary));
+      return p2[0];
+    }
+    if (p2.length > 1) {
+      // Two games same teams same day = doubleheader. Refuse — the
+      // grader needs HHMM to pick the right leg.
+      _setMeta('ambiguous_match', 2, p2.map(_candidateSummary));
+      return null;
+    }
+  }
+
+  // ── P3: teams-only fallback, ONLY when exactly one candidate exists ──
+  // Two sub-passes:
+  //   3a) TLA pair (unordered) across the entire window
+  //   3b) substring fallback across home / away / short names / matchup
+  // Either pass collects ALL matching games; we return only when count===1.
+  var p3 = [];
   if (selHomeTla && selAwayTla) {
-    for (var i = 0; i < normalizedGames.length; i++) {
-      var g = normalizedGames[i];
-      if (!g) continue;
-      var raw = g._sdioRaw || {};
-      var hTla = String(raw.HomeTeam || '').toUpperCase();
-      var aTla = String(raw.AwayTeam || '').toUpperCase();
+    var selPair = [selHomeTla, selAwayTla].sort().join('|');
+    for (var i3 = 0; i3 < normalizedGames.length; i3++) {
+      var g3 = normalizedGames[i3]; if (!g3) continue;
+      var raw3 = g3._sdioRaw || {};
+      var hTla = String(raw3.HomeTeam || '').toUpperCase();
+      var aTla = String(raw3.AwayTeam || '').toUpperCase();
       if (!hTla || !aTla) continue;
       var pair = [hTla, aTla].sort().join('|');
-      var selPair = [selHomeTla, selAwayTla].sort().join('|');
-      if (pair === selPair) return g;
+      if (pair === selPair) p3.push(g3);
+    }
+  }
+  // Substring fallback only runs if TLA pass found nothing — substring
+  // is broader and we don't want it to add false candidates that then
+  // trigger ambiguity-refusal against a clean TLA-only hit.
+  if (!p3.length) {
+    var selHome = selHomeRaw.toLowerCase();
+    var selAway = selAwayRaw.toLowerCase();
+    function _bidir(needle, hay) {
+      if (!needle || !hay) return false;
+      return needle.indexOf(hay) !== -1 || hay.indexOf(needle) !== -1;
+    }
+    for (var i4 = 0; i4 < normalizedGames.length; i4++) {
+      var g4 = normalizedGames[i4]; if (!g4) continue;
+      var gh = String(g4.home || '').toLowerCase();
+      var ga = String(g4.away || '').toLowerCase();
+      var raw4 = g4._sdioRaw || {};
+      var gShortH = String(raw4.HomeTeamName||'').toLowerCase();
+      var gShortA = String(raw4.AwayTeamName||'').toLowerCase();
+      var gTlaH   = String(raw4.HomeTeam||'').toLowerCase();
+      var gTlaA   = String(raw4.AwayTeam||'').toLowerCase();
+      var hit = false;
+      if (selHome && selAway) {
+        var homeHit = _bidir(selHome, gh) || _bidir(selHome, gShortH) || (gTlaH && selHome === gTlaH);
+        var awayHit = _bidir(selAway, ga) || _bidir(selAway, gShortA) || (gTlaA && selAway === gTlaA);
+        if (homeHit && awayHit) hit = true;
+        // Swapped: matchup string had home/away reversed.
+        if (!hit) {
+          var homeHitSwap = _bidir(selHome, ga) || _bidir(selHome, gShortA) || (gTlaA && selHome === gTlaA);
+          var awayHitSwap = _bidir(selAway, gh) || _bidir(selAway, gShortH) || (gTlaH && selAway === gTlaH);
+          if (homeHitSwap && awayHitSwap) hit = true;
+        }
+      }
+      if (hit && p3.indexOf(g4) === -1) p3.push(g4);
     }
   }
 
-  // 3. Substring fallback (legacy path) for tickets where TLA resolution
-  // somehow fails. Bidirectional substring against full / short / TLA.
-  var selHome = selHomeRaw.toLowerCase();
-  var selAway = selAwayRaw.toLowerCase();
-  function _bidir(needle, hay) {
-    if (!needle || !hay) return false;
-    return needle.indexOf(hay) !== -1 || hay.indexOf(needle) !== -1;
+  if (p3.length === 1) {
+    _setMeta('teams_unique', 3, p3.map(_candidateSummary));
+    return p3[0];
   }
-  for (var k = 0; k < normalizedGames.length; k++) {
-    var g2 = normalizedGames[k];
-    if (!g2) continue;
-    var gh = String(g2.home || '').toLowerCase();
-    var ga = String(g2.away || '').toLowerCase();
-    var raw2 = g2._sdioRaw || {};
-    var gTlas = [String(raw2.HomeTeam||'').toLowerCase(), String(raw2.AwayTeam||'').toLowerCase()];
-    var gShort = [String(raw2.HomeTeamName||'').toLowerCase(), String(raw2.AwayTeamName||'').toLowerCase()];
-    var ghLast = gh.split(' ').slice(-1)[0];
-    var gaLast = ga.split(' ').slice(-1)[0];
-    if (selHome && (_bidir(selHome, gh) || _bidir(selHome, gShort[0]) || (gTlas[0] && selHome === gTlas[0]))) {
-      if (selAway && (_bidir(selAway, ga) || _bidir(selAway, gShort[1]) || (gTlas[1] && selAway === gTlas[1]))) {
-        return g2;
-      }
-    }
-    if (matchup && (matchup.indexOf(gh) !== -1 || matchup.indexOf(ga) !== -1 ||
-                    (gShort[0] && matchup.indexOf(gShort[0]) !== -1) ||
-                    (gShort[1] && matchup.indexOf(gShort[1]) !== -1) ||
-                    (ghLast && matchup.indexOf(ghLast) !== -1) ||
-                    (gaLast && matchup.indexOf(gaLast) !== -1))) {
-      return g2;
-    }
+  if (p3.length > 1) {
+    _setMeta('ambiguous_match', 3, p3.map(_candidateSummary));
+    return null;
   }
+
+  _setMeta('no_match', null, []);
   return null;
 }
 
@@ -4525,6 +4762,7 @@ async function runUngradedFinishedTicketAudit(opts) {
 
     // Match attempt against the union of fetched games (completed or not).
     var matched = null;
+    var matchMeta = {};
     try {
       // Match against ALL fetched games first (including non-final), so we
       // can distinguish "no match" from "matched but not final".
@@ -4534,7 +4772,7 @@ async function runUngradedFinishedTicketAudit(opts) {
         if (ag && ag.id) allMap[String(ag.id).toLowerCase()] = ag;
       }
       matched = (typeof _findGameForSelection === 'function')
-        ? _findGameForSelection(sel, allGames, allMap)
+        ? _findGameForSelection(sel, allGames, allMap, matchMeta)
         : null;
     } catch(_e){ matched = null; }
 
@@ -4546,6 +4784,17 @@ async function runUngradedFinishedTicketAudit(opts) {
       skipReason = 'scores_grading_suspended (reason="' + suspensionReason + '")';
     } else if (fetchErrors.length && !allGames.length) {
       skipReason = 'sdio_fetch_error:' + fetchErrors.join(';');
+    } else if (matchMeta.matchReason === 'ambiguous_match') {
+      // Patch 1 safety refusal: same team pair + same date (sometimes
+      // same HHMM) collided in the window. This is a series or
+      // doubleheader the canonical key couldn't disambiguate — we
+      // refuse to grade rather than silently picking the wrong game.
+      var ambIds = (matchMeta.candidates||[]).map(function(c){
+        return (c.id||'?') + '@' + (c.scheduledTime || c.scheduledDate || '?');
+      }).join('; ');
+      skipReason = 'ambiguous_match (tier=' + matchMeta.tier +
+                   ', n=' + (matchMeta.candidates||[]).length +
+                   ', candidates=[' + ambIds + '])';
     } else if (!completedGames.length && !matched) {
       skipReason = 'no_completed_games_in_window';
     } else if (anyKnown && nowMs < earliest) {
