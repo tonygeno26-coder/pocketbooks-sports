@@ -3750,10 +3750,27 @@ function _closestGameDiagnostic(sel, normalizedGames) {
 // { games: [normalized...], resultsMap: {...}, completedCount, error: null|string }.
 // NEVER throws — callers must always get a usable object back.
 // Format a Date as the SportsDataIO date string: YYYY-MMM-DD (uppercase).
+//
+// MLB games are scheduled by stadium-local US date, and SportsDataIO's
+// GamesByDate/<date> endpoint keys games by that LOCAL US date — not UTC.
+//
+// Previous bug: this returned the UTC date, which from ~5pm Pacific
+// onward is already the NEXT calendar day in UTC. Result: an evening
+// fetch on "local 2026-05-14" asked SportsDataIO for "2026-MAY-15",
+// missed every game that finished that night, and tickets sat ACTIVE
+// with skipReason=no_completed_games_in_window even though the games
+// were Final upstream. The daysBack window papered over part of this
+// but still missed today's late-finishing games.
+//
+// Fix: use the runtime's local date components. Browser local time on
+// player devices matches the user's region, which for the host's MLB
+// betting clients is Pacific/Mountain/Central/Eastern — all of which
+// align with the same calendar day SportsDataIO keys on. No grading
+// math, payout math, or ticket schema touched.
 function _sdioDateString(d) {
   var months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-  return d.getUTCFullYear() + '-' + months[d.getUTCMonth()] + '-' +
-         String(d.getUTCDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + months[d.getMonth()] + '-' +
+         String(d.getDate()).padStart(2, '0');
 }
 
 // Fetch a single SportsDataIO GamesByDate bucket. Returns normalized array
