@@ -4057,9 +4057,51 @@ function _sdioDateString(d) {
 async function _fetchSdioByDate(dateStr) {
   var subPath = 'scores/json/GamesByDate/' + dateStr;
   var url = '/api/sportsdataio/mlb?path=' + encodeURIComponent(subPath);
-  var res = await fetch(url);
-  if (!res.ok) return { games: [], error: 'sdio_http_' + res.status, subPath: subPath };
-  var raw = await res.json();
+  var res;
+  try {
+    res = await fetch(url);
+  } catch (netErr) {
+    return { games: [], error: 'sdio_network:' + (netErr && netErr.message || netErr), subPath: subPath };
+  }
+  if (!res.ok) {
+    // Patch SDIO-diag: the proxy now returns a JSON envelope on every
+    // error with a stable `error` code. Surface that code to the caller
+    // so the audit and grading-suspension reason can distinguish:
+    //   sportsdataio_key_missing  (proxy not configured → 503)
+    //   upstream_unauthorized     (SDIO 401, bad/expired key)
+    //   upstream_forbidden        (SDIO 403)
+    //   upstream_not_found        (SDIO 404, e.g. wrong date format)
+    //   upstream_quota_exceeded   (SDIO 429)
+    //   upstream_5xx              (SDIO server issue)
+    //   upstream_fetch_failed     (network failure inside the proxy)
+    var bodyText = '';
+    try { bodyText = await res.text(); } catch(_e){}
+    var envelope = null;
+    if (bodyText) { try { envelope = JSON.parse(bodyText); } catch(_e){} }
+    var code = (envelope && envelope.error)
+                  ? String(envelope.error)
+                  : ('sdio_http_' + res.status);
+    var upstreamStatus = (envelope && envelope.upstream && envelope.upstream.status) || null;
+    var snippet = (envelope && envelope.upstream && envelope.upstream.snippet) || '';
+    var msg = (envelope && envelope.message) || ('HTTP ' + res.status);
+    var proxyVersion = (res.headers && res.headers.get) ? (res.headers.get('X-Proxy-Version') || null) : null;
+    return {
+      games: [],
+      error: code,
+      proxyHttpStatus: res.status,
+      upstreamStatus: upstreamStatus,
+      message: msg,
+      snippet: snippet,
+      proxyVersion: proxyVersion,
+      subPath: subPath
+    };
+  }
+  var raw;
+  try {
+    raw = await res.json();
+  } catch (parseErr) {
+    return { games: [], error: 'sdio_json_parse:' + (parseErr && parseErr.message || parseErr), subPath: subPath };
+  }
   if (!Array.isArray(raw)) return { games: [], error: 'sdio_not_array', subPath: subPath };
   var normalized = [];
   for (var i = 0; i < raw.length; i++) {
@@ -4068,6 +4110,35 @@ async function _fetchSdioByDate(dateStr) {
   }
   return { games: normalized, error: null, subPath: subPath };
 }
+
+// Operator-facing diagnostic for the SportsDataIO proxy. Hits the
+// ?diag=1 endpoint and prints whether SPORTSDATAIO_API_KEY is set on
+// the deployment, plus version + region info. No secrets are revealed.
+// Usage in devtools:  await runSdioProxyDiag()
+async function runSdioProxyDiag() {
+  var url = '/api/sportsdataio/mlb?diag=1';
+  try {
+    var res = await fetch(url);
+    var bodyText = await res.text();
+    var body = null;
+    try { body = JSON.parse(bodyText); } catch(_e){}
+    console.log('[sdio proxy diag]\n' +
+      '  http:                     ' + res.status + '\n' +
+      '  proxyVersion:             ' + (res.headers.get ? (res.headers.get('X-Proxy-Version') || '-') : '-') + '\n' +
+      '  sportsdataio_key_present: ' + (body && body.env && body.env.sportsdataio_key_present) + '\n' +
+      '  sportsdataio_key_length:  ' + (body && body.env && body.env.sportsdataio_key_length) + '\n' +
+      '  vercel_env:               ' + (body && body.env && body.env.vercel_env) + '\n' +
+      '  vercel_region:            ' + (body && body.env && body.env.vercel_region) + '\n' +
+      '  vercel_deployment:        ' + (body && body.env && body.env.vercel_deployment) + '\n' +
+      '  upstream_base:            ' + (body && body.env && body.env.upstream_base) + '\n' +
+      '  ts:                       ' + (body && body.ts));
+    return { ok: res.ok, http: res.status, body: body };
+  } catch (err) {
+    console.error('[sdio proxy diag] fetch failed:', err && err.message || err);
+    return { ok: false, error: String(err && err.message || err) };
+  }
+}
+window.runSdioProxyDiag = runSdioProxyDiag;
 
 // Fetch + normalize SportsDataIO MLB games across a date window (default: last 3 days).
 // Returns { games, resultsMap, completedCount, completedGames, error, datesFetched, gamesByDate }.
@@ -4093,7 +4164,15 @@ async function _fetchAndNormalizeScores(opts) {
     var perDate = {};
     for (var f = 0; f < fetches.length; f++) {
       var result = fetches[f];
-      perDate[dates[f]] = { count: result.games.length, error: result.error || null };
+      perDate[dates[f]] = {
+        count:          result.games.length,
+        error:          result.error || null,
+        proxyHttpStatus: result.proxyHttpStatus || null,
+        upstreamStatus:  result.upstreamStatus  || null,
+        message:         result.message         || null,
+        snippet:         result.snippet         || null,
+        proxyVersion:    result.proxyVersion    || null
+      };
       if (result.error) continue;
       for (var g = 0; g < result.games.length; g++) {
         var game = result.games[g];
@@ -4765,8 +4844,23 @@ async function runUngradedFinishedTicketAudit(opts) {
   var fetchErrors = [];
   for (var f = 0; f < fetchResults.length; f++) {
     var r = fetchResults[f];
-    perDate[dates[f]] = { count: r.games.length, error: r.error || null };
-    if (r.error) fetchErrors.push(dates[f] + ':' + r.error);
+    perDate[dates[f]] = {
+      count:           r.games.length,
+      error:           r.error || null,
+      proxyHttpStatus: r.proxyHttpStatus || null,
+      upstreamStatus:  r.upstreamStatus  || null,
+      message:         r.message         || null,
+      snippet:         r.snippet         || null,
+      proxyVersion:    r.proxyVersion    || null
+    };
+    if (r.error) {
+      // Surface the rich envelope into fetchErrors so the audit summary
+      // shows the real cause instead of the legacy sdio_http_NNN tag.
+      var detail = r.error;
+      if (r.upstreamStatus) detail += ' (upstream HTTP ' + r.upstreamStatus + ')';
+      else if (r.proxyHttpStatus) detail += ' (proxy HTTP ' + r.proxyHttpStatus + ')';
+      fetchErrors.push(dates[f] + ':' + detail);
+    }
     for (var g = 0; g < r.games.length; g++) {
       var game = r.games[g];
       var key = String(game.id || (game.away + '@' + game.home));
