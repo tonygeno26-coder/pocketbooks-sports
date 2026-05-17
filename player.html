@@ -6527,14 +6527,53 @@ try { _purgeMockTickets(); } catch(_e){}
 // Canonical Results ticket pipeline.
 // Uses _displayStatus (same guard as My Bets) so Results and My Bets
 // always agree on what is settled vs active.
+
+// 12-hour TTL: settled tickets older than this are hidden from the
+// current-week KPI summary (same rule as My Bets lifecycle filter).
+var _RES_SETTLED_TTL_MS = 12 * 60 * 60 * 1000;
+
+function _resSettledAgeMs(t) {
+  var iso = (t && t.gradedAt) ||
+            (t && t.grading && t.grading.gradedAt) ||
+            (t && t.settledAt) || null;
+  if (!iso) return Number.POSITIVE_INFINITY;
+  var ms = Date.parse(iso);
+  return isFinite(ms) ? (Date.now() - ms) : Number.POSITIVE_INFINITY;
+}
+
+// isVisibleInCurrentResultsSummary: true if ticket should contribute to
+// the TOP KPI cards (net, wagered, won, lost, settled count, chart bars).
+// Rule: active/canceled always included; settled only if within 12h of gradedAt.
+// Tickets outside the week window are excluded by the caller.
+function isVisibleInCurrentResultsSummary(t) {
+  var s = (typeof _displayStatus === 'function') ? _displayStatus(t) : (t.status||'').toLowerCase();
+  // Canceled/voided: included (for canceled count), but contributes $0 to net
+  if (s === 'canceled' || s === 'voided' || s === 'deleted') return true;
+  // Active/open/pending: always included (pending count, open risk)
+  if (s === 'active' || s === 'open' || s === 'pending' || s === '') return true;
+  // Settled (won/lost/push): only within 12h window
+  var ageMs = _resSettledAgeMs(t);
+  return ageMs <= _RES_SETTLED_TTL_MS;
+}
+window.isVisibleInCurrentResultsSummary = isVisibleInCurrentResultsSummary;
+
 function _resVisibleTickets(weekStart, weekEnd) {
   var bets = _resGetTickets();
   var wsT = weekStart.getTime(), weT = weekEnd.getTime();
   return bets.filter(function(t) {
     var ts = new Date(t.placedAt || t.createdAt || 0).getTime();
     if (isNaN(ts) || ts < wsT || ts >= weT) return false;
-    // Include all statuses — aggregation rules applied per-ticket in _resWeekAggregates
-    return true;
+    return isVisibleInCurrentResultsSummary(t);
+  });
+}
+
+// All tickets in window regardless of age — for full history/archive view
+function _resAllTicketsInWindow(weekStart, weekEnd) {
+  var bets = _resGetTickets();
+  var wsT = weekStart.getTime(), weT = weekEnd.getTime();
+  return bets.filter(function(t) {
+    var ts = new Date(t.placedAt || t.createdAt || 0).getTime();
+    return !isNaN(ts) && ts >= wsT && ts < weT;
   });
 }
 
@@ -6652,14 +6691,18 @@ function renderPlayerResults(){
 
   // ── AGGREGATE SUMMARY AUDIT ──────────────────────────────────────────────
   var _allTix = _resGetTickets();
+  var _allWeekTix = _resAllTicketsInWindow(ws, we);
   var _weekTix = _resVisibleTickets(ws, we);
+  var _hidden12h = _allWeekTix.filter(function(t){ return !isVisibleInCurrentResultsSummary(t); });
   var _excluded = _allTix.length - _weekTix.length;
   var _sampleIncluded = _weekTix.slice(0,2).map(function(t){ return (t.id||'?')+':'+((typeof _displayStatus==='function')?_displayStatus(t):(t.status||'?')); }).join(', ') || 'none';
-  var _sampleExcluded = _allTix.filter(function(t){ return !_weekTix.some(function(w){ return w.id===t.id; }); }).slice(0,2).map(function(t){ return (t.id||'?')+':out-of-week'; }).join(', ') || 'none';
+  var _sampleExcluded = _hidden12h.slice(0,2).map(function(t){ return (t.id||'?')+':hidden-12h-'+(t.status||'?'); }).join(', ') || 'none';
   console.log('[results aggregate audit summary]',
     '\n  buildSha:               ', window.PBS_BUILD_SHA || 'unknown',
     '\n  ticketsTotal:           ', _allTix.length,
+    '\n  ticketsInWeekWindow:    ', _allWeekTix.length,
     '\n  ticketsUsedForWeeklyKpis:', _weekTix.length,
+    '\n  ticketsHiddenBy12h:     ', _hidden12h.length,
     '\n  ticketsExcluded:        ', _excluded,
     '\n  weeklyNet:              ', net,
     '\n  wagered:                ', agg.totalWagered,
@@ -6709,12 +6752,14 @@ function renderPlayerResults(){
   // chart, summary strip).
   // Visible build/aggregate proof strip — shows SHA + key numbers so screenshots prove which code is running
   var _proofStrip = '<div style="font-family:monospace;font-size:0.58rem;color:#444;background:#0a0a0a;border-bottom:1px solid #1a1a1a;padding:4px 12px;display:flex;gap:12px;flex-wrap:wrap">'+
-    '<span>sha:'+( window.PBS_BUILD_SHA||'old')+'</span>'+
+    '<span style="color:#666">sha:'+(window.PBS_BUILD_SHA||'old')+'</span>'+
     '<span>net:$'+net.toFixed(2)+'</span>'+
     '<span>settled:'+agg.settledCount+'</span>'+
     '<span>pending:'+agg.pendingCount+'</span>'+
     '<span>canceled:'+agg.canceledCount+'</span>'+
-    '<span>tix:'+_weekTix.length+'</span>'+
+    '<span>inWindow:'+_allWeekTix.length+'</span>'+
+    '<span>hidden12h:'+_hidden12h.length+'</span>'+
+    '<span>used:'+_weekTix.length+'</span>'+
     '</div>';
   var topHtml = _proofStrip + '<div style="padding:20px 16px 4px">' +
     // Week selector — centered (host pattern)
