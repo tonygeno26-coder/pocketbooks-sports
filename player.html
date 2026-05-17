@@ -6650,6 +6650,29 @@ function renderPlayerResults(){
   var agg = _resWeekAggregates(ws, we);
   var net = agg.settledPnl; // player POV
 
+  // ── AGGREGATE SUMMARY AUDIT ──────────────────────────────────────────────
+  var _allTix = _resGetTickets();
+  var _weekTix = _resVisibleTickets(ws, we);
+  var _excluded = _allTix.length - _weekTix.length;
+  var _sampleIncluded = _weekTix.slice(0,2).map(function(t){ return (t.id||'?')+':'+((typeof _displayStatus==='function')?_displayStatus(t):(t.status||'?')); }).join(', ') || 'none';
+  var _sampleExcluded = _allTix.filter(function(t){ return !_weekTix.some(function(w){ return w.id===t.id; }); }).slice(0,2).map(function(t){ return (t.id||'?')+':out-of-week'; }).join(', ') || 'none';
+  console.log('[results aggregate audit summary]',
+    '\n  buildSha:               ', window.PBS_BUILD_SHA || 'unknown',
+    '\n  ticketsTotal:           ', _allTix.length,
+    '\n  ticketsUsedForWeeklyKpis:', _weekTix.length,
+    '\n  ticketsExcluded:        ', _excluded,
+    '\n  weeklyNet:              ', net,
+    '\n  wagered:                ', agg.totalWagered,
+    '\n  won:                    ', agg.totalWon,
+    '\n  lost:                   ', agg.totalLost,
+    '\n  pending:                ', agg.pendingCount,
+    '\n  settled:                ', agg.settledCount,
+    '\n  canceled:               ', agg.canceledCount,
+    '\n  sampleIncluded:         ', _sampleIncluded,
+    '\n  sampleExcluded:         ', _sampleExcluded
+  );
+  // ─────────────────────────────────────────────────────────────────────────
+
   var bigColor = net > 0 ? 'var(--green)' : net < 0 ? 'var(--red)' : '#fff';
   var bigLabel = net > 0 ? '+$'+net.toFixed(2) : net < 0 ? '-$'+Math.abs(net).toFixed(2) : '$0.00';
   var bigSub   = net > 0 ? 'Up this week' : net < 0 ? 'Down this week' : 'Even';
@@ -6684,7 +6707,16 @@ function renderPlayerResults(){
 
   // Top hero — same structure as host Settlements (week selector, big net,
   // chart, summary strip).
-  var topHtml = '<div style="padding:20px 16px 4px">' +
+  // Visible build/aggregate proof strip — shows SHA + key numbers so screenshots prove which code is running
+  var _proofStrip = '<div style="font-family:monospace;font-size:0.58rem;color:#444;background:#0a0a0a;border-bottom:1px solid #1a1a1a;padding:4px 12px;display:flex;gap:12px;flex-wrap:wrap">'+
+    '<span>sha:'+( window.PBS_BUILD_SHA||'old')+'</span>'+
+    '<span>net:$'+net.toFixed(2)+'</span>'+
+    '<span>settled:'+agg.settledCount+'</span>'+
+    '<span>pending:'+agg.pendingCount+'</span>'+
+    '<span>canceled:'+agg.canceledCount+'</span>'+
+    '<span>tix:'+_weekTix.length+'</span>'+
+    '</div>';
+  var topHtml = _proofStrip + '<div style="padding:20px 16px 4px">' +
     // Week selector — centered (host pattern)
     '<div style="display:flex;justify-content:center;align-items:center;gap:12px;margin-bottom:18px">' +
       '<button data-results-week="prev" style="background:var(--card);border:1px solid var(--border);color:#fff;width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;line-height:1">‹</button>' +
