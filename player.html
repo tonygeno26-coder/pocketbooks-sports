@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '7dcb6df';
-window.PBS_BUILD_DATE = '2026-05-17T12:06:01.500Z';
+window.PBS_BUILD_SHA = 'ec0ff5b';
+window.PBS_BUILD_DATE = '2026-05-17T12:14:23.606Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -1578,7 +1578,69 @@ function setMarketFilter(el, filter) {
 
 console.log("[PBS tabs bind]");
 console.log("[PBS tabs bound]");
+// ════════════════════════════════════════════════════════════════════════════
+// PLAYER SPORT ACCESS ENGINE
+// Reads host-set limits from pb-player-limits and enforces them at:
+//   1. setSport() — tab click
+//   2. odds cell click handler — slip add
+//   3. confirmBet() — final boundary gate
+// ════════════════════════════════════════════════════════════════════════════
+function _checkPlayerSportAccess(sport) {
+  // isSportBlocked() already exists and reads pb-player-limits correctly
+  // We add the audit log wrapper here
+  var allowed = !isSportBlocked(sport);
+  var pl   = JSON.parse(localStorage.getItem('pb-player')||'null') || {};
+  var club = JSON.parse(localStorage.getItem('pb-club')||'null')   || {};
+  var pid  = pl.id || pl.username || '?';
+  var cid  = club.id || club.clubId || '?';
+  var limits = (JSON.parse(localStorage.getItem('pb-player-limits')||'{}'))[pid] || null;
+  var hasLimits = !!(limits && limits.sportsAccess);
+  console.log('[player sport access gate]',
+    '\n  playerId:     ', pid,
+    '\n  clubId:       ', cid,
+    '\n  sport:        ', (sport||'').toUpperCase(),
+    '\n  allowed:      ', allowed,
+    '\n  source:       ', hasLimits ? 'host_limits' : 'default_open',
+    '\n  blockedReason:', allowed ? null : 'host_disabled_sport'
+  );
+  return { allowed: allowed, sport: (sport||'').toUpperCase(), playerId: pid, clubId: cid,
+           source: hasLimits ? 'host_limits' : 'default_open',
+           blockedReason: allowed ? null : 'host_disabled_sport',
+           message: 'Sport unavailable: your host has disabled betting on this sport.' };
+}
+
+function _checkTicketSportAccess(legs) {
+  for (var i = 0; i < legs.length; i++) {
+    var sport = (legs[i].sport || '').toLowerCase() || _currentSport || '';
+    if (!sport) continue;
+    var r = _checkPlayerSportAccess(sport);
+    if (!r.allowed) return Object.assign({ legIndex: i }, r);
+  }
+  return { allowed: true };
+}
+
+// Update sport tabs: grey out/disable blocked sports
+function _updateSportTabs() {
+  var tabMap = { mlb:'st-mlb', nba:'st-nba', nhl:'st-nhl', nfl:'st-nfl',
+                 soccer:'st-soccer', ufl:'st-ufl', tennis:'st-tennis', golf:'st-golf' };
+  Object.keys(tabMap).forEach(function(sport) {
+    var tab = document.getElementById(tabMap[sport]);
+    if (!tab) return;
+    var blocked = isSportBlocked(sport);
+    tab.style.opacity  = blocked ? '0.35' : '';
+    tab.style.pointerEvents = blocked ? 'none' : '';
+    tab.title = blocked ? 'Your host has disabled ' + sport.toUpperCase() + ' betting' : '';
+  });
+}
+// ════════════════════════════════════════════════════════════════════════════
+
 function setSport(el,sport){
+  // Gate: if host blocked this sport, don't switch to it
+  var _sa = _checkPlayerSportAccess(sport);
+  if (!_sa.allowed) {
+    showToast(_sa.message, 'error');
+    return;
+  }
   document.querySelectorAll('.sport-tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
   _currentSport = sport;
@@ -1759,6 +1821,7 @@ function returnToLobby() {
 // hit exactly this: _updateTeaserTab threw before /api/odds/mlb fetched.
 try { _currentSport = 'mlb'; } catch(e) { console.error('[PBS init] set _currentSport failed:', e && e.message || e); }
 try { _updateTeaserTab(); } catch(e) { console.error('[PBS init] _updateTeaserTab failed (continuing):', e && e.message || e); }
+try { _updateSportTabs(); } catch(e) { console.error('[PBS init] _updateSportTabs failed (continuing):', e && e.message || e); }
 try { loadGames('mlb'); } catch(e) { console.error('[PBS fetch failed]', e); }
 try { startAutoGradeDaemon(); } catch(e) { console.error('[auto grade daemon] failed to start:', e.message); }
 // Startup integrity scan: revert any tickets that have settled status but a future commenceTime
@@ -2979,6 +3042,15 @@ function confirmBet() {
       showToast('Teasers unavailable for ' + (_teaserSport||'this sport').toUpperCase(), 'warning');
       return;
     }
+  }
+
+  // Re-check sport access on all legs at confirm time (prevents console injection)
+  var _sportAccessCheck = _checkTicketSportAccess(snap.legs || []);
+  if (!_sportAccessCheck.allowed) {
+    closeBetConfirm();
+    showToast(_sportAccessCheck.message || 'Sport unavailable: your host has disabled betting on this sport.', 'error');
+    console.warn('[player sport access gate] BLOCKED at confirm', { sport: _sportAccessCheck.sport, reason: _sportAccessCheck.blockedReason, legIndex: _sportAccessCheck.legIndex });
+    return;
   }
 
   // Re-check placement gate on all legs at confirm time (catches stale board)
@@ -6514,11 +6586,10 @@ document.addEventListener('click', function(e) {
 
     if (replaced) showToast('Pick replaced');
 
-    // Sports access check before adding
-    if (isSportBlocked(sp)) {
-      console.log('SPORT CHECK:', sp, 'blocked');
-      dbgBanner('SPORT CHECK: '+sp+' blocked\nHost has restricted this sport', '#800');
-      showToast((sp||'This sport')+' betting is blocked by host settings');
+    // Sports access check (full gate with audit log)
+    var _saCheck = _checkPlayerSportAccess(sp);
+    if (!_saCheck.allowed) {
+      showToast(_saCheck.message, 'error');
       return;
     }
 
@@ -8781,7 +8852,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 7dcb6df · May 17, 05:06 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · ec0ff5b · May 17, 05:14 AM</span>
 </div>
 
 })();
