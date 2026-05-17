@@ -6531,33 +6531,66 @@ function _resWeekAggregates(weekStart, weekEnd){
   var dayNets = [0,0,0,0,0,0,0]; // 0 = Sunday (storage order)
   var settledPnl = 0;
   bets.forEach(function(t){
-    var ts = new Date(t.placedAt).getTime();
+    var ts = new Date(t.placedAt || t.createdAt || 0).getTime();
     if (isNaN(ts) || ts < wsT || ts >= weT) return;
     totalBets++;
     var risk   = parseFloat(t.riskAmount)||0;
     var profit = parseFloat(t.potentialProfit)||0;
     var s = (t.status||'').toLowerCase();
+    // Day index is ALWAYS based on placedAt (when bet was placed),
+    // not gradedAt, so the day bar reflects when the bet happened.
     var dayIdx = Math.floor((ts - wsT) / 86400000);
     if (dayIdx < 0 || dayIdx > 6) dayIdx = 0;
+    // Determine net contribution — ONLY settled outcomes affect dayNets
+    var netContrib = 0;
+    var inNet = false;
+    var inPending = false;
+    var inCanceled = false;
+    var reason = '';
     if (s === 'won') {
       totalWagered += risk; totalWon += profit;
       settledCount++; winCount++;
       settledPnl += profit;
       dayNets[dayIdx] += profit;
+      netContrib = profit; inNet = true;
+      reason = 'settled-won';
     } else if (s === 'lost') {
       totalWagered += risk; totalLost += risk;
       settledCount++; lossCount++;
       settledPnl -= risk;
       dayNets[dayIdx] -= risk;
+      netContrib = -risk; inNet = true;
+      reason = 'settled-lost';
     } else if (s === 'push' || s === 'pushed') {
       totalWagered += risk;
       settledCount++; pushCount++;
+      netContrib = 0; inNet = false;
+      reason = 'settled-push-no-net';
     } else if (s === 'canceled' || s === 'voided' || s === 'deleted') {
+      // Canceled: excluded from net, wagered, pending
       canceledCount++;
+      netContrib = 0; inNet = false; inCanceled = true;
+      reason = 'canceled-excluded';
     } else { // active / open / pending
+      // Active: counts toward totalWagered (handle) but NOT dayNets
       totalWagered += risk;
       pendingCount++;
+      netContrib = 0; inNet = false; inPending = true;
+      reason = 'active-pending-no-net';
     }
+    console.log('[results daily net audit]',
+      '\n  day:              ', new Date(ts).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}),
+      '\n  ticketId:         ', t.id || '?',
+      '\n  status:           ', s,
+      '\n  risk:             $'+(risk.toFixed(2)),
+      '\n  toWin:            $'+(profit.toFixed(2)),
+      '\n  payout:           $'+((parseFloat(t.estimatedPayout)||0).toFixed(2)),
+      '\n  includedInNet:    ', inNet,
+      '\n  netContribution:  $'+(netContrib.toFixed(2)),
+      '\n  includedInPending:', inPending,
+      '\n  includedInCanceled:', inCanceled,
+      '\n  reason:           ', reason
+    );
   });
   return {
     totalBets:    totalBets,
@@ -6704,10 +6737,22 @@ function renderPlayerResults(){
     var dayTix    = _resTicketsForDay(dayStart, dayEnd);
     var hasTix    = dayTix.length > 0;
     var isExp     = (_resultsExpandedDay === di) && hasTix;
-    var dCol      = (dayNet > 0) ? 'var(--green)' : (dayNet < 0) ? 'var(--red)' : 'var(--gray)';
-    var dAmt      = (Math.abs(dayNet) < 0.005)
-                      ? '—'
-                      : (dayNet > 0 ? '+$' : '−$') + Math.abs(dayNet).toFixed(2);
+    // Only show net if there are actual settled outcomes (won/lost)
+    // Active and canceled tickets must NEVER make the day header negative
+    var dayHasSettled = dayTix.some(function(t){
+      var ts2 = (t.status||'').toLowerCase();
+      return ts2 === 'won' || ts2 === 'lost' || ts2 === 'push' || ts2 === 'pushed';
+    });
+    var dayHasPending = dayTix.some(function(t){
+      var ts2 = (t.status||'').toLowerCase();
+      return ts2 === 'active' || ts2 === 'open' || ts2 === 'pending';
+    });
+    // If no settled outcomes, always show '—' regardless of dayNet value
+    var effectiveDayNet = dayHasSettled ? dayNet : 0;
+    var dCol      = (effectiveDayNet > 0) ? 'var(--green)' : (effectiveDayNet < 0) ? 'var(--red)' : 'var(--gray)';
+    var dAmt      = (Math.abs(effectiveDayNet) < 0.005)
+                      ? (dayHasPending ? '<span style="color:#f5c842;font-size:0.72rem;font-weight:700">Pending</span>' : '—')
+                      : (effectiveDayNet > 0 ? '+$' : '−$') + Math.abs(effectiveDayNet).toFixed(2);
     var dDate     = dayStart.toLocaleDateString('en-US',{month:'short',day:'numeric'});
     var caret     = hasTix ? (isExp ? '▾' : '▸') : '';
     var disabled  = hasTix ? '' : 'opacity:0.45;cursor:default;';
