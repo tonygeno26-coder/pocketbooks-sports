@@ -882,27 +882,127 @@ function calcHostStats() {
   };
 }
 
-function renderHostStats() {
-  var s = calcHostStats();
-  var handleEl  = document.getElementById('stat-handle');
-  var holdEl    = document.getElementById('stat-hold');
-  var profitEl  = document.getElementById('stat-profit');
-  var riskEl    = document.getElementById('stat-active-risk');
-  var activeEl  = document.getElementById('stat-active-bets');
-  var cntEl     = document.getElementById('host-bets-count');
+// ════════════════════════════════════════════════════════════════════════════
+// CANONICAL HOST STATS REFRESH
+// Single function that loads tickets, calculates all KPIs, renders DOM.
+// Called on load and every event that changes ticket/settlement state.
+// ════════════════════════════════════════════════════════════════════════════
+function refreshHostDashboardStats(trigger) {
+  trigger = trigger || 'unknown';
 
-  if (handleEl) handleEl.textContent = '$' + s.handle.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
-  if (holdEl)   holdEl.textContent   = s.holdPct !== null ? s.holdPct.toFixed(1) + '%' : '—';
-  if (profitEl) profitEl.textContent = (s.hostProfit >= 0 ? '+$' : '-$') + Math.abs(s.hostProfit).toFixed(2);
-  if (riskEl)   riskEl.textContent   = '$' + s.atRisk.toFixed(2);
-  if (activeEl) activeEl.textContent = s.activeBets;
-  if (cntEl)    cntEl.textContent    = s.activeBets + ' bet' + (s.activeBets !== 1 ? 's' : '');
+  // Load canonical ticket source: pb-tickets (player-placed) merged with hostActiveBets
+  var pbTickets = [];
+  try { pbTickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]'); } catch(_e) {}
+  var hostBets  = [];
+  try { hostBets  = JSON.parse(localStorage.getItem('hostActiveBets') || '[]'); } catch(_e) {}
 
-  console.log('[hostStats]', JSON.stringify({
-    handle: s.handle, activeHandle: s.activeHandle, settledHandle: s.settledHandle,
-    profit: s.hostProfit, holdPct: s.holdPct, atRisk: s.atRisk,
-    active: s.activeBets, settled: s.settledBets, voided: s.voidedBets
-  }));
+  // Merge: pb-tickets is authoritative; hostActiveBets fills in any missing
+  var seen = {};
+  var allTickets = [];
+  pbTickets.forEach(function(t) { if (t && t.id) { seen[t.id] = true; allTickets.push(t); } });
+  hostBets.forEach(function(t)  { if (t && t.id && !seen[t.id]) allTickets.push(t); });
+
+  var nowMs = Date.now();
+  var active = [], settled = [], canceled = [];
+  var handle = 0, settledHandle = 0, hostProfit = 0, atRisk = 0;
+
+  allTickets.forEach(function(t) {
+    var s = (t.status || '').toLowerCase();
+    var risk   = parseFloat(t.riskAmount)      || 0;
+    var profit = parseFloat(t.potentialProfit) || 0;
+    if (s === 'canceled' || s === 'voided' || s === 'deleted') {
+      canceled.push(t);
+      return;
+    }
+    if (s === 'active' || s === 'open') {
+      active.push(t);
+      handle += risk;
+      atRisk += profit; // host exposure = what host owes if player wins
+    } else if (s === 'won') {
+      settled.push(t);
+      handle        += risk;
+      settledHandle += risk;
+      hostProfit    -= profit; // host pays out profit
+    } else if (s === 'lost') {
+      settled.push(t);
+      handle        += risk;
+      settledHandle += risk;
+      hostProfit    += risk;  // host keeps wager
+    } else if (s === 'push' || s === 'pushed') {
+      settled.push(t);
+      handle        += risk;
+      settledHandle += risk;
+      // push: no net profit change
+    }
+  });
+
+  var holdPct = settledHandle > 0 ? (hostProfit / settledHandle * 100) : null;
+
+  // Settlement position from weekly net across players
+  var playersOwe = 0, hostOwes = 0;
+  try {
+    var players = loadClubPlayers ? loadClubPlayers() : [];
+    var now2 = new Date();
+    var ws = _sundayMidnight ? _sundayMidnight(now2) : new Date(now2.setDate(now2.getDate()-now2.getDay()));
+    var we = new Date(ws); we.setDate(we.getDate() + 7);
+    players.forEach(function(p) {
+      var pid = p.playerId || p.id;
+      if (!pid) return;
+      var net = 0;
+      try {
+        var wr = _calcWeekForPlayer ? _calcWeekForPlayer(pid, ws, we) : null;
+        if (wr) net = (wr.lost || 0) - (wr.won || 0);
+      } catch(_e) {}
+      if (net > 0)  playersOwe += net;  // player lost net → owes host
+      if (net < 0)  hostOwes   += (-net); // player won net → host owes
+    });
+  } catch(_e) {}
+
+  playersOwe = Math.round(playersOwe * 100) / 100;
+  hostOwes   = Math.round(hostOwes   * 100) / 100;
+  handle     = Math.round(handle     * 100) / 100;
+  hostProfit = Math.round(hostProfit * 100) / 100;
+  atRisk     = Math.round(atRisk     * 100) / 100;
+
+  // ── Render DOM ────────────────────────────────────────────────────────
+  function _fmtUSD(v) { return '$' + Math.abs(v).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+  var _set = function(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; };
+  _set('stat-handle',       _fmtUSD(handle));
+  _set('stat-hold',         holdPct !== null ? holdPct.toFixed(1) + '%' : '—');
+  _set('stat-profit',       (hostProfit >= 0 ? '+' : '-') + _fmtUSD(hostProfit));
+  _set('stat-active-risk',  _fmtUSD(atRisk));
+  _set('stat-active-bets',  String(active.length));
+  _set('host-bets-count',   active.length + ' bet' + (active.length !== 1 ? 's' : ''));
+  // Settlement position (if elements exist)
+  _set('stat-players-owe',  _fmtUSD(playersOwe));
+  _set('stat-host-owes',    _fmtUSD(hostOwes));
+
+  // Color profit element
+  var profitEl = document.getElementById('stat-profit');
+  if (profitEl) profitEl.style.color = hostProfit >= 0 ? 'var(--green, #00ff88)' : 'var(--red, #ff3d57)';
+
+  console.log('[host stats refresh]',
+    '\n  trigger:       ', trigger,
+    '\n  source:        ', 'pb-tickets(' + pbTickets.length + ') + hostActiveBets(' + hostBets.length + ')',
+    '\n  ticketsLoaded: ', allTickets.length,
+    '\n  activeTickets: ', active.length,
+    '\n  handle:        $' + handle.toFixed(2),
+    '\n  atRisk:        $' + atRisk.toFixed(2),
+    '\n  profit:        $' + hostProfit.toFixed(2),
+    '\n  holdPct:       ', holdPct !== null ? holdPct.toFixed(1) + '%' : 'n/a (no settled)',
+    '\n  playersOwe:    $' + playersOwe.toFixed(2),
+    '\n  hostOwes:      $' + hostOwes.toFixed(2)
+  );
+
+  return { handle, atRisk, hostProfit, holdPct, active: active.length, settled: settled.length, playersOwe, hostOwes };
+}
+window.refreshHostDashboardStats = refreshHostDashboardStats;
+// ════════════════════════════════════════════════════════════════════════════
+
+function renderHostStats(trigger) {
+  // Delegate to canonical refresh function
+  refreshHostDashboardStats(trigger || 'renderHostStats');
 }
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -3662,10 +3762,27 @@ function _showPlayerSettlementDetail(playerId) {
 }
 // seedMockSettlementPlayers: DISABLED for production/dev testing.
 // Only call manually via console: seedMockSettlementPlayers()
-// Unconditional call removed — was writing MK1-MK6 tickets to hostActiveBets
-// on every index.html load, polluting pb-tickets + player Results.
-// checkWeeklySettlement();  // kept active (read-only, no side effects)
 checkWeeklySettlement();
+
+// ── INITIAL LOAD: populate stats immediately, no tab click required ──
+(function _hostDashboardInit() {
+  function _doInit() {
+    refreshHostDashboardStats('page_load');
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _doInit);
+  } else {
+    _doInit();
+  }
+  // React to ticket changes from player tab (cross-tab via localStorage events)
+  window.addEventListener('storage', function(e) {
+    if (e.key === 'pb-tickets' || e.key === 'hostActiveBets' || e.key === 'pb-tickets-version') {
+      refreshHostDashboardStats('storage_event:' + e.key);
+    }
+  });
+  // Poll every 30s as fallback for same-tab updates that don't fire storage events
+  setInterval(function() { refreshHostDashboardStats('poll_30s'); }, 30000);
+})();
 
 </script>
 
@@ -3684,7 +3801,7 @@ checkWeeklySettlement();
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · fab45be · May 17, 04:53 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · ccd65db · May 17, 04:58 AM</span>
 </div>
 
 })();
