@@ -3943,6 +3943,9 @@ function resetTicketStateForFreshTesting() {
     'pb-balance-start'   // kept — reset separately below
   ];
 
+  // Permanently disable auto-seeder so it never repopulates after reset
+  localStorage.setItem('pb-mock-seed-disabled', '1');
+
   var wiped = {};
   WIPE_KEYS.forEach(function(k) {
     var had = localStorage.getItem(k) !== null;
@@ -3975,8 +3978,26 @@ function resetTicketStateForFreshTesting() {
   try { renderMyBets && renderMyBets(); } catch(_e) {}
   try { if (document.getElementById('results-section') && document.getElementById('results-section').style.display !== 'none') renderPlayerResults && renderPlayerResults(); } catch(_e) {}
 
-  alert('[fresh test reset] Done.\n\npb-tickets: cleared\nhostActiveBets: cleared\npb-ledger: cleared\nBalance reset to $'+_BASE_BALANCE+'\n\nPreserved: '+preserved.join(', '));
-  return { wiped: wiped, preserved: preserved, newBalance: _BASE_BALANCE };
+  // Post-reset verification
+  var _afterPbTickets   = JSON.parse(localStorage.getItem('pb-tickets')  || '[]');
+  var _afterHostBets    = JSON.parse(localStorage.getItem('hostActiveBets') || '[]');
+  var _mkCount = _afterHostBets.filter(function(t){ return /^MK\d+$/.test(t.id||''); }).length;
+  // Trigger Results re-render and check again
+  try { renderPlayerResults && renderPlayerResults(); } catch(_e) {}
+  var _afterResultsPbTickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]');
+  var _afterResultsHostBets  = JSON.parse(localStorage.getItem('hostActiveBets') || '[]');
+
+  console.log('[reset verification]',
+    '\n  afterClearPbTickets:          ', _afterPbTickets.length,
+    '\n  afterClearHostActiveBets:     ', _afterHostBets.length,
+    '\n  afterResultsRenderPbTickets:  ', _afterResultsPbTickets.length,
+    '\n  afterResultsRenderHostActiveBets:', _afterResultsHostBets.length,
+    '\n  mockSeederDisabled:           ', localStorage.getItem('pb-mock-seed-disabled') === '1',
+    '\n  mkTicketCount:                ', _mkCount
+  );
+
+  alert('[fresh test reset] Done.\n\npb-tickets: '+_afterPbTickets.length+' (expected 0)\nhostActiveBets: '+_afterHostBets.length+' (expected 0)\nMK tickets: '+_mkCount+' (expected 0)\nMock seeder: DISABLED\nBalance: $'+_BASE_BALANCE+'\n\nPreserved: '+preserved.join(', '));
+  return { wiped: wiped, preserved: preserved, newBalance: _BASE_BALANCE, verification: { pbTickets: _afterPbTickets.length, hostBets: _afterHostBets.length, mkCount: _mkCount } };
 }
 window.resetTicketStateForFreshTesting = resetTicketStateForFreshTesting;
 // ────────────────────────────────────────────────────────────────────────────

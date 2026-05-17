@@ -3128,8 +3128,13 @@ function resetSettlementPayments(playerId) {
   _saveSettlePayments(p);
 }
 // Seed mock players + tickets producing exact target nets for visual testing.
-// Idempotent: only seeds when no club players exist yet.
-function seedMockSettlementPlayers() {
+// NOT called automatically — must be invoked manually from console.
+// Use: seedMockSettlementPlayers(true) to force seed even with real data.
+function seedMockSettlementPlayers(force) {
+  if (!force && localStorage.getItem('pb-mock-seed-disabled') === '1') {
+    console.log('[seedMock] disabled by pb-mock-seed-disabled flag');
+    return false;
+  }
   var existing = loadClubPlayers();
   // Force re-seed when current state is degenerate: empty, or all players have
   // zero weekly net (orphan stubs from earlier dev seeds). Never touch a
@@ -3651,8 +3656,11 @@ function _showPlayerSettlementDetail(playerId) {
   ov.addEventListener('click', function(e){ if (e.target === ov) ov.remove(); });
   var cb = ov.querySelector('#sd-close'); if (cb) cb.addEventListener('click', function(){ ov.remove(); });
 }
-// Run check on host dashboard load + seed demo data once
-seedMockSettlementPlayers();
+// seedMockSettlementPlayers: DISABLED for production/dev testing.
+// Only call manually via console: seedMockSettlementPlayers()
+// Unconditional call removed — was writing MK1-MK6 tickets to hostActiveBets
+// on every index.html load, polluting pb-tickets + player Results.
+// checkWeeklySettlement();  // kept active (read-only, no side effects)
 checkWeeklySettlement();
 
 </script>
