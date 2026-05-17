@@ -2782,9 +2782,7 @@ window.evaluateCancelEligibility = evaluateCancelEligibility;
 var CANCEL_DISABLED_LABEL = 'Cancel unavailable — game started';
 
 function _makeSelection(b) {
-  // Parse 'Away Team vs Home Team' into structured pieces so the grader
-  // can match against SportsDataIO games (which key by AwayTeamName /
-  // HomeTeamName, not by Odds API ids).
+  // Parse 'Away Team vs Home Team' into structured pieces.
   var teams2 = (b.game||'').split(' vs ');
   var awayTeam = (teams2[0] || '').trim();
   var homeTeam = (teams2[1] || '').trim();
@@ -2792,27 +2790,65 @@ function _makeSelection(b) {
   var homeLower = homeTeam.toLowerCase();
   var side = pck.includes('over') ? 'over' : pck.includes('under') ? 'under' :
     (homeLower && pck.includes(homeLower.split(' ').pop())) ? 'home' : 'away';
-  // YYYY-MM-DD (UTC) of the moment the bet was placed — used by the grader
-  // to look up the right /scores/json/GamesByDate/<date> bucket.
-  var placedDate = new Date().toISOString().slice(0,10);
-  // Snapshotted game start time at placement (raw ISO/epoch from the
-  // sportsbook board's g.time / g.commence_time). Used ONLY by
-  // evaluateCancelEligibility() to hide Request Cancel once a leg's
-  // game has started. Optional field; legacy selections without this
-  // value fall back to "keep button visible" (today's behavior).
+  var now = new Date();
+  var placedDate = now.toISOString().slice(0,10);
+  // commenceTime: prefer raw ISO from betSlip entry (set at add-to-slip time)
   var commenceTime = (b.time != null && b.time !== '') ? b.time : null;
+  // Odds API game ID: strip the market suffix from cellId (e.g. 'abc123-sp-aw' -> 'abc123')
+  var oddsApiGameId = b.cellId ? b.cellId.split('-').slice(0,4).join('-') : null;
+  // Pull full game object from render-time cache for richer identity
+  var cachedGame = (window.gamesCache && oddsApiGameId) ? window.gamesCache[oddsApiGameId] : null;
+  // Prefer commenceTime from the cached game object if betSlip entry lacks it
+  if (!commenceTime && cachedGame) {
+    commenceTime = cachedGame.time || cachedGame.commence_time || null;
+  }
+  if (!awayTeam && cachedGame)  awayTeam  = cachedGame.away || cachedGame.away_team  || '';
+  if (!homeTeam && cachedGame)  homeTeam  = cachedGame.home || cachedGame.home_team  || '';
+  // canonicalGameKey: stable string for exact-game matching independent of provider
+  // Format: SPORT|AWAY|HOME|YYYY-MM-DD
+  var gameDate = '';
+  if (commenceTime) {
+    try { gameDate = new Date(commenceTime).toISOString().slice(0,10); } catch(_e){}
+  }
+  var canonicalGameKey = [
+    (b.sport||'mlb').toUpperCase(),
+    awayTeam.toLowerCase().replace(/\s+/g,'-'),
+    homeTeam.toLowerCase().replace(/\s+/g,'-'),
+    gameDate
+  ].join('|');
+  var legId = 'LEG-' + (oddsApiGameId||'?') + '-' + (b.market||'mkt').replace(/\s+/g,'').slice(0,8) + '-' + now.getTime();
+  console.log('[game identity audit]',
+    '\n  legId:            ', legId,
+    '\n  providerName:     ', 'odds-api',
+    '\n  providerGameId:   ', oddsApiGameId || '?',
+    '\n  canonicalGameKey: ', canonicalGameKey,
+    '\n  ticketCommenceTime:', commenceTime || '(not set)',
+    '\n  ticketTeams:      ', awayTeam + ' @ ' + homeTeam,
+    '\n  sport:            ', b.sport || '?',
+    '\n  market:           ', b.market || '?',
+    '\n  pick:             ', b.pick || '?',
+    '\n  odds:             ', b.odds
+  );
   return {
-    gameId:     b.cellId ? b.cellId.split('-').slice(0,4).join('-') : b.game,
-    sport:      b.sport||'',
-    matchup:    b.game||'',
-    awayTeam:   awayTeam,
-    homeTeam:   homeTeam,
-    placedDate: placedDate,
-    commenceTime: commenceTime,
-    pick:       b.pick||'',
-    market:     b.market||'',
-    odds:       b.odds,
-    side:       side
+    // ── GAME IDENTITY (permanent, used for grading match) ──
+    legId:             legId,
+    providerName:      'odds-api',
+    providerGameId:    oddsApiGameId,
+    canonicalGameKey:  canonicalGameKey,
+    scheduledStart:    commenceTime,   // canonical field name for grading
+    commenceTime:      commenceTime,   // keep for backward compat
+    sport:             b.sport || '',
+    homeTeam:          homeTeam,
+    awayTeam:          awayTeam,
+    // ── MARKET IDENTITY ──
+    market:            b.market || '',
+    pick:              b.pick   || '',
+    odds:              b.odds,
+    side:              side,
+    // ── LEGACY COMPAT ──
+    gameId:            oddsApiGameId,
+    matchup:           b.game || '',
+    placedDate:        placedDate
   };
 }
 
@@ -3549,7 +3585,8 @@ function _buildFinalScoreObject(gameResult) {
 // ── DATE SAFETY HELPERS ──────────────────────────────────────────────────────
 function _selCommenceMs(sel) {
   // Returns the ticket leg's commence time in ms, or 0 if unavailable
-  var ct = sel.commenceTime || sel.commence_time || sel.time || null;
+  // scheduledStart is the canonical field; commenceTime kept for legacy
+  var ct = sel.scheduledStart || sel.commenceTime || sel.commence_time || sel.time || null;
   if (!ct) return 0;
   var t = new Date(ct).getTime();
   return isNaN(t) ? 0 : t;
@@ -3579,7 +3616,39 @@ function _findGameForSelection(sel, normalizedGames, resultsMap) {
     return null;
   }
 
-  // 1. Direct gameId hit
+  // 0. canonicalGameKey match — strongest identity, prefer over gameId
+  if (sel.canonicalGameKey) {
+    var ckMatch = null;
+    for (var ci = 0; ci < normalizedGames.length; ci++) {
+      var cg = normalizedGames[ci];
+      if (!cg) continue;
+      // Build candidate canonicalGameKey from game record
+      var cgDate = '';
+      var cgMs = _gameCommenceMs(cg);
+      if (cgMs) { try { cgDate = new Date(cgMs).toISOString().slice(0,10); } catch(_e){} }
+      var cgSport = (cg.sport || 'mlb').toUpperCase();
+      var cgAway  = (cg.away || '').toLowerCase().replace(/\s+/g,'-');
+      var cgHome  = (cg.home || '').toLowerCase().replace(/\s+/g,'-');
+      var cgKey   = [cgSport, cgAway, cgHome, cgDate].join('|');
+      if (cgKey === sel.canonicalGameKey) { ckMatch = cg; break; }
+    }
+    if (ckMatch) {
+      console.log('[game identity audit]',
+        '\n  matchMethod:    canonicalGameKey',
+        '\n  ticketId:       ', (sel._ticketId||'?'),
+        '\n  legId:          ', (sel.legId||'?'),
+        '\n  canonicalGameKey:', sel.canonicalGameKey,
+        '\n  matchedGameId:  ', (ckMatch.id||'?'),
+        '\n  matchedTeams:   ', (ckMatch.away||'?')+' @ '+(ckMatch.home||'?'),
+        '\n  matchedGameStart:', (ckMatch.commence_time||ckMatch.time||'?'),
+        '\n  matchedStatus:  ', (ckMatch.status||'completed'),
+        '\n  refusedReason:  none'
+      );
+      return ckMatch;
+    }
+  }
+
+  // 1. Direct gameId hit (Odds API id — may not match SportsDataIO id)
   if (sel.gameId && resultsMap[String(sel.gameId).toLowerCase()]) {
     var gById = resultsMap[String(sel.gameId).toLowerCase()];
     // Date cross-check even on gameId match
