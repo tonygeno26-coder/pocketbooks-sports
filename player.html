@@ -2423,10 +2423,22 @@ function bsRenderLegs() {
 
 
 window.bsPlaceBet = function bsPlaceBet() {
+  // Fallback: if bsStakes is empty but numpad/input has a value, hydrate now
+  var _numDisplay = document.getElementById('numpad-display');
+  var _numVal = _numDisplay ? (parseFloat(_numDisplay.textContent) || 0) : 0;
+  var _stakeInp = document.getElementById('bs-stake-inp');
+  var _stakeVal = _stakeInp ? (parseFloat(_stakeInp.value) || 0) : 0;
+  var _fallback = _numVal || _stakeVal;
+  if (_fallback > 0 && Object.keys(bsStakes).length === 0 && bsType === 'straight') {
+    betSlip.forEach(function(b){ bsStakes[b.cellId] = _fallback; });
+    bsStake = _fallback;
+    console.log('[stake input change]','\n  source: bsPlaceBet fallback hydration','\n  value:',_fallback,'\n  bsStakes now:', JSON.stringify(bsStakes));
+  }
   // Recompute effective stake (Singles uses bsStakes map, others use bsStake)
   if (bsType === 'straight') {
     bsStake = Object.values(bsStakes).reduce(function(s,v){ return s+(parseFloat(v)||0); }, 0);
   }
+  console.log('[stake input change]','\n  source: bsPlaceBet final','\n  bsType:',bsType,'\n  bsStake:',bsStake,'\n  bsStakes:',JSON.stringify(bsStakes),'\n  activeSlipIds:',betSlip.map(function(b){return b.cellId;}).join(','));
   dbgBanner('STEP 1: bsPlaceBet started\npicks:'+betSlip.length+' stake:'+bsStake+' type:'+bsType, '#020');
   console.log('PLACE BET CLICKED', { betSlip: betSlip.length, bsStake: bsStake, bsType: bsType, bsStakes: bsStakes });
   try {
@@ -5562,9 +5574,21 @@ function bsAddStake(a) {
     return;
   }
   bsStake = (bsStake||0) + a;
+  // Fan into per-card bsStakes — bsRenderLegs() wipes bsStakes so use in-place sync
+  betSlip.forEach(function(b){ bsStakes[b.cellId] = bsStake; });
   var inp = document.getElementById('bs-stake-inp');
   if (inp) inp.value = bsStake;
-  bsRenderLegs();
+  document.querySelectorAll('input[data-cid]').forEach(function(cardInp) {
+    if (!cardInp.dataset.cid || cardInp.id === 'stake-all-inp') return;
+    cardInp.value = bsStake;
+    var payEl = document.querySelector('[data-payout-cid="'+cardInp.dataset.cid+'"]');
+    if (payEl) {
+      var _b = betSlip.find(function(x){ return x.cellId === cardInp.dataset.cid; });
+      payEl.textContent = _b ? 'Payout: '+fmtDollar(bsStake * amToDecimal(_b.odds)) : '';
+    }
+  });
+  console.log('[stake input change]','\n  source: quick-button +$'+a,'\n  bsType:',bsType,'\n  bsStake:',bsStake,'\n  bsStakes:',JSON.stringify(bsStakes),'\n  cardInputsUpdated:',document.querySelectorAll('input[data-cid]').length);
+  bsSyncPlaceBtn();
   // Sync visual selection state across all rendered cells
   document.querySelectorAll('.odds-cell').forEach(function(el) {
     var isIn = betSlip.some(function(b){ return b.cellId === el.dataset.id; });
@@ -5627,10 +5651,20 @@ function numpadKey(k) {
   } else if (numpadTarget.type === 'single') {
     bsStakes[numpadTarget.cellId] = val;
     bsStake = Object.values(bsStakes).reduce(function(s,v){ return s+(v||0); }, 0);
-    bsRenderLegs();
+    // Update card input in-place — bsRenderLegs() wipes bsStakes so skip it
+    var cardInp = document.querySelector('input[data-cid="'+numpadTarget.cellId+'"]');
+    if (cardInp) { cardInp.value = val > 0 ? val : ''; }
+    var payEl = document.querySelector('[data-payout-cid="'+numpadTarget.cellId+'"]');
+    if (payEl) {
+      var _b = betSlip.find(function(x){ return x.cellId === numpadTarget.cellId; });
+      payEl.textContent = val > 0 && _b ? 'Payout: '+fmtDollar(val * amToDecimal(_b.odds)) : '';
+    }
+    bsSyncPlaceBtn();
+    console.log('[stake input change]','\n  source: numpad single','\n  cellId:',numpadTarget.cellId,'\n  bsStake:',bsStake,'\n  bsStakes:',JSON.stringify(bsStakes));
   } else {
     bsStake = val;
     bsSetStake(val);
+    console.log('[stake input change]','\n  source: numpad parlay/teaser','\n  bsStake:',bsStake);
   }
 }
 
