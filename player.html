@@ -543,6 +543,7 @@ function openDebugPanel() {
         : '<button onclick="alert(\'Grading Console not available on this page\')" style="padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:8px;color:#555;font-size:0.78rem;cursor:pointer;text-align:left">🧪 Grading Console (player page only)</button>'
       ),
       '<button onclick="_debugExportAudit()" style="padding:10px;background:#1a1a1a;border:1px solid #00c2ff;border-radius:8px;color:#00c2ff;font-size:0.78rem;font-weight:700;cursor:pointer;text-align:left">📤 Export Audit JSON</button>',
+      '<button onclick="reconcileInvalidGrades()" style="padding:10px;background:#1a1a1a;border:1px solid #f59e0b;border-radius:8px;color:#f59e0b;font-size:0.78rem;font-weight:700;cursor:pointer;text-align:left">⚠️ Revert Invalid Grades</button>',
       '<button onclick="_debugClearTickets()" style="padding:10px;background:#1a1a1a;border:1px solid #ff3d57;border-radius:8px;color:#ff3d57;font-size:0.78rem;font-weight:700;cursor:pointer;text-align:left">🗑️ Clear All Tickets (dev reset)</button>',
     '</div>',
     '</div>'
@@ -3361,7 +3362,8 @@ function _gradeTicket(ticket, resultsMap, normalizedGames) {
     finalScores: finalScores,
     legResults:  legResults,
     gameResults: gameResultsPerLeg,
-    primaryGame: gameResultsPerLeg[0] // used to build the structured finalScore object
+    primaryGame: gameResultsPerLeg[0], // used to build the structured finalScore object
+    matchMethod: gameResultsPerLeg[0] && gameResultsPerLeg[0]._matchMethod || 'tla-or-fallback'
   };
 }
 
@@ -3534,6 +3536,12 @@ function _buildResultsMap(normalizedGames) {
   if (!Array.isArray(normalizedGames)) return map;
   for (var i = 0; i < normalizedGames.length; i++) {
     var g = normalizedGames[i];
+    // Stamp _canonicalKey onto each game so the grading snapshot can record it
+    if (g && !g._canonicalKey) {
+      var _cgMs = 0; try { var _cgRaw = (g._sdioRaw&&g._sdioRaw.DateTime)||g.commence_time||g.time||null; if(_cgRaw) _cgMs = new Date(_cgRaw).getTime(); } catch(_e){}
+      var _cgDate = _cgMs ? new Date(_cgMs).toISOString().slice(0,10) : '';
+      g._canonicalKey = [(g.sport||'mlb').toUpperCase(), (g.away||'').toLowerCase().replace(/\s+/g,'-'), (g.home||'').toLowerCase().replace(/\s+/g,'-'), _cgDate].join('|');
+    }
     if (!g) continue;
     var keys = [];
     if (g.id)               keys.push(String(g.id).toLowerCase());
@@ -3759,6 +3767,121 @@ function _findGameForSelection(sel, normalizedGames, resultsMap) {
   }
   return null;
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// RECONCILIATION — revert invalid historical grades
+// Call once: reconcileInvalidGrades()
+// Safe: only touches tickets whose grade fails date/future checks.
+// ════════════════════════════════════════════════════════════════════════════
+function reconcileInvalidGrades() {
+  var tickets = [];
+  try { tickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]'); } catch(_e) { return; }
+  var ledger  = [];
+  try { ledger  = JSON.parse(localStorage.getItem('pb-ledger')   || '[]'); } catch(_e) {}
+
+  var reverted = 0;
+  var now = new Date().toISOString();
+
+  tickets.forEach(function(t) {
+    var isSettled = t.status === 'won' || t.status === 'lost' || t.status === 'push';
+    if (!isSettled) return;
+
+    var g = t.grading || {};
+    var gradedAtMs = t.gradedAt ? new Date(t.gradedAt).getTime() : 0;
+
+    // Collect all leg commenceTimes
+    var sels = t.selections || [];
+    var legTimes = sels.map(function(s) {
+      var ct = s.scheduledStart || s.commenceTime || s.commence_time || s.time || null;
+      return ct ? new Date(ct).getTime() : 0;
+    }).filter(function(ms) { return ms > 0; });
+
+    var refuseReason = null;
+
+    // Check 1: any leg's commenceTime is in the future at grading time
+    legTimes.forEach(function(legMs) {
+      if (!refuseReason && gradedAtMs > 0 && legMs > gradedAtMs) {
+        refuseReason = 'future_game_at_grading_time';
+      }
+    });
+
+    // Check 2: graded before game could have started (gradedAt < commenceTime)
+    if (!refuseReason) {
+      legTimes.forEach(function(legMs) {
+        if (!refuseReason && gradedAtMs > 0 && gradedAtMs < legMs) {
+          refuseReason = 'graded_before_game_started';
+        }
+      });
+    }
+
+    // Check 3: matchedGameDate in snapshot doesn't match ticket's scheduledStart date
+    if (!refuseReason && g.matchedGameDate && legTimes.length) {
+      var ticketDate = new Date(legTimes[0]).toISOString().slice(0,10);
+      if (ticketDate && g.matchedGameDate && ticketDate !== g.matchedGameDate) {
+        refuseReason = 'snapshot_date_mismatch:ticket='+ticketDate+',matched='+g.matchedGameDate;
+      }
+    }
+
+    if (!refuseReason) return; // valid grade — leave it alone
+
+    var prevStatus = t.status;
+    var prevBalanceDelta = g.balanceChange || 0;
+
+    console.log('[invalid_historical_grade_reverted]',
+      '\n  ticketId:        ', t.id,
+      '\n  pick:            ', (sels[0]&&sels[0].pick) || '?',
+      '\n  prevStatus:      ', prevStatus,
+      '\n  gradedAt:        ', t.gradedAt || '?',
+      '\n  commenceTime:    ', (sels[0]&&(sels[0].scheduledStart||sels[0].commenceTime)) || '?',
+      '\n  matchedGameDate: ', g.matchedGameDate || '?',
+      '\n  balanceDelta:    ', prevBalanceDelta,
+      '\n  refuseReason:    ', refuseReason
+    );
+
+    // Revert ticket to active
+    t.status            = 'active';
+    t.gradedAt          = null;
+    t.gradingSource     = null;
+    t.finalScore        = null;
+    t.finalScoreDisplay = null;
+    t.lastSeenGameStatus = null;
+    t.grading           = null;
+    t._revertedAt       = now;
+    t._revertReason     = refuseReason;
+    t._prevStatus       = prevStatus;
+
+    // Ledger reversal entry
+    var balNow = 0; // will be recalculated by calcAvailableBalance after save
+    ledger.push({
+      id:            'REV-' + t.id + '-' + Date.now(),
+      type:          'invalid_grade_reversal',
+      ticketId:      t.id,
+      prevStatus:    prevStatus,
+      refuseReason:  refuseReason,
+      balanceDelta:  0, // no direct delta — balance re-derives from ticket status
+      createdAt:     now,
+      note:          'Auto-reverted by reconcileInvalidGrades()'
+    });
+
+    reverted++;
+  });
+
+  if (reverted > 0) {
+    localStorage.setItem('pb-tickets', JSON.stringify(tickets));
+    localStorage.setItem('pb-ledger',  JSON.stringify(ledger));
+    try { betTickets = tickets; } catch(_e) {}
+    try { syncBalanceDisplays(); } catch(_e) {}
+    try { renderMyBets(); } catch(_e) {}
+    console.log('[reconcileInvalidGrades] reverted', reverted, 'ticket(s) → active. Balance re-derived.');
+    showToast && showToast('⚠️ Reverted ' + reverted + ' invalid grade(s) → Active');
+  } else {
+    console.log('[reconcileInvalidGrades] no invalid grades found — all settled tickets look valid.');
+  }
+  return { reverted: reverted };
+}
+// Also expose as window fn for console use
+window.reconcileInvalidGrades = reconcileInvalidGrades;
+// ════════════════════════════════════════════════════════════════════════════
 
 // Canonicalize team identifiers within `pick` and within the game's
 // home/away fields to the same full names, so the substring matcher
@@ -4720,14 +4843,26 @@ async function checkOpenTickets() {
       ticket.finalScore          = finalScoreObj;       // OBJECT, not string
       ticket.lastSeenGameStatus  = (finalScoreObj && finalScoreObj.status) || 'Final';
       ticket.finalScoreDisplay   = legacyScore;          // human-readable, separate from guard data
+      // Immutable grading snapshot — written once, never overwritten
+      var _primaryGame = primary || {};
+      var _primaryMs = _primaryGame.commence_time || _primaryGame.time || null;
+      var _primaryDate = '';
+      if (_primaryMs) { try { _primaryDate = new Date(_primaryMs).toISOString().slice(0,10); } catch(_e){} }
       ticket.grading = {
-        result:         result,
-        finalScore:     finalScoreObj,
-        finalScoreText: legacyScore,
-        payout:         Math.round(payout * 100) / 100,
-        balanceBefore:  balBefore,
-        balanceAfter:   null, // set after sync
-        gradedAt:       ticket.gradedAt
+        result:               result,
+        finalScore:           finalScoreObj,
+        finalScoreText:       legacyScore,
+        payout:               Math.round(payout * 100) / 100,
+        balanceBefore:        balBefore,
+        balanceAfter:         null, // set after sync
+        gradedAt:             ticket.gradedAt,
+        // Immutable snapshot fields
+        matchedGameId:        _primaryGame.id || null,
+        matchedCanonicalKey:  _primaryGame._canonicalKey || null,
+        matchedGameDate:      _primaryDate || null,
+        matchedTeams:         _primaryGame.away && _primaryGame.home ? (_primaryGame.away + ' @ ' + _primaryGame.home) : null,
+        matchedStatus:        _primaryGame.status || 'Final',
+        gradingMethod:        gradeResult.matchMethod || 'unknown'
       };
 
       // ── BALANCE MODEL ────────────────────────────────────────────────────
