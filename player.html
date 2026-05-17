@@ -6360,18 +6360,21 @@ function _resTicketsForDay(dayStart, dayEnd){
   var out = [];
   for (var i = 0; i < bets.length; i++) {
     var t = bets[i]; if (!t) continue;
-    var s = String(t.status||'').toLowerCase();
-    var settled = (s === 'won' || s === 'lost' || s === 'push' || s === 'pushed' ||
-                   s === 'canceled' || s === 'voided' || s === 'deleted');
-    var iso = settled && t.gradedAt ? t.gradedAt : t.placedAt;
+    // Use _displayStatus so day expansion agrees with aggregate
+    var s = (typeof _displayStatus === 'function') ? _displayStatus(t) : String(t.status||'').toLowerCase();
+    var isCanceled = (s === 'canceled' || s === 'voided' || s === 'deleted');
+    var isActive   = (s === 'active' || s === 'open');
+    // Settled tickets: bucket by placedAt (when bet was placed)
+    // Active/canceled: bucket by placedAt
+    var iso = t.placedAt || t.createdAt;
     var ts  = iso ? Date.parse(iso) : NaN;
     if (isNaN(ts)) continue;
     if (ts >= dsT && ts < deT) out.push(t);
   }
   // Newest first within the day.
   out.sort(function(a,b){
-    var ax = Date.parse((String(a.status||'').toLowerCase()!=='active' && a.gradedAt) ? a.gradedAt : a.placedAt) || 0;
-    var bx = Date.parse((String(b.status||'').toLowerCase()!=='active' && b.gradedAt) ? b.gradedAt : b.placedAt) || 0;
+    var ax = Date.parse(a.placedAt || a.createdAt) || 0;
+    var bx = Date.parse(b.placedAt || b.createdAt) || 0;
     return bx - ax;
   });
   return out;
@@ -6521,9 +6524,24 @@ window._purgeMockTickets = _purgeMockTickets;
 // later runs AFTER this, but that recovery only pulls from hostActiveBets,
 // which has never carried MOCK-* tickets.
 try { _purgeMockTickets(); } catch(_e){}
-function _resWeekAggregates(weekStart, weekEnd){
+// Canonical Results ticket pipeline.
+// Uses _displayStatus (same guard as My Bets) so Results and My Bets
+// always agree on what is settled vs active.
+function _resVisibleTickets(weekStart, weekEnd) {
   var bets = _resGetTickets();
   var wsT = weekStart.getTime(), weT = weekEnd.getTime();
+  return bets.filter(function(t) {
+    var ts = new Date(t.placedAt || t.createdAt || 0).getTime();
+    if (isNaN(ts) || ts < wsT || ts >= weT) return false;
+    // Include all statuses — aggregation rules applied per-ticket in _resWeekAggregates
+    return true;
+  });
+}
+
+function _resWeekAggregates(weekStart, weekEnd){
+  var wsT = weekStart.getTime(), weT = weekEnd.getTime();
+  // Use canonical pipeline — _displayStatus as source-of-truth
+  var bets = _resVisibleTickets(weekStart, weekEnd);
   var totalWagered=0, totalWon=0, totalLost=0;
   var pendingCount=0, settledCount=0, canceledCount=0;
   var winCount=0, lossCount=0, pushCount=0;
@@ -6532,11 +6550,13 @@ function _resWeekAggregates(weekStart, weekEnd){
   var settledPnl = 0;
   bets.forEach(function(t){
     var ts = new Date(t.placedAt || t.createdAt || 0).getTime();
-    if (isNaN(ts) || ts < wsT || ts >= weT) return;
     totalBets++;
     var risk   = parseFloat(t.riskAmount)||0;
     var profit = parseFloat(t.potentialProfit)||0;
-    var s = (t.status||'').toLowerCase();
+    // CANONICAL: use _displayStatus so Results agrees with My Bets
+    // This ensures tickets the settled-guard rejects (no gradedAt, invalid
+    // finalScore shape, etc.) are treated as active here, not as won/lost.
+    var s = (typeof _displayStatus === 'function') ? _displayStatus(t) : (t.status||'').toLowerCase();
     // Day index is ALWAYS based on placedAt (when bet was placed),
     // not gradedAt, so the day bar reflects when the bet happened.
     var dayIdx = Math.floor((ts - wsT) / 86400000);
@@ -6546,6 +6566,8 @@ function _resWeekAggregates(weekStart, weekEnd){
     var inNet = false;
     var inPending = false;
     var inCanceled = false;
+    var rawStatus = (t.status||'').toLowerCase();
+    var hidden12h = (rawStatus !== s); // true when guard demoted won/lost → active
     var reason = '';
     if (s === 'won') {
       totalWagered += risk; totalWon += profit;
@@ -6578,18 +6600,23 @@ function _resWeekAggregates(weekStart, weekEnd){
       netContrib = 0; inNet = false; inPending = true;
       reason = 'active-pending-no-net';
     }
-    console.log('[results daily net audit]',
-      '\n  day:              ', new Date(ts).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}),
-      '\n  ticketId:         ', t.id || '?',
-      '\n  status:           ', s,
-      '\n  risk:             $'+(risk.toFixed(2)),
-      '\n  toWin:            $'+(profit.toFixed(2)),
-      '\n  payout:           $'+((parseFloat(t.estimatedPayout)||0).toFixed(2)),
-      '\n  includedInNet:    ', inNet,
-      '\n  netContribution:  $'+(netContrib.toFixed(2)),
-      '\n  includedInPending:', inPending,
-      '\n  includedInCanceled:', inCanceled,
-      '\n  reason:           ', reason
+    console.log('[results aggregate audit]',
+      '\n  ticketId:               ', t.id || '?',
+      '\n  status (raw):           ', rawStatus,
+      '\n  status (displayStatus): ', s,
+      '\n  hiddenBy12h:            ', hidden12h,
+      '\n  includedInVisibleResults:', true,
+      '\n  includedInWeeklyNet:    ', inNet,
+      '\n  includedInWagered:      ', (s !== 'canceled' && s !== 'voided' && s !== 'deleted'),
+      '\n  includedInWon:          ', (s === 'won'),
+      '\n  includedInLost:         ', (s === 'lost'),
+      '\n  includedInRecord:       ', (s === 'won' || s === 'lost' || s === 'push' || s === 'pushed'),
+      '\n  includedInPending:      ', inPending,
+      '\n  includedInCanceled:     ', inCanceled,
+      '\n  risk:                   $'+(risk.toFixed(2)),
+      '\n  toWin:                  $'+(profit.toFixed(2)),
+      '\n  netContribution:        $'+(netContrib.toFixed(2)),
+      '\n  reason:                 ', reason
     );
   });
   return {
