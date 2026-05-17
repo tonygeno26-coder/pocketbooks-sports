@@ -197,80 +197,37 @@ setViewport('desktop');
 loadUrl(currentUrl);
 </script>
 
-// ── VERSION / STALENESS GUARD ───────────────────────────────────────────────
-// Fetches /build.json on every load and compares SHA to the one baked
-// into this bundle. If they differ this bundle is stale and we show a
-// red banner so the dev never silently tests old code.
-(function _versionGuard() {
-  var CURRENT_SHA = window.PBS_BUILD_SHA || 'unknown';
-  var _guardBanner = null;
-
-  function _showStaleBanner(latestSha, builtAt) {
-    if (_guardBanner) return;
-    _guardBanner = document.createElement('div');
-    _guardBanner.id = '_pbs_stale_banner';
-    _guardBanner.style.cssText = [
-      'position:fixed;top:0;left:0;right:0;z-index:2147483647',
-      'background:#7f1d1d;color:#fef2f2;padding:10px 16px',
-      'font-family:monospace;font-size:0.75rem;font-weight:700',
-      'display:flex;align-items:center;gap:12px;flex-wrap:wrap',
-      'border-bottom:2px solid #dc2626;box-shadow:0 4px 20px rgba(0,0,0,0.6)'
-    ].join(';');
-    _guardBanner.innerHTML =
-      '<span style="font-size:1rem">⚠️</span>' +
-      '<span style="flex:1">' +
-        '<strong>STALE BUILD</strong> — you are testing old code!' +
-        '<br><span style="font-weight:400;opacity:0.85">' +
-          'Loaded: <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px">' + CURRENT_SHA + '</code>' +
-          ' &nbsp;|&nbsp; Latest: <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px">' + latestSha + '</code>' +
-          (builtAt ? ' &nbsp;|&nbsp; Built: ' + new Date(builtAt).toLocaleString() : '') +
-        '</span>' +
-      '</span>' +
-      '<button onclick="location.reload(true)" style="' +
-        'background:#dc2626;border:none;color:#fff;padding:8px 16px;border-radius:8px;' +
-        'font-weight:900;cursor:pointer;font-size:0.8rem;white-space:nowrap;flex-shrink:0' +
-      '">⟳ Hard Reload Latest</button>';
-    document.body.insertBefore(_guardBanner, document.body.firstChild);
-    // Push body content down so banner doesn't overlap
-    document.body.style.paddingTop = '72px';
-    console.warn('[version guard] STALE BUILD — loaded:' + CURRENT_SHA + ' latest:' + latestSha);
-  }
-
-  function _removeStaleBanner() {
-    var b = document.getElementById('_pbs_stale_banner');
-    if (b) { b.remove(); document.body.style.paddingTop = ''; }
-  }
-
-  function _checkVersion() {
-    fetch('/build.json?_=' + Date.now(), { cache: 'no-store' })
-      .then(function(r) { return r.ok ? r.json() : null; })
-      .then(function(data) {
-        if (!data || !data.sha) return;
-        var latestSha = String(data.sha).trim();
-        var currentSha = String(CURRENT_SHA).trim();
-        if (latestSha === currentSha || latestSha === 'unknown' || currentSha === 'unknown') {
-          _removeStaleBanner();
-          console.log('[version guard] ✅ up to date sha=' + currentSha);
-        } else {
-          _showStaleBanner(latestSha, data.builtAt);
-        }
-      })
-      .catch(function(e) {
-        // Network error or build.json missing — silent, don't block app
-        console.log('[version guard] build.json fetch failed (offline or missing):', e.message);
-      });
-  }
-
-  // Run on load, then every 60 s (catches hot deploys while page is open)
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', _checkVersion);
-  } else {
-    _checkVersion();
-  }
-  setInterval(_checkVersion, 60000);
-  window._checkBuildVersion = _checkVersion; // expose for manual console use
 })();
 // ────────────────────────────────────────────────────────────────────────────
 
+<script>
+// VERSION GUARD — fetches /build.json, shows stale banner if SHA mismatch
+(function _versionGuard() {
+  var CURRENT_SHA = window.PBS_BUILD_SHA || 'unknown';
+  function _showStaleBanner(latestSha, builtAt) {
+    if (document.getElementById('_pbs_stale_banner')) return;
+    var b = document.createElement('div');
+    b.id = '_pbs_stale_banner';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#7f1d1d;color:#fef2f2;padding:10px 16px;font-family:monospace;font-size:0.75rem;font-weight:700;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:2px solid #dc2626;box-shadow:0 4px 20px rgba(0,0,0,0.6)';
+    b.innerHTML = '<span style="font-size:1rem">⚠️</span><span style="flex:1"><strong>STALE BUILD</strong> — you are testing old code!<br><span style="font-weight:400;opacity:0.85">Loaded: <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px">' + CURRENT_SHA + '</code> &nbsp;|&nbsp; Latest: <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px">' + latestSha + '</code>' + (builtAt ? ' &nbsp;|&nbsp; Built: ' + new Date(builtAt).toLocaleString() : '') + '</span></span><button onclick="location.reload(true)" style="background:#dc2626;border:none;color:#fff;padding:8px 16px;border-radius:8px;font-weight:900;cursor:pointer;font-size:0.8rem;white-space:nowrap;flex-shrink:0">⟳ Hard Reload Latest</button>';
+    if (document.body) { document.body.insertBefore(b, document.body.firstChild); document.body.style.paddingTop = '64px'; }
+    console.warn('[version guard] STALE loaded:' + CURRENT_SHA + ' latest:' + latestSha);
+  }
+  function _check() {
+    fetch('/build.json?_=' + Date.now(), { cache: 'no-store' })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(d) {
+        if (!d || !d.sha) return;
+        var latest = String(d.sha).trim(), cur = String(CURRENT_SHA).trim();
+        if (latest && cur && cur !== 'unknown' && latest !== cur) _showStaleBanner(latest, d.builtAt);
+        else { var x = document.getElementById('_pbs_stale_banner'); if (x) { x.remove(); document.body.style.paddingTop = ''; } console.log('[version guard] ✅ up to date sha=' + cur); }
+      }).catch(function() {});
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _check);
+  else _check();
+  setInterval(_check, 60000);
+  window._checkBuildVersion = _check;
+})();
+</script>
 </body>
 </html>
