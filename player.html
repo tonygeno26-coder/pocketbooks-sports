@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'f283d8c';
-window.PBS_BUILD_DATE = '2026-05-17T11:45:55.984Z';
+window.PBS_BUILD_SHA = 'fab45be';
+window.PBS_BUILD_DATE = '2026-05-17T11:53:36.560Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -1100,7 +1100,7 @@ function showPlayerSettings() {
     } catch(_e){}
     applyPlayerTheme();
     if (typeof syncBalanceDisplays === 'function') syncBalanceDisplays();
-    showToast('✅ Settings saved');
+    showToast('Settings saved', 'success');
     ov.remove();
   });
 }
@@ -1476,7 +1476,7 @@ function rmLeg(i){
 
 function setSType(t){
   if (t === 'teaser' && !_canTeaser()) {
-    showToast('Teasers unavailable for ' + _currentSport.toUpperCase());
+    showToast('Teasers unavailable for ' + _currentSport.toUpperCase(), 'warning');
     return;
   }
   sType=t;
@@ -1535,7 +1535,7 @@ async function placeBet(){
       const to=slip.length===2?-120:180;
       await api('POST','/api/bets',{game:slip.length+'-Team Teaser: '+slip.map(b=>b.pick).join(' + '),bet_type:'Teaser',sport:slip[0].sport,risk,win:Math.round(risk*(dec(to)-1)*100)/100,result:'pending',player_id:1});
     }
-    closeSlip();clearSlip();showToast('✅ Bet submitted!');
+    closeSlip();clearSlip();showToast('Bet submitted!', 'success');
   }catch(e){showToast('❌ '+e.message);btn.textContent='Place Bet →';btn.disabled=false;}
 }
 
@@ -1553,7 +1553,7 @@ function setMarketFilter(el, filter) {
   el.classList.add('active');
   // Show/hide columns in game cards
   if (filter === 'props') {
-    showToast('Props unavailable from current odds provider');
+    showToast('Props unavailable from current odds provider', 'info');
     return;
   }
   var showSpread   = filter === 'lines' || filter === 'spread';
@@ -1651,11 +1651,67 @@ function setBNav(el,tab){
   }
 }
 
-function showToast(msg){
-  const t=document.createElement('div');
-  t.style.cssText='position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#1c1c1c;border:1px solid #333;color:#fff;padding:12px 20px;border-radius:12px;font-size:0.85rem;font-weight:600;z-index:999;white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,0.5)';
-  t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2500);
+// ════════════════════════════════════════════════════════════════════════════
+// NOTIFICATION SYSTEM
+// showToast(msg, type) — type: 'error'|'warning'|'success'|'info'
+// Auto-classifies by message content if type omitted.
+// Mobile-first: max-width 90vw, readable on 430px, slide-in animation.
+// ════════════════════════════════════════════════════════════════════════════
+(function _injectToastStyles(){
+  if (document.getElementById('_pbs_toast_styles')) return;
+  var s = document.createElement('style');
+  s.id = '_pbs_toast_styles';
+  s.textContent = [
+    '@keyframes _pbsToastIn{from{opacity:0;transform:translate(-50%,-16px)}to{opacity:1;transform:translate(-50%,0)}}',
+    '@keyframes _pbsToastOut{from{opacity:1;transform:translate(-50%,0)}to{opacity:0;transform:translate(-50%,-8px)}}',
+    '._pbs-toast{position:fixed;top:72px;left:50%;transform:translateX(-50%);',
+    'z-index:2147483646;max-width:90vw;min-width:280px;width:max-content;',
+    'padding:13px 18px;border-radius:14px;font-size:0.875rem;font-weight:700;',
+    'line-height:1.4;letter-spacing:0.1px;',
+    'display:flex;align-items:flex-start;gap:10px;',
+    'box-shadow:0 8px 32px rgba(0,0,0,0.55),0 2px 8px rgba(0,0,0,0.3);',
+    'animation:_pbsToastIn 0.22s cubic-bezier(0.32,0.72,0,1) forwards}',
+    '._pbs-toast._pbs-out{animation:_pbsToastOut 0.18s ease-in forwards}',
+    '._pbs-toast-icon{font-size:1.05rem;flex-shrink:0;margin-top:1px}',
+    '._pbs-toast-body{flex:1;white-space:pre-wrap;word-break:break-word}',
+    '._pbs-toast.error{background:#450a0a;border:1.5px solid #dc2626;color:#fca5a5}',
+    '._pbs-toast.error ._pbs-toast-icon{color:#ef4444}',
+    '._pbs-toast.warning{background:#422006;border:1.5px solid #ea580c;color:#fdba74}',
+    '._pbs-toast.warning ._pbs-toast-icon{color:#f97316}',
+    '._pbs-toast.success{background:#052e16;border:1.5px solid #16a34a;color:#86efac}',
+    '._pbs-toast.success ._pbs-toast-icon{color:#22c55e}',
+    '._pbs-toast.info{background:#0c1a2e;border:1.5px solid #2563eb;color:#93c5fd}',
+    '._pbs-toast.info ._pbs-toast-icon{color:#60a5fa}',
+  ].join('');
+  document.head.appendChild(s);
+})();
+
+function showToast(msg, type) {
+  // Auto-classify by message content if type not provided
+  if (!type) {
+    var lc = (msg||'').toLowerCase();
+    if (lc.startsWith('✅') || lc.includes('saved') || lc.includes('submitted') || lc.includes('success')) type = 'success';
+    else if (lc.startsWith('⚠') || lc.includes('unavailable') || lc.includes('blocked') || lc.includes('conflict') || lc.includes('invalid') || lc.includes('below') || lc.includes('above') || lc.includes('need ') || lc.includes('expired')) type = 'warning';
+    else if (lc.startsWith('❌') || lc.includes('error') || lc.includes('failed') || lc.includes('insufficient') || lc.includes('cannot') || lc.includes('already started') || lc.includes('finalized')) type = 'error';
+    else type = 'info';
+  }
+  var icons = { error: '⛔', warning: '⚠️', success: '✅', info: 'ℹ️' };
+  var icon  = icons[type] || 'ℹ️';
+  // Strip leading emoji from msg to avoid double icon
+  var cleanMsg = (msg||'').replace(/^[\u{1F300}-\u{1FFFF}\u{2700}-\u{27BF}\u{2600}-\u{26FF}⚠❌✅\s]+/u, '').trim() || msg;
+
+  var t = document.createElement('div');
+  t.className = '_pbs-toast ' + type;
+  t.innerHTML = '<span class="_pbs-toast-icon">' + icon + '</span><span class="_pbs-toast-body">' + cleanMsg.replace(/</g,'&lt;') + '</span>';
+  document.body.appendChild(t);
+
+  var dur = type === 'error' ? 4000 : type === 'warning' ? 3500 : 2500;
+  setTimeout(function() {
+    t.classList.add('_pbs-out');
+    setTimeout(function(){ if (t.parentNode) t.remove(); }, 200);
+  }, dur);
 }
+// ════════════════════════════════════════════════════════════════════════════
 
 // Preview mode — standardized params
 const _pp = new URLSearchParams(window.location.search);
@@ -1954,8 +2010,8 @@ function fmtDollar(n){ var v=parseFloat(n); if(isNaN(v)) return '--'; return _fm
 
 function bsSetType(t) {
   console.log("tab clicked", t);
-  if (t === 'rr' && betSlip.length < 3) { showToast('Need 3+ picks for Round Robin'); return; }
-  if (t === 'teaser' && getTeaserLegs().length < 2) { showToast('Need 2+ spread/total picks for Teaser'); return; }
+  if (t === 'rr' && betSlip.length < 3) { showToast('Need 3+ picks for Round Robin', 'warning'); return; }
+  if (t === 'teaser' && getTeaserLegs().length < 2) { showToast('Need 2+ spread/total picks for Teaser', 'warning'); return; }
   bsType = t;
   document.querySelectorAll('.dkslip-tab').forEach(function(el){ el.classList.remove('active'); });
   var tab = document.getElementById('bs-tab-'+t);
@@ -2508,18 +2564,18 @@ window.bsPlaceBet = function bsPlaceBet() {
       if (_me) {
         if (_me.status === 'blocked') {
           dbgBanner('BET BLOCKED\nBlocked by host', '#800');
-          showToast('Bet blocked by host settings'); return;
+          showToast('Bet blocked by host settings', 'error'); return;
         }
         var _avail = getClientAvailCredit(_pid);
         if (bsStake > _avail) {
           dbgBanner('EXCEEDS CREDIT\nAvailable: $'+_avail.toFixed(2), '#800');
-          showToast('Exceeds available credit ($'+_avail.toFixed(2)+' available)'); return;
+          showToast('Exceeds available credit ($'+_avail.toFixed(2)+' available)', 'error'); return;
         }
         var _lim = getPlayerLimitsClient(_pid);
         var _bt = bsType==='straight'?'straight':bsType==='rr'?'roundRobin':bsType;
         var _btl = (_lim.betLimits||{})[_bt] || {min:1,max:10000};
-        if (bsStake < _btl.min) { showToast('Below minimum bet ($'+_btl.min+')'); return; }
-        if (bsStake > _btl.max) { showToast('Above maximum bet ($'+_btl.max+')'); return; }
+        if (bsStake < _btl.min) { showToast('Below minimum bet ($'+_btl.min+')', 'warning'); return; }
+        if (bsStake > _btl.max) { showToast('Above maximum bet ($'+_btl.max+')', 'warning'); return; }
         // Check every pick's sport — block entire bet if any blocked sport
         var _blockedSport = null;
         betSlip.forEach(function(b){
@@ -2527,7 +2583,7 @@ window.bsPlaceBet = function bsPlaceBet() {
         });
         if (_blockedSport) {
           dbgBanner('BET BLOCKED: blocked sport '+_blockedSport, '#800');
-          showToast('This bet includes '+_blockedSport+', which is blocked by host settings');
+          showToast('This bet includes '+_blockedSport+', which is blocked by host settings', 'error');
           return;
         }
       }
@@ -2904,7 +2960,7 @@ function confirmBet() {
   // events between modal-open and modal-confirm.
   var snap = _pendingSnapshot;
   if (!snap) {
-    showToast('Bet expired · reopen confirmation');
+    showToast('Bet expired · reopen confirmation', 'warning');
     console.warn('[confirmBet] no snapshot — aborting');
     return;
   }
@@ -2922,7 +2978,7 @@ function confirmBet() {
   var _confirmGate = _checkTicketPlacementGate(_confirmLegs, _confirmNowMs);
   if (!_confirmGate.allowed) {
     closeBetConfirm();
-    showToast(_confirmGate.message || 'Bet unavailable: this game has already started or finalized.');
+    showToast(_confirmGate.message || 'Bet unavailable: this game has already started or finalized.', 'error');
     console.warn('[confirmBet] placement gate blocked at confirm', { reason: _confirmGate.blockedReason, legIndex: _confirmGate.legIndex });
     return;
   }
@@ -2931,7 +2987,7 @@ function confirmBet() {
   playerBalance = _avail;
   var riskAmount = snap.risk;
   bsStake = riskAmount; // keep live var in sync for any UI reading it post-confirm
-  if (_avail < riskAmount) { showToast('Insufficient balance · have '+fmtBalance()); return; }
+  if (_avail < riskAmount) { showToast('Insufficient balance · have '+fmtBalance(), 'error'); return; }
 
   var pl = _resolvePlayer();
   var now = new Date().toISOString();
@@ -6463,14 +6519,14 @@ document.addEventListener('click', function(e) {
     // Placement gate: block started/final games
     var _pgResult = _checkPlacementGate({ cellId: id, canonicalGameKey: _cKey, scheduledStart: time, gameStatus: gameStatus, market: market, pick: pick }, Date.now());
     if (!_pgResult.allowed) {
-      showToast(_pgResult.message);
+      showToast(_pgResult.message, 'error');
       return;
     }
 
     // Conflict check: block opposing sides
     var _cfResult = _checkBetConflict({ cellId: id, canonicalGameKey: _cKey, pick: pick, market: market });
     if (_cfResult.conflict) {
-      showToast(_cfResult.message);
+      showToast(_cfResult.message, 'warning');
       return;
     }
 
@@ -6660,13 +6716,13 @@ function bsToggle(cellId, game, time, market, pick, odds) {
     // Gate 1: placement gate (game started/final)
     var gateResult = _checkPlacementGate(sel, Date.now());
     if (!gateResult.allowed) {
-      showToast(gateResult.message);
+      showToast(gateResult.message, 'error');
       return;
     }
     // Gate 2: conflict check (opposing side)
     var conflict = _checkBetConflict(sel);
     if (conflict.conflict) {
-      showToast(conflict.message);
+      showToast(conflict.message, 'warning');
       console.log('[conflict] blocked pick="' + pick + '" reason=' + conflict.reason + (conflict.ticketId ? ' ticketId=' + conflict.ticketId : ''));
       return; // do not add — leave slip unchanged
     }
@@ -8709,7 +8765,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · f283d8c · May 17, 04:45 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · fab45be · May 17, 04:53 AM</span>
 </div>
 
 })();
