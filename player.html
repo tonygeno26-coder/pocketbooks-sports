@@ -908,26 +908,60 @@ function calcAvailableBalance() {
   // ─────────────────────────────────────────────────────────────────────────
   var starting = _getStartingBalance();
   var tickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]');
-  // Use _displayStatus so a ticket with stale status='lost' but failing the
-  // 5-guard is held in openRisk (recoverable), not subtracted as settledLoss.
+  // _effective: canonical status for balance purposes.
+  // Uses _isSettledTicket (5-guard: needs gradedAt + valid status).
+  // Does NOT apply 12h cutoff — settled wins/losses are permanent
+  // regardless of age. The 12h rule is only for Results KPI display.
   function _effective(t){
     var s = String(t.status||'').toLowerCase();
-    if (s === 'canceled' || s === 'voided' || s === 'deleted') return s;
+    if (s === 'canceled' || s === 'voided' || s === 'deleted') return 'canceled';
     if (s === 'active' || s === 'open' || s === '') return 'active';
     return (typeof _isSettledTicket === 'function' && _isSettledTicket(t)) ? s : 'active';
   }
-  var openRisk = tickets
-    .filter(function(t){ var es = _effective(t); return es==='active' || es==='open'; })
-    .reduce(function(s,t){ return s + (parseFloat(t.riskAmount)||0); }, 0);
-  var settledGains = tickets
-    .filter(function(t){ return _effective(t)==='won'; })
-    .reduce(function(s,t){ return s + (parseFloat(t.potentialProfit)||0); }, 0);
-  var settledLosses = tickets
-    .filter(function(t){ return _effective(t)==='lost'; })
-    .reduce(function(s,t){ return s + (parseFloat(t.riskAmount)||0); }, 0);
-  // refunds bucket intentionally empty under the openRisk-exclusion model.
+  var openRisk = 0, settledGains = 0, settledLosses = 0;
+  tickets.forEach(function(t){
+    var es = _effective(t);
+    var risk   = parseFloat(t.riskAmount)    || 0;
+    var profit = parseFloat(t.potentialProfit) || 0;
+    var contrib = 0;
+    var inOpenRisk = false, inGain = false, inLoss = false;
+    var reason = '';
+    if (es === 'active' || es === 'open') {
+      openRisk += risk; contrib = -risk; inOpenRisk = true;
+      reason = 'active-locks-in-openRisk';
+    } else if (es === 'won') {
+      settledGains += profit; contrib = profit; inGain = true;
+      reason = 'won-adds-profit';
+    } else if (es === 'lost') {
+      settledLosses += risk; contrib = -risk; inLoss = true;
+      reason = 'lost-subtracts-risk';
+    } else {
+      reason = 'canceled-or-push-zero-impact';
+    }
+    console.log('[balance derivation audit]',
+      '\n  ticketId:              ', t.id || '?',
+      '\n  rawStatus:             ', (t.status||'?'),
+      '\n  displayStatus:         ', es,
+      '\n  risk:                  $'+risk.toFixed(2),
+      '\n  toWin:                 $'+profit.toFixed(2),
+      '\n  payout:                $'+((parseFloat(t.estimatedPayout)||0).toFixed(2)),
+      '\n  includedAsOpenRisk:    ', inOpenRisk,
+      '\n  includedAsSettledGain: ', inGain,
+      '\n  includedAsSettledLoss: ', inLoss,
+      '\n  includedAsRefund:      ', false,
+      '\n  balanceContribution:   $'+contrib.toFixed(2),
+      '\n  reason:                ', reason
+    );
+  });
   var refunds = 0;
-  var available = Math.round((starting - openRisk - settledLosses + settledGains + refunds) * 100) / 100;
+  var available = Math.round((starting - openRisk - settledLosses + settledGains) * 100) / 100;
+  console.log('[balance derivation audit]',
+    '\n  startingBalance:       $'+starting.toFixed(2),
+    '\n  openRisk:              $'+openRisk.toFixed(2),
+    '\n  settledGains:          $'+settledGains.toFixed(2),
+    '\n  settledLosses:         $'+settledLosses.toFixed(2),
+    '\n  finalAvailableBalance: $'+available.toFixed(2)
+  );
   return {
     starting:      starting,
     openRisk:      openRisk,
