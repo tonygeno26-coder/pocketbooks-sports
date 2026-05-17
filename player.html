@@ -3222,6 +3222,8 @@ function _gradeTicket(ticket, resultsMap, normalizedGames) {
 
   for (var i = 0; i < ticket.selections.length; i++) {
     var sel = ticket.selections[i];
+    // Stamp ticketId onto sel so skip logs inside _findGameForSelection can reference it
+    sel._ticketId = ticket.id;
     var gameResult = _findGameForSelection(sel, games, resultsMap || {});
     if (!gameResult) {
       var nearest = _closestGameDiagnostic(sel, games);
@@ -3544,11 +3546,49 @@ function _buildFinalScoreObject(gameResult) {
 // TLA-first matcher. Resolves both the selection and every candidate game
 // to TLAs via the alias dictionary, then matches on the unordered TLA pair.
 // Falls back to the older substring strategy only if no TLA can be derived.
+// ── DATE SAFETY HELPERS ──────────────────────────────────────────────────────
+function _selCommenceMs(sel) {
+  // Returns the ticket leg's commence time in ms, or 0 if unavailable
+  var ct = sel.commenceTime || sel.commence_time || sel.time || null;
+  if (!ct) return 0;
+  var t = new Date(ct).getTime();
+  return isNaN(t) ? 0 : t;
+}
+function _gameCommenceMs(g) {
+  var ct = (g._sdioRaw && g._sdioRaw.DateTime) || g.commence_time || g.commenceTime || null;
+  if (!ct) return 0;
+  var t = new Date(ct).getTime();
+  return isNaN(t) ? 0 : t;
+}
+function _sameDateUTC(msA, msB) {
+  if (!msA || !msB) return true; // no date to compare — allow
+  var dA = new Date(msA); var dB = new Date(msB);
+  return dA.getUTCFullYear() === dB.getUTCFullYear() &&
+         dA.getUTCMonth()   === dB.getUTCMonth() &&
+         dA.getUTCDate()    === dB.getUTCDate();
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function _findGameForSelection(sel, normalizedGames, resultsMap) {
   if (!sel) return null;
+
+  // SAFETY GATE 1: if ticket commenceTime is in the future — never grade
+  var selMs = _selCommenceMs(sel);
+  if (selMs > 0 && selMs > Date.now()) {
+    console.log('[grade skipped]\n  reason:     future_game_not_gradeable\n  ticketId:   '+(sel._ticketId||'?')+'\n  pick:       '+(sel.pick||'-')+'\n  commenceTime: '+new Date(selMs).toISOString());
+    return null;
+  }
+
   // 1. Direct gameId hit
   if (sel.gameId && resultsMap[String(sel.gameId).toLowerCase()]) {
-    return resultsMap[String(sel.gameId).toLowerCase()];
+    var gById = resultsMap[String(sel.gameId).toLowerCase()];
+    // Date cross-check even on gameId match
+    var gMs = _gameCommenceMs(gById);
+    if (selMs > 0 && gMs > 0 && !_sameDateUTC(selMs, gMs)) {
+      console.log('[grade skipped]\n  reason:     date_mismatch_refused (gameId hit but wrong date)\n  ticketId:   '+(sel._ticketId||'?')+'\n  selDate:    '+new Date(selMs).toISOString()+'\n  gameDate:   '+new Date(gMs).toISOString());
+      return null;
+    }
+    return gById;
   }
   var matchup = String(sel.matchup || sel.game || '').toLowerCase();
   var selHomeRaw = String(sel.homeTeam || '').trim();
@@ -3566,8 +3606,8 @@ function _findGameForSelection(sel, normalizedGames, resultsMap) {
     }
   }
 
-  // 2. TLA pair match (unordered — we don't trust away/home order from
-  // the matchup string).
+  // 2. TLA pair match (unordered) + date gate
+  var tlaCandidates = [];
   if (selHomeTla && selAwayTla) {
     for (var i = 0; i < normalizedGames.length; i++) {
       var g = normalizedGames[i];
@@ -3578,18 +3618,47 @@ function _findGameForSelection(sel, normalizedGames, resultsMap) {
       if (!hTla || !aTla) continue;
       var pair = [hTla, aTla].sort().join('|');
       var selPair = [selHomeTla, selAwayTla].sort().join('|');
-      if (pair === selPair) return g;
+      if (pair === selPair) tlaCandidates.push(g);
     }
   }
+  if (tlaCandidates.length === 1) {
+    // Exactly one candidate — require date match if selMs is available
+    var gMs1 = _gameCommenceMs(tlaCandidates[0]);
+    if (selMs > 0 && gMs1 > 0 && !_sameDateUTC(selMs, gMs1)) {
+      console.log('[grade skipped]\n  reason:     date_mismatch_refused\n  ticketId:   '+(sel._ticketId||'?')+'\n  pick:       '+(sel.pick||'-')+'\n  selDate:    '+new Date(selMs).toISOString()+'\n  gameDate:   '+new Date(gMs1).toISOString());
+      return null;
+    }
+    return tlaCandidates[0];
+  }
+  if (tlaCandidates.length > 1) {
+    // Multiple candidates (e.g. doubleheader) — filter to same date first
+    if (selMs > 0) {
+      var sameDayCandidates = tlaCandidates.filter(function(g) { return _sameDateUTC(selMs, _gameCommenceMs(g)); });
+      if (sameDayCandidates.length === 1) return sameDayCandidates[0];
+      if (sameDayCandidates.length > 1) {
+        console.log('[grade skipped]\n  reason:     ambiguous_match_refused ('+sameDayCandidates.length+' same-day TLA candidates)\n  ticketId:   '+(sel._ticketId||'?')+'\n  pick:       '+(sel.pick||'-'));
+        return null;
+      }
+    }
+    console.log('[grade skipped]\n  reason:     ambiguous_match_refused ('+tlaCandidates.length+' TLA candidates, no selMs to disambiguate)\n  ticketId:   '+(sel._ticketId||'?')+'\n  pick:       '+(sel.pick||'-'));
+    return null;
+  }
 
-  // 3. Substring fallback (legacy path) for tickets where TLA resolution
-  // somehow fails. Bidirectional substring against full / short / TLA.
+  // 3. Substring fallback — ONLY for legacy tickets with no commenceTime
+  // AND must find exactly one candidate (ambiguous = refuse).
+  // Tickets with commenceTime skip this path to prevent wrong-date grading.
+  if (selMs > 0) {
+    // Has commenceTime — TLA path already failed, refuse rather than guess
+    console.log('[grade skipped]\n  reason:     ambiguous_match_refused (has commenceTime, TLA match failed, refusing substring fallback)\n  ticketId:   '+(sel._ticketId||'?')+'\n  pick:       '+(sel.pick||'-'));
+    return null;
+  }
   var selHome = selHomeRaw.toLowerCase();
   var selAway = selAwayRaw.toLowerCase();
   function _bidir(needle, hay) {
     if (!needle || !hay) return false;
     return needle.indexOf(hay) !== -1 || hay.indexOf(needle) !== -1;
   }
+  var substringCandidates = [];
   for (var k = 0; k < normalizedGames.length; k++) {
     var g2 = normalizedGames[k];
     if (!g2) continue;
@@ -3600,18 +3669,24 @@ function _findGameForSelection(sel, normalizedGames, resultsMap) {
     var gShort = [String(raw2.HomeTeamName||'').toLowerCase(), String(raw2.AwayTeamName||'').toLowerCase()];
     var ghLast = gh.split(' ').slice(-1)[0];
     var gaLast = ga.split(' ').slice(-1)[0];
+    var matched = false;
     if (selHome && (_bidir(selHome, gh) || _bidir(selHome, gShort[0]) || (gTlas[0] && selHome === gTlas[0]))) {
       if (selAway && (_bidir(selAway, ga) || _bidir(selAway, gShort[1]) || (gTlas[1] && selAway === gTlas[1]))) {
-        return g2;
+        matched = true;
       }
     }
-    if (matchup && (matchup.indexOf(gh) !== -1 || matchup.indexOf(ga) !== -1 ||
+    if (!matched && matchup && (matchup.indexOf(gh) !== -1 || matchup.indexOf(ga) !== -1 ||
                     (gShort[0] && matchup.indexOf(gShort[0]) !== -1) ||
                     (gShort[1] && matchup.indexOf(gShort[1]) !== -1) ||
                     (ghLast && matchup.indexOf(ghLast) !== -1) ||
                     (gaLast && matchup.indexOf(gaLast) !== -1))) {
-      return g2;
+      matched = true;
     }
+    if (matched) substringCandidates.push(g2);
+  }
+  if (substringCandidates.length === 1) return substringCandidates[0];
+  if (substringCandidates.length > 1) {
+    console.log('[grade skipped]\n  reason:     ambiguous_match_refused ('+substringCandidates.length+' substring candidates, no commenceTime to disambiguate)\n  ticketId:   '+(sel._ticketId||'?')+'\n  pick:       '+(sel.pick||'-'));
   }
   return null;
 }
