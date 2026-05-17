@@ -1,5 +1,9 @@
 # PocketBooks Sports — System Architecture
 
+> Last verified deploy: `fa019f2` — 2026-05-17
+> Build pipeline: GitHub push → Vercel auto-deploy → outputDirectory `.` → no-cache HTML headers
+> Deploy verified: `/build.json` SHA = `window.PBS_BUILD_SHA` = GitHub main ✅
+
 ## Stack
 
 ```
