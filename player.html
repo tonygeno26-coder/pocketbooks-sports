@@ -544,6 +544,7 @@ function openDebugPanel() {
       ),
       '<button onclick="_debugExportAudit()" style="padding:10px;background:#1a1a1a;border:1px solid #00c2ff;border-radius:8px;color:#00c2ff;font-size:0.78rem;font-weight:700;cursor:pointer;text-align:left">📤 Export Audit JSON</button>',
       '<button onclick="reconcileInvalidGrades()" style="padding:10px;background:#1a1a1a;border:1px solid #f59e0b;border-radius:8px;color:#f59e0b;font-size:0.78rem;font-weight:700;cursor:pointer;text-align:left">⚠️ Revert Invalid Grades</button>',
+      '<button onclick="resetTicketStateForFreshTesting()" style="padding:10px;background:#1a1a1a;border:1px solid #00c2ff;border-radius:8px;color:#00c2ff;font-size:0.78rem;font-weight:700;cursor:pointer;text-align:left">🔄 Fresh Test Reset (keep profile/club)</button>',
       '<button onclick="_debugClearTickets()" style="padding:10px;background:#1a1a1a;border:1px solid #ff3d57;border-radius:8px;color:#ff3d57;font-size:0.78rem;font-weight:700;cursor:pointer;text-align:left">🗑️ Clear All Tickets (dev reset)</button>',
     '</div>',
     '</div>'
@@ -3919,6 +3920,66 @@ function reconcileInvalidGrades() {
 }
 // Also expose as window fn for console use
 window.reconcileInvalidGrades = reconcileInvalidGrades;
+
+// ── FRESH TEST RESET ─────────────────────────────────────────────────────────────
+function resetTicketStateForFreshTesting() {
+  // Keys to wipe (tickets, bets, ledger, settlements, balance)
+  var WIPE_KEYS = [
+    'pb-tickets', 'pb-tickets-version',
+    'hostActiveBets',
+    'pb-ledger',
+    'pb-settlements',
+    'pb-crypto-purchases',
+    'pb-diamond-ledger',
+    'pb-last-graded'
+  ];
+  // Keys to preserve (identity, club, auth, settings, limits)
+  var PRESERVE_KEYS = [
+    'pb-player', 'pb-player-settings',
+    'pb-club', 'pb-clubs', 'pb-club-players',
+    'pb-player-limits', 'pb-club-limits',
+    'pb-sports-token', 'pb-admin-token',
+    'pb-dev-email', 'pb-dev-mode',
+    'pb-balance-start'   // kept — reset separately below
+  ];
+
+  var wiped = {};
+  WIPE_KEYS.forEach(function(k) {
+    var had = localStorage.getItem(k) !== null;
+    localStorage.removeItem(k);
+    wiped[k] = had;
+  });
+
+  // Reset balance to starting default (preserve the key, reset the value)
+  var prevBalance = localStorage.getItem('pb-balance-start');
+  localStorage.setItem('pb-balance-start', String(_BASE_BALANCE));
+
+  // Clear in-memory caches
+  try { betTickets = []; } catch(_e) {}
+  try { if (window._autoGradeInterval) { clearInterval(window._autoGradeInterval); window._autoGradeInterval = null; } } catch(_e) {}
+
+  // Collect what's preserved
+  var preserved = PRESERVE_KEYS.filter(function(k) { return localStorage.getItem(k) !== null; });
+
+  console.log('[fresh test reset]',
+    '\n  pbTicketsCleared:        ', wiped['pb-tickets'],
+    '\n  hostActiveBetsCleared:   ', wiped['hostActiveBets'],
+    '\n  ledgerCleared:           ', wiped['pb-ledger'],
+    '\n  settlementsCleared:      ', wiped['pb-settlements'],
+    '\n  balanceStart:            $'+_BASE_BALANCE+' (was '+prevBalance+')',
+    '\n  preservedKeys:           ', preserved.join(', ') || '(none)'
+  );
+
+  // Refresh UI
+  try { syncBalanceDisplays(); } catch(_e) {}
+  try { renderMyBets && renderMyBets(); } catch(_e) {}
+  try { if (document.getElementById('results-section') && document.getElementById('results-section').style.display !== 'none') renderPlayerResults && renderPlayerResults(); } catch(_e) {}
+
+  alert('[fresh test reset] Done.\n\npb-tickets: cleared\nhostActiveBets: cleared\npb-ledger: cleared\nBalance reset to $'+_BASE_BALANCE+'\n\nPreserved: '+preserved.join(', '));
+  return { wiped: wiped, preserved: preserved, newBalance: _BASE_BALANCE };
+}
+window.resetTicketStateForFreshTesting = resetTicketStateForFreshTesting;
+// ────────────────────────────────────────────────────────────────────────────
 // ════════════════════════════════════════════════════════════════════════════
 
 // Canonicalize team identifiers within `pick` and within the game's
