@@ -271,6 +271,104 @@ test('bsPlaceBet fallback: empty bsStakes hydrated from bottom input value', fun
   assertEq(bsStakes['cell-X'], 75, 'cell-X hydrated');
 });
 
+// FUTURE GAME HARD GATE
+console.log('\n── Future Game Hard Gate ──');
+
+function canGradeTicket(ticket, nowMs) {
+  nowMs = nowMs || Date.now();
+  var GRACE_MS = 3 * 60 * 60 * 1000; // 3h grace after scheduled start
+  var sels = ticket.selections || [];
+  for (var i = 0; i < sels.length; i++) {
+    var sel = sels[i];
+    var ct = sel.scheduledStart || sel.commenceTime || sel.time || null;
+    if (!ct) continue;
+    var ctMs = new Date(ct).getTime();
+    if (isNaN(ctMs)) continue;
+    // Hard gate: game hasn't started yet (with grace window)
+    if (nowMs < ctMs - GRACE_MS) return { canGrade: false, reason: 'future_game_not_gradeable', commenceTime: ct, now: new Date(nowMs).toISOString() };
+  }
+  return { canGrade: true };
+}
+
+function autoRevertFutureGrades(tickets, nowMs) {
+  nowMs = nowMs || Date.now();
+  var reverted = [];
+  tickets.forEach(function(t) {
+    var s = (t.status||'').toLowerCase();
+    if (s !== 'won' && s !== 'lost' && s !== 'push') return;
+    var check = canGradeTicket(t, nowMs);
+    if (!check.canGrade) {
+      console.log('[future-game-block]',
+        '\n  ticketId:     ', t.id,
+        '\n  commenceTime: ', check.commenceTime,
+        '\n  now:          ', check.now,
+        '\n  blockedReason:', check.reason);
+      t.status = 'active';
+      t.gradedAt = null;
+      t.grading = null;
+      t.finalScore = null;
+      t._revertedReason = check.reason;
+      reverted.push(t.id);
+    }
+  });
+  return reverted;
+}
+
+test('future game: ticket with commenceTime tomorrow cannot grade', function() {
+  var tomorrow = new Date(Date.now() + 86400000).toISOString();
+  var ticket = {
+    id: 'T_marlins', status: 'won', riskAmount: 100, potentialProfit: 56.82,
+    gradedAt: new Date().toISOString(),
+    selections: [{ pick: 'Marlins +1.5', market: 'Run Line', commenceTime: tomorrow }]
+  };
+  var check = canGradeTicket(ticket, Date.now());
+  assert(!check.canGrade, 'future game must block grading');
+  assertEq(check.reason, 'future_game_not_gradeable', 'correct block reason');
+});
+
+test('past game (yesterday): grading allowed', function() {
+  var yesterday = new Date(Date.now() - 86400000).toISOString();
+  var ticket = {
+    id: 'T_past', status: 'active', riskAmount: 75,
+    selections: [{ pick: 'Blue Jays ML', market: 'Moneyline', commenceTime: yesterday }]
+  };
+  var check = canGradeTicket(ticket, Date.now());
+  assert(check.canGrade, 'past game should be gradeable');
+});
+
+test('autoRevertFutureGrades: reverts won ticket with future commenceTime', function() {
+  var tomorrow = new Date(Date.now() + 86400000).toISOString();
+  var tickets = [
+    { id: 'T_future', status: 'won', riskAmount: 100, potentialProfit: 56.82,
+      gradedAt: new Date().toISOString(),
+      selections: [{ commenceTime: tomorrow }] },
+    { id: 'T_valid', status: 'won', riskAmount: 50, potentialProfit: 45,
+      gradedAt: new Date().toISOString(),
+      selections: [{ commenceTime: new Date(Date.now() - 86400000).toISOString() }] }
+  ];
+  var reverted = autoRevertFutureGrades(tickets, Date.now());
+  assertEq(reverted.length, 1, 'only 1 ticket reverted');
+  assertEq(reverted[0], 'T_future', 'correct ticket reverted');
+  assertEq(tickets[0].status, 'active', 'future ticket back to active');
+  assertEq(tickets[1].status, 'won', 'valid ticket untouched');
+});
+
+test('balance recalculates correctly after future grade revert', function() {
+  var tomorrow = new Date(Date.now() + 86400000).toISOString();
+  var yesterday = new Date(Date.now() - 86400000).toISOString();
+  var tickets = [
+    { id: 'T_marlins', status: 'won', riskAmount: 100, potentialProfit: 56.82, gradedAt: new Date().toISOString(), selections: [{ commenceTime: tomorrow }] },
+    { id: 'T_orioles', status: 'active', riskAmount: 100, selections: [{ commenceTime: tomorrow }] }
+  ];
+  // Revert bad grades
+  autoRevertFutureGrades(tickets, Date.now());
+  // Now both are active
+  var b = calcBalance(tickets, 1000, function(t) { return !!t.gradedAt && tickets.indexOf(t) >= 0; });
+  assertEq(b.openRisk, 200, 'both tickets in openRisk after revert');
+  assertEq(b.available, 800, 'available = 1000 - 200');
+  assertEq(b.settledGains, 0, 'no settled gains');
+});
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 console.log('\n──────────────────────────────────────');
 console.log('Results: ' + _pass + ' passed, ' + _fail + ' failed');
