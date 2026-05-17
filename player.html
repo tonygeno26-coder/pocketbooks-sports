@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'ec0ff5b';
-window.PBS_BUILD_DATE = '2026-05-17T12:14:23.606Z';
+window.PBS_BUILD_SHA = '2c54adf';
+window.PBS_BUILD_DATE = '2026-05-17T12:21:06.062Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -5339,7 +5339,256 @@ function revertFutureGrades() {
   return { reverted: reverted };
 }
 window.revertFutureGrades = revertFutureGrades;
+
 // ════════════════════════════════════════════════════════════════════════════
+// GRADE TODAY'S ACTIVE TICKETS — on-demand audit helper
+// Usage: gradeTodaysActiveTickets()   (also available as window.grade)
+// Fetches fresh scores, runs every active ticket through the full grading
+// pipeline, logs the complete audit trail, updates balances + host stats.
+// ════════════════════════════════════════════════════════════════════════════
+async function gradeTodaysActiveTickets() {
+  console.log('[live grading audit] ─── START ───');
+  var nowMs = Date.now();
+
+  // Step 1: Load canonical tickets
+  var tickets = [];
+  try { tickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]'); } catch(_e) {}
+  var hostBets = [];
+  try { hostBets = JSON.parse(localStorage.getItem('hostActiveBets') || '[]'); } catch(_e) {}
+  // Merge: pb-tickets authoritative
+  var seen = {}; tickets.forEach(function(t){ if(t&&t.id) seen[t.id]=true; });
+  hostBets.forEach(function(t){ if(t&&t.id&&!seen[t.id]){ tickets.push(t); seen[t.id]=true; } });
+
+  var active = tickets.filter(function(t){ var s=(t.status||'').toLowerCase(); return (s==='active'||s==='open') && !t.gradedAt; });
+  console.log('[live grading audit] active tickets:', active.length, '| total:', tickets.length);
+
+  if (!active.length) {
+    console.log('[live grading audit] nothing to grade');
+    try { showToast('No active tickets to grade', 'info'); } catch(_e){}
+    return { graded: 0, skipped: 0, results: [] };
+  }
+
+  // Step 2: Fetch scores
+  var scores;
+  try {
+    scores = await _fetchAndNormalizeScores({ daysBack: 2 });
+  } catch(e) {
+    console.error('[live grading audit] score fetch failed:', e.message);
+    try { showToast('Score fetch failed: ' + e.message, 'error'); } catch(_e){}
+    return { graded: 0, skipped: 0, error: e.message };
+  }
+  if (scores.error) {
+    console.log('[live grading audit] scores unavailable:', scores.error);
+    try { showToast('Scores unavailable: ' + scores.error, 'warning'); } catch(_e){}
+    return { graded: 0, skipped: 0, error: scores.error };
+  }
+
+  var resultsMap     = scores.resultsMap;
+  var completedGames = scores.completedGames || [];
+  console.log('[live grading audit] completed games:', completedGames.length);
+
+  var auditRows = [];
+  var gradedCount = 0, skippedCount = 0;
+
+  // Step 3–8: Grade each ticket
+  active.forEach(function(ticket) {
+    var sel0    = (ticket.selections || [])[0] || {};
+    var legStrs = (ticket.selections || []).map(function(s){ return (s.pick||'?') + ' (' + (s.market||'?') + ')'; }).join(' | ');
+    var cKey    = sel0.canonicalGameKey || sel0.gameKey || '?';
+    var ct      = sel0.scheduledStart || sel0.commenceTime || sel0.time || null;
+    var sport   = (typeof _ticketSportKey === 'function') ? _ticketSportKey(ticket) : (ticket.sport || '?');
+
+    var row = {
+      ticketId:           ticket.id || '?',
+      type:               ticket.type || 'Single',
+      legs:               (ticket.selections||[]).length,
+      canonicalGameKey:   cKey,
+      commenceTime:       ct || '(none)',
+      matchedGame:        null,
+      gameStatus:         null,
+      finalScore:         null,
+      legResult:          null,
+      ticketResult:       null,
+      playerBalanceBefore:null,
+      playerBalanceAfter: null,
+      hostExposureBefore: parseFloat(ticket.potentialProfit) || 0,
+      hostExposureAfter:  null,
+      hostProfitDelta:    null,
+      reason:             null
+    };
+
+    try {
+      // Gate: future game
+      var gateCheck = _canGradeTicket(ticket, nowMs);
+      if (!gateCheck.canGrade) {
+        row.reason = gateCheck.reason;
+        row.ticketResult = 'SKIPPED';
+        skippedCount++;
+        _logAuditRow(row);
+        return;
+      }
+
+      // Gate: sport supported
+      if (typeof _isSupportedForGrading === 'function' && !_isSupportedForGrading(ticket)) {
+        row.reason = 'unsupported_sport_for_grading (' + sport + ')';
+        row.ticketResult = 'SKIPPED';
+        skippedCount++;
+        _logAuditRow(row);
+        return;
+      }
+
+      var balBefore = calcAvailableBalance().available;
+      row.playerBalanceBefore = balBefore;
+
+      // Grade
+      var gradeResult = _gradeTicket(ticket, resultsMap, completedGames);
+
+      if (!gradeResult || !gradeResult.result) {
+        // Determine precise skip reason from _settledReason / match failure
+        var skipReason = 'game_not_final';
+        if (!gradeResult) skipReason = 'no_match_found';
+        row.reason = skipReason;
+        row.ticketResult = 'SKIPPED';
+        // Try to identify matched game for diagnostics
+        if (gradeResult && gradeResult.gameResults && gradeResult.gameResults[0]) {
+          var dg = gradeResult.gameResults[0];
+          row.matchedGame = (dg.away||'?') + ' @ ' + (dg.home||'?');
+          row.gameStatus  = dg.status || '?';
+        }
+        skippedCount++;
+        _logAuditRow(row);
+        return;
+      }
+
+      var result        = gradeResult.result;
+      var primary       = gradeResult.primaryGame;
+      var legacyScore   = (gradeResult.finalScores || []).join(' | ');
+      var finalScoreObj = (typeof _buildFinalScoreObject === 'function') ? _buildFinalScoreObject(primary) : null;
+      var payout        = result === 'won'  ? (parseFloat(ticket.estimatedPayout) || 0)
+                        : result === 'push' ? (parseFloat(ticket.riskAmount) || 0)
+                        : 0;
+
+      if (primary) {
+        row.matchedGame  = (primary.away||'?') + ' @ ' + (primary.home||'?');
+        row.gameStatus   = (primary.status || 'Final');
+        row.finalScore   = legacyScore;
+      }
+      row.legResult    = (gradeResult.legResults || []).join(', ');
+      row.ticketResult = result.toUpperCase();
+
+      // Write immutable grading snapshot
+      var _primaryMs = primary ? ((primary._sdioRaw&&primary._sdioRaw.DateTime)||primary.commence_time||primary.time||null) : null;
+      var _primaryDate = '';
+      if (_primaryMs) { try { _primaryDate = new Date(_primaryMs).toISOString().slice(0,10); } catch(_e){} }
+
+      ticket.status           = result;
+      ticket.gradedAt         = new Date().toISOString();
+      ticket.gradingSource    = 'gradeTodaysActiveTickets';
+      ticket.finalScore       = finalScoreObj;
+      ticket.finalScoreDisplay = legacyScore;
+      ticket.lastSeenGameStatus = (finalScoreObj && finalScoreObj.status) || 'Final';
+      ticket.grading = {
+        result:            result,
+        finalScore:        finalScoreObj,
+        finalScoreText:    legacyScore,
+        payout:            Math.round(payout * 100) / 100,
+        balanceBefore:     balBefore,
+        balanceAfter:      null,
+        gradedAt:          ticket.gradedAt,
+        matchedGameId:     primary ? (primary.id || null) : null,
+        matchedCanonicalKey: primary ? (primary._canonicalKey || null) : null,
+        matchedGameDate:   _primaryDate || null,
+        matchedTeams:      primary ? ((primary.away||'?')+' @ '+(primary.home||'?')) : null,
+        matchedStatus:     (primary && primary.status) || 'Final',
+        gradingMethod:     gradeResult.matchMethod || 'canonical'
+      };
+
+      // Balance update (derived model — no pb-balance-start writes)
+      var balAfter  = calcAvailableBalance().available;
+      var balChange = Math.round((balAfter - balBefore) * 100) / 100;
+      ticket.grading.balanceAfter  = balAfter;
+      ticket.grading.balanceChange = balChange;
+
+      row.playerBalanceAfter = balAfter;
+      row.hostExposureAfter  = result === 'won' ? 0 : (result === 'lost' ? 0 : parseFloat(ticket.riskAmount)||0);
+      row.hostProfitDelta    = result === 'lost' ? (parseFloat(ticket.riskAmount)||0) : result === 'won' ? -(parseFloat(ticket.potentialProfit)||0) : 0;
+      row.reason             = 'graded_' + result;
+
+      // Ledger
+      try {
+        addLedgerEntry({
+          id: 'GTA-' + ticket.id + '-' + Date.now(),
+          type: result === 'won' ? 'bet_won' : result === 'push' ? 'bet_push' : 'bet_lost',
+          ticketId: ticket.id, amount: result === 'won' ? (parseFloat(ticket.potentialProfit)||0) : 0,
+          risk: parseFloat(ticket.riskAmount)||0, payout: payout,
+          balanceBefore: balBefore, balanceAfter: balAfter, balanceChange: balChange,
+          createdAt: ticket.gradedAt, finalScore: legacyScore, source: 'gradeTodaysActiveTickets'
+        });
+      } catch(_e) {}
+
+      gradedCount++;
+    } catch(ticketErr) {
+      row.reason = 'error:' + (ticketErr.message || ticketErr);
+      row.ticketResult = 'ERROR';
+      console.error('[live grading audit] error on ticket', ticket.id, ticketErr.message);
+    }
+
+    _logAuditRow(row);
+    auditRows.push(row);
+  });
+
+  // Persist
+  if (gradedCount > 0) {
+    localStorage.setItem('pb-tickets', JSON.stringify(tickets));
+    try { betTickets = tickets; } catch(_e) {}
+    // Mirror to hostActiveBets
+    try {
+      var hb = JSON.parse(localStorage.getItem('hostActiveBets') || '[]');
+      tickets.forEach(function(t){
+        var hi = hb.findIndex(function(h){ return h.id === t.id; });
+        if (hi >= 0) Object.assign(hb[hi], { status:t.status, gradedAt:t.gradedAt, finalScore:t.finalScore, grading:t.grading });
+      });
+      localStorage.setItem('hostActiveBets', JSON.stringify(hb));
+    } catch(_e) {}
+    localStorage.setItem('pb-last-graded', new Date().toISOString());
+    try { syncBalanceDisplays(); } catch(_e) {}
+    try { renderMyBets(); } catch(_e) {}
+    // Trigger host stats refresh
+    try { window.dispatchEvent(new StorageEvent('storage', { key: 'pb-tickets' })); } catch(_e) {}
+    try { showToast('✅ Graded ' + gradedCount + ' ticket(s)', 'success'); } catch(_e) {}
+  } else {
+    try { showToast('No tickets graded — check console for details', 'info'); } catch(_e) {}
+  }
+
+  console.log('[live grading audit] ─── DONE ─── graded=' + gradedCount + ' skipped=' + skippedCount);
+  return { graded: gradedCount, skipped: skippedCount, results: auditRows };
+}
+
+function _logAuditRow(row) {
+  console.log('[live grading audit]',
+    '\n  ticketId:           ', row.ticketId,
+    '\n  type:               ', row.type,
+    '\n  legs:               ', row.legs,
+    '\n  canonicalGameKey:   ', row.canonicalGameKey,
+    '\n  commenceTime:       ', row.commenceTime,
+    '\n  matchedGame:        ', row.matchedGame || '(none)',
+    '\n  gameStatus:         ', row.gameStatus  || '(none)',
+    '\n  finalScore:         ', row.finalScore  || '(none)',
+    '\n  legResult:          ', row.legResult   || '(none)',
+    '\n  ticketResult:       ', row.ticketResult || '(none)',
+    '\n  playerBalanceBefore:', row.playerBalanceBefore != null ? ('$'+row.playerBalanceBefore.toFixed(2)) : 'n/a',
+    '\n  playerBalanceAfter: ', row.playerBalanceAfter  != null ? ('$'+row.playerBalanceAfter.toFixed(2))  : 'n/a',
+    '\n  hostExposureBefore: ', '$'+(row.hostExposureBefore||0).toFixed(2),
+    '\n  hostExposureAfter:  ', row.hostExposureAfter != null ? ('$'+row.hostExposureAfter.toFixed(2)) : 'n/a',
+    '\n  hostProfitDelta:    ', row.hostProfitDelta  != null ? ((row.hostProfitDelta>=0?'+':'')+row.hostProfitDelta.toFixed(2)) : 'n/a',
+    '\n  reason:             ', row.reason || ''
+  );
+}
+
+window.gradeTodaysActiveTickets = gradeTodaysActiveTickets;
+window.grade = gradeTodaysActiveTickets; // short alias
+// ════════════════════════════════════════════════════════════════════════════
+
 var _autoGradeRunning  = false;
 
 async function _autoGradePoll() {
@@ -8852,7 +9101,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · ec0ff5b · May 17, 05:14 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 2c54adf · May 17, 05:21 AM</span>
 </div>
 
 })();
