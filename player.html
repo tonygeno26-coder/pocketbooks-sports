@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '01f5959';
-window.PBS_BUILD_DATE = '2026-05-17T09:14:51.238Z';
+window.PBS_BUILD_SHA = 'f283d8c';
+window.PBS_BUILD_DATE = '2026-05-17T11:45:55.984Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -1376,6 +1376,7 @@ async function loadGames(sport, opts){
           data-pick="${safePick}"
           data-odds="${odds}"
           data-sport="${sp}"
+          data-status="${(g.status||g.state||'')}"
           >${top?`<span class="odds-line">${top}</span>`:''}
           <span class="odds-num ${c}">${f}</span></div>`;
       }
@@ -2905,6 +2906,24 @@ function confirmBet() {
   if (!snap) {
     showToast('Bet expired · reopen confirmation');
     console.warn('[confirmBet] no snapshot — aborting');
+    return;
+  }
+
+  // Re-check placement gate on all legs at confirm time (catches stale board)
+  var _confirmNowMs = Date.now();
+  var _confirmLegs = (snap.legs || []).map(function(b) {
+    return {
+      cellId: b.cellId, pick: b.pick, market: b.market,
+      canonicalGameKey: b.canonicalGameKey || null,
+      scheduledStart: b.scheduledStart || b.commenceTime || b.time || null,
+      gameStatus: b.gameStatus || ''
+    };
+  });
+  var _confirmGate = _checkTicketPlacementGate(_confirmLegs, _confirmNowMs);
+  if (!_confirmGate.allowed) {
+    closeBetConfirm();
+    showToast(_confirmGate.message || 'Bet unavailable: this game has already started or finalized.');
+    console.warn('[confirmBet] placement gate blocked at confirm', { reason: _confirmGate.blockedReason, legIndex: _confirmGate.legIndex });
     return;
   }
 
@@ -6360,11 +6379,12 @@ document.addEventListener('click', function(e) {
   var pick    = cell.dataset.pick || '';
   var odds    = parseInt(cell.dataset.odds) || 0;
   var sp      = cell.dataset.sport || '';
+  var gameStatus = cell.dataset.status || '';
   var gameKey = game + '|' + market; // unique key = game + market type
 
   if (!odds) return; // ignore cells with no valid odds
 
-  console.log('odds clicked:', { id, game, market, pick, odds, gameKey });
+  console.log('odds clicked:', { id, game, market, pick, odds, gameKey, gameStatus });
 
   // Check if this cell is already selected
   var existingIdx = betSlip.findIndex(function(b) { return b.cellId === id; });
@@ -6429,10 +6449,37 @@ document.addEventListener('click', function(e) {
       showToast((sp||'This sport')+' betting is blocked by host settings');
       return;
     }
+
+    // Build canonicalGameKey for this cell
+    var _teams = game.split(' vs ');
+    var _away = (_teams[0]||'').trim(), _home = (_teams[1]||'').trim();
+    var _gameDate = '';
+    if (time) { try { _gameDate = new Date(time).toISOString().slice(0,10); } catch(_e){} }
+    var _cKey = [(sp||'mlb').toUpperCase(),
+      _away.toLowerCase().replace(/\s+/g,'-'),
+      _home.toLowerCase().replace(/\s+/g,'-'),
+      _gameDate].join('|');
+
+    // Placement gate: block started/final games
+    var _pgResult = _checkPlacementGate({ cellId: id, canonicalGameKey: _cKey, scheduledStart: time, gameStatus: gameStatus, market: market, pick: pick }, Date.now());
+    if (!_pgResult.allowed) {
+      showToast(_pgResult.message);
+      return;
+    }
+
+    // Conflict check: block opposing sides
+    var _cfResult = _checkBetConflict({ cellId: id, canonicalGameKey: _cKey, pick: pick, market: market });
+    if (_cfResult.conflict) {
+      showToast(_cfResult.message);
+      return;
+    }
+
     // Add new valid selection
     betSlip.push({
       cellId: id, game: game, time: time, market: market,
-      pick: pick, odds: odds, sport: sp, gameKey: gameKey
+      pick: pick, odds: odds, sport: sp, gameKey: gameKey,
+      canonicalGameKey: _cKey, scheduledStart: time,
+      homeTeam: _home, awayTeam: _away, gameStatus: gameStatus
     });
     console.log('[highlight] adding selected to:', id, 'classList before:', cell.className);
     cell.classList.add('selected');
@@ -6445,6 +6492,56 @@ document.addEventListener('click', function(e) {
 }, true); // useCapture=true ensures this fires before any stopPropagation
 
 // ════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
+// PLACEMENT GATE
+// Prevents betting on games that have already started or finalized.
+// Applied at slip add (bsToggle) and re-checked at confirmBet.
+// ════════════════════════════════════════════════════════════════════════════
+var _FINAL_STATUSES = ['final','f','completed','complete','closed','cancelled','canceled','postponed','suspended','forfeit','f/ot','f/so'];
+function _isGameFinal(status) {
+  if (!status) return false;
+  return _FINAL_STATUSES.indexOf(String(status).toLowerCase().trim()) !== -1;
+}
+function _checkPlacementGate(leg, nowMs) {
+  nowMs = nowMs || Date.now();
+  var ct  = leg.scheduledStart || leg.commenceTime || leg.time || null;
+  var ctMs = ct ? new Date(ct).getTime() : 0;
+  var officialStatus = (leg.gameStatus || '').toLowerCase().trim();
+  var attemptId = 'PG-' + (leg.cellId||'?') + '-' + nowMs;
+
+  // Gate 1: game already final/closed/canceled
+  if (_isGameFinal(officialStatus)) {
+    var r1 = { allowed: false, blockedReason: 'game_already_final', officialStatus: officialStatus,
+               message: 'Bet unavailable: this game has already started or finalized.' };
+    console.log('[bet placement gate]', '\n  attemptId:', attemptId, '\n  canonicalGameKey:', (leg.canonicalGameKey||'?'),
+      '\n  commenceTime:', (ct||'?'), '\n  now:', new Date(nowMs).toISOString(),
+      '\n  officialStatus:', officialStatus, '\n  market:', (leg.market||'?'),
+      '\n  allowed:', false, '\n  blockedReason:', r1.blockedReason);
+    return r1;
+  }
+  // Gate 2: commenceTime in the past (game already started)
+  if (ctMs > 0 && nowMs >= ctMs) {
+    var r2 = { allowed: false, blockedReason: 'game_already_started', commenceTime: ct,
+               now: new Date(nowMs).toISOString(),
+               message: 'Bet unavailable: this game has already started or finalized.' };
+    console.log('[bet placement gate]', '\n  attemptId:', attemptId, '\n  canonicalGameKey:', (leg.canonicalGameKey||'?'),
+      '\n  commenceTime:', ct, '\n  now:', r2.now,
+      '\n  officialStatus:', (officialStatus||'(none)'), '\n  market:', (leg.market||'?'),
+      '\n  allowed:', false, '\n  blockedReason:', r2.blockedReason);
+    return r2;
+  }
+  console.log('[bet placement gate] allowed legKey=' + (leg.canonicalGameKey||'?') + ' commenceTime=' + (ct||'?'));
+  return { allowed: true };
+}
+function _checkTicketPlacementGate(legs, nowMs) {
+  for (var i = 0; i < legs.length; i++) {
+    var r = _checkPlacementGate(legs[i], nowMs);
+    if (!r.allowed) return Object.assign({ legIndex: i }, r);
+  }
+  return { allowed: true };
+}
+// ════════════════════════════════════════════════════════════════════════════
+
 // CONFLICT ENGINE
 // Prevents betting both sides of the same game in slip or vs active tickets.
 // Uses canonicalGameKey as primary conflict key.
@@ -6560,7 +6657,13 @@ function bsToggle(cellId, game, time, market, pick, odds) {
     betSlip.splice(idx, 1);
     if (cellEl) cellEl.classList.remove('sel');
   } else {
-    // Check conflict before adding
+    // Gate 1: placement gate (game started/final)
+    var gateResult = _checkPlacementGate(sel, Date.now());
+    if (!gateResult.allowed) {
+      showToast(gateResult.message);
+      return;
+    }
+    // Gate 2: conflict check (opposing side)
     var conflict = _checkBetConflict(sel);
     if (conflict.conflict) {
       showToast(conflict.message);
@@ -8606,7 +8709,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 01f5959 · May 17, 02:14 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · f283d8c · May 17, 04:45 AM</span>
 </div>
 
 })();
