@@ -131,15 +131,15 @@ CREATE INDEX IF NOT EXISTS idx_legs_scheduled     ON ticket_legs(scheduled_start
 CREATE TABLE IF NOT EXISTS ledger_entries (
   id              TEXT PRIMARY KEY,
   club_id         TEXT,
-  player_id       TEXT NOT NULL,
-  ticket_id       TEXT REFERENCES tickets(id),
+  player_id       TEXT,              -- nullable: guest players may not have id yet
+  ticket_id       TEXT,              -- no FK in Phase A (race condition: ledger arrives before ticket)
   type            TEXT NOT NULL
                     CHECK (type IN (
                       'bet_placed','bet_won','bet_lost','bet_push','bet_canceled',
                       'deposit','withdrawal','admin_adjustment',
                       'invalid_grade_reversal','future_grade_blocked_revert'
                     )),
-  amount          NUMERIC(12,2) NOT NULL,   -- signed
+  amount          NUMERIC(12,2) NOT NULL,
   balance_before  NUMERIC(12,2),
   balance_after   NUMERIC(12,2),
   reason          TEXT NOT NULL,
