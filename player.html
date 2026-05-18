@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'dccbb84';
-window.PBS_BUILD_DATE = '2026-05-18T08:15:08.383Z';
+window.PBS_BUILD_SHA = '1f05f56';
+window.PBS_BUILD_DATE = '2026-05-18T10:39:15.874Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -1831,8 +1831,12 @@ try { loadGames('mlb'); } catch(e) { console.error('[PBS fetch failed]', e); }
 try { startAutoGradeDaemon(); } catch(e) { console.error('[auto grade daemon] failed to start:', e.message); }
 // Startup integrity scan
 try { revertFutureGrades(); } catch(e) { console.error('[revertFutureGrades] startup error:', e.message); }
-// DB primary read trial (only runs if flag enabled via enableDbPrimaryReadsForSession())
-try { _initDbPrimaryRead().catch(function(e){ console.warn('[db primary read] init error:', e.message); }); } catch(e) { console.warn('[db primary read] sync error:', e.message); }
+// DB primary read: auto-enable for dev identities, then run trial
+try {
+  _maybeAutoEnableDbPrimaryReads().then(function(){
+    return _initDbPrimaryRead();
+  }).catch(function(e){ console.warn('[db primary read] init error:', e.message); });
+} catch(e) { console.warn('[db primary read] sync error:', e.message); }
 setTimeout(function(){
   var gl = document.getElementById('games-list');
   if (gl && gl.textContent && gl.textContent.indexOf('Loading') !== -1) {
@@ -4292,15 +4296,22 @@ async function runFullPersistenceAudit() {
   results.legs    = await runTicketLegMirrorAudit();
   results.ledger  = await runLedgerMirrorAudit();
   var allEnabled = results.tickets.enabled && results.legs.enabled && results.ledger.enabled;
+  // Tickets and legs must be fully in sync.
+  // Ledger: onlyLocal = 0 and mismatched = 0 is required.
+  // DB-only ledger rows (onlyDb > 0) are allowed — debug/system entries.
   var allSync = allEnabled &&
     results.tickets.onlyLocal === 0 &&
     results.legs.localLegCount <= results.legs.dbLegCount &&
     results.ledger.onlyLocal === 0 &&
     results.ledger.mismatched === 0;
+  var warnings = [];
+  if (results.ledger.onlyDb > 0) warnings.push('ledger has ' + results.ledger.onlyDb + ' DB-only rows (debug/system — OK)');
+  if (results.tickets.onlyMirror > 0) warnings.push('tickets has ' + results.tickets.onlyMirror + ' DB-only rows (OK)');
   console.log('[supabase full audit] ─── RESULT:',
     allSync ? '✅ FULLY IN SYNC' : '⚠️ SYNC GAPS FOUND',
-    '| enabled:', allEnabled);
-  return results;
+    '| enabled:', allEnabled,
+    warnings.length ? '| warnings: ' + warnings.join('; ') : '');
+  return Object.assign(results, { allSync: allSync, warnings: warnings });
 }
 window.runFullPersistenceAudit = runFullPersistenceAudit;
 
@@ -9603,7 +9614,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · dccbb84 · May 18, 01:15 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 1f05f56 · May 18, 03:39 AM</span>
 </div>
 
 })();
@@ -9694,12 +9705,84 @@ async function runPhaseBReadValidation() {
   // 6. Full persistence audit
   results.persistence = await runFullPersistenceAudit();
 
-  // Summary
-  var pass = results.flagEnabled && results.backendHasSupabase && results.dbRead.sourceUsed === 'db' && !results.duplicateTickets;
+  // Summary: pass if source=db, no dupes, persistence in sync
+  // DB-only ledger rows are warnings not failures
+  var persistenceOk = results.persistence && results.persistence.allSync;
+  var pass = results.flagEnabled && results.backendHasSupabase &&
+    results.dbRead.sourceUsed === 'db' && !results.duplicateTickets && persistenceOk;
+  if (results.persistence && results.persistence.warnings && results.persistence.warnings.length) {
+    console.log('[Phase B] ⚠️ warnings (non-blocking):', results.persistence.warnings.join('; '));
+  }
   console.log('[Phase B] ─── RESULT:', pass ? '✅ DB-PRIMARY READS VALIDATED' : '⚠️ VALIDATION INCOMPLETE — check items above');
   return results;
 }
 window.runPhaseBReadValidation = runPhaseBReadValidation;
+
+// ── DEV-IDENTITY AUTO-ENABLE ────────────────────────────────────────────────────────────────────────────
+// Auto-enables DB-primary reads for known dev/test identities.
+// Production identities always use the manual flag.
+var _DEV_PLAYER_IDS = new Set(['P1001','dev','test','demo']);
+var _DEV_CLUB_IDS   = new Set(['demo-club','dev-club','test-club']);
+
+function _isDevIdentity() {
+  var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
+  var pid  = (pl.id || pl.username || '').toLowerCase();
+  var cid  = (club.id || club.clubId || '').toLowerCase();
+  return _DEV_PLAYER_IDS.has(pid) || _DEV_CLUB_IDS.has(cid);
+}
+
+async function _maybeAutoEnableDbPrimaryReads() {
+  if (_DB_PRIMARY_READS_ENABLED) return; // already enabled
+  if (!_isDevIdentity()) return;         // production identity — never auto-enable
+  // Quick backend check: only auto-enable if Supabase is configured
+  try {
+    var env = await fetch('/api/env-check').then(function(r){ return r.json(); });
+    if (!env.hasSupabaseUrl || !env.hasSupabaseServiceKey) return;
+    // Supabase is ready and this is a dev identity — auto-enable
+    _DB_PRIMARY_READS_ENABLED = true;
+    sessionStorage.setItem('pb-db-primary', 'true');
+    console.log('[db primary read] AUTO-ENABLED for dev identity — sourceUsed will be determined by safety checks');
+  } catch(_e) { /* network error — stay on localStorage */ }
+}
+
+// Multi-device persistence check: logs all state needed to verify cross-device consistency
+async function runMultiDevicePersistenceCheck() {
+  console.log('[multi-device check] ─── START ───');
+  var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
+  var pid  = pl.id   || pl.username || '(none)';
+  var cid  = club.id || club.clubId || '(none)';
+  var localTickets = [];
+  try { localTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(_e){}
+  var lastTicketId = localTickets.length ? localTickets[0].id : '(none)';
+
+  // DB read
+  var dbResult = await fetchMirrorTickets(pid !== '(none)' ? pid : null, cid !== '(none)' ? cid : null);
+  var dbCount  = dbResult.enabled ? dbResult.tickets.length : -1;
+  var sourceUsed = _DB_PRIMARY_READS_ENABLED ? 'db-primary-mode' : 'localStorage';
+  var cacheHydrated = (betTickets.length > 0 && betTickets[0] && betTickets[0]._source === 'db');
+
+  // Balance
+  var bal = calcAvailableBalance();
+
+  console.log('[multi-device check]',
+    '\n  playerId:       ', pid,
+    '\n  clubId:         ', cid,
+    '\n  sourceUsed:     ', sourceUsed,
+    '\n  localCount:     ', localTickets.length,
+    '\n  dbCount:        ', dbCount === -1 ? '(db not configured)' : dbCount,
+    '\n  lastTicketId:   ', lastTicketId,
+    '\n  cacheHydrated:  ', cacheHydrated,
+    '\n  balance:        $'+bal.available.toFixed(2),
+    '\n  isDevIdentity:  ', _isDevIdentity(),
+    '\n  dbPrimaryFlag:  ', _DB_PRIMARY_READS_ENABLED,
+    '\n  status:         ', (dbCount === localTickets.length || dbCount >= localTickets.length) ? '✅ counts match' : '⚠️ counts differ'
+  );
+
+  return { playerId:pid, clubId:cid, sourceUsed, localCount:localTickets.length, dbCount, lastTicketId, cacheHydrated, balance:bal.available };
+}
+window.runMultiDevicePersistenceCheck = runMultiDevicePersistenceCheck;
 // ────────────────────────────────────────────────────────────────────────────
 
 // ── GLOBAL CONSOLE HELPERS REGISTRATION ───────────────────────────────────────────
@@ -9719,6 +9802,7 @@ window.runPhaseBReadValidation = runPhaseBReadValidation;
     'disableDbPrimaryReadsForSession',
     'checkDbPrimaryReadStatus',
     'runPhaseBReadValidation',
+    'runMultiDevicePersistenceCheck',
     'checkSupabaseMirrorStatus',
     'gradeTodaysActiveTickets',
     'grade',
