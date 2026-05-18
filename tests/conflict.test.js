@@ -201,8 +201,46 @@ test('conflict returns correct user-facing message', function() {
   assert(r.message.includes('opposite side'), 'message mentions "opposite side"');
 });
 
+console.log('\n── Different game same team: NOT blocked ──');
+
+test('Guardians today vs Guardians tomorrow: different date key → NOT blocked', function() {
+  var slip = [leg('Guardians To Win', 'Moneyline', 'MLB|reds|guardians|2026-05-17', 'c1')];
+  var r = checkConflict(leg('Guardians To Win', 'Moneyline', 'MLB|reds|guardians|2026-05-18', 'c2'), slip, []);
+  assert(!r.conflict, 'different date key = different game = not blocked');
+});
+
+test('Same team, different opponent, different key → NOT blocked', function() {
+  var slip = [leg('Guardians To Win', 'Moneyline', 'MLB|reds|guardians|2026-05-17', 'c1')];
+  var r = checkConflict(leg('Guardians To Win', 'Moneyline', 'MLB|tigers|guardians|2026-05-18', 'c2'), slip, []);
+  assert(!r.conflict, 'different opponent+date = not blocked');
+});
+
+test('Empty canonicalGameKey → no conflict check (safe fallback)', function() {
+  var slip = [leg('Guardians To Win', 'Moneyline', '', 'c1')];
+  var r = checkConflict(leg('Reds To Win', 'Moneyline', '', 'c2'), slip, []);
+  assert(!r.conflict, 'empty key = null token = no block');
+});
+
+test('Settled ticket (won) does NOT block new opposite-side bet', function() {
+  var active = [{ id:'T_won', status:'won', selections:[leg('Guardians To Win','Moneyline','MLB|reds|guardians|2026-05-17')] }];
+  var r = checkConflict(leg('Reds To Win','Moneyline','MLB|reds|guardians|2026-05-17', 'c2'), [], active);
+  assert(!r.conflict, 'settled won ticket — ignored for conflict');
+});
+
+test('Canceled ticket does NOT block new bet', function() {
+  var active = [{ id:'T_can', status:'canceled', selections:[leg('Guardians To Win','Moneyline','MLB|reds|guardians|2026-05-17')] }];
+  var r = checkConflict(leg('Reds To Win','Moneyline','MLB|reds|guardians|2026-05-17', 'c2'), [], active);
+  assert(!r.conflict, 'canceled ticket — ignored for conflict');
+});
+
+test('Active ticket same game DOES block', function() {
+  var active = [{ id:'T_act', status:'active', selections:[leg('Guardians To Win','Moneyline','MLB|reds|guardians|2026-05-17')] }];
+  var r = checkConflict(leg('Reds To Win','Moneyline','MLB|reds|guardians|2026-05-17', 'c2'), [], active);
+  assert(r.conflict, 'active ticket same game conflicts');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('\n' + '─'.repeat(54));
 console.log(`Conflict tests: ${_pass} passed, ${_fail} failed`);
-if (_fail > 0) { console.error('❌ CONFLICT TESTS FAILED'); process.exit(1); }
-else console.log('✅ All conflict rules verified');
+if (_fail > 0) { console.error('\u274c CONFLICT TESTS FAILED'); process.exit(1); }
+else console.log('\u2705 All conflict rules verified');
