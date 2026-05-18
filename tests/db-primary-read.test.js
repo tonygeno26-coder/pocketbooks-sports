@@ -93,6 +93,19 @@ function chooseReadSource(opts) {
     return { source: 'localStorage', tickets: local, fallbackReason: 'db_malformed_rows:'+malformed.length, cacheUpdate: false };
   }
 
+  // Duplicate ID check
+  var idCounts = {}; db.forEach(function(t){ idCounts[t.id] = (idCounts[t.id]||0)+1; });
+  var dupeIds = Object.keys(idCounts).filter(function(k){ return idCounts[k]>1; });
+  if (dupeIds.length > 0) {
+    return { source: 'localStorage', tickets: local, fallbackReason: 'db_duplicate_ids:'+dupeIds.join(','), cacheUpdate: false };
+  }
+
+  // Malformed legs check
+  var badLegs = legs.filter(function(l){ return !l.id || !l.ticket_id || l.leg_index == null; });
+  if (badLegs.length > 0) {
+    return { source: 'localStorage', tickets: local, fallbackReason: 'db_malformed_legs:'+badLegs.length, cacheUpdate: false };
+  }
+
   // Safety: never drop active local tickets
   var localActiveIds = new Set(local.filter(function(t){ return t.status==='active'||t.status==='open'; }).map(function(t){ return t.id; }));
   var dbIds = new Set(db.map(function(t){ return t.id; }));
@@ -264,6 +277,29 @@ test('chooseReadSource never returns duplicates', function() {
   var r = chooseReadSource({ flagEnabled:true, localTickets:[lt('T1'),lt('T2')], dbTickets:[dt('T1'),dt('T2'),dt('T3')], dbEnabled:true });
   var ids = r.tickets.map(function(t){ return t.id; });
   assertEq(new Set(ids).size, ids.length, 'no duplicate IDs in result');
+});
+
+
+console.log('\n\u2500\u2500 New Safety Gates \u2500\u2500');
+
+test('DB duplicate IDs in response → fallback localStorage', function() {
+  // When DB returns same ID twice, duplicate gate fires
+  var r = chooseReadSource({ flagEnabled:true,
+    localTickets:[lt('T1','active')],
+    dbTickets:[dt('T1','active'), dt('T1','active')],
+    dbEnabled:true });
+  assertEq(r.source, 'localStorage', 'duplicate DB ID → fallback');
+  assert(r.fallbackReason && r.fallbackReason.includes('duplicate'), 'reason mentions duplicate: got ' + r.fallbackReason);
+});
+
+test('malformed DB leg (no id) → fallback localStorage', function() {
+  var r = chooseReadSource({ flagEnabled:true,
+    localTickets:[lt('T1','active')],
+    dbTickets:[dt('T1','active')],
+    dbLegs:[{ id:null, ticket_id:null, leg_index:0 }],
+    dbEnabled:true });
+  assertEq(r.source, 'localStorage', 'malformed leg → fallback');
+  assert(r.fallbackReason && r.fallbackReason.includes('malformed_leg'), 'reason mentions malformed_leg: got ' + r.fallbackReason);
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

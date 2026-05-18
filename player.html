@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '74efc0b';
-window.PBS_BUILD_DATE = '2026-05-18T07:20:16.613Z';
+window.PBS_BUILD_SHA = 'dccbb84';
+window.PBS_BUILD_DATE = '2026-05-18T08:15:08.383Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -4482,19 +4482,27 @@ async function _initDbPrimaryRead() {
     dbError = e.message;
   }
 
-  // Hydrate DB rows
+  // Hydrate DB rows → localStorage shape
   var hydratedDb = dbTickets.map(function(r){ return _hydrateDbTicket(r, dbLegs); });
 
-  // Malformed check
+  // Gate 1: malformed ticket rows
   var malformed = hydratedDb.filter(function(t){ return !_isDbTicketSafe(t); });
 
-  // Active-ticket safety
+  // Gate 2: duplicate IDs in DB response
+  var dbIdCounts = {};
+  hydratedDb.forEach(function(t){ dbIdCounts[t.id] = (dbIdCounts[t.id]||0)+1; });
+  var duplicateDbIds = Object.keys(dbIdCounts).filter(function(k){ return dbIdCounts[k]>1; });
+
+  // Gate 3: malformed legs (leg with no canonicalGameKey on a graded ticket is suspicious)
+  var malformedLegs = dbLegs.filter(function(l){ return !l.id || !l.ticket_id || !l.leg_index; });
+
+  // Gate 4: active-ticket safety — never drop active local tickets
   var localActiveIds = new Set(localTickets.filter(function(t){ var s=(t.status||'').toLowerCase(); return s==='active'||s==='open'; }).map(function(t){ return t.id; }));
   var dbIds = new Set(hydratedDb.map(function(t){ return t.id; }));
   var droppedActive = []; localActiveIds.forEach(function(id){ if(!dbIds.has(id)) droppedActive.push(id); });
 
-  // Gap check
-  var remirrorIds = localTickets.filter(function(t){ return !dbIds.has(t.id); }).map(function(t){ return t.id; });
+  // Gate 5: gap — DB has fewer tickets than local
+  var gapIds = localTickets.filter(function(t){ return !dbIds.has(t.id); }).map(function(t){ return t.id; });
 
   // Decision
   var sourceUsed = 'localStorage', fallbackReason = null, hydrated = false, cacheUpdated = false;
@@ -4503,6 +4511,10 @@ async function _initDbPrimaryRead() {
     fallbackReason = dbError ? 'db_error:'+dbError : 'db_disabled';
   } else if (malformed.length > 0) {
     fallbackReason = 'db_malformed_rows:' + malformed.length;
+  } else if (duplicateDbIds.length > 0) {
+    fallbackReason = 'db_duplicate_ids:' + duplicateDbIds.join(',');
+  } else if (malformedLegs.length > 0) {
+    fallbackReason = 'db_malformed_legs:' + malformedLegs.length;
   } else if (!hydratedDb.length && localTickets.length > 0) {
     fallbackReason = 'db_empty_local_has_data';
   } else if (droppedActive.length > 0) {
@@ -4513,17 +4525,17 @@ async function _initDbPrimaryRead() {
     var toRemirror = localTickets.filter(function(t){ return !dbIds.has(t.id); });
     toRemirror.forEach(function(t){ try{ _mirrorTicketToBackend(t); }catch(_e){} });
   } else {
-    // DB is safe and complete—use it
-    sourceUsed = 'db';
-    hydrated   = true;
-    betTickets = hydratedDb;
-    // Update localStorage cache from DB (only if DB has MORE or equal data)
-    try {
-      localStorage.setItem('pb-tickets', JSON.stringify(hydratedDb));
-      cacheUpdated = true;
-    } catch(_e) {}
+    // All gates pass — DB is safe and complete
+    sourceUsed   = 'db';
+    hydrated     = true;
+    betTickets   = hydratedDb;
+    // Refresh localStorage cache from DB
+    try { localStorage.setItem('pb-tickets', JSON.stringify(hydratedDb)); cacheUpdated = true; } catch(_e) {}
     syncBalanceDisplays();
   }
+
+  // Update debug badge (dev/preview mode only — hidden in production)
+  _updateDbSourceBadge(sourceUsed, localTickets.length, hydratedDb.length, fallbackReason);
 
   console.log('[db primary read]',
     '\n  enabled:         ', _DB_PRIMARY_READS_ENABLED,
@@ -9591,7 +9603,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 74efc0b · May 18, 12:20 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · dccbb84 · May 18, 01:15 AM</span>
 </div>
 
 })();
@@ -9626,6 +9638,70 @@ window.openGradingConsole = openGradingConsole;
   window._checkBuildVersion = _check;
 })();
 
+// ── DB SOURCE DEBUG BADGE ────────────────────────────────────────────────────────────────────────────
+function _updateDbSourceBadge(source, localCount, dbCount, fallbackReason) {
+  // Only shown when DB primary reads are enabled (dev mode)
+  if (!_DB_PRIMARY_READS_ENABLED) {
+    var old = document.getElementById('_db_source_badge'); if (old) old.remove(); return;
+  }
+  var badge = document.getElementById('_db_source_badge');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = '_db_source_badge';
+    badge.style.cssText = 'position:fixed;bottom:36px;left:8px;z-index:9999998;font-family:monospace;font-size:0.62rem;font-weight:700;padding:4px 8px;border-radius:6px;pointer-events:none;opacity:0.88;max-width:200px;word-break:break-all';
+    document.body.appendChild(badge);
+  }
+  var isDb = source === 'db';
+  badge.style.background = isDb ? '#052e16' : '#422006';
+  badge.style.border      = '1px solid ' + (isDb ? '#16a34a' : '#ea580c');
+  badge.style.color       = isDb ? '#86efac' : '#fdba74';
+  badge.textContent = (isDb ? '🗄️ DB' : '💾 Local') +
+    ' | db:' + dbCount + ' local:' + localCount +
+    (fallbackReason ? ' | ' + fallbackReason.split(':')[0] : '');
+}
+
+// Phase B read validation helper — runs a full sequence of checks
+async function runPhaseBReadValidation() {
+  console.log('[Phase B Read Validation] ─── START ───');
+  var results = {};
+
+  // 1. Check feature flag
+  results.flagEnabled = _DB_PRIMARY_READS_ENABLED;
+  console.log('[Phase B] 1. feature flag:', results.flagEnabled ? '✅ enabled' : '❌ disabled (call enableDbPrimaryReadsForSession())');
+
+  // 2. Check backend env
+  try {
+    var envR = await fetch('/api/env-check').then(function(r){ return r.json(); });
+    results.backendHasSupabase = envR.hasSupabaseUrl && envR.hasSupabaseServiceKey;
+    console.log('[Phase B] 2. backend Supabase env:', results.backendHasSupabase ? '✅ configured' : '❌ MISSING — add vars to pocketbooks-sports-backend Railway service');
+  } catch(e) { results.backendHasSupabase = false; console.warn('[Phase B] 2. env-check failed:', e.message); }
+
+  // 3. Run DB primary read trial
+  results.dbRead = await _initDbPrimaryRead();
+  console.log('[Phase B] 3. DB read trial: sourceUsed='+results.dbRead.sourceUsed, 'fallback='+results.dbRead.fallbackReason);
+
+  // 4. Check for duplicate tickets in current betTickets
+  var ids = betTickets.map(function(t){ return t.id; });
+  var dupes = ids.filter(function(id,i){ return ids.indexOf(id) !== i; });
+  results.duplicateTickets = dupes.length;
+  console.log('[Phase B] 4. duplicate tickets in render set:', dupes.length === 0 ? '✅ none' : '❌ DUPES: '+dupes.join(','));
+
+  // 5. Balance unchanged
+  var bal = calcAvailableBalance();
+  results.balance = bal.available;
+  console.log('[Phase B] 5. available balance: $'+bal.available.toFixed(2), '| openRisk: $'+bal.openRisk.toFixed(2));
+
+  // 6. Full persistence audit
+  results.persistence = await runFullPersistenceAudit();
+
+  // Summary
+  var pass = results.flagEnabled && results.backendHasSupabase && results.dbRead.sourceUsed === 'db' && !results.duplicateTickets;
+  console.log('[Phase B] ─── RESULT:', pass ? '✅ DB-PRIMARY READS VALIDATED' : '⚠️ VALIDATION INCOMPLETE — check items above');
+  return results;
+}
+window.runPhaseBReadValidation = runPhaseBReadValidation;
+// ────────────────────────────────────────────────────────────────────────────
+
 // ── GLOBAL CONSOLE HELPERS REGISTRATION ───────────────────────────────────────────
 // Belt-and-suspenders: re-assign all console helpers at end of script
 // so they are accessible even if an earlier runtime error skipped their
@@ -9642,6 +9718,7 @@ window.openGradingConsole = openGradingConsole;
     'enableDbPrimaryReadsForSession',
     'disableDbPrimaryReadsForSession',
     'checkDbPrimaryReadStatus',
+    'runPhaseBReadValidation',
     'checkSupabaseMirrorStatus',
     'gradeTodaysActiveTickets',
     'grade',
