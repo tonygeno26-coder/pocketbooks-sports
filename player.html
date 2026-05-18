@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '3217a02';
-window.PBS_BUILD_DATE = '2026-05-17T13:48:13.743Z';
+window.PBS_BUILD_SHA = '1c30393';
+window.PBS_BUILD_DATE = '2026-05-18T05:12:59.756Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -4110,20 +4110,50 @@ function _mirrorTicketToBackend(ticket) {
   });
 }
 
-// checkSupabaseMirrorStatus — lightweight sync check, no awaiting needed
+// checkSupabaseMirrorStatus — shows backend URL, env vars, mirror status
 function checkSupabaseMirrorStatus() {
+  var backendUrl = (typeof API !== 'undefined' ? API : 'unknown');
+  console.log('[supabase mirror status] backend URL:', backendUrl);
+
+  // Step 1: env-check (which service, which vars present)
+  fetch('/api/env-check')
+    .then(function(r){ return r.json(); })
+    .then(function(env){
+      console.log('[supabase mirror status] /api/env-check result:',
+        '\n  serviceName:           ', env.serviceName,
+        '\n  railwayServiceUrl:     ', env.railwayServiceUrl,
+        '\n  hasSupabaseUrl:        ', env.hasSupabaseUrl,
+        '\n  hasSupabaseServiceKey: ', env.hasSupabaseServiceKey,
+        '\n  hasDatabaseUrl:        ', env.hasDatabaseUrl,
+        '\n  hasOddsApiKey:         ', env.hasOddsApiKey,
+        '\n  nodeEnv:               ', env.nodeEnv
+      );
+      if (!env.hasSupabaseUrl || !env.hasSupabaseServiceKey) {
+        console.warn('[supabase mirror status] ❌ SUPABASE vars MISSING from service:', env.serviceName,
+          '\n  Fix: add SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY to Railway service:', env.serviceName,
+          '\n  (NOT sms-backend — these must go in pocketbooks-sports-backend)');
+      } else {
+        console.log('[supabase mirror status] ✅ Supabase vars present in correct service');
+      }
+    })
+    .catch(function(e){
+      console.warn('[supabase mirror status] /api/env-check failed:', e.message);
+    });
+
+  // Step 2: mirror audit
   fetch('/api/mirror/audit?limit=1')
     .then(function(r){ return r.json(); })
     .then(function(d){
       if (!d.enabled) {
-        console.log('[supabase mirror status] NOT configured —', d.reason || 'SUPABASE_URL/KEY missing on backend');
+        console.log('[supabase mirror status] mirror NOT enabled —', d.reason);
       } else {
-        console.log('[supabase mirror status] ✅ configured — total mirrored:', d.total_mirrored);
+        console.log('[supabase mirror status] ✅ mirror enabled — total mirrored:', d.total_mirrored);
       }
     })
     .catch(function(e){
-      console.warn('[supabase mirror status] backend unreachable:', e.message);
+      console.warn('[supabase mirror status] /api/mirror/audit failed:', e.message);
     });
+
   return 'Checking... see console';
 }
 window.checkSupabaseMirrorStatus = checkSupabaseMirrorStatus;
@@ -9182,7 +9212,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 3217a02 · May 17, 06:48 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 1c30393 · May 17, 10:12 PM</span>
 </div>
 
 })();
