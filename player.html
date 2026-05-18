@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'eb8daa3';
-window.PBS_BUILD_DATE = '2026-05-18T05:46:27.865Z';
+window.PBS_BUILD_SHA = '075dd30';
+window.PBS_BUILD_DATE = '2026-05-18T05:56:12.779Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -1829,8 +1829,10 @@ try { _updateTeaserTab(); } catch(e) { console.error('[PBS init] _updateTeaserTa
 try { _updateSportTabs(); } catch(e) { console.error('[PBS init] _updateSportTabs failed (continuing):', e && e.message || e); }
 try { loadGames('mlb'); } catch(e) { console.error('[PBS fetch failed]', e); }
 try { startAutoGradeDaemon(); } catch(e) { console.error('[auto grade daemon] failed to start:', e.message); }
-// Startup integrity scan: revert any tickets that have settled status but a future commenceTime
+// Startup integrity scan
 try { revertFutureGrades(); } catch(e) { console.error('[revertFutureGrades] startup error:', e.message); }
+// DB primary read trial (only runs if flag enabled via enableDbPrimaryReadsForSession())
+try { _initDbPrimaryRead().catch(function(e){ console.warn('[db primary read] init error:', e.message); }); } catch(e) { console.warn('[db primary read] sync error:', e.message); }
 setTimeout(function(){
   var gl = document.getElementById('games-list');
   if (gl && gl.textContent && gl.textContent.indexOf('Loading') !== -1) {
@@ -4389,6 +4391,152 @@ async function runReadShadowAudit() {
 window.fetchMirrorTickets    = fetchMirrorTickets;
 window.compareMirrorVsLocal  = compareMirrorVsLocal;
 window.runReadShadowAudit    = runReadShadowAudit;
+
+// ── DB PRIMARY READ ENGINE (Phase B Step 1) ──────────────────────────────────────────
+// Feature flag: off by default. Enable per-session with enableDbPrimaryReadsForSession().
+// localStorage remains fallback. UI always renders betTickets (set by this engine).
+
+var _DB_PRIMARY_READS_ENABLED = (sessionStorage.getItem('pb-db-primary') === 'true');
+
+function enableDbPrimaryReadsForSession() {
+  sessionStorage.setItem('pb-db-primary', 'true');
+  _DB_PRIMARY_READS_ENABLED = true;
+  console.log('[db primary read] enabled for this session');
+  return 'DB primary reads enabled. Reload or call _initDbPrimaryRead() to apply.';
+}
+function disableDbPrimaryReadsForSession() {
+  sessionStorage.removeItem('pb-db-primary');
+  _DB_PRIMARY_READS_ENABLED = false;
+  console.log('[db primary read] disabled');
+  return 'DB primary reads disabled. Using localStorage.';
+}
+function checkDbPrimaryReadStatus() {
+  console.log('[db primary read] enabled:', _DB_PRIMARY_READS_ENABLED);
+  return { enabled: _DB_PRIMARY_READS_ENABLED };
+}
+
+var _SAFE_DB_STATUSES = new Set(['active','open','won','lost','push','canceled','voided','deleted']);
+
+function _isDbTicketSafe(t) {
+  if (!t || !t.id || typeof t.id !== 'string') return false;
+  if (!_SAFE_DB_STATUSES.has((t.status||'').toLowerCase())) return false;
+  if (typeof t.riskAmount !== 'number' || t.riskAmount < 0) return false;
+  return true;
+}
+
+function _hydrateDbTicket(dbRow, legs) {
+  var myLegs = (legs||[]).filter(function(l){ return l.ticket_id === dbRow.id; })
+    .sort(function(a,b){ return (a.leg_index||0)-(b.leg_index||0); })
+    .map(function(l){
+      return {
+        legId: l.id, pick: l.pick||'', market: l.market||'', odds: l.odds,
+        line: l.line, sport: l.sport||'', homeTeam: l.home_team||'',
+        awayTeam: l.away_team||'', canonicalGameKey: l.canonical_game_key||'',
+        scheduledStart: l.scheduled_start||null, providerGameId: l.provider_game_id||null,
+        gameStatus: l.game_status||'', result: l.leg_result||null
+      };
+    });
+  return {
+    id: dbRow.id, type: dbRow.type||'Single', status: (dbRow.status||'active'),
+    riskAmount: parseFloat(dbRow.risk_amount)||0,
+    potentialProfit: parseFloat(dbRow.potential_profit)||0,
+    estimatedPayout: parseFloat(dbRow.estimated_payout)||0,
+    odds: dbRow.odds||null,
+    placedAt: dbRow.placed_at||new Date().toISOString(),
+    gradedAt: dbRow.graded_at||null,
+    gradingSource: dbRow.grading_source||null,
+    grading: dbRow.grading_snapshot||null,
+    selections: myLegs, _source: 'db'
+  };
+}
+
+async function _initDbPrimaryRead() {
+  if (!_DB_PRIMARY_READS_ENABLED) return; // flag off — localStorage used as-is
+
+  var localTickets = [];
+  try { localTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(_e) {}
+
+  var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
+  var pid  = pl.id   || pl.username || null;
+  var cid  = club.id || club.clubId || null;
+
+  var dbTickets = [], dbLegs = [], dbEnabled = false, dbError = null;
+  try {
+    var qs = [];
+    if (pid) qs.push('playerId=' + encodeURIComponent(pid));
+    if (cid) qs.push('clubId='   + encodeURIComponent(cid));
+    var url = '/api/mirror/tickets-with-legs' + (qs.length ? '?' + qs.join('&') : '');
+    var resp = await fetch(url);
+    var data = await resp.json();
+    dbEnabled = !!data.enabled;
+    if (data.error) { dbError = data.error; }
+    else { dbTickets = data.tickets||[]; dbLegs = data.legs||[]; }
+  } catch(e) {
+    dbError = e.message;
+  }
+
+  // Hydrate DB rows
+  var hydratedDb = dbTickets.map(function(r){ return _hydrateDbTicket(r, dbLegs); });
+
+  // Malformed check
+  var malformed = hydratedDb.filter(function(t){ return !_isDbTicketSafe(t); });
+
+  // Active-ticket safety
+  var localActiveIds = new Set(localTickets.filter(function(t){ var s=(t.status||'').toLowerCase(); return s==='active'||s==='open'; }).map(function(t){ return t.id; }));
+  var dbIds = new Set(hydratedDb.map(function(t){ return t.id; }));
+  var droppedActive = []; localActiveIds.forEach(function(id){ if(!dbIds.has(id)) droppedActive.push(id); });
+
+  // Gap check
+  var remirrorIds = localTickets.filter(function(t){ return !dbIds.has(t.id); }).map(function(t){ return t.id; });
+
+  // Decision
+  var sourceUsed = 'localStorage', fallbackReason = null, hydrated = false, cacheUpdated = false;
+
+  if (!dbEnabled || dbError) {
+    fallbackReason = dbError ? 'db_error:'+dbError : 'db_disabled';
+  } else if (malformed.length > 0) {
+    fallbackReason = 'db_malformed_rows:' + malformed.length;
+  } else if (!hydratedDb.length && localTickets.length > 0) {
+    fallbackReason = 'db_empty_local_has_data';
+  } else if (droppedActive.length > 0) {
+    fallbackReason = 'db_missing_active_tickets:' + droppedActive.join(',');
+  } else if (hydratedDb.length < localTickets.length) {
+    fallbackReason = 'gap_detected:db_has_fewer';
+    // Re-mirror missing tickets fire-and-forget
+    var toRemirror = localTickets.filter(function(t){ return !dbIds.has(t.id); });
+    toRemirror.forEach(function(t){ try{ _mirrorTicketToBackend(t); }catch(_e){} });
+  } else {
+    // DB is safe and complete—use it
+    sourceUsed = 'db';
+    hydrated   = true;
+    betTickets = hydratedDb;
+    // Update localStorage cache from DB (only if DB has MORE or equal data)
+    try {
+      localStorage.setItem('pb-tickets', JSON.stringify(hydratedDb));
+      cacheUpdated = true;
+    } catch(_e) {}
+    syncBalanceDisplays();
+  }
+
+  console.log('[db primary read]',
+    '\n  enabled:         ', _DB_PRIMARY_READS_ENABLED,
+    '\n  sourceUsed:      ', sourceUsed,
+    '\n  localCount:      ', localTickets.length,
+    '\n  dbCount:         ', hydratedDb.length,
+    '\n  fallbackReason:  ', fallbackReason || 'none',
+    '\n  hydrated:        ', hydrated,
+    '\n  cacheUpdated:    ', cacheUpdated,
+    '\n  status:          ', sourceUsed === 'db' ? '✅ db_primary' : '⚠️ localStorage_fallback'
+  );
+
+  return { sourceUsed, fallbackReason, hydrated, cacheUpdated, localCount: localTickets.length, dbCount: hydratedDb.length };
+}
+window.enableDbPrimaryReadsForSession  = enableDbPrimaryReadsForSession;
+window.disableDbPrimaryReadsForSession = disableDbPrimaryReadsForSession;
+window.checkDbPrimaryReadStatus        = checkDbPrimaryReadStatus;
+window._initDbPrimaryRead              = _initDbPrimaryRead;
+// ────────────────────────────────────────────────────────────────────────────
 // ────────────────────────────────────────────────────────────────────────────
 
 // ── FRESH TEST RESET ─────────────────────────────────────────────────────────────
@@ -9437,7 +9585,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · eb8daa3 · May 17, 10:46 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 075dd30 · May 17, 10:56 PM</span>
 </div>
 
 })();
@@ -9485,6 +9633,9 @@ window.openGradingConsole = openGradingConsole;
     'runReadShadowAudit',
     'fetchMirrorTickets',
     'compareMirrorVsLocal',
+    'enableDbPrimaryReadsForSession',
+    'disableDbPrimaryReadsForSession',
+    'checkDbPrimaryReadStatus',
     'checkSupabaseMirrorStatus',
     'gradeTodaysActiveTickets',
     'grade',
