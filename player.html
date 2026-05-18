@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '949b5cf';
-window.PBS_BUILD_DATE = '2026-05-18T10:51:22.762Z';
+window.PBS_BUILD_SHA = '61b1a47';
+window.PBS_BUILD_DATE = '2026-05-18T10:54:18.575Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -4478,7 +4478,9 @@ function _hydrateDbTicket(dbRow, legs) {
 }
 
 async function _initDbPrimaryRead() {
-  if (!_DB_PRIMARY_READS_ENABLED) return; // flag off — localStorage used as-is
+  if (!_DB_PRIMARY_READS_ENABLED) {
+    return { sourceUsed:'localStorage', fallbackReason:'feature_flag_off', hydrated:false, cacheUpdated:false, localCount:0, dbCount:0 };
+  }
 
   var localTickets = [];
   try { localTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(_e) {}
@@ -4541,18 +4543,32 @@ async function _initDbPrimaryRead() {
   } else if (droppedActive.length > 0) {
     fallbackReason = 'db_missing_active_tickets:' + droppedActive.join(',');
   } else if (hydratedDb.length < localTickets.length) {
+    // DB has FEWER than local — local may have un-mirrored tickets.
+    // Re-mirror the gaps, then fall back to localStorage to preserve them.
     fallbackReason = 'gap_detected:db_has_fewer';
-    // Re-mirror missing tickets fire-and-forget
     var toRemirror = localTickets.filter(function(t){ return !dbIds.has(t.id); });
     toRemirror.forEach(function(t){ try{ _mirrorTicketToBackend(t); }catch(_e){} });
   } else {
-    // All gates pass — DB is safe and complete
+    // DB count >= local count AND all safety gates pass.
+    // DB is authoritative (covers stale-local / multi-device scenario).
     sourceUsed   = 'db';
     hydrated     = true;
     betTickets   = hydratedDb;
     // Refresh localStorage cache from DB
     try { localStorage.setItem('pb-tickets', JSON.stringify(hydratedDb)); cacheUpdated = true; } catch(_e) {}
     syncBalanceDisplays();
+    // Log hydration recovery when DB has more tickets than local
+    if (hydratedDb.length > localTickets.length) {
+      var recovered = hydratedDb.filter(function(t){ return !new Set(localTickets.map(function(l){ return l.id; })).has(t.id); });
+      console.log('[db hydration recovery]',
+        '\n  localCount:       ', localTickets.length,
+        '\n  dbCount:          ', hydratedDb.length,
+        '\n  hydratedFromDb:   ', true,
+        '\n  ticketsRecovered: ', recovered.length,
+        '\n  sourceUsed:       ', 'db',
+        '\n  status:           \u2705 stale local hydrated from DB'
+      );
+    }
   }
 
   // Update debug badge (dev/preview mode only — hidden in production)
@@ -9624,7 +9640,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 949b5cf · May 18, 03:51 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 61b1a47 · May 18, 03:54 AM</span>
 </div>
 
 })();
@@ -9698,8 +9714,16 @@ async function runPhaseBReadValidation() {
   } catch(e) { results.backendHasSupabase = false; console.warn('[Phase B] 2. env-check failed:', e.message); }
 
   // 3. Run DB primary read trial
-  results.dbRead = await _initDbPrimaryRead();
-  console.log('[Phase B] 3. DB read trial: sourceUsed='+results.dbRead.sourceUsed, 'fallback='+results.dbRead.fallbackReason);
+  try {
+    results.dbRead = await _initDbPrimaryRead();
+  } catch(e) {
+    results.dbRead = { sourceUsed:'localStorage', fallbackReason:'init_error:'+e.message, hydrated:false, cacheUpdated:false, localCount:0, dbCount:0 };
+    console.warn('[Phase B] 3. _initDbPrimaryRead threw:', e.message);
+  }
+  if (!results.dbRead) {
+    results.dbRead = { sourceUsed:'localStorage', fallbackReason:'missing_validation_result', hydrated:false, cacheUpdated:false, localCount:0, dbCount:0 };
+  }
+  console.log('[Phase B] 3. DB read trial: sourceUsed='+results.dbRead.sourceUsed, 'fallback='+(results.dbRead.fallbackReason||'none'));
 
   // 4. Check for duplicate tickets in current betTickets
   var ids = betTickets.map(function(t){ return t.id; });
