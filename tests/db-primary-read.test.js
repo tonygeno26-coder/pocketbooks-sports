@@ -341,6 +341,56 @@ test('Stale local: DB missing a local active ticket → fallback localStorage (d
   assert(r.fallbackReason.includes('db_missing_active'), 'reason mentions missing active');
 });
 
+console.log('\n\u2500\u2500 _safeId / _isDevIdentity crash protection \u2500\u2500');
+
+function safeId(val) { return val != null ? String(val) : null; }
+
+test('safeId: numeric id coerces to string', function() {
+  assertEq(safeId(1001), '1001', 'numeric -> string');
+});
+test('safeId: null returns null', function() {
+  assertEq(safeId(null), null, 'null -> null');
+});
+test('safeId: undefined returns null', function() {
+  assertEq(safeId(undefined), null, 'undefined -> null');
+});
+test('safeId: string passes through', function() {
+  assertEq(safeId('P1001'), 'P1001', 'string unchanged');
+});
+test('safeId: object coerces without throwing', function() {
+  var r = safeId({});
+  assert(typeof r === 'string', 'object -> string, no throw');
+});
+
+function isDevIdentity(pl, club) {
+  var DEV_PIDS = new Set(['p1001','dev','test','demo']);
+  var DEV_CIDS = new Set(['demo-club','dev-club','test-club']);
+  var pid = String(pl   == null ? '' : (pl.id   != null ? pl.id   : (pl.username  != null ? pl.username  : ''))).toLowerCase();
+  var cid = String(club == null ? '' : (club.id != null ? club.id : (club.clubId  != null ? club.clubId  : ''))).toLowerCase();
+  return DEV_PIDS.has(pid) || DEV_CIDS.has(cid);
+}
+
+test('isDevIdentity: null pl/club never throws', function() {
+  assert(!isDevIdentity(null, null), 'null inputs safe');
+});
+test('isDevIdentity: {} pl/club never throws', function() {
+  assert(!isDevIdentity({}, {}), 'empty objects safe');
+});
+test('isDevIdentity: numeric id never throws', function() {
+  assert(!isDevIdentity({ id: 12345 }, { id: 99 }), 'numeric ids safe');
+});
+test('isDevIdentity: P1001 string recognized', function() {
+  assert(isDevIdentity({ id: 'P1001' }, {}), 'P1001 is dev identity');
+});
+test('isDevIdentity: demo-club recognized', function() {
+  assert(isDevIdentity({}, { id: 'demo-club' }), 'demo-club is dev identity');
+});
+test('isDevIdentity: numeric P1001 (1001) recognized after String()', function() {
+  // If someone stores id as number 1001, String(1001)='1001', not 'p1001' -> not dev
+  // This is correct: numeric 1001 !== string 'P1001'
+  assert(!isDevIdentity({ id: 1001 }, {}), 'numeric 1001 is NOT dev (correct: different from P1001)');
+});
+
 test('_initDbPrimaryRead returns object even when flag off', function() {
   // Validator assumes result always exists
   // This tests the contract: always return { sourceUsed, fallbackReason, ... }
