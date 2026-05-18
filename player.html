@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '1c30393';
-window.PBS_BUILD_DATE = '2026-05-18T05:12:59.756Z';
+window.PBS_BUILD_SHA = '1b21e9b';
+window.PBS_BUILD_DATE = '2026-05-18T05:30:52.758Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -1107,9 +1107,14 @@ function showPlayerSettings() {
 function saveBalance(){ /* no-op: balance is derived, not stored directly */ }
 function loadBalance(){ var s = syncBalanceDisplays(); playerBalance = s.available; return playerBalance; }
 function addLedgerEntry(entry) {
+  // 1. Write to localStorage (source of truth, Phase A)
   var ledger = JSON.parse(localStorage.getItem('pb-ledger')||'[]');
   ledger.unshift(entry); if (ledger.length > 500) ledger = ledger.slice(0,500);
   localStorage.setItem('pb-ledger', JSON.stringify(ledger));
+  // 2. Mirror to Supabase (fire-and-forget, never blocks)
+  if (typeof _mirrorLedgerToBackend === 'function') {
+    try { _mirrorLedgerToBackend(entry); } catch(_e) { /* never block */ }
+  }
 }
 function applyBalanceChange(type, amount, ticketId, meta) {
   // Balance derives from tickets — no direct mutation. Just log + sync.
@@ -4095,9 +4100,7 @@ window.reconcileInvalidGrades = reconcileInvalidGrades;
 
 // ── Supabase mirror helpers (Phase A) ─────────────────────────────────────────────
 
-// Mirror a single ticket to Supabase via backend proxy.
-// Fire-and-forget: never awaited in the placement flow.
-// Returns a promise that resolves regardless of success/failure.
+// Fire-and-forget ticket mirror
 function _mirrorTicketToBackend(ticket) {
   return fetch('/api/mirror/ticket', {
     method: 'POST',
@@ -4106,7 +4109,21 @@ function _mirrorTicketToBackend(ticket) {
   }).then(function(r) {
     console.log('[supabase mirror] ticketId:', ticket.id, 'success:', r.ok);
   }).catch(function(e) {
-    console.warn('[supabase mirror] ticketId:', ticket.id, 'success: false', 'error:', e.message);
+    console.warn('[supabase mirror] ticketId:', ticket.id, 'success: false error:', e.message);
+  });
+}
+
+// Fire-and-forget ledger entry mirror
+function _mirrorLedgerToBackend(entry) {
+  if (!entry || !entry.id) return Promise.resolve();
+  return fetch('/api/mirror/ledger', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(entry)
+  }).then(function(r) {
+    console.log('[supabase mirror] ledger', entry.id, 'type:', entry.type, 'success:', r.ok);
+  }).catch(function(e) {
+    console.warn('[supabase mirror] ledger', entry.id, 'success: false error:', e.message);
   });
 }
 
@@ -4196,6 +4213,88 @@ async function runSupabaseMirrorAudit() {
   }
 }
 window.runSupabaseMirrorAudit = runSupabaseMirrorAudit;
+
+// Audit: ticket_legs mirror
+async function runTicketLegMirrorAudit() {
+  console.log('[supabase leg audit] ─── START ───');
+  var localTickets = [];
+  try { localTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(_e) {}
+  var localLegCount = localTickets.reduce(function(s,t){ return s + (Array.isArray(t.selections) ? t.selections.length : 0); }, 0);
+  console.log('[supabase leg audit] local legs:', localLegCount, '(across', localTickets.length, 'tickets)');
+  try {
+    var r = await fetch('/api/mirror/audit/legs?limit=200');
+    var data = await r.json();
+    if (!data.enabled) { console.log('[supabase leg audit] NOT enabled:', data.reason); return { enabled: false }; }
+    console.log('[supabase leg audit]',
+      '\n  localLegCount:  ', localLegCount,
+      '\n  dbLegCount:     ', data.total_mirrored,
+      '\n  recentChecked:  ', (data.recent||[]).length,
+      '\n  status:         ', data.total_mirrored >= localLegCount ? '✅ in sync' : '⚠️ DB has fewer legs than local'
+    );
+    return { enabled: true, localLegCount, dbLegCount: data.total_mirrored };
+  } catch(e) { console.error('[supabase leg audit] error:', e.message); return { enabled: false, error: e.message }; }
+}
+window.runTicketLegMirrorAudit = runTicketLegMirrorAudit;
+
+// Audit: ledger_entries mirror
+async function runLedgerMirrorAudit() {
+  console.log('[supabase ledger audit] ─── START ───');
+  var localLedger = [];
+  try { localLedger = JSON.parse(localStorage.getItem('pb-ledger')||'[]'); } catch(_e) {}
+  console.log('[supabase ledger audit] local ledger rows:', localLedger.length);
+  try {
+    var r = await fetch('/api/mirror/audit/ledger?limit=200');
+    var data = await r.json();
+    if (!data.enabled) { console.log('[supabase ledger audit] NOT enabled:', data.reason); return { enabled: false }; }
+    var dbIds    = new Set((data.recent||[]).map(function(e){ return e.id; }));
+    var localIds = new Set(localLedger.map(function(e){ return e.id; }));
+    var onlyLocal  = localLedger.filter(function(e){ return !dbIds.has(e.id); });
+    var onlyDb     = (data.recent||[]).filter(function(e){ return !localIds.has(e.id); });
+    var mismatched = [];
+    // Check amounts match
+    localLedger.forEach(function(le) {
+      var dbRow = (data.recent||[]).find(function(d){ return d.id === le.id; });
+      if (dbRow && Math.abs(parseFloat(dbRow.amount) - parseFloat(le.amount||0)) > 0.01) {
+        mismatched.push({ id: le.id, localAmount: le.amount, dbAmount: dbRow.amount });
+      }
+    });
+    console.log('[supabase ledger audit]',
+      '\n  localCount:    ', localLedger.length,
+      '\n  dbCount:       ', data.total_mirrored,
+      '\n  onlyLocal:     ', onlyLocal.length, onlyLocal.slice(0,3).map(function(e){ return e.id; }).join(', ') || '(none)',
+      '\n  onlyDb:        ', onlyDb.length,
+      '\n  mismatchedIds: ', mismatched.length, mismatched.map(function(m){ return m.id; }).join(', ') || '(none)',
+      '\n  status:        ', onlyLocal.length === 0 && mismatched.length === 0 ? '✅ in sync' : '⚠️ out of sync'
+    );
+    // Re-queue un-mirrored entries
+    if (onlyLocal.length > 0) {
+      console.log('[supabase ledger audit] queuing', onlyLocal.length, 'un-mirrored ledger entries...');
+      onlyLocal.forEach(function(e){ _mirrorLedgerToBackend(e); });
+    }
+    return { enabled: true, localCount: localLedger.length, dbCount: data.total_mirrored, onlyLocal: onlyLocal.length, onlyDb: onlyDb.length, mismatched: mismatched.length };
+  } catch(e) { console.error('[supabase ledger audit] error:', e.message); return { enabled: false, error: e.message }; }
+}
+window.runLedgerMirrorAudit = runLedgerMirrorAudit;
+
+// Full persistence audit: runs all 3 audits in sequence
+async function runFullPersistenceAudit() {
+  console.log('[supabase full audit] ─── FULL PERSISTENCE AUDIT ───');
+  var results = {};
+  results.tickets = await runSupabaseMirrorAudit();
+  results.legs    = await runTicketLegMirrorAudit();
+  results.ledger  = await runLedgerMirrorAudit();
+  var allEnabled = results.tickets.enabled && results.legs.enabled && results.ledger.enabled;
+  var allSync = allEnabled &&
+    results.tickets.onlyLocal === 0 &&
+    results.legs.localLegCount <= results.legs.dbLegCount &&
+    results.ledger.onlyLocal === 0 &&
+    results.ledger.mismatched === 0;
+  console.log('[supabase full audit] ─── RESULT:',
+    allSync ? '✅ FULLY IN SYNC' : '⚠️ SYNC GAPS FOUND',
+    '| enabled:', allEnabled);
+  return results;
+}
+window.runFullPersistenceAudit = runFullPersistenceAudit;
 // ────────────────────────────────────────────────────────────────────────────
 
 // ── FRESH TEST RESET ─────────────────────────────────────────────────────────────
@@ -9212,7 +9311,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 1c30393 · May 17, 10:12 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 1b21e9b · May 17, 10:30 PM</span>
 </div>
 
 })();
@@ -9254,6 +9353,9 @@ window.openGradingConsole = openGradingConsole;
 (function _registerConsoleHelpers() {
   var helpers = [
     'runSupabaseMirrorAudit',
+    'runTicketLegMirrorAudit',
+    'runLedgerMirrorAudit',
+    'runFullPersistenceAudit',
     'checkSupabaseMirrorStatus',
     'gradeTodaysActiveTickets',
     'grade',
@@ -9271,6 +9373,9 @@ window.openGradingConsole = openGradingConsole;
   });
   // Explicit safe assignments for the most critical ones
   try { if (typeof runSupabaseMirrorAudit      === 'function') window.runSupabaseMirrorAudit      = runSupabaseMirrorAudit; } catch(_e){}
+  try { if (typeof runTicketLegMirrorAudit     === 'function') window.runTicketLegMirrorAudit     = runTicketLegMirrorAudit; } catch(_e){}
+  try { if (typeof runLedgerMirrorAudit        === 'function') window.runLedgerMirrorAudit        = runLedgerMirrorAudit; } catch(_e){}
+  try { if (typeof runFullPersistenceAudit     === 'function') window.runFullPersistenceAudit     = runFullPersistenceAudit; } catch(_e){}
   try { if (typeof checkSupabaseMirrorStatus   === 'function') window.checkSupabaseMirrorStatus   = checkSupabaseMirrorStatus; } catch(_e){}
   try { if (typeof gradeTodaysActiveTickets    === 'function') { window.gradeTodaysActiveTickets = gradeTodaysActiveTickets; window.grade = gradeTodaysActiveTickets; } } catch(_e){}
   try { if (typeof resetTicketStateForFreshTesting === 'function') window.resetTicketStateForFreshTesting = resetTicketStateForFreshTesting; } catch(_e){}
