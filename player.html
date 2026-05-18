@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'a710f82';
-window.PBS_BUILD_DATE = '2026-05-18T05:41:09.568Z';
+window.PBS_BUILD_SHA = 'eb8daa3';
+window.PBS_BUILD_DATE = '2026-05-18T05:46:27.865Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -4295,6 +4295,100 @@ async function runFullPersistenceAudit() {
   return results;
 }
 window.runFullPersistenceAudit = runFullPersistenceAudit;
+
+// ── READ SHADOW MODE (Phase B Step 1) ────────────────────────────────────────────────
+// Reads from Supabase silently and compares vs localStorage.
+// UI always renders localStorage. DB read is compare-only, never replaces.
+
+// Pure comparison (no network calls)
+function _compareTicketSets(localTickets, dbTickets) {
+  var localIds = {}; localTickets.forEach(function(t){ if(t&&t.id) localIds[t.id]=t; });
+  var dbIds    = {}; dbTickets.forEach(function(t){ if(t&&t.id) dbIds[t.id]=t; });
+  var missingInDb    = localTickets.filter(function(t){ return t&&t.id && !dbIds[t.id]; });
+  var missingInLocal = dbTickets.filter(function(t){ return t&&t.id && !localIds[t.id]; });
+  var mismatched = [];
+  localTickets.forEach(function(lt) {
+    if (!lt||!lt.id) return;
+    var dt = dbIds[lt.id]; if (!dt) return;
+    var ls = (lt.status||'').toLowerCase(), ds = (dt.status||'').toLowerCase();
+    var lS = ls==='won'||ls==='lost'||ls==='push';
+    var dS = ds==='won'||ds==='lost'||ds==='push';
+    if (lS !== dS) mismatched.push({ id:lt.id, localStatus:ls, dbStatus:ds });
+  });
+  var inSync = !missingInDb.length && !missingInLocal.length && !mismatched.length;
+  return {
+    localCount:     localTickets.length,
+    dbCount:        dbTickets.length,
+    missingInDb:    missingInDb.map(function(t){ return t.id; }),
+    missingInLocal: missingInLocal.map(function(t){ return t.id; }),
+    mismatched:     mismatched,
+    inSync:         inSync,
+    status:         inSync ? 'in_sync' : 'gap_detected'
+  };
+}
+
+// Fetch tickets from Supabase mirror (read-only, never affects localStorage)
+async function fetchMirrorTickets(playerId, clubId) {
+  try {
+    var qs = [];
+    if (playerId) qs.push('playerId=' + encodeURIComponent(playerId));
+    if (clubId)   qs.push('clubId='   + encodeURIComponent(clubId));
+    var url = '/api/mirror/tickets' + (qs.length ? '?' + qs.join('&') : '');
+    var r = await fetch(url);
+    var data = await r.json();
+    if (!data.enabled) return { enabled: false, tickets: [], reason: data.reason };
+    return { enabled: true, tickets: Array.isArray(data.tickets) ? data.tickets : [] };
+  } catch(e) {
+    // Network/offline: return empty safely, never throws
+    return { enabled: false, tickets: [], error: e.message };
+  }
+}
+
+// Compare localStorage vs Supabase mirror and log result
+async function compareMirrorVsLocal(playerId, clubId) {
+  var localTickets = [];
+  try { localTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(_e) {}
+  var dbResult = await fetchMirrorTickets(playerId, clubId);
+  var cmp = _compareTicketSets(localTickets, Array.isArray(dbResult.tickets) ? dbResult.tickets : []);
+  return Object.assign({ dbEnabled: dbResult.enabled, dbError: dbResult.error || null }, cmp);
+}
+
+// Full read shadow audit — logs everything, queues re-mirrors for gaps
+async function runReadShadowAudit() {
+  console.log('[read shadow audit] ─── START ───');
+  // Resolve player/club from localStorage
+  var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
+  var pid  = pl.id   || pl.username || null;
+  var cid  = club.id || club.clubId || null;
+
+  var cmp = await compareMirrorVsLocal(pid, cid);
+
+  console.log('[read shadow audit]',
+    '\n  localCount:    ', cmp.localCount,
+    '\n  dbCount:       ', cmp.dbCount,
+    '\n  missingLocal:  ', cmp.missingInDb.length,   cmp.missingInDb.slice(0,3).join(', ')   || '(none)',
+    '\n  missingDB:     ', cmp.missingInLocal.length, cmp.missingInLocal.slice(0,3).join(', ') || '(none)',
+    '\n  mismatched:    ', cmp.mismatched.length,     cmp.mismatched.map(function(m){ return m.id+':'+m.localStatus+'≠'+m.dbStatus; }).join(', ') || '(none)',
+    '\n  status:        ', cmp.inSync ? '✅ in_sync' : '⚠️ gap_detected',
+    '\n  dbEnabled:     ', cmp.dbEnabled
+  );
+
+  // Re-queue tickets missing from DB (fire-and-forget)
+  if (cmp.missingInDb.length > 0) {
+    var localTickets = [];
+    try { localTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(_e){}
+    var toRemirror = localTickets.filter(function(t){ return cmp.missingInDb.indexOf(t.id) !== -1; });
+    console.log('[read shadow audit] re-mirroring', toRemirror.length, 'ticket(s) missing from DB...');
+    toRemirror.forEach(function(t){ try { _mirrorTicketToBackend(t); } catch(_e){} });
+  }
+
+  // UI is unaffected — still reads localStorage
+  return cmp;
+}
+window.fetchMirrorTickets    = fetchMirrorTickets;
+window.compareMirrorVsLocal  = compareMirrorVsLocal;
+window.runReadShadowAudit    = runReadShadowAudit;
 // ────────────────────────────────────────────────────────────────────────────
 
 // ── FRESH TEST RESET ─────────────────────────────────────────────────────────────
@@ -9343,7 +9437,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · a710f82 · May 17, 10:41 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · eb8daa3 · May 17, 10:46 PM</span>
 </div>
 
 })();
@@ -9388,6 +9482,9 @@ window.openGradingConsole = openGradingConsole;
     'runTicketLegMirrorAudit',
     'runLedgerMirrorAudit',
     'runFullPersistenceAudit',
+    'runReadShadowAudit',
+    'fetchMirrorTickets',
+    'compareMirrorVsLocal',
     'checkSupabaseMirrorStatus',
     'gradeTodaysActiveTickets',
     'grade',
