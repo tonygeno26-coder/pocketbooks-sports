@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'd80294a';
-window.PBS_BUILD_DATE = '2026-05-18T06:03:25.129Z';
+window.PBS_BUILD_SHA = '74efc0b';
+window.PBS_BUILD_DATE = '2026-05-18T07:20:16.613Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -1119,7 +1119,7 @@ function addLedgerEntry(entry) {
 function applyBalanceChange(type, amount, ticketId, meta) {
   // Balance derives from tickets — no direct mutation. Just log + sync.
   var s = syncBalanceDisplays();
-  addLedgerEntry(Object.assign({ id:'L'+Date.now(), type:type, ticketId:ticketId||null,
+  addLedgerEntry(Object.assign({ id:'L'+Date.now()+Math.random().toString(36).slice(2,6), type:type, ticketId:ticketId||null,
     amount:amount, balanceBefore: s.available - amount, balanceAfter: s.available,
     createdAt: new Date().toISOString() }, meta||{}));
   return s;
@@ -3147,7 +3147,7 @@ function confirmBet() {
 
   // Sync balance (derives from active tickets)
   var _bs = syncBalanceDisplays();
-  addLedgerEntry({ id:'L'+Date.now(), type:'bet_placed',
+  addLedgerEntry({ id:'L'+Date.now()+Math.random().toString(36).slice(2,6), type:'bet_placed',
     ticketIds: newTickets.map(function(t){return t.id;}),
     amount: -riskAmount, balanceBefore: _bs.available + riskAmount,
     balanceAfter: _bs.available, createdAt: now,
@@ -4268,10 +4268,16 @@ async function runLedgerMirrorAudit() {
       '\n  mismatchedIds: ', mismatched.length, mismatched.map(function(m){ return m.id; }).join(', ') || '(none)',
       '\n  status:        ', onlyLocal.length === 0 && mismatched.length === 0 ? '✅ in sync' : '⚠️ out of sync'
     );
-    // Re-queue un-mirrored entries
+    // Re-queue un-mirrored entries via bulk endpoint for efficiency
     if (onlyLocal.length > 0) {
-      console.log('[supabase ledger audit] queuing', onlyLocal.length, 'un-mirrored ledger entries...');
-      onlyLocal.forEach(function(e){ _mirrorLedgerToBackend(e); });
+      console.log('[supabase ledger audit] bulk-replaying', onlyLocal.length, 'un-mirrored entries...');
+      fetch('/api/mirror/ledger-bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(onlyLocal)
+      }).then(function(r){ return r.json(); })
+        .then(function(d){ console.log('[supabase ledger audit] bulk queued:', d.count, 'entries'); })
+        .catch(function(e){ console.warn('[supabase ledger audit] bulk error:', e.message); });
     }
     return { enabled: true, localCount: localLedger.length, dbCount: data.total_mirrored, onlyLocal: onlyLocal.length, onlyDb: onlyDb.length, mismatched: mismatched.length };
   } catch(e) { console.error('[supabase ledger audit] error:', e.message); return { enabled: false, error: e.message }; }
@@ -9585,7 +9591,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · d80294a · May 17, 11:03 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 74efc0b · May 18, 12:20 AM</span>
 </div>
 
 })();
