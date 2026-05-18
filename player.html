@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '1f05f56';
-window.PBS_BUILD_DATE = '2026-05-18T10:39:15.874Z';
+window.PBS_BUILD_SHA = '949b5cf';
+window.PBS_BUILD_DATE = '2026-05-18T10:51:22.762Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -2704,7 +2704,17 @@ function openBetConfirm() {
     risk   = bsStake;
     payout = calcPayout(bsStake, betSlip, bsType);
     toWin  = payout - risk;
-    console.log('PARLAY CONFIRM: risk='+risk.toFixed(2)+' payout='+payout.toFixed(2)+' profit='+toWin.toFixed(2));
+    // Parlay math audit log
+    var _decOdds = betSlip.map(function(b){ return amToDecimal(b.odds); });
+    var _combined = _decOdds.reduce(function(p,d){ return p*d; }, 1);
+    console.log('[parlay math audit]',
+      '\n  stake:          $'+risk.toFixed(2),
+      '\n  legs:           '+betSlip.map(function(b){ return b.odds; }).join(', '),
+      '\n  decimalOdds:    '+_decOdds.map(function(d){ return d.toFixed(4); }).join(' × '),
+      '\n  combinedDecimal:'+_combined.toFixed(4),
+      '\n  toWin:          $'+toWin.toFixed(2),
+      '\n  totalPayout:    $'+payout.toFixed(2)
+    );
   }
   // Sync bsStake to computed risk (prevents double-count)
   bsStake = risk;
@@ -9614,7 +9624,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 1f05f56 · May 18, 03:39 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 949b5cf · May 18, 03:51 AM</span>
 </div>
 
 })();
