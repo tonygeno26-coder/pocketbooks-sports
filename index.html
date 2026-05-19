@@ -4013,8 +4013,261 @@ function _currentWeekPreview(weekOffset) {
 }
 
 // ── Phase P: Settlement Periods Panel ────────────────────────────────────────────────────────────────
+// State for Phase P panel
+var _phasePState = { periods:null, selectedPeriodId:null, playerBalances:null, loading:false };
+
 function _renderSettlementPeriods(container) {
-  container.innerHTML = '<div style="color:#666;font-size:0.65rem;padding:6px 0 2px">Phase P Settlements Panel Loaded</div>';
+  if (_phasePState.loading) return;
+  if (!_phasePState.periods) {
+    _phasePState.loading = true;
+    var cl = {}; try { cl = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+    var cid = cl.id||cl.clubId||'';
+    if (!cid) { container.innerHTML = ''; return; }
+    _pbFetch('/api/host/settlements/periods?clubId='+encodeURIComponent(cid))
+      .then(function(r){ return r.json(); })
+      .then(function(d) {
+        _phasePState.periods = d.periods||[];
+        _phasePState.loading = false;
+        _renderSettlementPeriods(container);
+      })
+      .catch(function() { _phasePState.loading=false; container.innerHTML=''; });
+    container.innerHTML = '<div style="color:#555;font-size:0.65rem;padding:8px">Loading periods...</div>';
+    return;
+  }
+  var periods = _phasePState.periods;
+  if (!periods.length) { container.innerHTML = ''; return; }
+  var role = ''; try { role = localStorage.getItem('pb-actor-role')||''; } catch(_e){}
+  var rankMap = { owner:5,full_admin:4,settlement_manager:3,risk_viewer:2,player:1,view_only:0 };
+  var rank = rankMap[role]||0;
+  var html = '<div style="margin:0 0 12px;background:#111;border-radius:12px;overflow:hidden">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px 6px">';
+  html += '<span style="font-size:0.75rem;font-weight:800;color:#aaa">SETTLEMENT PERIODS</span>';
+  html += '<button onclick="_phasePRefresh()" style="background:none;border:none;color:#555;font-size:0.75rem;cursor:pointer">↻ Refresh</button>';
+  html += '</div>';
+  periods.slice(0,6).forEach(function(p) {
+    var canClose  = p.status==='open'||p.status==='reopened';
+    var canReopen = (p.status==='closed'||p.status==='reopened') && rank>=4;
+    var statusColor = {open:'#10b981',closed:'#6b7280',reopened:'#f59e0b',closing:'#3b82f6'}[p.status]||'#555';
+    var statusLabel = {open:'Open',closed:'Closed',reopened:'Reopened',closing:'Closing'}[p.status]||p.status;
+    var isSelected = _phasePState.selectedPeriodId === (p.period_id||p.periodId);
+    html += '<div style="border-top:1px solid #1a1a1a;padding:9px 14px;cursor:pointer;background:'+(isSelected?'#1a1a1a':'transparent')+'" onclick="_phasePSelectPeriod(\''+(p.period_id||p.periodId)+'\')">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center">';
+    html += '<span style="font-size:0.75rem;font-weight:700">Wk '+((p.week_start||p.weekStart||'').slice(5))+' <span style="color:#555;font-weight:400">Rev '+((p.revision||0))+'</span></span>';
+    html += '<span style="font-size:0.65rem;font-weight:800;color:'+statusColor+'">'+statusLabel+'</span>';
+    html += '</div>';
+    html += '<div style="display:flex;gap:6px;margin-top:5px">';
+    if (canClose && rank>=3) html += '<button onclick="event.stopPropagation();_phasePCloseWeek(\''+(p.period_id||p.periodId)+'\',\''+(p.week_start||p.weekStart)+'\')" style="font-size:0.6rem;padding:3px 8px;border-radius:6px;background:#1e3a1e;color:#4ade80;border:1px solid #2d5a2d;cursor:pointer">Close Week</button>';
+    if (canReopen)           html += '<button onclick="event.stopPropagation();_phasePReopenWeek(\''+(p.period_id||p.periodId)+'\',\''+(p.week_start||p.weekStart)+'\')" style="font-size:0.6rem;padding:3px 8px;border-radius:6px;background:#1a1a00;color:#facc15;border:1px solid #3a3a00;cursor:pointer">Reopen</button>';
+    html += '</div></div>';
+  });
+  html += '</div>';
+  // If a period is selected, show its payment detail below
+  if (_phasePState.selectedPeriodId && _phasePState.playerBalances) {
+    html += _buildSettlementDetailHTML(_phasePState.playerBalances, rank);
+  }
+  container.innerHTML = html;
+}
+
+function _phasePRefresh() {
+  _phasePState.periods = null;
+  _phasePState.selectedPeriodId = null;
+  _phasePState.playerBalances = null;
+  renderSettlements();
+}
+
+function _phasePSelectPeriod(periodId) {
+  if (_phasePState.selectedPeriodId === periodId) {
+    _phasePState.selectedPeriodId = null;
+    _phasePState.playerBalances   = null;
+    renderSettlements();
+    return;
+  }
+  _phasePState.selectedPeriodId = periodId;
+  _phasePState.playerBalances   = null;
+  _pbFetch('/api/host/settlements/'+encodeURIComponent(periodId)+'/payments')
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      _phasePState.playerBalances = d.playerBalances||[];
+      renderSettlements();
+    })
+    .catch(function(){ renderSettlements(); });
+  renderSettlements();
+}
+
+function _phasePCloseWeek(periodId, weekStart) {
+  var cl = {}; try { cl = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+  var cid = cl.id||cl.clubId||'';
+  _pbFetch('/api/host/settlements/close-week', {
+    method:'POST', body:JSON.stringify({ clubId:cid, weekStart, periodId })
+  }).then(function(r){ return r.json(); }).then(function(d) {
+    if (d.ok) {
+      showToast('Week closed — '+d.playerCount+' players snapshotted', 'success');
+      _phasePState.periods = null;
+      renderSettlements();
+    } else {
+      var code = d.code||d.error||'';
+      if (code==='open_tickets_exist') {
+        showToast((d.openCount||'Some')+' players have open bets. Force close?', 'warning');
+      } else {
+        showToast(code.replace(/_/g,' ')||'Close failed', 'error');
+      }
+    }
+  }).catch(function(){ showToast('Network error', 'error'); });
+}
+
+function _buildSettlementDetailHTML(playerBalances, rank) {
+  var html = '<div style="background:#111;border-radius:12px;overflow:hidden;margin-bottom:8px">';
+  html += '<div style="padding:10px 14px 6px;font-size:0.75rem;font-weight:800;color:#aaa">PLAYER SETTLEMENTS</div>';
+  if (!playerBalances.length) {
+    html += '<div style="padding:10px 14px;color:#555;font-size:0.7rem">No player data for this period.</div>';
+    html += '</div>'; return html;
+  }
+  var scMap = { unpaid:'#ef4444',partial:'#f59e0b',paid:'#10b981',overpaid:'#8b5cf6',even:'#555' };
+  var slMap = { unpaid:'Unpaid',partial:'Partial',paid:'Paid',overpaid:'Overpaid',even:'Even' };
+  playerBalances.forEach(function(pb) {
+    var sc = scMap[pb.status]||'#555';
+    var sl = slMap[pb.status]||pb.status;
+    var owedBy = parseFloat(pb.owedByPlayer||0);
+    var owedTo = parseFloat(pb.owedToPlayer||0);
+    var remBy  = parseFloat(pb.remainingByPlayer||0);
+    var remTo  = parseFloat(pb.remainingToPlayer||0);
+    html += '<div style="border-top:1px solid #1a1a1a;padding:9px 14px">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center">';
+    html += '<span style="font-size:0.75rem;font-weight:700">'+(pb.playerId||'?')+'</span>';
+    html += '<span style="font-size:0.65rem;font-weight:800;color:'+sc+'">'+sl+'</span>';
+    html += '</div>';
+    if (owedBy>0) {
+      html += '<div style="font-size:0.65rem;color:#aaa;margin-top:3px">Owes host: <b style="color:#fff">$'+owedBy.toFixed(2)+'</b>';
+      if (pb.paidByPlayer>0) html += '  Paid: <b style="color:#10b981">$'+parseFloat(pb.paidByPlayer).toFixed(2)+'</b>';
+      if (remBy>0.005)       html += '  Remaining: <b style="color:#f59e0b">$'+remBy.toFixed(2)+'</b>';
+      html += '</div>';
+    } else if (owedTo>0) {
+      html += '<div style="font-size:0.65rem;color:#aaa;margin-top:3px">Host owes: <b style="color:#fff">$'+owedTo.toFixed(2)+'</b>';
+      if (pb.paidToPlayer>0) html += '  Paid: <b style="color:#10b981">$'+parseFloat(pb.paidToPlayer).toFixed(2)+'</b>';
+      if (remTo>0.005)       html += '  Remaining: <b style="color:#f59e0b">$'+remTo.toFixed(2)+'</b>';
+      html += '</div>';
+    }
+    // Action buttons
+    if (rank >= 3) {
+      var pid  = JSON.stringify(pb.playerId);
+      var oPid = _phasePState.selectedPeriodId;
+      html += '<div style="display:flex;gap:5px;margin-top:6px">';
+      html += '<button onclick="_phasePRecordPayment('+pid+')" style="font-size:0.6rem;padding:3px 8px;border-radius:6px;background:#0f2027;color:#38bdf8;border:1px solid #1e3a4a;cursor:pointer">Record Payment</button>';
+      // Pending payment confirm/void buttons
+      (pb.paymentHistory||[]).filter(function(p){ return p.status==='pending'; }).forEach(function(pay) {
+        var payId = JSON.stringify(pay.payment_id||pay.paymentId);
+        html += '<button onclick="_phasePConfirmPayment('+payId+')" style="font-size:0.6rem;padding:3px 8px;border-radius:6px;background:#0f2718;color:#4ade80;border:1px solid #1a3a20;cursor:pointer">Confirm $'+parseFloat(pay.amount).toFixed(2)+'</button>';
+        if (rank>=4) html += '<button onclick="_phasePVoidPayment('+payId+')" style="font-size:0.6rem;padding:3px 8px;border-radius:6px;background:#1a0a0a;color:#f87171;border:1px solid #3a1a1a;cursor:pointer">Void</button>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function _phasePRecordPayment(playerId) {
+  var periodId = _phasePState.selectedPeriodId;
+  if (!periodId||!playerId) return;
+  var cl = {}; try { cl = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+  var cid = cl.id||cl.clubId||'';
+  var pb = (_phasePState.playerBalances||[]).find(function(p){ return p.playerId===playerId; })||{};
+  var owedBy = parseFloat(pb.owedByPlayer||0);
+  var owedTo = parseFloat(pb.owedToPlayer||0);
+  var defDir = owedBy>0?'player_paid_host':'host_paid_player';
+  var defAmt = owedBy>0?parseFloat(pb.remainingByPlayer||owedBy):parseFloat(pb.remainingToPlayer||owedTo);
+  var modal = document.createElement('div');
+  modal.id = '_phase-p-pay-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center';
+  modal.innerHTML = [
+    '<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:16px;padding:24px;width:90%;max-width:340px">',
+      '<div style="font-weight:800;font-size:0.9rem;margin-bottom:14px">Record Payment — '+playerId+'</div>',
+      '<label style="font-size:0.7rem;color:#aaa">Direction</label>',
+      '<select id="_pay-dir" style="width:100%;background:#111;color:#fff;border:1px solid #333;border-radius:8px;padding:7px;font-size:0.75rem;margin:4px 0 10px">',
+        '<option value="player_paid_host"'+(defDir==='player_paid_host'?' selected':'')+'>Player → Host</option>',
+        '<option value="host_paid_player"'+(defDir==='host_paid_player'?' selected':'')+'>Host → Player</option>',
+      '</select>',
+      '<label style="font-size:0.7rem;color:#aaa">Amount</label>',
+      '<input id="_pay-amt" type="number" min="0.01" step="0.01" value="'+defAmt.toFixed(2)+'" style="width:100%;background:#111;color:#fff;border:1px solid #333;border-radius:8px;padding:7px;font-size:0.75rem;margin:4px 0 10px;box-sizing:border-box">',
+      '<label style="font-size:0.7rem;color:#aaa">Method</label>',
+      '<select id="_pay-meth" style="width:100%;background:#111;color:#fff;border:1px solid #333;border-radius:8px;padding:7px;font-size:0.75rem;margin:4px 0 10px">',
+        ['cash','zelle','venmo','cashapp','crypto','other'].map(function(m){ return '<option>'+m+'</option>'; }).join(''),
+      '</select>',
+      '<label style="font-size:0.7rem;color:#aaa">Note (optional)</label>',
+      '<input id="_pay-note" type="text" placeholder="Optional note" style="width:100%;background:#111;color:#fff;border:1px solid #333;border-radius:8px;padding:7px;font-size:0.75rem;margin:4px 0 14px;box-sizing:border-box">',
+      '<div style="display:flex;gap:8px">',
+        '<button id="_pay-cancel" style="flex:1;padding:10px;background:#222;border:1px solid #333;border-radius:10px;color:#aaa;cursor:pointer;font-size:0.8rem">Cancel</button>',
+        '<button id="_pay-submit" style="flex:1;padding:10px;background:#10b981;border:none;border-radius:10px;color:#000;font-weight:800;cursor:pointer;font-size:0.8rem">Record</button>',
+      '</div>',
+    '</div>'
+  ].join('');
+  document.body.appendChild(modal);
+  modal.querySelector('#_pay-cancel').onclick = function(){ modal.remove(); };
+  modal.onclick = function(e){ if(e.target===modal) modal.remove(); };
+  modal.querySelector('#_pay-submit').onclick = function() {
+    var dir  = modal.querySelector('#_pay-dir').value;
+    var amt  = parseFloat(modal.querySelector('#_pay-amt').value);
+    var meth = modal.querySelector('#_pay-meth').value;
+    var note = modal.querySelector('#_pay-note').value;
+    if (isNaN(amt)||amt<=0) { showToast('Enter a valid amount','error'); return; }
+    modal.remove();
+    _pbFetch('/api/host/settlements/payment', { method:'POST',
+      body:JSON.stringify({ periodId, clubId:cid, playerId, direction:dir, amount:amt, method:meth, note })
+    }).then(function(r){ return r.json(); }).then(function(d) {
+      if (d.ok) {
+        showToast('Payment recorded (pending $'+amt.toFixed(2)+')','success');
+        _phasePSelectPeriod(periodId);
+      } else {
+        var msg = { overpayment_blocked:'Overpayment blocked (remaining $'+(d.remaining||0).toFixed(2)+')',
+                    period_not_closed:'Close the week first' }[d.code] || (d.error||'Payment failed').replace(/_/g,' ');
+        showToast(msg,'error');
+      }
+    }).catch(function(){ showToast('Network error','error'); });
+  };
+}
+
+function _phasePConfirmPayment(paymentId) {
+  _pbFetch('/api/host/settlements/payment-confirm', { method:'POST',
+    body:JSON.stringify({ paymentId })
+  }).then(function(r){ return r.json(); }).then(function(d) {
+    if (d.ok) {
+      showToast(d.idempotent?'Already confirmed':'Payment confirmed — ledger written','success');
+      _phasePSelectPeriod(_phasePState.selectedPeriodId);
+    } else {
+      showToast((d.error||'Confirm failed').replace(/_/g,' '),'error');
+    }
+  }).catch(function(){ showToast('Network error','error'); });
+}
+
+function _phasePVoidPayment(paymentId) {
+  if (!confirm('Void this payment? This will write a reversal ledger entry.')) return;
+  _pbFetch('/api/host/settlements/payment-void', { method:'POST',
+    body:JSON.stringify({ paymentId, voidReason:'host void' })
+  }).then(function(r){ return r.json(); }).then(function(d) {
+    if (d.ok) {
+      showToast(d.reversalLedgerId?'Payment voided — reversal written':'Payment voided','success');
+      _phasePSelectPeriod(_phasePState.selectedPeriodId);
+    } else {
+      showToast((d.error||'Void failed').replace(/_/g,' '),'error');
+    }
+  }).catch(function(){ showToast('Network error','error'); });
+}
+
+function _phasePReopenWeek(periodId, weekStart) {
+  var cl = {}; try { cl = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+  var cid = cl.id||cl.clubId||'';
+  _pbFetch('/api/host/settlements/reopen-week', {
+    method:'POST', body:JSON.stringify({ clubId:cid, weekStart, reason:'host reopen' })
+  }).then(function(r){ return r.json(); }).then(function(d) {
+    if (d.ok) {
+      showToast('Week reopened', 'success');
+      _phasePState.periods = null;
+      renderSettlements();
+    } else {
+      showToast((d.error||'Reopen failed').replace(/_/g,' '), 'error');
+    }
+  }).catch(function(){ showToast('Network error', 'error'); });
 }
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -4506,7 +4759,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 77968ff · May 19, 03:43 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 40e142c · May 19, 03:45 AM</span>
 </div>
 
 })();
