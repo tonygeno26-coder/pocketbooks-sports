@@ -1401,6 +1401,135 @@ async function runWeeklyRolloverAudit() {
 }
 window.createWeeklyRollover   = createWeeklyRollover;
 window.runWeeklyRolloverAudit = runWeeklyRolloverAudit;
+
+// ── HISTORICAL WEEK VIEW (Phase C Step 6, read-only) ───────────────────────────────────────────
+
+var _historyContainer = null;   // DOM element where history renders
+
+async function loadWeeklyHistory(targetEl) {
+  _historyContainer = targetEl || document.getElementById('_weekly_history_section');
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+  var cid  = club.id || club.clubId || null;
+  try {
+    var qs   = cid ? '?clubId='+encodeURIComponent(cid) : '';
+    var resp = await fetch('/api/host/rollover-history'+qs);
+    var data = await resp.json();
+    if (!data.ok) throw new Error(data.error || 'failed');
+    _renderWeekList(data.history||[], cid);
+  } catch(e) {
+    console.warn('[weekly history] failed:', e.message);
+    if (_historyContainer) _historyContainer.innerHTML = '<div style="padding:12px;color:#666;font-size:0.78rem">History unavailable: '+e.message+'</div>';
+  }
+}
+
+function _renderWeekList(history, clubId) {
+  if (!_historyContainer) return;
+  if (!history.length) {
+    _historyContainer.innerHTML = '<div style="padding:12px;color:#555;font-size:0.75rem;text-align:center">No closed weeks yet. Use \'Close Week\' to create the first snapshot.</div>';
+    return;
+  }
+  var sorted = history.slice().sort(function(a,b){ return b.rollover_week.localeCompare(a.rollover_week); });
+  var html = '<div style="padding:8px 0">' +
+    '<div style="font-size:0.75rem;font-weight:800;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">📚 Previous Weeks</div>';
+  sorted.forEach(function(r) {
+    var totals = {}; try { totals = JSON.parse(r.totals_snapshot||'{}'); } catch(_e){}
+    var net = totals.net || 0;
+    var netColor = net>0 ? 'var(--green,#00ff88)' : net<0 ? 'var(--red,#ff3d57)' : '#666';
+    html += '<button onclick="openHistoricalWeek(\''+r.rollover_week+'\',\''+encodeURIComponent(clubId||'')+'\')"'+
+      ' style="width:100%;text-align:left;background:var(--card,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:12px;padding:12px 14px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;color:inherit;font-family:inherit">' +
+      '<div>' +
+        '<div style="font-size:0.82rem;font-weight:700">' + r.rollover_week + '</div>' +
+        '<div style="font-size:0.62rem;color:#555;margin-top:2px">' + r.players_count + ' players · ' + new Date(r.performed_at).toLocaleDateString() + '</div>' +
+      '</div>' +
+      '<div style="text-align:right">' +
+        '<div style="font-size:0.85rem;font-weight:900;color:'+netColor+'">'+(net>=0?'+':'−')+'$'+Math.abs(net).toFixed(2)+'</div>' +
+        '<div style="font-size:0.58rem;color:#555">net</div>' +
+      '</div>' +
+    '</button>';
+  });
+  html += '</div>';
+  _historyContainer.innerHTML = html;
+}
+
+async function openHistoricalWeek(week, encodedClubId) {
+  var clubId = decodeURIComponent(encodedClubId||'');
+  try {
+    var qs = '?week='+encodeURIComponent(week)+(clubId?'&clubId='+encodeURIComponent(clubId):'');
+    // Get rollover row for totals
+    var hist = await fetch('/api/host/rollover-history'+(clubId?'?clubId='+encodeURIComponent(clubId):'')).then(function(r){return r.json();});
+    var rolloverRow = (hist.history||[]).find(function(r){ return r.rollover_week===week; });
+    var snap = await fetch('/api/host/week-snapshot'+qs).then(function(r){return r.json();});
+    if (!snap.ok) throw new Error(snap.error||'failed');
+    _renderHistoricalSnapshot(week, rolloverRow, snap.players||[]);
+  } catch(e) {
+    console.error('[weekly history] open week error:', e.message);
+  }
+}
+
+function _renderHistoricalSnapshot(week, rolloverRow, players) {
+  var container = document.getElementById('_settlement_preview_container') || _historyContainer;
+  if (!container) return;
+  var totals = {};
+  try { totals = JSON.parse((rolloverRow&&rolloverRow.totals_snapshot)||'{}'); } catch(_e){}
+  var sorted = players.slice().sort(function(a,b){ return (parseFloat(b.owes_host)+parseFloat(b.host_owes))-(parseFloat(a.owes_host)+parseFloat(a.host_owes)); });
+
+  var html = '<div style="background:var(--card,#1a1a1a);border:1px solid #2563eb;border-radius:14px;padding:16px;margin-bottom:16px">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
+      '<div>' +
+        '<div style="font-size:0.95rem;font-weight:900">' + week + ' Snapshot</div>' +
+        '<div style="font-size:0.62rem;color:#555;margin-top:2px">Closed ' + (rolloverRow ? new Date(rolloverRow.performed_at).toLocaleDateString() : '') + '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;align-items:center">' +
+        '<span style="font-size:0.6rem;font-weight:700;padding:3px 8px;border-radius:10px;background:rgba(37,99,235,0.12);border:1px solid #2563eb;color:#93c5fd">📚 Historical</span>' +
+        '<button onclick="loadWeeklyHistory()" style="font-size:0.65rem;padding:3px 8px;border-radius:8px;border:1px solid #333;background:transparent;color:#666;cursor:pointer">← Back</button>' +
+      '</div>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;background:rgba(255,255,255,0.02);border-radius:10px;padding:10px;margin-bottom:14px">' +
+      '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Players Owed</div><div style="font-size:0.95rem;font-weight:900;color:var(--green,#00ff88)">$'+((totals.playersOwe||0).toFixed(2))+'</div></div>' +
+      '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Host Owed</div><div style="font-size:0.95rem;font-weight:900;color:var(--red,#ff3d57)">$'+((totals.hostOwes||0).toFixed(2))+'</div></div>' +
+      '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Net</div><div style="font-size:0.95rem;font-weight:900;color:'+((totals.net||0)>=0?'var(--green,#00ff88)':'var(--red,#ff3d57)')+'">'+(((totals.net||0)>=0?'+':'−'))+'$'+Math.abs(totals.net||0).toFixed(2)+'</div></div>' +
+    '</div>';
+
+  sorted.forEach(function(p) {
+    var owe = parseFloat(p.owes_host)||0, hOwe = parseFloat(p.host_owes)||0;
+    var isOwes = owe > 0;
+    var color  = isOwes ? 'var(--red,#ff3d57)' : hOwe>0 ? 'var(--green,#00ff88)' : '#555';
+    var amtTxt = isOwes ? '−$'+owe.toFixed(2)+' owed' : hOwe>0 ? '+$'+hOwe.toFixed(2)+' owed' : 'Even';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--border,#2a2a2a)">' +
+      '<div>' +
+        '<div style="font-size:0.82rem;font-weight:700">'+(p.username||p.player_id)+'</div>' +
+        ((parseFloat(p.open_risk)||0) > 0 ? '<div style="font-size:0.62rem;color:#555;margin-top:2px">🔒 $'+(parseFloat(p.open_risk)).toFixed(2)+' was open</div>' : '') +
+      '</div>' +
+      '<div style="font-size:0.88rem;font-weight:900;color:'+color+'">' + amtTxt + '</div>' +
+    '</div>';
+  });
+
+  html += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border,#2a2a2a);font-size:0.6rem;color:#444;text-align:center">Historical snapshot — read only — no mutations allowed</div></div>';
+  container.innerHTML = html;
+}
+
+async function runWeeklyHistoryAudit() {
+  console.log('[weekly history audit] ─── START ───');
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+  var cid  = club.id || club.clubId || null;
+  try {
+    var qs   = cid ? '?clubId='+encodeURIComponent(cid) : '';
+    var hist = await fetch('/api/host/rollover-history'+qs).then(function(r){ return r.json(); });
+    console.log('[weekly history audit]',
+      '\n  clubId:       ', cid||'(none)',
+      '\n  closedWeeks:  ', (hist.history||[]).length,
+      '\n  weeks:        ', (hist.history||[]).map(function(r){ return r.rollover_week; }).join(', ') || '(none)'
+    );
+    (hist.history||[]).forEach(function(r){
+      var t={}; try{t=JSON.parse(r.totals_snapshot||'{}');}catch(_e){}
+      console.log('  '+r.rollover_week+': playersOwe=$'+(t.playersOwe||0)+' hostOwes=$'+(t.hostOwes||0)+' net=$'+(t.net||0)+' players='+r.players_count);
+    });
+    return hist;
+  } catch(e) { console.error('[weekly history audit] error:', e.message); }
+}
+window.loadWeeklyHistory     = loadWeeklyHistory;
+window.openHistoricalWeek    = openHistoricalWeek;
+window.runWeeklyHistoryAudit = runWeeklyHistoryAudit;
 window.enableHostDbPrimary        = function(){ _setHostDbPrimary(true);  return 'HOST_DB_PRIMARY=true'; };
 window.disableHostDbPrimary       = function(){ _setHostDbPrimary(false); return 'HOST_DB_PRIMARY=false'; };
 window.checkHostDbPrimaryStatus   = function(){ return { enabled: _HOST_DB_PRIMARY }; };
@@ -4254,7 +4383,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · c95c7c2 · May 18, 10:01 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · d3313e6 · May 18, 10:07 PM</span>
 </div>
 
 })();
