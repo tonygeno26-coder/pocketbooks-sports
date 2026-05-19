@@ -1,5 +1,5 @@
 # Pocketbooks Sports — Architecture Checkpoint (Phase Z)
-**Date:** 2026-05-19 | **Test count:** 1228/1228 | **Migrations:** 001–018
+**Date:** 2026-05-19 | **Test count:** 1335/1335 | **Migrations:** 001–018
 
 ---
 

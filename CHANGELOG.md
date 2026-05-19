@@ -4,7 +4,7 @@
 
 ## Architecture Milestone — Phases A–Z (2026-05-19)
 
-Full server-authoritative betting platform — 1288 tests across 42 test files.
+Full server-authoritative betting platform — 1335 tests across 43 test files.
 
 ### Security / Auth (Phases H–M)
 - HS256 HMAC token auth (`SESSION_SECRET` signed); `jti` + session store on every request
