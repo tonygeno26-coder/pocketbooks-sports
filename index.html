@@ -778,6 +778,8 @@ function renderAdminCrypto() {
 <div id="players-section" style="display:none;padding-bottom:100px"></div>
 <div id="settlements-section" style="display:none;background:#0a0a0a;min-height:100vh;padding-bottom:100px"></div>
 <div id="crypto-section" style="display:none;padding-bottom:100px"></div>
+<!-- Phase U: Admin System Panel (full_admin+ only) -->
+<div id="_admin-system-panel" style="display:none;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;margin:8px;overflow:hidden"></div>
 <div id="bets-section" style="display:none;padding-bottom:100px">
   <div style="padding:16px 16px 8px;display:flex;justify-content:space-between;align-items:center">
     <span style="font-size:1rem;font-weight:900">Active Bets</span>
@@ -4764,7 +4766,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 9959445 · May 19, 04:15 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 96c8115 · May 19, 04:20 AM</span>
 </div>
 
 })();
@@ -4800,6 +4802,153 @@ async function _dispatchHostStatsRefresh(trigger) {
 })();
 
 // ── Phase R: System Health Badge (full_admin+ only) ──────────────────────────────────────────
+// ── Phase U: Admin System Panel ──────────────────────────────────────────────────────────────────────
+var _adminPanelState = { health:null, diag:null, jobs:null, events:null, open:false };
+
+function _adminRank() {
+  var role = ''; try{ role=localStorage.getItem('pb-actor-role')||''; }catch(_e){}
+  return { owner:5,full_admin:4,settlement_manager:3,risk_viewer:2,player:1,view_only:0 }[role]||0;
+}
+
+async function _adminLoad() {
+  try {
+    var cl = {}; try{ cl=JSON.parse(localStorage.getItem('pb-club')||'{}'); }catch(_e){}
+    var cid = cl.id||cl.clubId||'';
+    var [hResp,dResp,jResp,eResp] = await Promise.all([
+      fetch('/api/health'),
+      _pbFetch('/api/admin/diagnostics'),
+      _pbFetch('/api/admin/jobs?limit=20'),
+      _pbFetch('/api/events?clubId='+encodeURIComponent(cid)+'&limit=25')
+    ]);
+    _adminPanelState.health = await hResp.json().catch(function(){ return null; });
+    _adminPanelState.diag   = await dResp.json().catch(function(){ return null; });
+    _adminPanelState.jobs   = await jResp.json().catch(function(){ return null; });
+    _adminPanelState.events = await eResp.json().catch(function(){ return null; });
+  } catch(_e){ console.warn('[admin panel] load error:', _e.message); }
+  _adminRender();
+}
+
+function _adminRender() {
+  var container = document.getElementById('_admin-system-panel');
+  if (!container) return;
+  var rank = _adminRank();
+  if (rank < 4) { container.style.display='none'; return; }
+  container.style.display='block';
+  if (!_adminPanelState.open) {
+    container.innerHTML = '<div style="padding:10px 14px;cursor:pointer" onclick="_adminToggle()">' +
+      '<span style="font-size:0.7rem;font-weight:800;color:#6b7280">🛠 SYSTEM PANEL</span>' +
+      '<span style="float:right;color:#555;font-size:0.7rem">▼ expand</span></div>';
+    return;
+  }
+  var h     = _adminPanelState.health||{};
+  var d     = _adminPanelState.diag&&_adminPanelState.diag.ok?_adminPanelState.diag:{};
+  var jData = _adminPanelState.jobs&&_adminPanelState.jobs.ok?_adminPanelState.jobs:{ jobs:[], counts:{} };
+  var eData = _adminPanelState.events&&_adminPanelState.events.ok?_adminPanelState.events:{ events:[] };
+  var jc    = jData.counts||{};
+  var okC   = h.ok?'#10b981':'#ef4444';
+  var html  = '<div style="padding:10px 14px 0;display:flex;justify-content:space-between;align-items:center">' +
+    '<span style="font-size:0.7rem;font-weight:800;color:#6b7280">🛠 SYSTEM PANEL</span>' +
+    '<div style="display:flex;gap:6px">' +
+    '<button onclick="_adminLoad()" style="font-size:0.6rem;padding:2px 7px;border-radius:5px;background:#1a1a1a;border:1px solid #333;color:#aaa;cursor:pointer">↻ Refresh</button>' +
+    '<button onclick="_adminToggle()" style="font-size:0.6rem;padding:2px 7px;border-radius:5px;background:#1a1a1a;border:1px solid #333;color:#aaa;cursor:pointer">▲ collapse</button>' +
+    '</div></div>';
+  // Health row
+  html += '<div style="padding:6px 14px;font-size:0.65rem;color:#aaa;border-top:1px solid #1a1a1a">' +
+    '<span style="color:'+okC+';font-weight:800">' + (h.ok?'HEALTHY':'DEGRADED') + '</span>' +
+    ' DB:' + (h.dbStatus||'?') +
+    ' Odds:' + (h.oddsStatus||'?') +
+    ' Up:' + (h.uptime!=null?Math.floor(h.uptime/60)+'m':'?') +
+    ' v' + (h.version||'?') + '</div>';
+  // Job counts
+  var jcHtml = '<div style="padding:4px 14px;font-size:0.62rem;display:flex;gap:8px;flex-wrap:wrap">';
+  [['queued','#3b82f6'],['running','#f59e0b'],['succeeded','#10b981'],['failed','#ef4444'],['dead','#6b7280']].forEach(function(pair){
+    jcHtml += '<span style="color:'+pair[1]+';font-weight:800">' + pair[0] + ':' + (jc[pair[0]]||0) + '</span>';
+  });
+  jcHtml += '</div>';
+  html += jcHtml;
+  // Diagnostics warnings
+  if (d.warnings&&d.warnings.length) {
+    html += '<div style="padding:2px 14px 4px;font-size:0.62rem;color:#fbbf24">⚠ ' + d.warnings.join(' | ') + '</div>';
+  }
+  // Enqueue buttons
+  html += '<div style="padding:4px 14px 6px;display:flex;gap:5px;flex-wrap:wrap;border-top:1px solid #1a1a1a">';
+  ['odds_refresh','result_refresh','grade_run'].forEach(function(t){
+    html += '<button onclick="_adminEnqueue(\'' + t + '\')" style="font-size:0.58rem;padding:2px 7px;border-radius:5px;background:#0f2027;border:1px solid #1e3a4a;color:#38bdf8;cursor:pointer">▶ ' + t.replace(/_/g,' ') + '</button>';
+  });
+  html += '</div>';
+  // Failed/dead jobs
+  var badJobs = (jData.jobs||[]).filter(function(j){ return j.status==='dead'||j.status==='failed'; }).slice(0,5);
+  if (badJobs.length) {
+    html += '<div style="padding:2px 14px 4px;border-top:1px solid #1a1a1a">';
+    badJobs.forEach(function(j) {
+      var jid = JSON.stringify(j.job_id);
+      html += '<div style="font-size:0.6rem;color:#aaa;margin:2px 0;display:flex;justify-content:space-between;align-items:center">' +
+        '<span style="color:#f87171">' + j.type + ' [' + j.status + '] attempt ' + j.attempts + '/' + (j.max_attempts||5) + '</span>' +
+        '<div style="display:flex;gap:4px">';
+      if (j.status==='dead') html += '<button onclick="_adminRetryJob('+jid+')" style="font-size:0.58rem;padding:1px 5px;border-radius:4px;background:#0f1a0f;border:1px solid #1a3a1a;color:#4ade80;cursor:pointer">↺ Retry</button>';
+      if (j.status==='queued'||j.status==='failed') html += '<button onclick="_adminCancelJob('+jid+')" style="font-size:0.58rem;padding:1px 5px;border-radius:4px;background:#1a0a0a;border:1px solid #3a1a1a;color:#f87171;cursor:pointer">✕ Cancel</button>';
+      html += '</div></div>';
+    });
+    html += '</div>';
+  }
+  // Recent events
+  var evs = (eData.events||[]).slice(-8).reverse();
+  if (evs.length) {
+    html += '<div style="border-top:1px solid #1a1a1a;padding:4px 14px 6px">';
+    html += '<div style="font-size:0.6rem;font-weight:800;color:#555;margin-bottom:3px">RECENT EVENTS</div>';
+    evs.forEach(function(ev) {
+      var p = ev.payload_json||ev.payloadJson||{};
+      var preview = Object.keys(p).slice(0,2).map(function(k){ return k+':'+JSON.stringify(p[k]); }).join(',').slice(0,50);
+      html += '<div style="font-size:0.58rem;color:#666;margin:1px 0">' +
+        '<span style="color:#888">' + ev.type + '</span>' +
+        (ev.player_id?'<span style="color:#555"> →'+ev.player_id+'</span>':'') +
+        (preview?' <span style="color:#3a3a3a">' + preview + '</span>':'') + '</div>';
+    });
+    html += '</div>';
+  }
+  container.innerHTML = html;
+}
+
+function _adminToggle() {
+  _adminPanelState.open = !_adminPanelState.open;
+  if (_adminPanelState.open && !_adminPanelState.health) _adminLoad();
+  else _adminRender();
+}
+
+async function _adminEnqueue(type) {
+  if (!confirm('Enqueue job: ' + type + '?')) return;
+  var cl = {}; try{ cl=JSON.parse(localStorage.getItem('pb-club')||'{}'); }catch(_e){}
+  var cid = cl.id||cl.clubId||'';
+  try {
+    var r = await _pbFetch('/api/admin/jobs/enqueue',{ method:'POST',
+      body:JSON.stringify({ type, clubId:cid, payload:{} }) });
+    var d = await r.json();
+    if (d.ok) { showToast('Job enqueued: '+type,'success'); _adminLoad(); }
+    else showToast((d.error||'Enqueue failed').replace(/_/g,' '),'error');
+  } catch(_e){ showToast('Network error','error'); }
+}
+
+async function _adminRetryJob(jobId) {
+  if (!confirm('Retry dead job '+jobId+'?')) return;
+  try {
+    var r = await _pbFetch('/api/admin/jobs/retry',{ method:'POST', body:JSON.stringify({ jobId }) });
+    var d = await r.json();
+    if (d.ok) { showToast('Job re-queued','success'); _adminLoad(); }
+    else showToast(({ job_not_dead:'Job is not dead', job_not_found:'Job not found' }[d.error]||d.error||'Retry failed').replace(/_/g,' '),'error');
+  } catch(_e){ showToast('Network error','error'); }
+}
+
+async function _adminCancelJob(jobId) {
+  if (!confirm('Cancel job '+jobId+'?')) return;
+  try {
+    var r = await _pbFetch('/api/admin/jobs/cancel',{ method:'POST', body:JSON.stringify({ jobId }) });
+    var d = await r.json();
+    if (d.ok) { showToast('Job cancelled','success'); _adminLoad(); }
+    else showToast(({ cannot_cancel_running:'Cannot cancel a running job', job_not_found:'Job not found' }[d.error]||d.error||'Cancel failed').replace(/_/g,' '),'error');
+  } catch(_e){ showToast('Network error','error'); }
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 var _sysHealthBadge = null;
 var _sysHealthLastOk = true;
 
@@ -4852,7 +5001,9 @@ window._refreshSysHealth = function() {
 
 document.addEventListener('DOMContentLoaded', function() {
   _fetchSysHealth();
-  setInterval(_fetchSysHealth, 90000); // refresh every 90s
+  setInterval(_fetchSysHealth, 90000);
+  // Phase U: admin panel — show collapsed label if full_admin+
+  if (_adminRank() >= 4) _adminRender();
 });
 // ────────────────────────────────────────────────────────────────────────────
 </script>
