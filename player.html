@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'b4bf8be';
-window.PBS_BUILD_DATE = '2026-05-19T06:26:48.491Z';
+window.PBS_BUILD_SHA = 'f4be814';
+window.PBS_BUILD_DATE = '2026-05-19T06:32:01.353Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -5958,14 +5958,19 @@ function _getActorHeaders() {
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');    } catch(_e){}
   var pid  = String(pl.id  != null ? pl.id  : pl.username || '').trim();
   var cid  = String(club.id != null ? club.id : club.clubId || '').trim();
-  var role = (pl.role || pl.isHost ? 'player' : 'player');  // frontend defaults to player; host sets role in localStorage
+  var role = 'player';
   try { if (localStorage.getItem('pb-actor-role')) role = localStorage.getItem('pb-actor-role'); } catch(_e){}
-  return {
+  // Phase C: include signed session token if available (server will trust token over raw headers)
+  var token = null;
+  try { token = localStorage.getItem('pb-session-token'); } catch(_e){}
+  var headers = {
     'Content-Type': 'application/json',
-    'X-Actor-Id':   pid  || 'anonymous',
-    'X-Club-Id':    cid  || '',
-    'X-Actor-Role': role || 'player'
+    'X-Actor-Id':   pid || 'anonymous',
+    'X-Club-Id':    cid || '',
+    'X-Actor-Role': role
   };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  return headers;
 }
 
 // _pbFetch: wraps fetch() with auth headers for all API calls
@@ -5974,6 +5979,27 @@ async function _pbFetch(url, opts) {
   var headers = Object.assign(_getActorHeaders(), opts.headers || {});
   return fetch(url, Object.assign({}, opts, { headers }));
 }
+
+// Acquire session token from backend and store it.
+// Called after club join / host login when we know the actor identity.
+async function _acquireSessionToken(actorId, role, clubId) {
+  try {
+    var resp = await fetch('/api/auth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actorId, role: role||'player', clubId })
+    });
+    var data = await resp.json();
+    if (data.ok && data.token) {
+      localStorage.setItem('pb-session-token', data.token);
+      localStorage.setItem('pb-actor-role', data.role);
+      console.log('[auth] session token acquired actor='+actorId+' role='+data.role);
+      return data;
+    }
+  } catch(_e) { console.warn('[auth] token acquisition failed:', _e.message); }
+  return null;
+}
+window._acquireSessionToken = _acquireSessionToken;
 // ────────────────────────────────────────────────────────────────────────────
 
 function enableBrowserGradeFallbackForSession() {
@@ -9402,7 +9428,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · b4bf8be · May 18, 11:26 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · f4be814 · May 18, 11:32 PM</span>
 </div>
 
 })();
