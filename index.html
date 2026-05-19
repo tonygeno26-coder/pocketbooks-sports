@@ -1123,8 +1123,14 @@ async function renderSettlementPreviewFromDb() {
     // Build HTML
     var html = '<div style="background:var(--card,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:14px;padding:16px;margin-bottom:16px">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
-        '<div style="font-size:0.95rem;font-weight:900">Settlement Preview</div>' +
-        '<span id="_sett_db_badge" style="font-size:0.6rem;font-weight:700;padding:3px 8px;border-radius:10px;background:rgba(22,163,74,0.12);border:1px solid #16a34a;color:#86efac">💰 Settlements:DB</span>' +
+        '<div>' +
+          '<div style="font-size:0.95rem;font-weight:900">Settlement Preview</div>' +
+          '<div style="font-size:0.6rem;color:#555;margin-top:2px">📅 '+_currentISOWeek()+'</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;align-items:center">' +
+          '<span style="font-size:0.6rem;font-weight:700;padding:3px 8px;border-radius:10px;background:rgba(22,163,74,0.12);border:1px solid #16a34a;color:#86efac">💰 DB</span>' +
+          '<button onclick="createWeeklyRollover(false)" style="font-size:0.65rem;font-weight:800;padding:4px 10px;border-radius:10px;border:1px solid #2563eb;background:transparent;color:#60a5fa;cursor:pointer">Close Week</button>' +
+        '</div>' +
       '</div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;margin-bottom:14px;background:rgba(255,255,255,0.02);border-radius:10px;padding:10px">' +
         '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Players Owe</div><div style="font-size:0.95rem;font-weight:900;color:var(--green,#00ff88)">$'+totals.playersOwe.toFixed(2)+'</div></div>' +
@@ -1310,6 +1316,91 @@ async function runSettlementExecutionAudit() {
   } catch(e) { console.error('[settlement execution audit] error:', e.message); }
 }
 window.runSettlementExecutionAudit = runSettlementExecutionAudit;
+
+// ── WEEKLY ROLLOVER (Phase C Step 5) ───────────────────────────────────────────────────────
+
+function _currentISOWeek() {
+  var d = new Date(); d.setHours(0,0,0,0);
+  d.setDate(d.getDate() + 3 - (d.getDay()+6)%7);
+  var w1 = new Date(d.getFullYear(), 0, 4);
+  return d.getFullYear() + '-W' + String(1 + Math.round(
+    ((d.getTime() - w1.getTime()) / 86400000 - 3 + (w1.getDay()+6)%7) / 7
+  )).padStart(2,'0');
+}
+
+async function createWeeklyRollover(confirm) {
+  var week = _currentISOWeek();
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+  var cid  = club.id || club.clubId || null;
+
+  if (!confirm) {
+    // Show confirm modal
+    var ex = document.getElementById('_rollover_modal'); if (ex) ex.remove();
+    var ov = document.createElement('div');
+    ov.id = '_rollover_modal';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML = '<div style="background:#111;width:100%;max-width:400px;border-radius:16px;padding:24px">'+
+      '<div style="font-size:1rem;font-weight:900;margin-bottom:8px">📅 Close Week '+week+'</div>'+
+      '<div style="font-size:0.8rem;color:#888;margin-bottom:20px">'+
+        'This snapshots all current settlement balances and starts a new settlement week.\n\n'+
+        'Active bets are preserved. Historical data remains forever.'+
+      '</div>'+
+      '<div style="display:flex;gap:10px">'+
+        '<button onclick="document.getElementById(\'_rollover_modal\').remove()" style="flex:1;height:44px;background:#1a1a1a;border:1px solid #333;border-radius:10px;color:#888;font-weight:700;cursor:pointer">Cancel</button>'+
+        '<button onclick="createWeeklyRollover(true)" style="flex:2;height:44px;background:#2563eb;border:none;border-radius:10px;color:#fff;font-size:0.9rem;font-weight:900;cursor:pointer">Confirm Close Week</button>'+
+      '</div>'+
+    '</div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
+    return;
+  }
+
+  var modal = document.getElementById('_rollover_modal'); if (modal) modal.remove();
+  try {
+    var resp = await fetch('/api/host/weekly-rollover', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ clubId:cid, rolloverWeek:week, performedBy:'host' })
+    });
+    var data = await resp.json();
+    if (!data.ok) throw new Error(data.error || JSON.stringify(data.errors));
+    if (typeof showToastHost === 'function')
+      showToastHost('✅ Week '+week+' closed. '+data.playersSnapshotted+' players snapshotted.');
+    // Refresh views
+    try { await renderSettlementPreviewFromDb(); } catch(_e){}
+    try { await loadHostDashboardFromDb('post_rollover'); } catch(_e){}
+    console.log('[weekly rollover] executed week='+week+' players='+data.playersSnapshotted);
+    return data;
+  } catch(e) {
+    if (typeof showToastHost === 'function') showToastHost('❌ Rollover failed: '+e.message);
+    console.error('[weekly rollover] error:', e.message);
+  }
+}
+
+async function runWeeklyRolloverAudit() {
+  console.log('[weekly rollover audit] ─── START ───');
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+  var cid  = club.id || club.clubId || null;
+  var week = _currentISOWeek();
+  try {
+    var qs = cid ? '?clubId='+encodeURIComponent(cid) : '';
+    var hist = await fetch('/api/host/rollover-history'+qs).then(function(r){ return r.json(); });
+    var snap = await fetch('/api/host/week-snapshot?week='+encodeURIComponent(week)+(cid?'&clubId='+encodeURIComponent(cid):'')).then(function(r){ return r.json(); });
+    console.log('[weekly rollover audit]',
+      '\n  clubId:          ', cid||'(none)',
+      '\n  currentWeek:     ', week,
+      '\n  rolloverCount:   ', (hist.history||[]).length,
+      '\n  latestRollover:  ', hist.history&&hist.history[0] ? hist.history[0].rollover_week+' ('+hist.history[0].performed_at+')' : '(none)',
+      '\n  currentSnapshot: ', snap.players ? snap.players.length+' players' : 'none (week not closed yet)'
+    );
+    if (hist.history&&hist.history[0]) {
+      var t = JSON.parse(hist.history[0].totals_snapshot||'{}');
+      console.log('  lastRolloverTotals: playersOwe=$'+(t.playersOwe||0)+' hostOwes=$'+(t.hostOwes||0)+' net=$'+(t.net||0));
+    }
+    return { history: hist.history, snapshots: snap.players };
+  } catch(e) { console.error('[weekly rollover audit] error:', e.message); }
+}
+window.createWeeklyRollover   = createWeeklyRollover;
+window.runWeeklyRolloverAudit = runWeeklyRolloverAudit;
 window.enableHostDbPrimary        = function(){ _setHostDbPrimary(true);  return 'HOST_DB_PRIMARY=true'; };
 window.disableHostDbPrimary       = function(){ _setHostDbPrimary(false); return 'HOST_DB_PRIMARY=false'; };
 window.checkHostDbPrimaryStatus   = function(){ return { enabled: _HOST_DB_PRIMARY }; };
@@ -4163,7 +4254,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · e011b6d · May 18, 09:53 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · abcd713 · May 18, 09:58 PM</span>
 </div>
 
 })();
