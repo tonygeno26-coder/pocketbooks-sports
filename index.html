@@ -4012,9 +4012,24 @@ function _currentWeekPreview(weekOffset) {
            dailyNets: _dailyNetsForWeek(weekStart, weekEnd) };
 }
 
+// ── Phase P: Settlement Periods Panel ────────────────────────────────────────────────────────────────
+function _renderSettlementPeriods(container) {
+  container.innerHTML = '<div style="color:#666;font-size:0.65rem;padding:6px 0 2px">Phase P Settlements Panel Loaded</div>';
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 function renderSettlements() {
   var el = document.getElementById('settlements-section');
   if (!el) return;
+  // Phase P: inject settlements panel container if not present
+  var phaseP = document.getElementById('phase-p-settlements');
+  if (!phaseP) {
+    phaseP = document.createElement('div');
+    phaseP.id = 'phase-p-settlements';
+    phaseP.style.cssText = 'margin-bottom:8px';
+    el.insertBefore(phaseP, el.firstChild);
+  }
+  _renderSettlementPeriods(phaseP);
   checkWeeklySettlement();
   var all = loadSettlements();
   var preview = _currentWeekPreview(_settleWeekOffset);
@@ -4491,7 +4506,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · b044bc1 · May 19, 02:08 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 77968ff · May 19, 03:43 AM</span>
 </div>
 
 })();
