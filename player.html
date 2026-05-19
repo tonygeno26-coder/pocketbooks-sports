@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'e8b3891';
-window.PBS_BUILD_DATE = '2026-05-19T07:50:29.244Z';
+window.PBS_BUILD_SHA = '32604eb';
+window.PBS_BUILD_DATE = '2026-05-19T07:59:15.542Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -3234,10 +3234,35 @@ function confirmBet() {
         console.warn('[bet placement] DB rejected:', _dbData.code||_dbData.error||JSON.stringify(_dbData.errors));
         // Hard blocks: balance, conflict, market closed, game started
         var _hardBlock = _dbData.code || _dbData.error || '';
-        if (_hardBlock.includes('insufficient_balance') || _hardBlock.includes('conflict') ||
+        // Risk limit rejection codes (422)
+        var _RISK_CODES = new Set(['player_suspended','stake_below_min','stake_above_max',
+          'payout_above_max','parlays_disabled','teasers_disabled','round_robins_disabled',
+          'too_many_parlay_legs','sport_blocked','sport_not_allowed','market_blocked',
+          'live_betting_disabled','player_open_risk_exceeded','club_open_risk_exceeded',
+          'event_risk_exceeded','market_risk_exceeded']);
+        var _RISK_MESSAGES = {
+          player_suspended:         'Your account is suspended',
+          stake_below_min:          'Stake too small (min: $'+(_dbData.min||'?')+')',
+          stake_above_max:          'Stake too large (max: $'+(_dbData.max||'?')+')',
+          payout_above_max:         'Potential payout exceeds limit ($'+(_dbData.max||'?')+')',
+          parlays_disabled:         'Parlays are not allowed in this club',
+          teasers_disabled:         'Teasers are not allowed in this club',
+          too_many_parlay_legs:     'Too many legs (max: '+(_dbData.max||'?')+')',
+          sport_blocked:            'Sport not available: '+(_dbData.sport||''),
+          sport_not_allowed:        'Sport not in your allowed list: '+(_dbData.sport||''),
+          market_blocked:           'Market not available: '+(_dbData.market||''),
+          live_betting_disabled:    'Live betting is not allowed',
+          player_open_risk_exceeded:'Open risk limit reached ($'+(_dbData.max||'?')+')',
+          club_open_risk_exceeded:  'Club risk limit reached',
+          event_risk_exceeded:      'Event risk limit reached',
+          market_risk_exceeded:     'Market risk limit reached'
+        };
+        if (_RISK_CODES.has(_hardBlock) ||
+            _hardBlock.includes('insufficient_balance') || _hardBlock.includes('conflict') ||
             _hardBlock.includes('market_closed') || _hardBlock.includes('game_started')) {
           closeBetConfirm();
-          showToast(_hardBlock.replace(/_/g,' '), 'error');
+          var _msg = _RISK_MESSAGES[_hardBlock] || _hardBlock.replace(/_/g,' ');
+          showToast(_msg, 'error');
           return;
         }
       }
@@ -9549,7 +9574,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · e8b3891 · May 19, 12:50 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 32604eb · May 19, 12:59 AM</span>
 </div>
 
 })();
