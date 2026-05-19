@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'aa539e5';
-window.PBS_BUILD_DATE = '2026-05-19T05:50:08.271Z';
+window.PBS_BUILD_SHA = '2f4bba8';
+window.PBS_BUILD_DATE = '2026-05-19T06:02:37.598Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -4152,7 +4152,6 @@ async function checkServerGradeStatus() {
 }
 
 function _updateGradingSourceBadge(source) {
-  if (!_DB_PRIMARY_READS_ENABLED) return;
   var badge = document.getElementById('_grading_source_badge');
   if (!badge) {
     badge = document.createElement('div');
@@ -4160,11 +4159,12 @@ function _updateGradingSourceBadge(source) {
     badge.style.cssText = 'position:fixed;bottom:52px;left:8px;z-index:9999997;font-family:monospace;font-size:0.6rem;font-weight:700;padding:3px 7px;border-radius:5px;pointer-events:none;opacity:0.85';
     document.body.appendChild(badge);
   }
-  var isServer = source === 'server';
+  // source: 'Server' | 'BrowserFallback DEV' | 'server' (legacy)
+  var isServer = source === 'Server' || source === 'server';
   badge.style.background = isServer ? '#0c1a2e' : '#1a0a00';
   badge.style.border = '1px solid ' + (isServer ? '#2563eb' : '#ea580c');
   badge.style.color  = isServer ? '#93c5fd' : '#fdba74';
-  badge.textContent  = '🧐 ' + (isServer ? 'server-grade' : 'browser-fallback');
+  badge.textContent  = '🧠 Grading:' + (isServer ? 'Server' : 'BrowserFallback DEV');
 }
 
 window.runServerGrade            = runServerGrade;
@@ -5437,7 +5437,13 @@ window.runPlayerDashboardDbAudit  = runPlayerDashboardDbAudit;
 // pipeline, logs the complete audit trail, updates balances + host stats.
 // ════════════════════════════════════════════════════════════════════════════
 async function gradeTodaysActiveTickets() {
-  console.log('[live grading audit] ─── START ───');
+  // Guard: browser grading blocked in server-authoritative mode
+  if (_GRADING_MODE !== 'browser_fallback_dev') {
+    console.log('[browser grade blocked] server authoritative mode active — use runServerGrade()');
+    console.log('[browser grade blocked] to enable browser grading: enableBrowserGradeFallbackForSession()');
+    return { blocked:true, reason:'server_authoritative', graded:0, skipped:0 };
+  }
+  console.log('[live grading audit] ─── START (browser fallback mode) ───');
   var nowMs = Date.now();
 
   // Step 1: Load canonical tickets
@@ -5682,7 +5688,12 @@ window.grade = gradeTodaysActiveTickets; // short alias
 var _autoGradeRunning  = false;
 
 async function _autoGradePoll() {
-  if (_autoGradeRunning) return; // prevent overlap if poll is slow
+  // Guard: in server-authoritative mode this function must never run
+  if (_GRADING_MODE !== 'browser_fallback_dev') {
+    console.log('[browser grade blocked] _autoGradePoll suppressed — server authoritative mode');
+    return;
+  }
+  if (_autoGradeRunning) return;
   _autoGradeRunning = true;
   var ts = new Date().toISOString();
   try {
@@ -5886,16 +5897,65 @@ async function _autoGradePoll() {
   }
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// GRADING AUTHORITY FLAG
+// Default: server_authoritative — browser grading blocked, server is truth.
+// Dev fallback: enableBrowserGradeFallbackForSession() required to run browser grading.
+// ════════════════════════════════════════════════════════════════════════════
+var _GRADING_MODE = 'server_authoritative'; // 'server_authoritative' | 'browser_fallback_dev'
+
+function enableBrowserGradeFallbackForSession() {
+  _GRADING_MODE = 'browser_fallback_dev';
+  sessionStorage.setItem('pb-grading-mode', 'browser_fallback_dev');
+  _updateGradingSourceBadge('BrowserFallback DEV');
+  console.log('[grading authority] BROWSER FALLBACK ENABLED for this session — dev use only');
+  return 'Browser grading enabled (dev). Use disableBrowserGradeFallbackForSession() to restore.';
+}
+function disableBrowserGradeFallbackForSession() {
+  _GRADING_MODE = 'server_authoritative';
+  sessionStorage.removeItem('pb-grading-mode');
+  _updateGradingSourceBadge('Server');
+  console.log('[grading authority] server authoritative mode restored');
+  return 'Server authoritative mode restored.';
+}
+function checkGradingAuthorityStatus() {
+  return { mode: _GRADING_MODE, serverAuthoritative: _GRADING_MODE === 'server_authoritative' };
+}
+// Restore from session storage
+(function(){ if (sessionStorage.getItem('pb-grading-mode')==='browser_fallback_dev') { _GRADING_MODE='browser_fallback_dev'; } })();
+
+window.enableBrowserGradeFallbackForSession  = enableBrowserGradeFallbackForSession;
+window.disableBrowserGradeFallbackForSession = disableBrowserGradeFallbackForSession;
+window.checkGradingAuthorityStatus           = checkGradingAuthorityStatus;
+
+// ── AUTO-GRADE DAEMON (routes to server or browser based on mode) ────────────────────────
+
 function startAutoGradeDaemon() {
-  if (_autoGradeInterval) return; // already running
-  console.log('[auto grade daemon] started — polling every 60s');
-  _autoGradePoll(); // immediate first check
-  _autoGradeInterval = setInterval(_autoGradePoll, 60000);
+  if (_autoGradeInterval) return;
+  console.log('[auto grade daemon] started — 60s poll — mode:', _GRADING_MODE);
+  _dispatchGradePoll(); // immediate
+  _autoGradeInterval = setInterval(_dispatchGradePoll, 60000);
 }
 
 function stopAutoGradeDaemon() {
   if (_autoGradeInterval) { clearInterval(_autoGradeInterval); _autoGradeInterval = null; }
   console.log('[auto grade daemon] stopped');
+}
+
+// Dispatch: server grade in normal mode, browser grade only in dev fallback
+function _dispatchGradePoll() {
+  if (_GRADING_MODE === 'server_authoritative') {
+    // Server is authoritative — call server grade, hydrate from DB on success
+    if (typeof runServerGrade === 'function') {
+      runServerGrade({ daysBack:3 }).catch(function(e){
+        console.warn('[auto grade daemon] server grade error:', e.message);
+      });
+    }
+  } else {
+    // Dev fallback: browser grading allowed
+    console.log('[auto grade daemon] browser fallback mode — running browser grade');
+    if (typeof _autoGradePoll === 'function') _autoGradePoll();
+  }
 }
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -9223,7 +9283,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · aa539e5 · May 18, 10:50 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 2f4bba8 · May 18, 11:02 PM</span>
 </div>
 
 })();
@@ -9468,16 +9528,22 @@ window.runMultiDevicePersistenceCheck = runMultiDevicePersistenceCheck;
   try { if (typeof checkDbPrimaryReadStatus     === 'function') window.checkDbPrimaryReadStatus     = checkDbPrimaryReadStatus; } catch(_e){}
   try { if (typeof runFullPersistenceAudit      === 'function') window.runFullPersistenceAudit      = runFullPersistenceAudit; } catch(_e){}
 
+  // Grading authority helpers (explicit window assignments)
+  try { if (typeof enableBrowserGradeFallbackForSession  === 'function') window.enableBrowserGradeFallbackForSession  = enableBrowserGradeFallbackForSession;  } catch(_e){}
+  try { if (typeof disableBrowserGradeFallbackForSession === 'function') window.disableBrowserGradeFallbackForSession = disableBrowserGradeFallbackForSession; } catch(_e){}
+  try { if (typeof checkGradingAuthorityStatus           === 'function') window.checkGradingAuthorityStatus           = checkGradingAuthorityStatus;           } catch(_e){}
+
   // devHealth — one-call health summary
   window.devHealth = async function() {
     var sha = window.PBS_BUILD_SHA || 'unknown';
     console.log('[devHealth] sha=' + sha);
     var result = { version: sha };
-    try { result.dbPrimary = checkDbPrimaryReadStatus ? checkDbPrimaryReadStatus() : null; } catch(_e) {}
-    try { result.persistence = await runFullPersistenceAudit(); } catch(_e) { result.persistence = { error: _e.message }; }
-    try { result.multiDevice = await runMultiDevicePersistenceCheck(); } catch(_e) { result.multiDevice = { error: _e.message }; }
-    try { result.grading = await checkServerGradeStatus(); } catch(_e) { result.grading = { error: _e.message }; }
-    console.log('[devHealth] done', JSON.stringify({ version:result.version, dbPrimary:result.dbPrimary, gradingEnabled:result.grading&&result.grading.enabled }));
+    try { result.dbPrimary       = checkDbPrimaryReadStatus ? checkDbPrimaryReadStatus() : null; } catch(_e) {}
+    try { result.gradingAuthority = checkGradingAuthorityStatus ? checkGradingAuthorityStatus() : null; } catch(_e) {}
+    try { result.persistence      = await runFullPersistenceAudit(); } catch(_e) { result.persistence = { error: _e.message }; }
+    try { result.multiDevice      = await runMultiDevicePersistenceCheck(); } catch(_e) { result.multiDevice = { error: _e.message }; }
+    try { result.grading          = await checkServerGradeStatus(); } catch(_e) { result.grading = { error: _e.message }; }
+    console.log('[devHealth] done', JSON.stringify({ version:result.version, dbPrimary:result.dbPrimary, gradingMode:result.gradingAuthority&&result.gradingAuthority.mode }));
     return result;
   };
 
@@ -9485,11 +9551,19 @@ window.runMultiDevicePersistenceCheck = runMultiDevicePersistenceCheck;
     'grade:', typeof window.grade,
     '| runServerGrade:', typeof window.runServerGrade,
     '| devHealth:', typeof window.devHealth,
+    '| gradingAuth:', typeof window.checkGradingAuthorityStatus,
     '| dbPrimary:', typeof window.enableDbPrimaryReadsForSession,
     '| repair:', typeof window.repairAllTicketIdentities
   );
 })();
 // ────────────────────────────────────────────────────────────────────────────
+
+// Initialize grading authority badge on page load
+document.addEventListener('DOMContentLoaded', function() {
+  _updateGradingSourceBadge(_GRADING_MODE === 'server_authoritative' ? 'Server' : 'BrowserFallback DEV');
+  console.log('[grading authority] init mode:', _GRADING_MODE);
+});
+
 </script>
 </body>
 </html>
