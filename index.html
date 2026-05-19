@@ -998,6 +998,110 @@ function refreshHostDashboardStats(trigger) {
   return { handle, atRisk, hostProfit, holdPct, active: active.length, settled: settled.length, playersOwe, hostOwes };
 }
 window.refreshHostDashboardStats = refreshHostDashboardStats;
+
+// ── HOST DASHBOARD DB READ (Phase C Step 2) ───────────────────────────────────────────────────
+
+function _validateHostStats(s) {
+  if (!s) return { safe:false, warnings:['missing_stats'] };
+  var w = [];
+  if (isNaN(s.handle))     w.push('handle_NaN');
+  if (isNaN(s.activeRisk)) w.push('activeRisk_NaN');
+  if (s.activeRisk < 0)   w.push('activeRisk_negative');
+  if (isNaN(s.profit))    w.push('profit_NaN');
+  return { safe: w.length===0, warnings: w };
+}
+
+async function loadHostDashboardFromDb(trigger) {
+  trigger = trigger || 'manual';
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+  var cid  = club.id || club.clubId || null;
+  try {
+    var qs  = cid ? '?clubId='+encodeURIComponent(cid) : '';
+    var resp = await fetch('/api/host/dashboard'+qs);
+    var data = await resp.json();
+    if (!data.ok || !data.stats) throw new Error(data.error || 'missing stats');
+    var valid = _validateHostStats(data.stats);
+    if (!valid.safe) throw new Error('invalid_stats:'+valid.warnings.join(','));
+    // Render stats from DB
+    var s = data.stats;
+    function _fmtUSD(v){ return '$'+Math.abs(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+    function _set(id,val){ var el=document.getElementById(id); if(el) el.textContent=val; }
+    _set('stat-handle',       _fmtUSD(s.handle));
+    _set('stat-hold',         s.holdPct!==null ? s.holdPct.toFixed(1)+'%' : '—');
+    _set('stat-profit',       (s.profit>=0?'+':'-')+_fmtUSD(s.profit));
+    _set('stat-active-risk',  _fmtUSD(s.hostAtRisk));
+    _set('stat-active-bets',  String(s.activeBetCount));
+    _set('host-bets-count',   s.activeBetCount+' bet'+(s.activeBetCount!==1?'s':''));
+    var profitEl = document.getElementById('stat-profit');
+    if (profitEl) profitEl.style.color = s.profit>=0 ? 'var(--green,#00ff88)' : 'var(--red,#ff3d57)';
+    _updateHostSourceBadge('db', data.warnings||[]);
+    console.log('[host db read] trigger='+trigger+' source=db clubId='+(cid||'?')+
+      ' handle=$'+s.handle+' active='+s.activeBetCount+' profit=$'+s.profit);
+    return { source:'db', stats:s, warnings:data.warnings||[] };
+  } catch(e) {
+    // Fallback to localStorage calculation
+    console.warn('[host db read] fallback to localStorage: '+e.message);
+    _updateHostSourceBadge('localStorage', [e.message]);
+    refreshHostDashboardStats('db_fallback:'+trigger);
+    return { source:'localStorage', fallbackReason:e.message };
+  }
+}
+
+function _updateHostSourceBadge(source, warnings) {
+  var badge = document.getElementById('_host_source_badge');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = '_host_source_badge';
+    badge.style.cssText = 'position:fixed;bottom:8px;right:8px;z-index:9999997;font-family:monospace;font-size:0.6rem;font-weight:700;padding:3px 7px;border-radius:5px;pointer-events:none;opacity:0.88';
+    document.body.appendChild(badge);
+  }
+  var isDb = source==='db';
+  badge.style.background = isDb ? '#052e16' : '#422006';
+  badge.style.border = '1px solid '+(isDb?'#16a34a':'#ea580c');
+  badge.style.color  = isDb ? '#86efac' : '#fdba74';
+  badge.textContent = '🏠 '+(isDb?'Host:DB':'Host:Local')+(warnings&&warnings.length?' ⚠':'');
+}
+
+async function runHostDbReadAudit() {
+  console.log('[host db audit] ─── START ───');
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+  var cid  = club.id || club.clubId || null;
+
+  // Local stats
+  var localResult = {};
+  try { localResult = refreshHostDashboardStats('audit') || {}; } catch(_e){}
+  var localHandle = parseFloat((document.getElementById('stat-handle')||{}).textContent||'0') || 0;
+  var localActive = parseInt((document.getElementById('stat-active-bets')||{}).textContent||'0') || 0;
+
+  // DB stats
+  var dbData = null, fallbackReason = null;
+  try {
+    var qs = cid ? '?clubId='+encodeURIComponent(cid) : '';
+    var resp = await fetch('/api/host/dashboard'+qs);
+    dbData = await resp.json();
+    if (!dbData.ok) fallbackReason = dbData.error || 'db_error';
+  } catch(e) { fallbackReason = e.message; }
+
+  var dbStats = dbData && dbData.stats;
+  var sourceUsed = (!fallbackReason && dbStats) ? 'db' : 'localStorage';
+
+  console.log('[host db audit]',
+    '\n  clubId:             ', cid || '(none)',
+    '\n  sourceUsed:         ', sourceUsed,
+    '\n  dbActiveTickets:    ', dbData ? (dbData.activeTickets||[]).length : 'n/a',
+    '\n  localActiveTickets: ', localActive,
+    '\n  dbHandle:           ', dbStats ? '$'+dbStats.handle : 'n/a',
+    '\n  localHandle:        ', '$'+localHandle,
+    '\n  dbActiveRisk:       ', dbStats ? '$'+dbStats.activeRisk : 'n/a',
+    '\n  dbProfit:           ', dbStats ? '$'+dbStats.profit : 'n/a',
+    '\n  fallbackReason:     ', fallbackReason || 'none',
+    '\n  status:             ', !fallbackReason && dbStats ? '✅ db_primary' : '⚠️ localStorage'
+  );
+  return { sourceUsed, dbStats, fallbackReason };
+}
+window.loadHostDashboardFromDb = loadHostDashboardFromDb;
+window.runHostDbReadAudit      = runHostDbReadAudit;
+// ────────────────────────────────────────────────────────────────────────────
 // ════════════════════════════════════════════════════════════════════════════
 
 function renderHostStats(trigger) {
@@ -3801,7 +3905,7 @@ checkWeeklySettlement();
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 721f71e · May 18, 09:20 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · fca1a6e · May 18, 09:31 PM</span>
 </div>
 
 })();
