@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '2f4bba8';
-window.PBS_BUILD_DATE = '2026-05-19T06:02:37.598Z';
+window.PBS_BUILD_SHA = '031cb37';
+window.PBS_BUILD_DATE = '2026-05-19T06:09:21.222Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -3182,15 +3182,65 @@ function confirmBet() {
       if (_dbData.ok) {
         _dbPlacementAttempted = true;
         console.log('[bet placement] DB success ticketId='+_dbData.ticketId+' ledger='+_dbData.ledgerEntryId);
-        // Hydrate from DB after placement
         try { loadPlayerDashboardFromDb(); } catch(_e){}
+      } else if (_dbData.code === 'odds_changed') {
+        // ── ODDS CHANGED MODAL ──────────────────────────────────────────────
+        console.warn('[bet placement] odds_changed:', _dbData.leg, _dbData.oldOdds, '→', _dbData.newOdds);
+        closeBetConfirm();
+        var _od = _dbData;
+        var _odModal = document.createElement('div');
+        _odModal.id = 'odds-changed-modal';
+        _odModal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center';
+        _odModal.innerHTML = [
+          '<div style="background:#1a1a1a;border:1.5px solid #ea580c;border-radius:18px;padding:28px 24px;max-width:340px;width:90%;text-align:center">',
+            '<div style="font-size:1.5rem;margin-bottom:8px">⚠️ Line Moved</div>',
+            '<div style="font-weight:700;font-size:1rem;margin-bottom:6px">' + (_od.leg||'Selection') + '</div>',
+            '<div style="color:#aaa;font-size:0.9rem;margin-bottom:16px">',
+              'Line changed from <b style="color:#fff">' + _od.oldOdds + '</b> to <b style="color:#00ff87">' + _od.newOdds + '</b>',
+            '</div>',
+            '<div style="display:flex;gap:10px;justify-content:center">',
+              '<button id="odds-reject-btn" style="flex:1;padding:12px;background:#222;border:1px solid #444;border-radius:10px;color:#fff;font-weight:700;font-size:0.9rem">Cancel Bet</button>',
+              '<button id="odds-accept-btn" style="flex:1;padding:12px;background:#00ff87;border:none;border-radius:10px;color:#000;font-weight:700;font-size:0.9rem">Accept New Odds</button>',
+            '</div>',
+          '</div>'
+        ].join('');
+        document.body.appendChild(_odModal);
+        document.getElementById('odds-reject-btn').onclick = function() { _odModal.remove(); showToast('Bet canceled — line moved', 'info'); };
+        document.getElementById('odds-accept-btn').onclick = async function() {
+          _odModal.remove();
+          // Resubmit with updatedLegs from server + oddsAccepted:true flag
+          var _rePayload = Object.assign({}, _dbPayload, {
+            legs: _od.updatedLegs || _dbPayload.legs,
+            oddsAccepted: true,
+            idempotencyKey: _dbPayload.idempotencyKey + '_oa'  // new key to avoid idempotency collision
+          });
+          try {
+            var _re2 = await fetch('/api/bets/place', {
+              method:'POST', headers:{'Content-Type':'application/json'},
+              body: JSON.stringify(_rePayload)
+            });
+            var _rd2 = await _re2.json();
+            if (_rd2.ok) {
+              console.log('[bet placement] accepted-odds resubmit ok ticketId='+_rd2.ticketId);
+              showToast('✅ Bet placed at new odds', 'success');
+              try { loadPlayerDashboardFromDb(); } catch(_e){}
+              try { renderMyBets(); } catch(_e){}
+            } else {
+              showToast((_rd2.code||_rd2.error||'placement failed').replace(/_/g,' '), 'error');
+            }
+          } catch(_e2) { showToast('Network error — try again', 'error'); }
+        };
+        return; // Do NOT write localStorage
+        // ───────────────────────────────────────────────────────────────────────
       } else {
-        console.warn('[bet placement] DB rejected:', _dbData.error || JSON.stringify(_dbData.errors));
-        // Surface server errors to player
-        if (_dbData.error && (_dbData.error.includes('insufficient_balance') || _dbData.error.includes('conflict'))) {
+        console.warn('[bet placement] DB rejected:', _dbData.code||_dbData.error||JSON.stringify(_dbData.errors));
+        // Hard blocks: balance, conflict, market closed, game started
+        var _hardBlock = _dbData.code || _dbData.error || '';
+        if (_hardBlock.includes('insufficient_balance') || _hardBlock.includes('conflict') ||
+            _hardBlock.includes('market_closed') || _hardBlock.includes('game_started')) {
           closeBetConfirm();
-          showToast(_dbData.error.replace(/_/g,' '), 'error');
-          return; // DO NOT fall through to localStorage — server said no
+          showToast(_hardBlock.replace(/_/g,' '), 'error');
+          return;
         }
       }
     } catch(_e) {
@@ -9283,7 +9333,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 2f4bba8 · May 18, 11:02 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 031cb37 · May 18, 11:09 PM</span>
 </div>
 
 })();
