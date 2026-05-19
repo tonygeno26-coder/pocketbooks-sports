@@ -4766,7 +4766,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 9d1c044 · May 19, 04:26 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · b74eaa1 · May 19, 04:33 AM</span>
 </div>
 
 })();
@@ -4814,18 +4814,20 @@ async function _adminLoad() {
   try {
     var cl = {}; try{ cl=JSON.parse(localStorage.getItem('pb-club')||'{}'); }catch(_e){}
     var cid = cl.id||cl.clubId||'';
-    var [hResp,dResp,jResp,eResp,raResp] = await Promise.all([
+    var [hResp,dResp,jResp,eResp,raResp,cdResp] = await Promise.all([
       fetch('/api/health'),
       _pbFetch('/api/admin/diagnostics'),
       _pbFetch('/api/admin/jobs?limit=20'),
       _pbFetch('/api/events?clubId='+encodeURIComponent(cid)+'&limit=25'),
-      _pbFetch('/api/admin/risk-alerts?status=open&limit=20')
+      _pbFetch('/api/admin/risk-alerts?status=open&limit=20'),
+      _pbFetch('/api/admin/crypto/deposits?limit=10')
     ]);
-    _adminPanelState.health  = await hResp.json().catch(function(){ return null; });
-    _adminPanelState.diag    = await dResp.json().catch(function(){ return null; });
-    _adminPanelState.jobs    = await jResp.json().catch(function(){ return null; });
-    _adminPanelState.events  = await eResp.json().catch(function(){ return null; });
-    _adminPanelState.alerts  = await raResp.json().catch(function(){ return null; });
+    _adminPanelState.health   = await hResp.json().catch(function(){ return null; });
+    _adminPanelState.diag     = await dResp.json().catch(function(){ return null; });
+    _adminPanelState.jobs     = await jResp.json().catch(function(){ return null; });
+    _adminPanelState.events   = await eResp.json().catch(function(){ return null; });
+    _adminPanelState.alerts   = await raResp.json().catch(function(){ return null; });
+    _adminPanelState.deposits = await cdResp.json().catch(function(){ return null; });
   } catch(_e){ console.warn('[admin panel] load error:', _e.message); }
   _adminRender();
 }
@@ -4916,6 +4918,30 @@ function _adminRender() {
     });
     html += '</div>';
   }
+  // Crypto deposits section
+  var cdData    = _adminPanelState.deposits&&_adminPanelState.deposits.ok?_adminPanelState.deposits:{ intents:[], counts:{} };
+  var cdCounts  = cdData.counts||{};
+  var cdPending = (cdData.intents||[]).filter(function(i){ return i.status==='hash_submitted'||i.status==='pending_review'; });
+  var cdFlagged = (cdData.intents||[]).filter(function(i){ return i.flags&&i.flags.length>0; });
+  if (cdCounts.hash_submitted>0||cdFlagged.length>0) {
+    html += '<div style="border-top:1px solid #1a1a1a;padding:4px 14px 6px">';
+    html += '<div style="font-size:0.62rem;font-weight:800;color:#a78bfa;margin-bottom:3px">₿ CRYPTO DEPOSITS';
+    if (cdCounts.hash_submitted>0) html += ' | '+cdCounts.hash_submitted+' pending review';
+    if (cdFlagged.length>0)        html += ' | '+cdFlagged.length+' flagged';
+    html += '</div>';
+    cdPending.slice(0,5).forEach(function(i) {
+      var iid = JSON.stringify(i.intent_id);
+      html += '<div style="font-size:0.6rem;color:#aaa;margin:2px 0;display:flex;justify-content:space-between;align-items:center">';
+      html += '<span style="color:#c4b5fd">' + i.player_id + '</span>';
+      html += '<span> ' + i.package_amount_diamonds + '💎 $' + i.expected_usd + ' ' + i.crypto_symbol + '</span>';
+      if (i.tx_hash) html += '<span style="color:#555;font-size:0.55rem"> ' + i.tx_hash.slice(0,10) + '...</span>';
+      html += '<div style="display:flex;gap:3px">';
+      html += '<button onclick="_adminConfirmDeposit('+iid+')" style="font-size:0.55rem;padding:1px 4px;border-radius:3px;background:#0f1a0f;border:1px solid #1a3a1a;color:#4ade80;cursor:pointer">Credit</button>';
+      html += '<button onclick="_adminRejectDeposit('+iid+')" style="font-size:0.55rem;padding:1px 4px;border-radius:3px;background:#1a0a0a;border:1px solid #3a0a0a;color:#f87171;cursor:pointer">Reject</button>';
+      html += '</div></div>';
+    });
+    html += '</div>';
+  }
   // Recent events
   var evs = (eData.events||[]).slice(-8).reverse();
   if (evs.length) {
@@ -4972,6 +4998,25 @@ async function _adminAckAlert(alertId) {
   } catch(_e){ showToast('Network error','error'); }
 }
 
+async function _adminConfirmDeposit(intentId) {
+  if (!confirm('Credit diamonds for deposit '+intentId+'?')) return;
+  try {
+    var r = await _pbFetch('/api/admin/crypto/deposits/confirm',{ method:'POST', body:JSON.stringify({ intentId }) });
+    var d = await r.json();
+    if (d.ok) { showToast(d.idempotent?'Already credited':'Deposit credited 💎 '+d.diamonds,'success'); _adminLoad(); }
+    else showToast((d.error||'Credit failed').replace(/_/g,' '),'error');
+  } catch(_e){ showToast('Network error','error'); }
+}
+async function _adminRejectDeposit(intentId) {
+  var reason = prompt('Reject reason:');
+  if (!reason) return;
+  try {
+    var r = await _pbFetch('/api/admin/crypto/deposits/reject',{ method:'POST', body:JSON.stringify({ intentId, reason }) });
+    var d = await r.json();
+    if (d.ok) { showToast('Deposit rejected','success'); _adminLoad(); }
+    else showToast((d.error||'Reject failed').replace(/_/g,' '),'error');
+  } catch(_e){ showToast('Network error','error'); }
+}
 async function _adminDismissAlert(alertId) {
   try {
     var r = await _pbFetch('/api/admin/risk-alerts/dismiss',{ method:'POST', body:JSON.stringify({ alertId }) });
