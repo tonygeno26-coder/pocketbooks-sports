@@ -245,3 +245,20 @@ CREATE TABLE IF NOT EXISTS weekly_player_snapshots (
 );
 CREATE INDEX IF NOT EXISTS idx_snapshots_week   ON weekly_player_snapshots(club_id, rollover_week);
 CREATE INDEX IF NOT EXISTS idx_snapshots_player ON weekly_player_snapshots(player_id);
+
+-- ── club_staff_tokens ─────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS club_staff_tokens (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  club_id      TEXT NOT NULL,
+  user_id      TEXT NOT NULL,
+  staff_role   TEXT NOT NULL
+               CHECK (staff_role IN ('owner','full_admin','settlement_manager','risk_viewer','view_only')),
+  token_hash   TEXT UNIQUE NOT NULL,
+  label        TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_used_at TIMESTAMPTZ,
+  revoked      BOOLEAN DEFAULT FALSE,
+  UNIQUE(club_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_staff_tokens_club ON club_staff_tokens(club_id);
+CREATE INDEX IF NOT EXISTS idx_staff_tokens_hash ON club_staff_tokens(token_hash) WHERE NOT revoked;

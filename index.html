@@ -1565,6 +1565,79 @@ async function runSettlementReconciliationAudit() {
   } catch(e) { console.error('[settlement reconciliation] error:', e.message); }
 }
 window.runSettlementReconciliationAudit = runSettlementReconciliationAudit;
+
+// ── CLIENT PERMISSION ENGINE (mirrors backend) ─────────────────────────────────────────────────
+
+var _ROLE_LEVELS_CLIENT = { owner:5, full_admin:4, settlement_manager:3, risk_viewer:2, view_only:1 };
+var _ACTION_MIN_LEVEL_CLIENT = {
+  settle_player:3, weekly_rollover:3, approve_cancel:4, deny_cancel:4,
+  set_player_limits:4, add_player:4, remove_player:5, manage_staff:5,
+  view_host_dashboard:1, view_active_bets:1, view_history:1,
+  view_exposure:2, view_settlement_preview:2, view_player_limits:2, grade_trigger:4
+};
+
+// Current session staff role (set from club membership or token)
+var _currentStaffRole = 'owner'; // default: owner until permissions loaded
+
+function setStaffRole(role) {
+  if (!_ROLE_LEVELS_CLIENT[role]) { console.warn('[permissions] unknown role:', role); return; }
+  _currentStaffRole = role;
+  console.log('[permissions] staff role set:', role);
+  _applyPermissionGates();
+}
+
+function canDoAction(action, role) {
+  var r = role || _currentStaffRole;
+  var rl = _ROLE_LEVELS_CLIENT[r]; var ml = _ACTION_MIN_LEVEL_CLIENT[action];
+  if (!rl || ml===undefined) return false;
+  return rl >= ml;
+}
+
+// Apply permission gates to DOM: hide/disable buttons the current role cannot use
+function _applyPermissionGates() {
+  var role = _currentStaffRole;
+  // Map data-perm attribute on buttons to action names
+  document.querySelectorAll('[data-perm]').forEach(function(el) {
+    var action = el.getAttribute('data-perm');
+    var allowed = canDoAction(action, role);
+    el.style.display  = allowed ? '' : 'none';
+    el.disabled       = !allowed;
+    el.title          = allowed ? '' : 'Not permitted for role: '+role;
+  });
+  console.log('[permissions] gates applied for role:', role);
+}
+
+// Fetch staff role from backend (looks up club_members.staff_role)
+async function loadStaffRole() {
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+  var cid  = club.id || club.clubId || null;
+  if (!cid) return;
+  try {
+    var r = await fetch('/api/permissions/roles');
+    var data = await r.json();
+    if (data.ok) console.log('[permissions] available roles:', data.roles.map(function(r){ return r.role; }).join(', '));
+  } catch(_e) {}
+}
+
+async function checkMyPermission(action) {
+  try {
+    var resp = await fetch('/api/permissions/check', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ role:_currentStaffRole, action })
+    });
+    var data = await resp.json();
+    console.log('[permissions]', action, '->', data.allowed ? '✅ permitted' : '❌ denied ('+data.reason+')');
+    return data;
+  } catch(e) {
+    console.warn('[permissions] check failed:', e.message);
+    return { allowed:false, reason:'network_error' };
+  }
+}
+
+window.setStaffRole       = setStaffRole;
+window.canDoAction        = canDoAction;
+window.loadStaffRole      = loadStaffRole;
+window.checkMyPermission  = checkMyPermission;
 window.enableHostDbPrimary        = function(){ _setHostDbPrimary(true);  return 'HOST_DB_PRIMARY=true'; };
 window.disableHostDbPrimary       = function(){ _setHostDbPrimary(false); return 'HOST_DB_PRIMARY=false'; };
 window.checkHostDbPrimaryStatus   = function(){ return { enabled: _HOST_DB_PRIMARY }; };
@@ -4418,7 +4491,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 2e928be · May 18, 10:12 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 93de688 · May 18, 10:19 PM</span>
 </div>
 
 })();
