@@ -4766,7 +4766,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 96c8115 · May 19, 04:20 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 9d1c044 · May 19, 04:26 AM</span>
 </div>
 
 })();
@@ -4814,16 +4814,18 @@ async function _adminLoad() {
   try {
     var cl = {}; try{ cl=JSON.parse(localStorage.getItem('pb-club')||'{}'); }catch(_e){}
     var cid = cl.id||cl.clubId||'';
-    var [hResp,dResp,jResp,eResp] = await Promise.all([
+    var [hResp,dResp,jResp,eResp,raResp] = await Promise.all([
       fetch('/api/health'),
       _pbFetch('/api/admin/diagnostics'),
       _pbFetch('/api/admin/jobs?limit=20'),
-      _pbFetch('/api/events?clubId='+encodeURIComponent(cid)+'&limit=25')
+      _pbFetch('/api/events?clubId='+encodeURIComponent(cid)+'&limit=25'),
+      _pbFetch('/api/admin/risk-alerts?status=open&limit=20')
     ]);
-    _adminPanelState.health = await hResp.json().catch(function(){ return null; });
-    _adminPanelState.diag   = await dResp.json().catch(function(){ return null; });
-    _adminPanelState.jobs   = await jResp.json().catch(function(){ return null; });
-    _adminPanelState.events = await eResp.json().catch(function(){ return null; });
+    _adminPanelState.health  = await hResp.json().catch(function(){ return null; });
+    _adminPanelState.diag    = await dResp.json().catch(function(){ return null; });
+    _adminPanelState.jobs    = await jResp.json().catch(function(){ return null; });
+    _adminPanelState.events  = await eResp.json().catch(function(){ return null; });
+    _adminPanelState.alerts  = await raResp.json().catch(function(){ return null; });
   } catch(_e){ console.warn('[admin panel] load error:', _e.message); }
   _adminRender();
 }
@@ -4891,6 +4893,29 @@ function _adminRender() {
     });
     html += '</div>';
   }
+  // Risk alerts section
+  var raData   = _adminPanelState.alerts&&_adminPanelState.alerts.ok?_adminPanelState.alerts:{ alerts:[], counts:{} };
+  var raCounts = raData.counts||{};
+  var openAlerts = (raData.alerts||[]).filter(function(a){ return a.status==='open'; }).slice(0,10);
+  if (openAlerts.length || raCounts.open>0) {
+    var totalOpen = raCounts.open||openAlerts.length;
+    var highCount = raCounts.high||0;
+    html += '<div style="border-top:1px solid #1a1a1a;padding:4px 14px 6px">';
+    html += '<div style="font-size:0.62rem;font-weight:800;color:#fbbf24;margin-bottom:3px">⚠️ RISK ALERTS (' + totalOpen + ' open' + (highCount?' | '+highCount+' HIGH':'') + ')</div>';
+    openAlerts.forEach(function(a) {
+      var sevC = { high:'#ef4444',medium:'#f59e0b',low:'#6b7280' }[a.severity]||'#555';
+      var aid  = JSON.stringify(a.alert_id);
+      html += '<div style="font-size:0.6rem;color:#aaa;margin:2px 0;display:flex;justify-content:space-between;align-items:center">';
+      html += '<span><span style="color:'+sevC+';font-weight:800">'+a.severity.toUpperCase()+'</span> ';
+      html +=   (a.type||'').replace(/_/g,' ') + ' ×' + (a.count||1);
+      if (a.actor_id) html += ' <span style="color:#555">' + a.actor_id + '</span>';
+      html += '</span><div style="display:flex;gap:3px">';
+      html += '<button onclick="_adminAckAlert('+aid+')" style="font-size:0.55rem;padding:1px 4px;border-radius:3px;background:#0f1a2a;border:1px solid #1a2a3a;color:#60a5fa;cursor:pointer">Ack</button>';
+      html += '<button onclick="_adminDismissAlert('+aid+')" style="font-size:0.55rem;padding:1px 4px;border-radius:3px;background:#1a0a0a;border:1px solid #2a0a0a;color:#9ca3af;cursor:pointer">Dismiss</button>';
+      html += '</div></div>';
+    });
+    html += '</div>';
+  }
   // Recent events
   var evs = (eData.events||[]).slice(-8).reverse();
   if (evs.length) {
@@ -4935,6 +4960,24 @@ async function _adminRetryJob(jobId) {
     var d = await r.json();
     if (d.ok) { showToast('Job re-queued','success'); _adminLoad(); }
     else showToast(({ job_not_dead:'Job is not dead', job_not_found:'Job not found' }[d.error]||d.error||'Retry failed').replace(/_/g,' '),'error');
+  } catch(_e){ showToast('Network error','error'); }
+}
+
+async function _adminAckAlert(alertId) {
+  try {
+    var r = await _pbFetch('/api/admin/risk-alerts/ack',{ method:'POST', body:JSON.stringify({ alertId }) });
+    var d = await r.json();
+    if (d.ok) { showToast('Alert acknowledged','success'); _adminLoad(); }
+    else showToast((d.error||'Ack failed').replace(/_/g,' '),'error');
+  } catch(_e){ showToast('Network error','error'); }
+}
+
+async function _adminDismissAlert(alertId) {
+  try {
+    var r = await _pbFetch('/api/admin/risk-alerts/dismiss',{ method:'POST', body:JSON.stringify({ alertId }) });
+    var d = await r.json();
+    if (d.ok) { showToast('Alert dismissed','success'); _adminLoad(); }
+    else showToast((d.error||'Dismiss failed').replace(/_/g,' '),'error');
   } catch(_e){ showToast('Network error','error'); }
 }
 
