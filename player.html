@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'b984631';
-window.PBS_BUILD_DATE = '2026-05-19T06:51:58.244Z';
+window.PBS_BUILD_SHA = 'cf4e5a6';
+window.PBS_BUILD_DATE = '2026-05-19T06:58:40.656Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -6035,6 +6035,84 @@ async function _acquireSessionToken(actorId, role, clubId) {
   return null;
 }
 window._acquireSessionToken = _acquireSessionToken;
+
+// _verifyOrRefreshSession: called on boot + before sensitive actions
+// - If token present: verify via /api/auth/verify
+// - If near expiry (<30min): rotate via /api/auth/refresh
+// - If revoked/invalid: clear token, force dev flow
+var _SESSION_REFRESH_THRESHOLD_SEC = 30 * 60; // refresh if <30min left
+
+async function _verifyOrRefreshSession() {
+  var token = null;
+  try { token = localStorage.getItem('pb-session-token'); } catch(_e){}
+  if (!token) return { ok:false, reason:'no_token' };
+
+  try {
+    var resp = await _pbFetch('/api/auth/verify');
+    var data = await resp.json();
+    if (!data.ok) {
+      var hardErrors = ['session_revoked','session_not_found','legacy_token_missing_jti',
+                        'session_claim_mismatch','invalid_token'];
+      if (hardErrors.includes(data.error)) {
+        console.warn('[session] '+data.error+' — clearing stored token');
+        try { localStorage.removeItem('pb-session-token'); } catch(_e){}
+        try { localStorage.removeItem('pb-actor-role'); } catch(_e){}
+        return { ok:false, reason:data.error, cleared:true };
+      }
+      if (data.error === 'expired_token') {
+        return _refreshSession();
+      }
+      return { ok:false, reason:data.error };
+    }
+    // Check expiry: if near threshold, rotate proactively
+    // Parse exp from token (no crypto needed — just decode payload)
+    try {
+      var parts = token.split('.');
+      if (parts.length === 3) {
+        var pl = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+        var secsLeft = pl.exp - Math.floor(Date.now()/1000);
+        if (secsLeft > 0 && secsLeft < _SESSION_REFRESH_THRESHOLD_SEC) {
+          console.log('[session] near expiry ('+secsLeft+'s left) — refreshing');
+          return _refreshSession();
+        }
+      }
+    } catch(_e){}
+    return { ok:true, actor:data };
+  } catch(_e) {
+    console.warn('[session] verify failed (network):', _e.message);
+    return { ok:false, reason:'network_error' };
+  }
+}
+
+async function _refreshSession() {
+  try {
+    var resp = await _pbFetch('/api/auth/refresh', { method:'POST' });
+    var data = await resp.json();
+    if (data.ok && data.token) {
+      localStorage.setItem('pb-session-token', data.token);
+      console.log('[session] refreshed newJti='+data.jti);
+      return { ok:true, refreshed:true, jti:data.jti };
+    }
+    console.warn('[session] refresh failed:', data.error);
+    return { ok:false, reason:data.error };
+  } catch(_e) {
+    return { ok:false, reason:'network_error' };
+  }
+}
+
+async function _logout() {
+  try {
+    await _pbFetch('/api/auth/logout', { method:'POST' });
+  } catch(_e){}
+  try { localStorage.removeItem('pb-session-token'); } catch(_e){}
+  try { localStorage.removeItem('pb-actor-role'); } catch(_e){}
+  console.log('[session] logged out — token cleared');
+  return { ok:true };
+}
+
+window._verifyOrRefreshSession = _verifyOrRefreshSession;
+window._refreshSession         = _refreshSession;
+window._logout                 = _logout;
 // ────────────────────────────────────────────────────────────────────────────
 
 function enableBrowserGradeFallbackForSession() {
@@ -9463,7 +9541,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · b984631 · May 18, 11:51 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · cf4e5a6 · May 18, 11:58 PM</span>
 </div>
 
 })();
@@ -9769,10 +9847,19 @@ window.runMultiDevicePersistenceCheck = runMultiDevicePersistenceCheck;
 })();
 // ────────────────────────────────────────────────────────────────────────────
 
-// Initialize grading authority badge on page load
+// Initialize grading authority badge + verify session on page load
 document.addEventListener('DOMContentLoaded', function() {
   _updateGradingSourceBadge(_GRADING_MODE === 'server_authoritative' ? 'Server' : 'BrowserFallback DEV');
   console.log('[grading authority] init mode:', _GRADING_MODE);
+  // Verify session if token stored
+  try {
+    if (localStorage.getItem('pb-session-token')) {
+      _verifyOrRefreshSession().then(function(r) {
+        if (r.cleared) console.warn('[session] token was revoked/invalid — re-auth required');
+        else if (r.refreshed) console.log('[session] token auto-refreshed on boot');
+      }).catch(function(_e){});
+    }
+  } catch(_e){}
 });
 
 </script>
