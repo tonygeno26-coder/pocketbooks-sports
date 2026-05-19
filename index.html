@@ -4082,6 +4082,11 @@ function _phasePSelectPeriod(periodId) {
     renderSettlements();
     return;
   }
+  _phasePReloadPeriodPayments(periodId);
+}
+
+// Re-fetch payments for a period without toggling deselect
+function _phasePReloadPeriodPayments(periodId) {
   _phasePState.selectedPeriodId = periodId;
   _phasePState.playerBalances   = null;
   _pbFetch('/api/host/settlements/'+encodeURIComponent(periodId)+'/payments')
@@ -4217,7 +4222,7 @@ function _phasePRecordPayment(playerId) {
     }).then(function(r){ return r.json(); }).then(function(d) {
       if (d.ok) {
         showToast('Payment recorded (pending $'+amt.toFixed(2)+')','success');
-        _phasePSelectPeriod(periodId);
+        _phasePReloadPeriodPayments(periodId);
       } else {
         var msg = { overpayment_blocked:'Overpayment blocked (remaining $'+(d.remaining||0).toFixed(2)+')',
                     period_not_closed:'Close the week first' }[d.code] || (d.error||'Payment failed').replace(/_/g,' ');
@@ -4233,7 +4238,7 @@ function _phasePConfirmPayment(paymentId) {
   }).then(function(r){ return r.json(); }).then(function(d) {
     if (d.ok) {
       showToast(d.idempotent?'Already confirmed':'Payment confirmed — ledger written','success');
-      _phasePSelectPeriod(_phasePState.selectedPeriodId);
+      _phasePReloadPeriodPayments(_phasePState.selectedPeriodId);
     } else {
       showToast((d.error||'Confirm failed').replace(/_/g,' '),'error');
     }
@@ -4247,7 +4252,7 @@ function _phasePVoidPayment(paymentId) {
   }).then(function(r){ return r.json(); }).then(function(d) {
     if (d.ok) {
       showToast(d.reversalLedgerId?'Payment voided — reversal written':'Payment voided','success');
-      _phasePSelectPeriod(_phasePState.selectedPeriodId);
+      _phasePReloadPeriodPayments(_phasePState.selectedPeriodId);
     } else {
       showToast((d.error||'Void failed').replace(/_/g,' '),'error');
     }
@@ -4759,7 +4764,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 40e142c · May 19, 03:45 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · c4eb617 · May 19, 03:49 AM</span>
 </div>
 
 })();
