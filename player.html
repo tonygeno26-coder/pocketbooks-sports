@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '696be42';
-window.PBS_BUILD_DATE = '2026-05-19T06:17:27.853Z';
+window.PBS_BUILD_SHA = 'b4bf8be';
+window.PBS_BUILD_DATE = '2026-05-19T06:26:48.491Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -3174,9 +3174,8 @@ function confirmBet() {
       })
     };
     try {
-      var _dbResp = await fetch('/api/bets/place', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(_dbPayload)
+      var _dbResp = await _pbFetch('/api/bets/place', {
+        method: 'POST', body: JSON.stringify(_dbPayload)
       });
       var _dbData = await _dbResp.json();
       if (_dbData.ok) {
@@ -3215,9 +3214,8 @@ function confirmBet() {
             idempotencyKey: _dbPayload.idempotencyKey + '_oa'  // new key to avoid idempotency collision
           });
           try {
-            var _re2 = await fetch('/api/bets/place', {
-              method:'POST', headers:{'Content-Type':'application/json'},
-              body: JSON.stringify(_rePayload)
+            var _re2 = await _pbFetch('/api/bets/place', {
+              method:'POST', body: JSON.stringify(_rePayload)
             });
             var _rd2 = await _re2.json();
             if (_rd2.ok) {
@@ -3362,8 +3360,8 @@ async function submitDeleteRequest(ticketId) {
     var cid  = _safeId(club.id != null ? club.id : club.clubId);
     var iKey = 'CANCEL_' + ticketId + '_' + Date.now();
     try {
-      var resp = await fetch('/api/bets/cancel', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+      var resp = await _pbFetch('/api/bets/cancel', {
+        method: 'POST',
         body: JSON.stringify({ ticketId, playerId:pid, clubId:cid, idempotencyKey:iKey, reason:'player_request' })
       });
       var data = await resp.json();
@@ -4150,7 +4148,7 @@ async function runServerGrade(opts) {
     var body = { daysBack: opts.daysBack || 3 };
     if (pid) body.playerId = pid;
     if (cid) body.clubId   = cid;
-    var resp = await fetch('/api/grade/run', {
+    var resp = await _pbFetch('/api/grade/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -5953,6 +5951,30 @@ async function _autoGradePoll() {
 // Dev fallback: enableBrowserGradeFallbackForSession() required to run browser grading.
 // ════════════════════════════════════════════════════════════════════════════
 var _GRADING_MODE = 'server_authoritative'; // 'server_authoritative' | 'browser_fallback_dev'
+
+// ══ AUTH HEADER HELPER ══════════════════════════════════════════════════════════════════════
+function _getActorHeaders() {
+  var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}');  } catch(_e){}
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');    } catch(_e){}
+  var pid  = String(pl.id  != null ? pl.id  : pl.username || '').trim();
+  var cid  = String(club.id != null ? club.id : club.clubId || '').trim();
+  var role = (pl.role || pl.isHost ? 'player' : 'player');  // frontend defaults to player; host sets role in localStorage
+  try { if (localStorage.getItem('pb-actor-role')) role = localStorage.getItem('pb-actor-role'); } catch(_e){}
+  return {
+    'Content-Type': 'application/json',
+    'X-Actor-Id':   pid  || 'anonymous',
+    'X-Club-Id':    cid  || '',
+    'X-Actor-Role': role || 'player'
+  };
+}
+
+// _pbFetch: wraps fetch() with auth headers for all API calls
+async function _pbFetch(url, opts) {
+  opts = opts || {};
+  var headers = Object.assign(_getActorHeaders(), opts.headers || {});
+  return fetch(url, Object.assign({}, opts, { headers }));
+}
+// ────────────────────────────────────────────────────────────────────────────
 
 function enableBrowserGradeFallbackForSession() {
   _GRADING_MODE = 'browser_fallback_dev';
@@ -9380,7 +9402,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 696be42 · May 18, 11:17 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · b4bf8be · May 18, 11:26 PM</span>
 </div>
 
 })();
@@ -9654,7 +9676,7 @@ window.runMultiDevicePersistenceCheck = runMultiDevicePersistenceCheck;
   };
   window.forceLiveOddsRefresh = async function() {
     try {
-      var r = await fetch('/api/markets/refresh', { method:'POST' });
+      var r = await _pbFetch('/api/markets/refresh', { method:'POST' });
       var d = await r.json();
       console.log('[live cache] forced refresh:', JSON.stringify(d));
       return d;
