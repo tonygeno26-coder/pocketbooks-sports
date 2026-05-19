@@ -1135,13 +1135,21 @@ async function renderSettlementPreviewFromDb() {
     players.forEach(function(p) {
       var isOwes = p.owesHost > 0;
       var color  = isOwes ? 'var(--red,#ff3d57)' : (p.hostOwes>0 ? 'var(--green,#00ff88)' : '#666');
-      var amtTxt = isOwes ? '−$'+p.owesHost.toFixed(2)+' owes' : (p.hostOwes>0 ? '+$'+p.hostOwes.toFixed(2)+' owed' : 'Even');
+      var amtTxt   = isOwes ? '−$'+p.owesHost.toFixed(2)+' owes' : (p.hostOwes>0 ? '+$'+p.hostOwes.toFixed(2)+' owed' : 'Even');
+      var canSettle = (p.owesHost > 0 || p.hostOwes > 0);
+      var settleBtn = canSettle
+        ? '<button onclick="openSettlePlayerModal('+JSON.stringify(p.playerId)+','+JSON.stringify(p.username)+','+p.owesHost+','+p.hostOwes+')"'+
+          ' style="font-size:0.65rem;font-weight:800;padding:4px 10px;border-radius:10px;border:1px solid '+color+';background:transparent;color:'+color+';cursor:pointer;white-space:nowrap">🤝 Settle</button>'
+        : '';
       html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--border,#2a2a2a)">' +
-        '<div>' +
+        '<div style="min-width:0;flex:1">' +
           '<div style="font-size:0.82rem;font-weight:700">'+p.username+'</div>' +
           (p.openRisk>0 ? '<div style="font-size:0.62rem;color:#666;margin-top:2px">🔒 $'+p.openRisk.toFixed(2)+' open risk</div>' : '') +
         '</div>' +
-        '<div style="font-size:0.88rem;font-weight:900;color:'+color+'">'+amtTxt+'</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">' +
+          '<div style="font-size:0.88rem;font-weight:900;color:'+color+'">'+amtTxt+'</div>' +
+          settleBtn +
+        '</div>' +
       '</div>';
     });
 
@@ -1197,6 +1205,111 @@ async function runSettlementDbAudit() {
 }
 window.renderSettlementPreviewFromDb = renderSettlementPreviewFromDb;
 window.runSettlementDbAudit          = runSettlementDbAudit;
+
+// ── SETTLEMENT EXECUTION (Phase C Step 4) ────────────────────────────────────────────────
+
+function _buildSettlementWeek() {
+  // Returns YYYY-MM-DD of the most recent Sunday
+  var d = new Date(); d.setDate(d.getDate() - d.getDay()); return d.toISOString().slice(0,10);
+}
+
+function _buildIdempotencyKey(clubId, playerId, direction, week) {
+  return 'SETTLE_'+clubId+'_'+playerId+'_'+week+'_'+direction.replace('_','')+'_'+Date.now();
+}
+
+async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes) {
+  // Remove existing modal
+  var ex = document.getElementById('_settle_modal'); if (ex) ex.remove();
+
+  var direction = owesHost > 0 ? 'player_paid_host' : 'host_paid_player';
+  var maxAmt    = owesHost > 0 ? owesHost : hostOwes;
+  var label     = owesHost > 0
+    ? playerName + ' owes host $'+owesHost.toFixed(2)
+    : 'Host owes '+playerName+' $'+hostOwes.toFixed(2);
+  var color     = owesHost > 0 ? 'var(--red,#ff3d57)' : 'var(--green,#00ff88)';
+
+  var ov = document.createElement('div');
+  ov.id = '_settle_modal';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.65);display:flex;align-items:flex-end;justify-content:center';
+  ov.innerHTML = '<div style="background:#111;width:100%;max-width:430px;border-radius:20px 20px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px))">'+
+    '<div style="font-size:1rem;font-weight:900;margin-bottom:6px">Settle: '+playerName+'</div>'+
+    '<div style="font-size:0.78rem;color:'+color+';font-weight:700;margin-bottom:16px">'+label+'</div>'+
+    '<div style="margin-bottom:14px">'+
+      '<label style="font-size:0.7rem;color:#666;text-transform:uppercase;letter-spacing:0.5px">Amount ($)</label>'+
+      '<input id="_settle_amount" type="number" step="0.01" min="0.01" max="'+maxAmt+'" value="'+maxAmt.toFixed(2)+'"'+
+        ' style="width:100%;background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:10px 12px;color:#fff;font-size:1rem;font-weight:700;outline:none;margin-top:4px">'+
+    '</div>'+
+    '<div style="margin-bottom:16px">'+
+      '<label style="font-size:0.7rem;color:#666;text-transform:uppercase;letter-spacing:0.5px">Note (optional)</label>'+
+      '<input id="_settle_note" type="text" placeholder="Cash, Venmo, etc."'+
+        ' style="width:100%;background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:8px 12px;color:#fff;font-size:0.85rem;outline:none;margin-top:4px">'+
+    '</div>'+
+    '<div style="display:flex;gap:10px">'+
+      '<button onclick="document.getElementById(\'_settle_modal\').remove()" style="flex:1;height:48px;background:#1a1a1a;border:1px solid #333;border-radius:12px;color:#888;font-weight:700;cursor:pointer">Cancel</button>'+
+      '<button id="_settle_confirm_btn" style="flex:2;height:48px;background:var(--green,#00c853);border:none;border-radius:12px;color:#000;font-size:0.95rem;font-weight:900;cursor:pointer">Confirm Settlement</button>'+
+    '</div>'+
+  '</div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
+
+  document.getElementById('_settle_confirm_btn').addEventListener('click', async function() {
+    var amtEl  = document.getElementById('_settle_amount');
+    var noteEl = document.getElementById('_settle_note');
+    var amt    = parseFloat(amtEl.value);
+    if (isNaN(amt) || amt<=0 || amt>maxAmt+0.01) { amtEl.style.borderColor='red'; return; }
+    amtEl.style.borderColor='#333';
+    var btn = document.getElementById('_settle_confirm_btn');
+    btn.textContent = 'Processing...'; btn.disabled = true;
+
+    var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+    var cid  = club.id || club.clubId || null;
+    var week = _buildSettlementWeek();
+    var iKey = _buildIdempotencyKey(cid||'?', playerId, direction, week);
+
+    try {
+      var resp = await fetch('/api/host/settle-player', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ clubId:cid, playerId, amount:amt, direction,
+          settlementWeek:week, note:noteEl.value||null, idempotencyKey:iKey })
+      });
+      var data = await resp.json();
+      if (!data.ok) throw new Error(data.error || JSON.stringify(data.errors));
+      ov.remove();
+      // Refresh DB views
+      try { await renderSettlementPreviewFromDb(); } catch(_e){}
+      try { await loadHostDashboardFromDb('post_settlement'); } catch(_e){}
+      if (typeof showToastHost === 'function') showToastHost('✅ Settlement recorded: $'+amt.toFixed(2));
+      console.log('[settlement execution] ok ledgerEntryId='+data.ledgerEntryId+' direction='+direction+' amount='+amt);
+    } catch(e) {
+      btn.textContent = 'Confirm Settlement'; btn.disabled = false;
+      if (typeof showToastHost === 'function') showToastHost('❌ Settlement failed: '+e.message);
+      console.error('[settlement execution] error:', e.message);
+    }
+  });
+}
+window.openSettlePlayerModal = openSettlePlayerModal;
+
+async function runSettlementExecutionAudit() {
+  console.log('[settlement execution audit] ─── START ───');
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+  var cid  = club.id || club.clubId || null;
+  try {
+    var qs = cid ? '?clubId='+encodeURIComponent(cid) : '';
+    var r1 = await fetch('/api/host/settlements-preview'+qs).then(function(r){ return r.json(); });
+    var r2 = await fetch('/api/mirror/audit/ledger?limit=10').then(function(r){ return r.json(); });
+    var settlements = (r2.recent||[]).filter(function(e){ return e.type==='settlement'; });
+    console.log('[settlement execution audit]',
+      '\n  clubId:           ', cid||'(none)',
+      '\n  previewPlayers:   ', (r1.players||[]).length,
+      '\n  playersOwe:       ', r1.totals ? '$'+r1.totals.playersOwe : 'n/a',
+      '\n  hostOwes:         ', r1.totals ? '$'+r1.totals.hostOwes   : 'n/a',
+      '\n  ledgerSettlements:', settlements.length,
+      '\n  recentSettlement: ', settlements[0] ? settlements[0].id+' $'+settlements[0].amount : '(none)'
+    );
+    return { preview: r1, settlements };
+  } catch(e) { console.error('[settlement execution audit] error:', e.message); }
+}
+window.runSettlementExecutionAudit = runSettlementExecutionAudit;
 window.enableHostDbPrimary        = function(){ _setHostDbPrimary(true);  return 'HOST_DB_PRIMARY=true'; };
 window.disableHostDbPrimary       = function(){ _setHostDbPrimary(false); return 'HOST_DB_PRIMARY=false'; };
 window.checkHostDbPrimaryStatus   = function(){ return { enabled: _HOST_DB_PRIMARY }; };
@@ -4050,7 +4163,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 4be2a11 · May 18, 09:42 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · e011b6d · May 18, 09:53 PM</span>
 </div>
 
 })();
