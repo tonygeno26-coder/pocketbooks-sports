@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '93de688';
-window.PBS_BUILD_DATE = '2026-05-19T05:19:13.354Z';
+window.PBS_BUILD_SHA = '8b29de4';
+window.PBS_BUILD_DATE = '2026-05-19T05:33:45.430Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -5247,6 +5247,94 @@ function revertFutureGrades() {
 }
 window.revertFutureGrades = revertFutureGrades;
 
+// ── PLAYER DASHBOARD DB READ (Phase C) ──────────────────────────────────────────────────
+async function loadPlayerDashboardFromDb() {
+  var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
+  var pid  = _safeId(pl.id != null ? pl.id : pl.username);
+  var cid  = _safeId(club.id != null ? club.id : club.clubId);
+  if (!pid) return { ok:false, fallbackReason:'no_player_id' };
+  try {
+    var qs   = '?playerId='+encodeURIComponent(pid)+(cid?'&clubId='+encodeURIComponent(cid):'');
+    var resp = await fetch('/api/player/dashboard'+qs);
+    var data = await resp.json();
+    if (!data.ok || !data.balance) throw new Error(data.error||'missing balance');
+    var b = data.balance;
+    if (isNaN(b.availableBalance)) throw new Error('NaN balance from DB');
+    if (b.openRisk < 0) throw new Error('negative openRisk from DB');
+    // Hydrate betTickets from DB-derived active tickets
+    var allTix = (data.tickets.active||[]).concat(data.tickets.settled||[]).concat(data.tickets.canceled||[]);
+    if (allTix.length > 0) {
+      // Only update if DB has more/equal data (stale local protection)
+      var localCount = 0; try { localCount = JSON.parse(localStorage.getItem('pb-tickets')||'[]').length; } catch(_e){}
+      if (allTix.length >= localCount) {
+        try { localStorage.setItem('pb-tickets', JSON.stringify(allTix)); betTickets = allTix; } catch(_e){}
+      }
+    }
+    syncBalanceDisplays();
+    _updatePlayerSourceBadge('db');
+    console.log('[player dashboard db] playerId='+pid+' available=$'+b.availableBalance+' openRisk=$'+b.openRisk+' active='+data.tickets.active.length);
+    return data;
+  } catch(e) {
+    console.warn('[player dashboard db] fallback to localStorage:', e.message);
+    _updatePlayerSourceBadge('localStorage');
+    return { ok:false, fallbackReason:e.message };
+  }
+}
+
+function _updatePlayerSourceBadge(source) {
+  if (!_DB_PRIMARY_READS_ENABLED) return;
+  var badge = document.getElementById('_player_source_badge');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = '_player_source_badge';
+    badge.style.cssText = 'position:fixed;bottom:68px;left:8px;z-index:9999996;font-family:monospace;font-size:0.6rem;font-weight:700;padding:3px 7px;border-radius:5px;pointer-events:none;opacity:0.85';
+    document.body.appendChild(badge);
+  }
+  var isDb = source === 'db';
+  badge.style.background = isDb ? '#0c1a2e' : '#1a0a00';
+  badge.style.border = '1px solid '+(isDb?'#2563eb':'#ea580c');
+  badge.style.color  = isDb ? '#93c5fd' : '#fdba74';
+  badge.textContent  = '👤 Player:'+(isDb?'DB':'Local');
+}
+
+async function runPlayerDashboardDbAudit() {
+  console.log('[player dashboard db audit] ─── START ───');
+  var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
+  var pid  = _safeId(pl.id != null ? pl.id : pl.username);
+  var cid  = _safeId(club.id != null ? club.id : club.clubId);
+  // Local balance
+  var localBal = calcAvailableBalance();
+  // DB balance
+  var dbData = null; var fallbackReason = null;
+  try {
+    var qs   = '?playerId='+encodeURIComponent(pid||'?')+(cid?'&clubId='+encodeURIComponent(cid):'');
+    var resp = await fetch('/api/player/dashboard'+qs);
+    dbData   = await resp.json();
+    if (!dbData.ok) fallbackReason = dbData.error;
+  } catch(e) { fallbackReason = e.message; }
+  var db = dbData && dbData.balance;
+  var delta = db ? Math.abs((db.availableBalance||0) - localBal.available) : null;
+  console.log('[player dashboard db audit]',
+    '\n  playerId:         ', pid||'(none)',
+    '\n  clubId:           ', cid||'(none)',
+    '\n  localAvailable:   $', localBal.available,
+    '\n  dbAvailable:      ', db ? '$'+db.availableBalance : 'n/a',
+    '\n  localOpenRisk:    $', localBal.openRisk,
+    '\n  dbOpenRisk:       ', db ? '$'+db.openRisk : 'n/a',
+    '\n  delta:            ', delta !== null ? '$'+delta.toFixed(2)+(delta < 0.02 ? ' ✅' : ' ⚠️') : 'n/a',
+    '\n  dbActive:         ', dbData && dbData.tickets ? dbData.tickets.active.length : 'n/a',
+    '\n  dbWeek:           ', dbData && dbData.weekly ? dbData.weekly.currentWeek+' net=$'+dbData.weekly.settledNet : 'n/a',
+    '\n  fallbackReason:   ', fallbackReason||'none',
+    '\n  status:           ', !fallbackReason && delta<0.02 ? '✅ in_sync' : '⚠️ gap'
+  );
+  return dbData;
+}
+window.loadPlayerDashboardFromDb  = loadPlayerDashboardFromDb;
+window.runPlayerDashboardDbAudit  = runPlayerDashboardDbAudit;
+// ────────────────────────────────────────────────────────────────────────────
+
 // ════════════════════════════════════════════════════════════════════════════
 // GRADE TODAY'S ACTIVE TICKETS — on-demand audit helper
 // Usage: gradeTodaysActiveTickets()   (also available as window.grade)
@@ -9040,7 +9128,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 93de688 · May 18, 10:19 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 8b29de4 · May 18, 10:33 PM</span>
 </div>
 
 })();
@@ -9244,6 +9332,8 @@ window.runMultiDevicePersistenceCheck = runMultiDevicePersistenceCheck;
     'runMultiDevicePersistenceCheck',
     'runServerGrade',
     'checkServerGradeStatus',
+    'loadPlayerDashboardFromDb',
+    'runPlayerDashboardDbAudit',
     'repairTicketGameIdentity',
     'repairAllTicketIdentities',
     'checkSupabaseMirrorStatus',
