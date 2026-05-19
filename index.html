@@ -4766,7 +4766,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · d187b41 · May 19, 04:39 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · eb83b48 · May 19, 04:51 AM</span>
 </div>
 
 })();
@@ -4814,13 +4814,14 @@ async function _adminLoad() {
   try {
     var cl = {}; try{ cl=JSON.parse(localStorage.getItem('pb-club')||'{}'); }catch(_e){}
     var cid = cl.id||cl.clubId||'';
-    var [hResp,dResp,jResp,eResp,raResp,cdResp] = await Promise.all([
+    var [hResp,dResp,jResp,eResp,raResp,cdResp,reconResp] = await Promise.all([
       fetch('/api/health'),
       _pbFetch('/api/admin/diagnostics'),
       _pbFetch('/api/admin/jobs?limit=20'),
       _pbFetch('/api/events?clubId='+encodeURIComponent(cid)+'&limit=25'),
       _pbFetch('/api/admin/risk-alerts?status=open&limit=20'),
-      _pbFetch('/api/admin/crypto/deposits?limit=10')
+      _pbFetch('/api/admin/crypto/deposits?limit=10'),
+      _pbFetch('/api/admin/crypto/reconciliation')
     ]);
     _adminPanelState.health   = await hResp.json().catch(function(){ return null; });
     _adminPanelState.diag     = await dResp.json().catch(function(){ return null; });
@@ -4828,6 +4829,7 @@ async function _adminLoad() {
     _adminPanelState.events   = await eResp.json().catch(function(){ return null; });
     _adminPanelState.alerts   = await raResp.json().catch(function(){ return null; });
     _adminPanelState.deposits = await cdResp.json().catch(function(){ return null; });
+    _adminPanelState.recon    = await reconResp.json().catch(function(){ return null; });
   } catch(_e){ console.warn('[admin panel] load error:', _e.message); }
   _adminRender();
 }
@@ -4941,6 +4943,58 @@ function _adminRender() {
       html += '<button onclick="_adminRejectDeposit('+iid+')" style="font-size:0.55rem;padding:1px 4px;border-radius:3px;background:#1a0a0a;border:1px solid #3a0a0a;color:#f87171;cursor:pointer">Reject</button>';
       html += '</div></div>';
     });
+    html += '</div>';
+  }
+  // Crypto Reconciliation section
+  var reconData = _adminPanelState.recon&&_adminPanelState.recon.ok ? _adminPanelState.recon : null;
+  if (reconData && (reconData.flaggedRows.length>0 || reconData.dailySummary.length>0)) {
+    var rfl = reconData.flaggedRows||[];
+    var rds = (reconData.dailySummary||[]).slice(0,3);
+    var rws = reconData.walletSummary||[];
+    html += '<div style="border-top:1px solid #1a1a1a;padding:4px 14px 8px">';
+    html += '<div style="font-size:0.62rem;font-weight:800;color:#f59e0b;margin-bottom:3px">';
+    html += '📊 CRYPTO RECONCILIATION';
+    if (rfl.length) html += ' | <span style="color:#f87171">'+rfl.length+' flagged</span>';
+    html += '</div>';
+    // Daily rows
+    rds.forEach(function(d) {
+      html += '<div style="font-size:0.6rem;color:#aaa;margin:2px 0;display:flex;justify-content:space-between">';
+      html += '<span style="color:#fbbf24">'+d.date+'</span>';
+      html += '<span>'+d.totalDepositIntents+' intents</span>';
+      html += '<span style="color:#a78bfa">💎 '+d.totalCreditedDiamonds+'</span>';
+      html += '<span style="color:#34d399">$'+d.totalConfirmedUsd.toFixed(2)+' conf</span>';
+      if (d.missingHashCount) html += '<span style="color:#f87171">⚠ '+d.missingHashCount+' miss</span>';
+      if (d.mismatchCount)    html += '<span style="color:#f87171">⚠ '+d.mismatchCount+' mismatch</span>';
+      html += '</div>';
+    });
+    // Wallet summary rows
+    if (rws.length) {
+      html += '<div style="font-size:0.58rem;color:#666;margin:3px 0 1px">Wallets:</div>';
+      rws.forEach(function(w) {
+        html += '<div style="font-size:0.58rem;color:#aaa;margin:1px 0;display:flex;gap:6px">';
+        html += '<span style="color:#60a5fa">'+w.cryptoSymbol+'/'+w.network+'</span>';
+        html += '<span>$'+w.confirmedUsd.toFixed(2)+' conf</span>';
+        html += '<span style="color:#a78bfa">💎 '+w.creditedDiamonds+'</span>';
+        if (w.pendingUsd)    html += '<span style="color:#fbbf24">$'+w.pendingUsd.toFixed(2)+' pend</span>';
+        if (w.mismatchCount) html += '<span style="color:#f87171">'+w.mismatchCount+' mismatch</span>';
+        html += '</div>';
+      });
+    }
+    // Flagged rows (top 5)
+    if (rfl.length) {
+      html += '<div style="font-size:0.58rem;color:#f87171;margin:3px 0 1px">⚠ Flagged:</div>';
+      rfl.slice(0,5).forEach(function(f) {
+        var iid = JSON.stringify(f.intentId);
+        html += '<div style="font-size:0.58rem;color:#aaa;margin:1px 0;display:flex;justify-content:space-between;align-items:center">';
+        html += '<span style="color:#fbbf24">'+f.playerId+'</span>';
+        html += '<span style="color:#f87171;font-size:0.55rem">'+(f.flags||[]).join(', ')+'</span>';
+        html += '<div style="display:flex;gap:2px">';
+        if (f.txHash) html += '<button onclick="_adminScanDeposit('+iid+')" style="font-size:0.52rem;padding:1px 3px;border-radius:3px;background:#0a0f1a;border:1px solid #1a2a3a;color:#60a5fa;cursor:pointer">Scan</button>';
+        html += '<button onclick="_adminConfirmDeposit('+iid+')" style="font-size:0.52rem;padding:1px 3px;border-radius:3px;background:#0f1a0f;border:1px solid #1a3a1a;color:#4ade80;cursor:pointer">Credit</button>';
+        html += '<button onclick="_adminRejectDeposit('+iid+')" style="font-size:0.52rem;padding:1px 3px;border-radius:3px;background:#1a0a0a;border:1px solid #3a0a0a;color:#f87171;cursor:pointer">Reject</button>';
+        html += '</div></div>';
+      });
+    }
     html += '</div>';
   }
   // Recent events
