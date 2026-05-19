@@ -1530,6 +1530,41 @@ async function runWeeklyHistoryAudit() {
 window.loadWeeklyHistory     = loadWeeklyHistory;
 window.openHistoricalWeek    = openHistoricalWeek;
 window.runWeeklyHistoryAudit = runWeeklyHistoryAudit;
+
+// ── SETTLEMENT RECONCILIATION AUDIT (Phase C Step 7, read-only) ────────────────────
+async function runSettlementReconciliationAudit() {
+  console.log('[settlement reconciliation] ─── START ───');
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+  var cid  = club.id || club.clubId || null;
+  try {
+    var qs   = cid ? '?clubId='+encodeURIComponent(cid) : '';
+    var resp = await fetch('/api/host/settlement-reconciliation'+qs);
+    var data = await resp.json();
+    if (!data.ok) throw new Error(data.error || 'reconciliation failed');
+    var tt = data.ticketTotals       || {};
+    var lt = data.ledgerTotals       || {};
+    var pt = data.settlementPreviewTotals || {};
+    var lr = data.latestRollover     || {};
+    console.log('[settlement reconciliation]',
+      '\n  clubId:            ', cid||'(none)',
+      '\n  ticketProfit:      $', tt.profit,
+      '\n  ticketActiveRisk:  $', tt.activeRisk,
+      '\n  ticketSettledGain: $', tt.settledGain,
+      '\n  ticketSettledLoss: $', tt.settledLoss,
+      '\n  ledgerNet:          $', lt.net,
+      '\n  ledger.settlement:  $', lt.settlement,
+      '\n  previewPlayersOwe: $', pt.playersOwe,
+      '\n  previewHostOwes:   $', pt.hostOwes,
+      '\n  previewNet:        $', pt.net,
+      '\n  latestSnapshot:    ', lr.rolloverWeek ? (lr.rolloverWeek+' net=$'+lr.net) : '(none)',
+      '\n  mismatches:        ', data.mismatches.length,
+      data.mismatches.length ? '\n  ⚠️ '+data.mismatches.map(function(m){ return m.category+' delta='+m.delta; }).join('; ') : '',
+      '\n  status:            ', data.status === 'balanced' ? '✅ BALANCED' : '❌ MISMATCH'
+    );
+    return data;
+  } catch(e) { console.error('[settlement reconciliation] error:', e.message); }
+}
+window.runSettlementReconciliationAudit = runSettlementReconciliationAudit;
 window.enableHostDbPrimary        = function(){ _setHostDbPrimary(true);  return 'HOST_DB_PRIMARY=true'; };
 window.disableHostDbPrimary       = function(){ _setHostDbPrimary(false); return 'HOST_DB_PRIMARY=false'; };
 window.checkHostDbPrimaryStatus   = function(){ return { enabled: _HOST_DB_PRIMARY }; };
@@ -4383,7 +4418,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · d3313e6 · May 18, 10:07 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 2e928be · May 18, 10:12 PM</span>
 </div>
 
 })();
