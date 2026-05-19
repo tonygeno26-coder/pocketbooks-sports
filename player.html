@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '540edab';
-window.PBS_BUILD_DATE = '2026-05-19T04:03:27.033Z';
+window.PBS_BUILD_SHA = '8fed420';
+window.PBS_BUILD_DATE = '2026-05-19T04:15:23.308Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -3986,7 +3986,95 @@ function repairAllTicketIdentities() {
   return { ticketsChecked: active.length, legsRepaired: total };
 }
 window.repairAllTicketIdentities = repairAllTicketIdentities;
-// ════════════════════════════════════════════════════════════════════════════
+
+// ── SERVER GRADING INTEGRATION (Phase C) ────────────────────────────────────────────────
+// Browser calls /api/grade/run, awaits result, hydrates from DB.
+// Browser fallback (grade()) still available in dev mode.
+
+var _serverGradeLastResult = null;
+
+async function runServerGrade(opts) {
+  opts = opts || {};
+  var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
+  var pid  = _safeId(pl.id != null ? pl.id : pl.username);
+  var cid  = _safeId(club.id != null ? club.id : club.clubId);
+
+  console.log('[server grade] starting — playerId:', pid, 'clubId:', cid);
+  try {
+    var body = { daysBack: opts.daysBack || 3 };
+    if (pid) body.playerId = pid;
+    if (cid) body.clubId   = cid;
+    var resp = await fetch('/api/grade/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    var data = await resp.json();
+    _serverGradeLastResult = data;
+
+    console.log('[server grade] done:',
+      '\n  checked:', data.checked,
+      '\n  graded:',  data.graded,
+      '\n  skipped:', data.skipped,
+      '\n  errors:',  data.errors && data.errors.length || 0
+    );
+
+    if (data.graded > 0) {
+      // Hydrate My Bets from DB after server grading
+      var hydrateResult = await _initDbPrimaryRead();
+      if (hydrateResult && hydrateResult.sourceUsed === 'db') {
+        console.log('[server grade] hydrated betTickets from DB after grading');
+        syncBalanceDisplays();
+        try { renderMyBets(); } catch(_e){}
+        try { showToast('✅ Server graded ' + data.graded + ' ticket(s)', 'success'); } catch(_e){}
+      }
+      // Update badge
+      _updateGradingSourceBadge('server');
+    }
+    return data;
+  } catch(e) {
+    console.error('[server grade] error:', e.message);
+    try { showToast('⚠️ Server grade failed: ' + e.message + ' — using browser fallback', 'warning'); } catch(_e){}
+    return { ok:false, error:e.message, graded:0, skipped:0 };
+  }
+}
+
+async function checkServerGradeStatus() {
+  try {
+    var r = await fetch('/api/grade/status').then(function(r){ return r.json(); });
+    console.log('[server grade status]',
+      '\n  enabled:', r.enabled,
+      '\n  activeTicketCount:', r.activeTicketCount,
+      '\n  lastGradedAt:', r.lastGradedAt || '(never)',
+      '\n  recentGrades:', (r.recentGrades||[]).length
+    );
+    return r;
+  } catch(e) {
+    console.warn('[server grade status] error:', e.message);
+    return { enabled:false, error:e.message };
+  }
+}
+
+function _updateGradingSourceBadge(source) {
+  if (!_DB_PRIMARY_READS_ENABLED) return;
+  var badge = document.getElementById('_grading_source_badge');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = '_grading_source_badge';
+    badge.style.cssText = 'position:fixed;bottom:52px;left:8px;z-index:9999997;font-family:monospace;font-size:0.6rem;font-weight:700;padding:3px 7px;border-radius:5px;pointer-events:none;opacity:0.85';
+    document.body.appendChild(badge);
+  }
+  var isServer = source === 'server';
+  badge.style.background = isServer ? '#0c1a2e' : '#1a0a00';
+  badge.style.border = '1px solid ' + (isServer ? '#2563eb' : '#ea580c');
+  badge.style.color  = isServer ? '#93c5fd' : '#fdba74';
+  badge.textContent  = '🧐 ' + (isServer ? 'server-grade' : 'browser-fallback');
+}
+
+window.runServerGrade            = runServerGrade;
+window.checkServerGradeStatus    = checkServerGradeStatus;
+// ────────────────────────────────────────────────────────────────────────────
 
 // Canonicalize team identifiers within `pick` and within the game's
 // home/away fields to the same full names, so the substring matcher
@@ -8952,7 +9040,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 540edab · May 18, 09:03 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 8fed420 · May 18, 09:15 PM</span>
 </div>
 
 })();
@@ -9154,6 +9242,10 @@ window.runMultiDevicePersistenceCheck = runMultiDevicePersistenceCheck;
     'checkDbPrimaryReadStatus',
     'runPhaseBReadValidation',
     'runMultiDevicePersistenceCheck',
+    'runServerGrade',
+    'checkServerGradeStatus',
+    'repairTicketGameIdentity',
+    'repairAllTicketIdentities',
     'checkSupabaseMirrorStatus',
     'gradeTodaysActiveTickets',
     'grade',
