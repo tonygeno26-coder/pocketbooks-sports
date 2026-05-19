@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '8b29de4';
-window.PBS_BUILD_DATE = '2026-05-19T05:33:45.430Z';
+window.PBS_BUILD_SHA = 'b4d6171';
+window.PBS_BUILD_DATE = '2026-05-19T05:40:13.031Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -3144,15 +3144,69 @@ function confirmBet() {
     });
   }
 
-  // Save tickets (localStorage — source of truth, Phase A)
+  // ── DB-FIRST BET PLACEMENT (Phase C) ────────────────────────────────────────────────
+  // Try backend first when DB primary mode is enabled.
+  // On success: DB is authoritative, localStorage is updated from DB response.
+  // On failure or dev mode: localStorage flow runs as fallback.
+  var _dbPlacementAttempted = false;
+  if (_DB_PRIMARY_READS_ENABLED && newTickets.length > 0) {
+    var _t0 = newTickets[0]; // primary ticket for single/parlay
+    var _pl  = {}; try { _pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
+    var _club = {}; try { _club = JSON.parse(localStorage.getItem('pb-club')||'{}');  } catch(_e){}
+    var _pid  = _safeId(_pl.id  != null ? _pl.id  : _pl.username);
+    var _cid  = _safeId(_club.id != null ? _club.id : _club.clubId);
+    var _iKey = 'BET_' + (_pid||'?') + '_' + now.replace(/[^0-9]/g,'').slice(0,14);
+    var _dbPayload = {
+      clubId: _cid, playerId: _pid, playerUsername: _pl.username || _pid,
+      betType: snap.type === 'straight' ? 'Single' : snap.type === 'parlay' ? 'Parlay' : snap.type === 'rr' ? 'RoundRobin' : 'Teaser',
+      stake: snap.risk, payout: snap.payout, potentialProfit: snap.profit,
+      idempotencyKey: _iKey,
+      legs: (_t0.selections || snap.legs || []).map(function(leg){
+        return {
+          legId: leg.legId, pick: leg.pick, market: leg.market, odds: leg.odds,
+          line: leg.line || null, side: leg.side || null,
+          canonicalGameKey: leg.canonicalGameKey || leg.canonical_game_key || '',
+          sport: leg.sport || _currentSport || 'mlb',
+          homeTeam: leg.homeTeam || '', awayTeam: leg.awayTeam || '',
+          scheduledStart: leg.scheduledStart || leg.commenceTime || null,
+          providerGameId: leg.providerGameId || null, providerName: leg.providerName || 'odds-api'
+        };
+      })
+    };
+    try {
+      var _dbResp = await fetch('/api/bets/place', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(_dbPayload)
+      });
+      var _dbData = await _dbResp.json();
+      if (_dbData.ok) {
+        _dbPlacementAttempted = true;
+        console.log('[bet placement] DB success ticketId='+_dbData.ticketId+' ledger='+_dbData.ledgerEntryId);
+        // Hydrate from DB after placement
+        try { loadPlayerDashboardFromDb(); } catch(_e){}
+      } else {
+        console.warn('[bet placement] DB rejected:', _dbData.error || JSON.stringify(_dbData.errors));
+        // Surface server errors to player
+        if (_dbData.error && (_dbData.error.includes('insufficient_balance') || _dbData.error.includes('conflict'))) {
+          closeBetConfirm();
+          showToast(_dbData.error.replace(/_/g,' '), 'error');
+          return; // DO NOT fall through to localStorage — server said no
+        }
+      }
+    } catch(_e) {
+      console.warn('[bet placement] DB fetch failed, using localStorage fallback:', _e.message);
+    }
+  }
+  // ── localStorage path (Phase A fallback or DB not enabled) ────────────────────────
   newTickets.forEach(function(t){ betTickets.unshift(t); });
   saveTickets();
 
-  // Supabase mirror: fire-and-forget after localStorage write succeeds.
-  // If mirror fails, bet is still placed correctly in localStorage.
-  newTickets.forEach(function(t) {
-    try { _mirrorTicketToBackend(t); } catch(_e) { /* never block placement */ }
-  });
+  // Mirror to Supabase (fire-and-forget) when DB placement was not attempted
+  if (!_dbPlacementAttempted) {
+    newTickets.forEach(function(t) {
+      try { _mirrorTicketToBackend(t); } catch(_e) { /* never block placement */ }
+    });
+  }
 
   // Save to hostActiveBets
   var hostBets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
@@ -9128,7 +9182,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 8b29de4 · May 18, 10:33 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · b4d6171 · May 18, 10:40 PM</span>
 </div>
 
 })();
