@@ -4764,7 +4764,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 1e5c5ee · May 19, 03:54 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 07e3e3a · May 19, 04:03 AM</span>
 </div>
 
 })();
@@ -4798,6 +4798,63 @@ async function _dispatchHostStatsRefresh(trigger) {
   setInterval(_check, 60000);
   window._checkBuildVersion = _check;
 })();
+
+// ── Phase R: System Health Badge (full_admin+ only) ──────────────────────────────────────────
+var _sysHealthBadge = null;
+var _sysHealthLastOk = true;
+
+function _renderSysHealthBadge(health) {
+  var role = ''; try { role = localStorage.getItem('pb-actor-role')||''; } catch(_e){}
+  var rankMap = { owner:5, full_admin:4, settlement_manager:3, risk_viewer:2, player:1, view_only:0 };
+  if ((rankMap[role]||0) < 4) { // only full_admin+
+    if (_sysHealthBadge) { _sysHealthBadge.style.display='none'; }
+    return;
+  }
+  if (!_sysHealthBadge) {
+    _sysHealthBadge = document.createElement('div');
+    _sysHealthBadge.id = '_sys-health-badge';
+    _sysHealthBadge.style.cssText = 'position:fixed;bottom:72px;right:8px;z-index:9999990;font-family:monospace;font-size:0.58rem;font-weight:700;padding:4px 8px;border-radius:8px;cursor:pointer;opacity:0.9;max-width:200px';
+    _sysHealthBadge.onclick = function() { window._refreshSysHealth&&window._refreshSysHealth(); };
+    if (document.body) document.body.appendChild(_sysHealthBadge);
+  }
+  var ok = health && health.ok !== false;
+  var dbOk = !health || health.dbStatus === 'connected' || health.dbStatus === 'not_configured';
+  var color = ok ? '#0c1a0c' : '#1a0c0c';
+  var border = ok ? '#15803d' : '#dc2626';
+  var text   = ok ? '#4ade80' : '#f87171';
+  var label  = ok
+    ? '♥ DB:' + (health.dbStatus||'?') + ' | Up:' + Math.round((health.uptime||0)/60) + 'm'
+    : '⚠ ' + (health.dbStatus||'error');
+  _sysHealthBadge.style.background = color;
+  _sysHealthBadge.style.border     = '1px solid ' + border;
+  _sysHealthBadge.style.color      = text;
+  _sysHealthBadge.textContent      = label;
+  _sysHealthBadge.style.display    = 'block';
+  _sysHealthBadge.title = 'Click to refresh. Odds: '+(health&&health.oddsStatus||'?');
+}
+
+async function _fetchSysHealth() {
+  try {
+    var r = await fetch('/api/health');
+    var d = await r.json();
+    _renderSysHealthBadge(d);
+    _sysHealthLastOk = !!d.ok;
+    return d;
+  } catch(_e) {
+    _renderSysHealthBadge({ ok:false, dbStatus:'unreachable' });
+  }
+}
+
+window._refreshSysHealth = function() {
+  _sysHealthBadge && (_sysHealthBadge.textContent = '↻ ...');
+  _fetchSysHealth();
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+  _fetchSysHealth();
+  setInterval(_fetchSysHealth, 90000); // refresh every 90s
+});
+// ────────────────────────────────────────────────────────────────────────────
 </script>
 </body>
 </html>
