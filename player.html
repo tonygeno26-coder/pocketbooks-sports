@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'e3b5c27';
-window.PBS_BUILD_DATE = '2026-05-18T11:06:36.753Z';
+window.PBS_BUILD_SHA = '540edab';
+window.PBS_BUILD_DATE = '2026-05-19T04:03:27.033Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -3846,834 +3846,146 @@ function _sameDateUTC(msA, msB) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ════════════════════════════════════════════════════════════════════════════
+// GRADING MATCH ENGINE — 4-priority deterministic game lookup
+// P1: providerGameId exact  →  P2: canonicalGameKey  →  P3: teams+date  →  P4: TLA legacy
+// Ambiguous at any stage = refused. Always logs [grading match audit].
+// ════════════════════════════════════════════════════════════════════════════
+
+function _normName(s) {
+  if (!s) return '';
+  return String(s).toLowerCase().replace(/\s+/g, ' ').trim().replace(/^the\s+/, '');
+}
+
 function _findGameForSelection(sel, normalizedGames, resultsMap) {
   if (!sel) return null;
 
-  // SAFETY GATE 1: if ticket commenceTime is in the future — never grade
+  // SAFETY GATE: future game never gradeable
   var selMs = _selCommenceMs(sel);
   if (selMs > 0 && selMs > Date.now()) {
-    console.log('[grade skipped]\n  reason:     future_game_not_gradeable\n  ticketId:   '+(sel._ticketId||'?')+'\n  pick:       '+(sel.pick||'-')+'\n  commenceTime: '+new Date(selMs).toISOString());
+    console.log('[grade skipped]\n  reason:     future_game_not_gradeable\n  ticketId:   '+(sel._ticketId||'?')+'\n  commenceTime: '+new Date(selMs).toISOString());
     return null;
   }
 
-  // 0. canonicalGameKey match — strongest identity, prefer over gameId
-  if (sel.canonicalGameKey) {
-    var ckMatch = null;
-    for (var ci = 0; ci < normalizedGames.length; ci++) {
-      var cg = normalizedGames[ci];
-      if (!cg) continue;
-      // Build candidate canonicalGameKey from game record
-      var cgDate = '';
-      var cgMs = _gameCommenceMs(cg);
-      if (cgMs) { try { cgDate = new Date(cgMs).toISOString().slice(0,10); } catch(_e){} }
-      var cgSport = (cg.sport || 'mlb').toUpperCase();
-      var cgAway  = (cg.away || '').toLowerCase().replace(/\s+/g,'-');
-      var cgHome  = (cg.home || '').toLowerCase().replace(/\s+/g,'-');
-      var cgKey   = [cgSport, cgAway, cgHome, cgDate].join('|');
-      if (cgKey === sel.canonicalGameKey) { ckMatch = cg; break; }
-    }
-    if (ckMatch) {
-      console.log('[game identity audit]',
-        '\n  matchMethod:    canonicalGameKey',
-        '\n  ticketId:       ', (sel._ticketId||'?'),
-        '\n  legId:          ', (sel.legId||'?'),
-        '\n  canonicalGameKey:', sel.canonicalGameKey,
-        '\n  matchedGameId:  ', (ckMatch.id||'?'),
-        '\n  matchedTeams:   ', (ckMatch.away||'?')+' @ '+(ckMatch.home||'?'),
-        '\n  matchedGameStart:', (ckMatch.commence_time||ckMatch.time||'?'),
-        '\n  matchedStatus:  ', (ckMatch.status||'completed'),
-        '\n  refusedReason:  none'
-      );
-      return ckMatch;
-    }
+  var provId  = sel.providerGameId || sel.gameId || null;
+  var cKey    = sel.canonicalGameKey || null;
+  var selHome = _normName(sel.homeTeam);
+  var selAway = _normName(sel.awayTeam);
+  var matchup = (sel.matchup || sel.game || '').toLowerCase();
+  var ticketId = sel._ticketId || '?';
+  var legId    = sel.legId || '?';
+  var result   = null;
+  var method   = 'none';
+  var reason   = null;
+  var candidateCount = 0;
+  var candidates = [];
+
+  // ── P1: providerGameId ─────────────────────────────────────────────────
+  if (provId) {
+    var p1 = normalizedGames.find(function(g){
+      return g.id === provId || g._providerGameId === provId ||
+             (g._sdioRaw && (g._sdioRaw.GameID === provId || String(g._sdioRaw.GameID) === String(provId)));
+    });
+    if (p1) { result = p1; method = 'provider_game_id'; candidateCount = 1; }
   }
 
-  // 1. Direct gameId hit (Odds API id — may not match SportsDataIO id)
-  if (sel.gameId && resultsMap[String(sel.gameId).toLowerCase()]) {
-    var gById = resultsMap[String(sel.gameId).toLowerCase()];
-    // Date cross-check even on gameId match
-    var gMs = _gameCommenceMs(gById);
-    if (selMs > 0 && gMs > 0 && !_sameDateUTC(selMs, gMs)) {
-      console.log('[grade skipped]\n  reason:     date_mismatch_refused (gameId hit but wrong date)\n  ticketId:   '+(sel._ticketId||'?')+'\n  selDate:    '+new Date(selMs).toISOString()+'\n  gameDate:   '+new Date(gMs).toISOString());
-      return null;
-    }
-    return gById;
-  }
-  var matchup = String(sel.matchup || sel.game || '').toLowerCase();
-  var selHomeRaw = String(sel.homeTeam || '').trim();
-  var selAwayRaw = String(sel.awayTeam || '').trim();
-  // Try TLA resolution against homeTeam, awayTeam, and also any tokens
-  // pulled out of the matchup string ("Angels @ Guardians").
-  var selHomeTla = _tlaForName(selHomeRaw);
-  var selAwayTla = _tlaForName(selAwayRaw);
-  if ((!selHomeTla || !selAwayTla) && matchup) {
-    // Split on ' vs ', ' @ ', or '@'
-    var parts = matchup.split(/\s+(?:vs|@)\s+|@/).map(function(s){ return s.trim(); }).filter(Boolean);
-    if (parts.length === 2) {
-      if (!selAwayTla) selAwayTla = _tlaForName(parts[0]);
-      if (!selHomeTla) selHomeTla = _tlaForName(parts[1]);
-    }
+  // ── P2: canonicalGameKey ───────────────────────────────────────────────
+  if (!result && cKey) {
+    var p2 = normalizedGames.filter(function(g){ return g._canonicalKey === cKey || g._cKey === cKey; });
+    if (p2.length === 1)      { result = p2[0]; method = 'canonical_game_key'; candidateCount = 1; }
+    else if (p2.length > 1)  { reason = 'ambiguous_match_refused'; method = 'canonical_game_key'; candidateCount = p2.length; candidates = p2; }
   }
 
-  // 2. TLA pair match (unordered) + date gate
-  var tlaCandidates = [];
-  if (selHomeTla && selAwayTla) {
-    for (var i = 0; i < normalizedGames.length; i++) {
-      var g = normalizedGames[i];
-      if (!g) continue;
-      var raw = g._sdioRaw || {};
-      var hTla = String(raw.HomeTeam || '').toUpperCase();
-      var aTla = String(raw.AwayTeam || '').toUpperCase();
-      if (!hTla || !aTla) continue;
-      var pair = [hTla, aTla].sort().join('|');
-      var selPair = [selHomeTla, selAwayTla].sort().join('|');
-      if (pair === selPair) tlaCandidates.push(g);
-    }
-  }
-  if (tlaCandidates.length === 1) {
-    // Exactly one candidate — require date match if selMs is available
-    var gMs1 = _gameCommenceMs(tlaCandidates[0]);
-    if (selMs > 0 && gMs1 > 0 && !_sameDateUTC(selMs, gMs1)) {
-      console.log('[grade skipped]\n  reason:     date_mismatch_refused\n  ticketId:   '+(sel._ticketId||'?')+'\n  pick:       '+(sel.pick||'-')+'\n  selDate:    '+new Date(selMs).toISOString()+'\n  gameDate:   '+new Date(gMs1).toISOString());
-      return null;
-    }
-    return tlaCandidates[0];
-  }
-  if (tlaCandidates.length > 1) {
-    // Multiple candidates (e.g. doubleheader) — filter to same date first
-    if (selMs > 0) {
-      var sameDayCandidates = tlaCandidates.filter(function(g) { return _sameDateUTC(selMs, _gameCommenceMs(g)); });
-      if (sameDayCandidates.length === 1) return sameDayCandidates[0];
-      if (sameDayCandidates.length > 1) {
-        console.log('[grade skipped]\n  reason:     ambiguous_match_refused ('+sameDayCandidates.length+' same-day TLA candidates)\n  ticketId:   '+(sel._ticketId||'?')+'\n  pick:       '+(sel.pick||'-'));
-        return null;
-      }
-    }
-    console.log('[grade skipped]\n  reason:     ambiguous_match_refused ('+tlaCandidates.length+' TLA candidates, no selMs to disambiguate)\n  ticketId:   '+(sel._ticketId||'?')+'\n  pick:       '+(sel.pick||'-'));
-    return null;
+  // ── P3: normalized teams + date ────────────────────────────────────────
+  if (!result && !reason && selHome && selAway) {
+    var p3 = normalizedGames.filter(function(g) {
+      var gHome = _normName(g.home); var gAway = _normName(g.away);
+      var teams = (gHome === selHome && gAway === selAway) ||
+                  (gHome === selAway && gAway === selHome);
+      if (!teams) return false;
+      var gMs = _gameCommenceMs(g);
+      return (selMs > 0 && gMs > 0) ? _sameDateUTC(selMs, gMs) : true;
+    });
+    if (p3.length === 1)      { result = p3[0]; method = 'teams_date'; candidateCount = 1; }
+    else if (p3.length > 1)  { reason = 'ambiguous_match_refused'; method = 'teams_date'; candidateCount = p3.length; candidates = p3; }
+    else if (p3.length === 0) { reason = 'no_candidate'; method = 'teams_date'; candidateCount = 0; }
   }
 
-  // 3. Substring fallback — ONLY for legacy tickets with no commenceTime
-  // AND must find exactly one candidate (ambiguous = refuse).
-  // Tickets with commenceTime skip this path to prevent wrong-date grading.
-  if (selMs > 0) {
-    // Has commenceTime — TLA path already failed, refuse rather than guess
-    console.log('[grade skipped]\n  reason:     ambiguous_match_refused (has commenceTime, TLA match failed, refusing substring fallback)\n  ticketId:   '+(sel._ticketId||'?')+'\n  pick:       '+(sel.pick||'-'));
-    return null;
+  // ── P4: TLA fallback (legacy tickets only) ─────────────────────────────
+  if (!result && !reason && matchup) {
+    var p4 = normalizedGames.filter(function(g) {
+      var gMs = _gameCommenceMs(g);
+      if (selMs > 0 && gMs > 0 && !_sameDateUTC(selMs, gMs)) return false;
+      var hLast = _normName(g.home).split(' ').pop();
+      var aLast = _normName(g.away).split(' ').pop();
+      return matchup.includes(hLast) || matchup.includes(aLast);
+    });
+    if (p4.length === 1)      { result = p4[0]; method = 'tla_fallback'; candidateCount = 1; }
+    else if (p4.length > 1)  { reason = 'ambiguous_match_refused'; method = 'tla_fallback'; candidateCount = p4.length; candidates = p4; }
+    else                     { reason = 'no_match_found'; method = 'none'; candidateCount = 0; }
   }
-  var selHome = selHomeRaw.toLowerCase();
-  var selAway = selAwayRaw.toLowerCase();
-  function _bidir(needle, hay) {
-    if (!needle || !hay) return false;
-    return needle.indexOf(hay) !== -1 || hay.indexOf(needle) !== -1;
+
+  // ── Audit log ──────────────────────────────────────────────────────────
+  console.log('[grading match audit]',
+    '\n  ticketId:       ', ticketId,
+    '\n  legId:          ', legId,
+    '\n  providerGameId: ', provId || '(none)',
+    '\n  canonicalKey:   ', cKey || '(none)',
+    '\n  matchMethod:    ', method,
+    '\n  candidateCount: ', result ? 1 : (candidates.length || candidateCount),
+    '\n  matchedGame:    ', result ? (result.away+' @ '+result.home+' ['+result.id+']') : '(none)',
+    '\n  reason:         ', reason || (result ? 'matched' : 'no_match_found')
+  );
+
+  if (!result && reason) {
+    console.log('[grade skipped]\n  reason:     '+reason+'\n  ticketId:   '+ticketId+'\n  method:     '+method+'\n  candidates: '+candidateCount);
   }
-  var substringCandidates = [];
-  for (var k = 0; k < normalizedGames.length; k++) {
-    var g2 = normalizedGames[k];
-    if (!g2) continue;
-    var gh = String(g2.home || '').toLowerCase();
-    var ga = String(g2.away || '').toLowerCase();
-    var raw2 = g2._sdioRaw || {};
-    var gTlas = [String(raw2.HomeTeam||'').toLowerCase(), String(raw2.AwayTeam||'').toLowerCase()];
-    var gShort = [String(raw2.HomeTeamName||'').toLowerCase(), String(raw2.AwayTeamName||'').toLowerCase()];
-    var ghLast = gh.split(' ').slice(-1)[0];
-    var gaLast = ga.split(' ').slice(-1)[0];
-    var matched = false;
-    if (selHome && (_bidir(selHome, gh) || _bidir(selHome, gShort[0]) || (gTlas[0] && selHome === gTlas[0]))) {
-      if (selAway && (_bidir(selAway, ga) || _bidir(selAway, gShort[1]) || (gTlas[1] && selAway === gTlas[1]))) {
-        matched = true;
-      }
-    }
-    if (!matched && matchup && (matchup.indexOf(gh) !== -1 || matchup.indexOf(ga) !== -1 ||
-                    (gShort[0] && matchup.indexOf(gShort[0]) !== -1) ||
-                    (gShort[1] && matchup.indexOf(gShort[1]) !== -1) ||
-                    (ghLast && matchup.indexOf(ghLast) !== -1) ||
-                    (gaLast && matchup.indexOf(gaLast) !== -1))) {
-      matched = true;
-    }
-    if (matched) substringCandidates.push(g2);
-  }
-  if (substringCandidates.length === 1) return substringCandidates[0];
-  if (substringCandidates.length > 1) {
-    console.log('[grade skipped]\n  reason:     ambiguous_match_refused ('+substringCandidates.length+' substring candidates, no commenceTime to disambiguate)\n  ticketId:   '+(sel._ticketId||'?')+'\n  pick:       '+(sel.pick||'-'));
-  }
-  return null;
+
+  return result || null;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// RECONCILIATION — revert invalid historical grades
-// Call once: reconcileInvalidGrades()
-// Safe: only touches tickets whose grade fails date/future checks.
-// ════════════════════════════════════════════════════════════════════════════
-function reconcileInvalidGrades() {
+// repairTicketGameIdentity — fills missing providerGameId on active tickets from gamesCache
+function repairTicketGameIdentity(ticket) {
+  var s = (ticket && ticket.status || '').toLowerCase();
+  if (s !== 'active' && s !== 'open') return { repaired: false, reason: 'only_active_tickets' };
+  var sels = ticket.selections || [];
+  var repairedCount = 0;
+  var cache = window.gamesCache || {};
+  var cacheValues = Object.values(cache);
+  sels.forEach(function(sel) {
+    if (sel.providerGameId) return;
+    var r = _findGameForSelection(sel, cacheValues, {});
+    if (r) {
+      sel.providerGameId = r.id;
+      sel._repairedAt = new Date().toISOString();
+      repairedCount++;
+    }
+  });
+  var repaired = repairedCount > 0;
+  if (repaired) {
+    console.log('[repair ticket identity] ticketId:', ticket.id, 'selectionsRepaired:', repairedCount);
+    // Persist
+    try {
+      var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
+      var idx = tickets.findIndex(function(t){ return t.id === ticket.id; });
+      if (idx >= 0) { tickets[idx].selections = sels; localStorage.setItem('pb-tickets', JSON.stringify(tickets)); }
+    } catch(_e) {}
+  }
+  return { repaired, selectionsRepaired: repairedCount };
+}
+window.repairTicketGameIdentity = repairTicketGameIdentity;
+
+// Repair all active tickets in localStorage
+function repairAllTicketIdentities() {
   var tickets = [];
-  try { tickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]'); } catch(_e) { return; }
-  var ledger  = [];
-  try { ledger  = JSON.parse(localStorage.getItem('pb-ledger')   || '[]'); } catch(_e) {}
-
-  var reverted = 0;
-  var now = new Date().toISOString();
-
-  tickets.forEach(function(t) {
-    var isSettled = t.status === 'won' || t.status === 'lost' || t.status === 'push';
-    if (!isSettled) return;
-
-    var g = t.grading || {};
-    var gradedAtMs = t.gradedAt ? new Date(t.gradedAt).getTime() : 0;
-
-    // Collect all leg commenceTimes
-    var sels = t.selections || [];
-    var legTimes = sels.map(function(s) {
-      var ct = s.scheduledStart || s.commenceTime || s.commence_time || s.time || null;
-      return ct ? new Date(ct).getTime() : 0;
-    }).filter(function(ms) { return ms > 0; });
-
-    var refuseReason = null;
-
-    // Check 1: any leg's commenceTime is in the future at grading time
-    legTimes.forEach(function(legMs) {
-      if (!refuseReason && gradedAtMs > 0 && legMs > gradedAtMs) {
-        refuseReason = 'future_game_at_grading_time';
-      }
-    });
-
-    // Check 2: graded before game could have started (gradedAt < commenceTime)
-    if (!refuseReason) {
-      legTimes.forEach(function(legMs) {
-        if (!refuseReason && gradedAtMs > 0 && gradedAtMs < legMs) {
-          refuseReason = 'graded_before_game_started';
-        }
-      });
-    }
-
-    // Check 3: matchedGameDate in snapshot doesn't match ticket's scheduledStart date
-    if (!refuseReason && g.matchedGameDate && legTimes.length) {
-      var ticketDate = new Date(legTimes[0]).toISOString().slice(0,10);
-      if (ticketDate && g.matchedGameDate && ticketDate !== g.matchedGameDate) {
-        refuseReason = 'snapshot_date_mismatch:ticket='+ticketDate+',matched='+g.matchedGameDate;
-      }
-    }
-
-    if (!refuseReason) return; // valid grade — leave it alone
-
-    var prevStatus = t.status;
-    var prevBalanceDelta = g.balanceChange || 0;
-
-    console.log('[invalid_historical_grade_reverted]',
-      '\n  ticketId:        ', t.id,
-      '\n  pick:            ', (sels[0]&&sels[0].pick) || '?',
-      '\n  prevStatus:      ', prevStatus,
-      '\n  gradedAt:        ', t.gradedAt || '?',
-      '\n  commenceTime:    ', (sels[0]&&(sels[0].scheduledStart||sels[0].commenceTime)) || '?',
-      '\n  matchedGameDate: ', g.matchedGameDate || '?',
-      '\n  balanceDelta:    ', prevBalanceDelta,
-      '\n  refuseReason:    ', refuseReason
-    );
-
-    // Revert ticket to active
-    t.status            = 'active';
-    t.gradedAt          = null;
-    t.gradingSource     = null;
-    t.finalScore        = null;
-    t.finalScoreDisplay = null;
-    t.lastSeenGameStatus = null;
-    t.grading           = null;
-    t._revertedAt       = now;
-    t._revertReason     = refuseReason;
-    t._prevStatus       = prevStatus;
-
-    // Ledger reversal entry
-    var balNow = 0; // will be recalculated by calcAvailableBalance after save
-    ledger.push({
-      id:            'REV-' + t.id + '-' + Date.now(),
-      type:          'invalid_grade_reversal',
-      ticketId:      t.id,
-      prevStatus:    prevStatus,
-      refuseReason:  refuseReason,
-      balanceDelta:  0, // no direct delta — balance re-derives from ticket status
-      createdAt:     now,
-      note:          'Auto-reverted by reconcileInvalidGrades()'
-    });
-
-    reverted++;
-  });
-
-  if (reverted > 0) {
-    localStorage.setItem('pb-tickets', JSON.stringify(tickets));
-    localStorage.setItem('pb-ledger',  JSON.stringify(ledger));
-    try { betTickets = tickets; } catch(_e) {}
-    try { syncBalanceDisplays(); } catch(_e) {}
-    try { renderMyBets(); } catch(_e) {}
-    console.log('[reconcileInvalidGrades] reverted', reverted, 'ticket(s) → active. Balance re-derived.');
-    showToast && showToast('⚠️ Reverted ' + reverted + ' invalid grade(s) → Active');
-  } else {
-    console.log('[reconcileInvalidGrades] no invalid grades found — all settled tickets look valid.');
-  }
-  return { reverted: reverted };
+  try { tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(_e) { return; }
+  var active = tickets.filter(function(t){ var s=(t.status||'').toLowerCase(); return s==='active'||s==='open'; });
+  var total = 0;
+  active.forEach(function(t){ var r = repairTicketGameIdentity(t); if(r.repaired) total += r.selectionsRepaired; });
+  console.log('[repair all tickets] repaired', total, 'leg identities across', active.length, 'active tickets');
+  return { ticketsChecked: active.length, legsRepaired: total };
 }
-// Also expose as window fn for console use
-window.reconcileInvalidGrades = reconcileInvalidGrades;
-
-// ── Supabase mirror helpers (Phase A) ─────────────────────────────────────────────
-
-// Fire-and-forget ticket mirror
-function _mirrorTicketToBackend(ticket) {
-  return fetch('/api/mirror/ticket', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(ticket)
-  }).then(function(r) {
-    console.log('[supabase mirror] ticketId:', ticket.id, 'success:', r.ok);
-  }).catch(function(e) {
-    console.warn('[supabase mirror] ticketId:', ticket.id, 'success: false error:', e.message);
-  });
-}
-
-// Fire-and-forget ledger entry mirror
-function _mirrorLedgerToBackend(entry) {
-  if (!entry || !entry.id) return Promise.resolve();
-  return fetch('/api/mirror/ledger', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(entry)
-  }).then(function(r) {
-    console.log('[supabase mirror] ledger', entry.id, 'type:', entry.type, 'success:', r.ok);
-  }).catch(function(e) {
-    console.warn('[supabase mirror] ledger', entry.id, 'success: false error:', e.message);
-  });
-}
-
-// checkSupabaseMirrorStatus — shows backend URL, env vars, mirror status
-function checkSupabaseMirrorStatus() {
-  var backendUrl = (typeof API !== 'undefined' ? API : 'unknown');
-  console.log('[supabase mirror status] backend URL:', backendUrl);
-
-  // Step 1: env-check (which service, which vars present)
-  fetch('/api/env-check')
-    .then(function(r){ return r.json(); })
-    .then(function(env){
-      console.log('[supabase mirror status] /api/env-check result:',
-        '\n  serviceName:           ', env.serviceName,
-        '\n  railwayServiceUrl:     ', env.railwayServiceUrl,
-        '\n  hasSupabaseUrl:        ', env.hasSupabaseUrl,
-        '\n  hasSupabaseServiceKey: ', env.hasSupabaseServiceKey,
-        '\n  hasDatabaseUrl:        ', env.hasDatabaseUrl,
-        '\n  hasOddsApiKey:         ', env.hasOddsApiKey,
-        '\n  nodeEnv:               ', env.nodeEnv
-      );
-      if (!env.hasSupabaseUrl || !env.hasSupabaseServiceKey) {
-        console.warn('[supabase mirror status] ❌ SUPABASE vars MISSING from service:', env.serviceName,
-          '\n  Fix: add SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY to Railway service:', env.serviceName,
-          '\n  (NOT sms-backend — these must go in pocketbooks-sports-backend)');
-      } else {
-        console.log('[supabase mirror status] ✅ Supabase vars present in correct service');
-      }
-    })
-    .catch(function(e){
-      console.warn('[supabase mirror status] /api/env-check failed:', e.message);
-    });
-
-  // Step 2: mirror audit
-  fetch('/api/mirror/audit?limit=1')
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      if (!d.enabled) {
-        console.log('[supabase mirror status] mirror NOT enabled —', d.reason);
-      } else {
-        console.log('[supabase mirror status] ✅ mirror enabled — total mirrored:', d.total_mirrored);
-      }
-    })
-    .catch(function(e){
-      console.warn('[supabase mirror status] /api/mirror/audit failed:', e.message);
-    });
-
-  return 'Checking... see console';
-}
-window.checkSupabaseMirrorStatus = checkSupabaseMirrorStatus;
-
-// Public audit helper: compares localStorage tickets vs Supabase mirror.
-// Usage: runSupabaseMirrorAudit()
-async function runSupabaseMirrorAudit() {
-  console.log('[supabase mirror audit] ─── START ───');
-  var localTickets = [];
-  try { localTickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]'); } catch(_e) {}
-  console.log('[supabase mirror audit] local pb-tickets count:', localTickets.length);
-  try {
-    var r = await fetch('/api/mirror/audit?limit=50');
-    var data = await r.json();
-    if (!data.enabled) {
-      console.log('[supabase mirror audit] Supabase not configured on backend —', data.reason);
-      return { enabled: false };
-    }
-    var mirroredIds = new Set((data.recent || []).map(function(t){ return t.id; }));
-    var localIds    = new Set(localTickets.map(function(t){ return t.id; }));
-    var onlyLocal   = localTickets.filter(function(t){ return !mirroredIds.has(t.id); });
-    var onlyMirror  = (data.recent||[]).filter(function(t){ return !localIds.has(t.id); });
-    console.log('[supabase mirror audit]',
-      '\n  totalMirrored:  ', data.total_mirrored,
-      '\n  recentChecked:  ', (data.recent||[]).length,
-      '\n  localCount:     ', localTickets.length,
-      '\n  onlyLocal:      ', onlyLocal.length, onlyLocal.map(function(t){ return t.id; }).join(', ') || '(none)',
-      '\n  onlyInMirror:   ', onlyMirror.length,
-      '\n  status:         ', onlyLocal.length === 0 ? '✅ in sync' : '⚠️ ' + onlyLocal.length + ' local ticket(s) not yet mirrored'
-    );
-    // Queue un-mirrored tickets
-    if (onlyLocal.length > 0) {
-      console.log('[supabase mirror audit] queuing', onlyLocal.length, 'un-mirrored ticket(s)...');
-      onlyLocal.forEach(function(t){ _mirrorTicketToBackend(t); });
-    }
-    return { enabled: true, total: data.total_mirrored, onlyLocal: onlyLocal.length, onlyMirror: onlyMirror.length };
-  } catch(e) {
-    console.error('[supabase mirror audit] error:', e.message);
-    return { enabled: false, error: e.message };
-  }
-}
-window.runSupabaseMirrorAudit = runSupabaseMirrorAudit;
-
-// Audit: ticket_legs mirror
-async function runTicketLegMirrorAudit() {
-  console.log('[supabase leg audit] ─── START ───');
-  var localTickets = [];
-  try { localTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(_e) {}
-  var localLegCount = localTickets.reduce(function(s,t){ return s + (Array.isArray(t.selections) ? t.selections.length : 0); }, 0);
-  console.log('[supabase leg audit] local legs:', localLegCount, '(across', localTickets.length, 'tickets)');
-  try {
-    var r = await fetch('/api/mirror/audit/legs?limit=200');
-    var data = await r.json();
-    if (!data.enabled) { console.log('[supabase leg audit] NOT enabled:', data.reason); return { enabled: false }; }
-    console.log('[supabase leg audit]',
-      '\n  localLegCount:  ', localLegCount,
-      '\n  dbLegCount:     ', data.total_mirrored,
-      '\n  recentChecked:  ', (data.recent||[]).length,
-      '\n  status:         ', data.total_mirrored >= localLegCount ? '✅ in sync' : '⚠️ DB has fewer legs than local'
-    );
-    return { enabled: true, localLegCount, dbLegCount: data.total_mirrored };
-  } catch(e) { console.error('[supabase leg audit] error:', e.message); return { enabled: false, error: e.message }; }
-}
-window.runTicketLegMirrorAudit = runTicketLegMirrorAudit;
-
-// Audit: ledger_entries mirror
-async function runLedgerMirrorAudit() {
-  console.log('[supabase ledger audit] ─── START ───');
-  var localLedger = [];
-  try { localLedger = JSON.parse(localStorage.getItem('pb-ledger')||'[]'); } catch(_e) {}
-  console.log('[supabase ledger audit] local ledger rows:', localLedger.length);
-  try {
-    var r = await fetch('/api/mirror/audit/ledger?limit=200');
-    var data = await r.json();
-    if (!data.enabled) { console.log('[supabase ledger audit] NOT enabled:', data.reason); return { enabled: false }; }
-    var dbIds    = new Set((data.recent||[]).map(function(e){ return e.id; }));
-    var localIds = new Set(localLedger.map(function(e){ return e.id; }));
-    var onlyLocal  = localLedger.filter(function(e){ return !dbIds.has(e.id); });
-    var onlyDb     = (data.recent||[]).filter(function(e){ return !localIds.has(e.id); });
-    var mismatched = [];
-    // Check amounts match
-    localLedger.forEach(function(le) {
-      var dbRow = (data.recent||[]).find(function(d){ return d.id === le.id; });
-      if (dbRow && Math.abs(parseFloat(dbRow.amount) - parseFloat(le.amount||0)) > 0.01) {
-        mismatched.push({ id: le.id, localAmount: le.amount, dbAmount: dbRow.amount });
-      }
-    });
-    console.log('[supabase ledger audit]',
-      '\n  localCount:    ', localLedger.length,
-      '\n  dbCount:       ', data.total_mirrored,
-      '\n  onlyLocal:     ', onlyLocal.length, onlyLocal.slice(0,3).map(function(e){ return e.id; }).join(', ') || '(none)',
-      '\n  onlyDb:        ', onlyDb.length,
-      '\n  mismatchedIds: ', mismatched.length, mismatched.map(function(m){ return m.id; }).join(', ') || '(none)',
-      '\n  status:        ', onlyLocal.length === 0 && mismatched.length === 0 ? '✅ in sync' : '⚠️ out of sync'
-    );
-    // Re-queue un-mirrored entries via bulk endpoint for efficiency
-    if (onlyLocal.length > 0) {
-      console.log('[supabase ledger audit] bulk-replaying', onlyLocal.length, 'un-mirrored entries...');
-      fetch('/api/mirror/ledger-bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(onlyLocal)
-      }).then(function(r){ return r.json(); })
-        .then(function(d){ console.log('[supabase ledger audit] bulk queued:', d.count, 'entries'); })
-        .catch(function(e){ console.warn('[supabase ledger audit] bulk error:', e.message); });
-    }
-    return { enabled: true, localCount: localLedger.length, dbCount: data.total_mirrored, onlyLocal: onlyLocal.length, onlyDb: onlyDb.length, mismatched: mismatched.length };
-  } catch(e) { console.error('[supabase ledger audit] error:', e.message); return { enabled: false, error: e.message }; }
-}
-window.runLedgerMirrorAudit = runLedgerMirrorAudit;
-
-// Full persistence audit: runs all 3 audits in sequence
-async function runFullPersistenceAudit() {
-  console.log('[supabase full audit] ─── FULL PERSISTENCE AUDIT ───');
-  var results = {};
-  results.tickets = await runSupabaseMirrorAudit();
-  results.legs    = await runTicketLegMirrorAudit();
-  results.ledger  = await runLedgerMirrorAudit();
-  var allEnabled = results.tickets.enabled && results.legs.enabled && results.ledger.enabled;
-  // Tickets and legs must be fully in sync.
-  // Ledger: onlyLocal = 0 and mismatched = 0 is required.
-  // DB-only ledger rows (onlyDb > 0) are allowed — debug/system entries.
-  var allSync = allEnabled &&
-    results.tickets.onlyLocal === 0 &&
-    results.legs.localLegCount <= results.legs.dbLegCount &&
-    results.ledger.onlyLocal === 0 &&
-    results.ledger.mismatched === 0;
-  var warnings = [];
-  if (results.ledger.onlyDb > 0) warnings.push('ledger has ' + results.ledger.onlyDb + ' DB-only rows (debug/system — OK)');
-  if (results.tickets.onlyMirror > 0) warnings.push('tickets has ' + results.tickets.onlyMirror + ' DB-only rows (OK)');
-  console.log('[supabase full audit] ─── RESULT:',
-    allSync ? '✅ FULLY IN SYNC' : '⚠️ SYNC GAPS FOUND',
-    '| enabled:', allEnabled,
-    warnings.length ? '| warnings: ' + warnings.join('; ') : '');
-  return Object.assign(results, { allSync: allSync, warnings: warnings });
-}
-window.runFullPersistenceAudit = runFullPersistenceAudit;
-
-// ── READ SHADOW MODE (Phase B Step 1) ────────────────────────────────────────────────
-// Reads from Supabase silently and compares vs localStorage.
-// UI always renders localStorage. DB read is compare-only, never replaces.
-
-// Pure comparison (no network calls)
-function _compareTicketSets(localTickets, dbTickets) {
-  var localIds = {}; localTickets.forEach(function(t){ if(t&&t.id) localIds[t.id]=t; });
-  var dbIds    = {}; dbTickets.forEach(function(t){ if(t&&t.id) dbIds[t.id]=t; });
-  var missingInDb    = localTickets.filter(function(t){ return t&&t.id && !dbIds[t.id]; });
-  var missingInLocal = dbTickets.filter(function(t){ return t&&t.id && !localIds[t.id]; });
-  var mismatched = [];
-  localTickets.forEach(function(lt) {
-    if (!lt||!lt.id) return;
-    var dt = dbIds[lt.id]; if (!dt) return;
-    var ls = (lt.status||'').toLowerCase(), ds = (dt.status||'').toLowerCase();
-    var lS = ls==='won'||ls==='lost'||ls==='push';
-    var dS = ds==='won'||ds==='lost'||ds==='push';
-    if (lS !== dS) mismatched.push({ id:lt.id, localStatus:ls, dbStatus:ds });
-  });
-  var inSync = !missingInDb.length && !missingInLocal.length && !mismatched.length;
-  return {
-    localCount:     localTickets.length,
-    dbCount:        dbTickets.length,
-    missingInDb:    missingInDb.map(function(t){ return t.id; }),
-    missingInLocal: missingInLocal.map(function(t){ return t.id; }),
-    mismatched:     mismatched,
-    inSync:         inSync,
-    status:         inSync ? 'in_sync' : 'gap_detected'
-  };
-}
-
-// Fetch tickets from Supabase mirror (read-only, never affects localStorage)
-async function fetchMirrorTickets(playerId, clubId) {
-  try {
-    var qs = [];
-    if (playerId) qs.push('playerId=' + encodeURIComponent(playerId));
-    if (clubId)   qs.push('clubId='   + encodeURIComponent(clubId));
-    var url = '/api/mirror/tickets' + (qs.length ? '?' + qs.join('&') : '');
-    var r = await fetch(url);
-    var data = await r.json();
-    if (!data.enabled) return { enabled: false, tickets: [], reason: data.reason };
-    return { enabled: true, tickets: Array.isArray(data.tickets) ? data.tickets : [] };
-  } catch(e) {
-    // Network/offline: return empty safely, never throws
-    return { enabled: false, tickets: [], error: e.message };
-  }
-}
-
-// Compare localStorage vs Supabase mirror and log result
-async function compareMirrorVsLocal(playerId, clubId) {
-  var localTickets = [];
-  try { localTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(_e) {}
-  var dbResult = await fetchMirrorTickets(playerId, clubId);
-  var cmp = _compareTicketSets(localTickets, Array.isArray(dbResult.tickets) ? dbResult.tickets : []);
-  return Object.assign({ dbEnabled: dbResult.enabled, dbError: dbResult.error || null }, cmp);
-}
-
-// Full read shadow audit — logs everything, queues re-mirrors for gaps
-async function runReadShadowAudit() {
-  console.log('[read shadow audit] ─── START ───');
-  // Resolve player/club from localStorage
-  var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
-  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
-  var pid  = _safeId(pl.id  != null ? pl.id  : pl.username);
-  var cid  = _safeId(club.id != null ? club.id : club.clubId);
-
-  var cmp = await compareMirrorVsLocal(pid, cid);
-
-  console.log('[read shadow audit]',
-    '\n  localCount:    ', cmp.localCount,
-    '\n  dbCount:       ', cmp.dbCount,
-    '\n  missingLocal:  ', cmp.missingInDb.length,   cmp.missingInDb.slice(0,3).join(', ')   || '(none)',
-    '\n  missingDB:     ', cmp.missingInLocal.length, cmp.missingInLocal.slice(0,3).join(', ') || '(none)',
-    '\n  mismatched:    ', cmp.mismatched.length,     cmp.mismatched.map(function(m){ return m.id+':'+m.localStatus+'≠'+m.dbStatus; }).join(', ') || '(none)',
-    '\n  status:        ', cmp.inSync ? '✅ in_sync' : '⚠️ gap_detected',
-    '\n  dbEnabled:     ', cmp.dbEnabled
-  );
-
-  // Re-queue tickets missing from DB (fire-and-forget)
-  if (cmp.missingInDb.length > 0) {
-    var localTickets = [];
-    try { localTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(_e){}
-    var toRemirror = localTickets.filter(function(t){ return cmp.missingInDb.indexOf(t.id) !== -1; });
-    console.log('[read shadow audit] re-mirroring', toRemirror.length, 'ticket(s) missing from DB...');
-    toRemirror.forEach(function(t){ try { _mirrorTicketToBackend(t); } catch(_e){} });
-  }
-
-  // UI is unaffected — still reads localStorage
-  return cmp;
-}
-window.fetchMirrorTickets    = fetchMirrorTickets;
-window.compareMirrorVsLocal  = compareMirrorVsLocal;
-window.runReadShadowAudit    = runReadShadowAudit;
-
-// ── DB PRIMARY READ ENGINE (Phase B Step 1) ──────────────────────────────────────────
-// Feature flag: off by default. Enable per-session with enableDbPrimaryReadsForSession().
-// localStorage remains fallback. UI always renders betTickets (set by this engine).
-
-var _DB_PRIMARY_READS_ENABLED = (sessionStorage.getItem('pb-db-primary') === 'true');
-
-function enableDbPrimaryReadsForSession() {
-  sessionStorage.setItem('pb-db-primary', 'true');
-  _DB_PRIMARY_READS_ENABLED = true;
-  console.log('[db primary read] enabled for this session');
-  return 'DB primary reads enabled. Reload or call _initDbPrimaryRead() to apply.';
-}
-function disableDbPrimaryReadsForSession() {
-  sessionStorage.removeItem('pb-db-primary');
-  _DB_PRIMARY_READS_ENABLED = false;
-  console.log('[db primary read] disabled');
-  return 'DB primary reads disabled. Using localStorage.';
-}
-function checkDbPrimaryReadStatus() {
-  console.log('[db primary read] enabled:', _DB_PRIMARY_READS_ENABLED);
-  return { enabled: _DB_PRIMARY_READS_ENABLED };
-}
-
-var _SAFE_DB_STATUSES = new Set(['active','open','won','lost','push','canceled','voided','deleted']);
-
-function _isDbTicketSafe(t) {
-  if (!t || !t.id || typeof t.id !== 'string') return false;
-  if (!_SAFE_DB_STATUSES.has((t.status||'').toLowerCase())) return false;
-  if (typeof t.riskAmount !== 'number' || t.riskAmount < 0) return false;
-  return true;
-}
-
-function _hydrateDbTicket(dbRow, legs) {
-  var myLegs = (legs||[]).filter(function(l){ return l.ticket_id === dbRow.id; })
-    .sort(function(a,b){ return (a.leg_index||0)-(b.leg_index||0); })
-    .map(function(l){
-      return {
-        legId: l.id, pick: l.pick||'', market: l.market||'', odds: l.odds,
-        line: l.line, sport: l.sport||'', homeTeam: l.home_team||'',
-        awayTeam: l.away_team||'', canonicalGameKey: l.canonical_game_key||'',
-        scheduledStart: l.scheduled_start||null, providerGameId: l.provider_game_id||null,
-        gameStatus: l.game_status||'', result: l.leg_result||null
-      };
-    });
-  return {
-    id: dbRow.id, type: dbRow.type||'Single', status: (dbRow.status||'active'),
-    riskAmount: parseFloat(dbRow.risk_amount)||0,
-    potentialProfit: parseFloat(dbRow.potential_profit)||0,
-    estimatedPayout: parseFloat(dbRow.estimated_payout)||0,
-    odds: dbRow.odds||null,
-    placedAt: dbRow.placed_at||new Date().toISOString(),
-    gradedAt: dbRow.graded_at||null,
-    gradingSource: dbRow.grading_source||null,
-    grading: dbRow.grading_snapshot||null,
-    selections: myLegs, _source: 'db'
-  };
-}
-
-async function _initDbPrimaryRead() {
-  if (!_DB_PRIMARY_READS_ENABLED) {
-    return { sourceUsed:'localStorage', fallbackReason:'feature_flag_off', hydrated:false, cacheUpdated:false, localCount:0, dbCount:0 };
-  }
-
-  var localTickets = [];
-  try { localTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(_e) {}
-
-  var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
-  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
-  var pid  = _safeId(pl.id  != null ? pl.id  : pl.username);
-  var cid  = _safeId(club.id != null ? club.id : club.clubId);
-
-  var dbTickets = [], dbLegs = [], dbEnabled = false, dbError = null;
-  try {
-    var qs = [];
-    if (pid) qs.push('playerId=' + encodeURIComponent(pid));
-    if (cid) qs.push('clubId='   + encodeURIComponent(cid));
-    var url = '/api/mirror/tickets-with-legs' + (qs.length ? '?' + qs.join('&') : '');
-    var resp = await fetch(url);
-    var data = await resp.json();
-    dbEnabled = !!data.enabled;
-    if (data.error) { dbError = data.error; }
-    else { dbTickets = data.tickets||[]; dbLegs = data.legs||[]; }
-  } catch(e) {
-    dbError = e.message;
-  }
-
-  // Hydrate DB rows → localStorage shape
-  var hydratedDb = dbTickets.map(function(r){ return _hydrateDbTicket(r, dbLegs); });
-
-  // Gate 1: malformed ticket rows
-  var malformed = hydratedDb.filter(function(t){ return !_isDbTicketSafe(t); });
-
-  // Gate 2: duplicate IDs in DB response
-  var dbIdCounts = {};
-  hydratedDb.forEach(function(t){ dbIdCounts[t.id] = (dbIdCounts[t.id]||0)+1; });
-  var duplicateDbIds = Object.keys(dbIdCounts).filter(function(k){ return dbIdCounts[k]>1; });
-
-  // Gate 3: malformed legs (leg with no canonicalGameKey on a graded ticket is suspicious)
-  var malformedLegs = dbLegs.filter(function(l){ return !l.id || !l.ticket_id || !l.leg_index; });
-
-  // Gate 4: active-ticket safety — never drop active local tickets
-  var localActiveIds = new Set(localTickets.filter(function(t){ var s=(t.status||'').toLowerCase(); return s==='active'||s==='open'; }).map(function(t){ return t.id; }));
-  var dbIds = new Set(hydratedDb.map(function(t){ return t.id; }));
-  var droppedActive = []; localActiveIds.forEach(function(id){ if(!dbIds.has(id)) droppedActive.push(id); });
-
-  // Gate 5: gap — DB has fewer tickets than local
-  var gapIds = localTickets.filter(function(t){ return !dbIds.has(t.id); }).map(function(t){ return t.id; });
-
-  // Decision
-  var sourceUsed = 'localStorage', fallbackReason = null, hydrated = false, cacheUpdated = false;
-
-  if (!dbEnabled || dbError) {
-    fallbackReason = dbError ? 'db_error:'+dbError : 'db_disabled';
-  } else if (malformed.length > 0) {
-    fallbackReason = 'db_malformed_rows:' + malformed.length;
-  } else if (duplicateDbIds.length > 0) {
-    fallbackReason = 'db_duplicate_ids:' + duplicateDbIds.join(',');
-  } else if (malformedLegs.length > 0) {
-    fallbackReason = 'db_malformed_legs:' + malformedLegs.length;
-  } else if (!hydratedDb.length && localTickets.length > 0) {
-    fallbackReason = 'db_empty_local_has_data';
-  } else if (droppedActive.length > 0) {
-    fallbackReason = 'db_missing_active_tickets:' + droppedActive.join(',');
-  } else if (hydratedDb.length < localTickets.length) {
-    // DB has FEWER than local — local may have un-mirrored tickets.
-    // Re-mirror the gaps, then fall back to localStorage to preserve them.
-    fallbackReason = 'gap_detected:db_has_fewer';
-    var toRemirror = localTickets.filter(function(t){ return !dbIds.has(t.id); });
-    toRemirror.forEach(function(t){ try{ _mirrorTicketToBackend(t); }catch(_e){} });
-  } else {
-    // DB count >= local count AND all safety gates pass.
-    // DB is authoritative (covers stale-local / multi-device scenario).
-    sourceUsed   = 'db';
-    hydrated     = true;
-    betTickets   = hydratedDb;
-    // Refresh localStorage cache from DB
-    try { localStorage.setItem('pb-tickets', JSON.stringify(hydratedDb)); cacheUpdated = true; } catch(_e) {}
-    syncBalanceDisplays();
-    // Log hydration recovery when DB has more tickets than local
-    if (hydratedDb.length > localTickets.length) {
-      var recovered = hydratedDb.filter(function(t){ return !new Set(localTickets.map(function(l){ return l.id; })).has(t.id); });
-      console.log('[db hydration recovery]',
-        '\n  localCount:       ', localTickets.length,
-        '\n  dbCount:          ', hydratedDb.length,
-        '\n  hydratedFromDb:   ', true,
-        '\n  ticketsRecovered: ', recovered.length,
-        '\n  sourceUsed:       ', 'db',
-        '\n  status:           \u2705 stale local hydrated from DB'
-      );
-    }
-  }
-
-  // Update debug badge (dev/preview mode only — hidden in production)
-  _updateDbSourceBadge(sourceUsed, localTickets.length, hydratedDb.length, fallbackReason);
-
-  console.log('[db primary read]',
-    '\n  enabled:         ', _DB_PRIMARY_READS_ENABLED,
-    '\n  sourceUsed:      ', sourceUsed,
-    '\n  localCount:      ', localTickets.length,
-    '\n  dbCount:         ', hydratedDb.length,
-    '\n  fallbackReason:  ', fallbackReason || 'none',
-    '\n  hydrated:        ', hydrated,
-    '\n  cacheUpdated:    ', cacheUpdated,
-    '\n  status:          ', sourceUsed === 'db' ? '✅ db_primary' : '⚠️ localStorage_fallback'
-  );
-
-  return { sourceUsed, fallbackReason, hydrated, cacheUpdated, localCount: localTickets.length, dbCount: hydratedDb.length };
-}
-window.enableDbPrimaryReadsForSession  = enableDbPrimaryReadsForSession;
-window.disableDbPrimaryReadsForSession = disableDbPrimaryReadsForSession;
-window.checkDbPrimaryReadStatus        = checkDbPrimaryReadStatus;
-window._initDbPrimaryRead              = _initDbPrimaryRead;
-// ────────────────────────────────────────────────────────────────────────────
-// ────────────────────────────────────────────────────────────────────────────
-
-// ── FRESH TEST RESET ─────────────────────────────────────────────────────────────
-function resetTicketStateForFreshTesting() {
-  // Keys to wipe (tickets, bets, ledger, settlements, balance)
-  var WIPE_KEYS = [
-    'pb-tickets', 'pb-tickets-version',
-    'hostActiveBets',
-    'pb-ledger',
-    'pb-settlements',
-    'pb-crypto-purchases',
-    'pb-diamond-ledger',
-    'pb-last-graded'
-  ];
-  // Keys to preserve (identity, club, auth, settings, limits)
-  var PRESERVE_KEYS = [
-    'pb-player', 'pb-player-settings',
-    'pb-club', 'pb-clubs', 'pb-club-players',
-    'pb-player-limits', 'pb-club-limits',
-    'pb-sports-token', 'pb-admin-token',
-    'pb-dev-email', 'pb-dev-mode',
-    'pb-balance-start'   // kept — reset separately below
-  ];
-
-  // Permanently disable auto-seeder so it never repopulates after reset
-  localStorage.setItem('pb-mock-seed-disabled', '1');
-
-  var wiped = {};
-  WIPE_KEYS.forEach(function(k) {
-    var had = localStorage.getItem(k) !== null;
-    localStorage.removeItem(k);
-    wiped[k] = had;
-  });
-
-  // Reset balance to starting default (preserve the key, reset the value)
-  var prevBalance = localStorage.getItem('pb-balance-start');
-  localStorage.setItem('pb-balance-start', String(_BASE_BALANCE));
-
-  // Clear in-memory caches
-  try { betTickets = []; } catch(_e) {}
-  try { if (window._autoGradeInterval) { clearInterval(window._autoGradeInterval); window._autoGradeInterval = null; } } catch(_e) {}
-
-  // Collect what's preserved
-  var preserved = PRESERVE_KEYS.filter(function(k) { return localStorage.getItem(k) !== null; });
-
-  console.log('[fresh test reset]',
-    '\n  pbTicketsCleared:        ', wiped['pb-tickets'],
-    '\n  hostActiveBetsCleared:   ', wiped['hostActiveBets'],
-    '\n  ledgerCleared:           ', wiped['pb-ledger'],
-    '\n  settlementsCleared:      ', wiped['pb-settlements'],
-    '\n  balanceStart:            $'+_BASE_BALANCE+' (was '+prevBalance+')',
-    '\n  preservedKeys:           ', preserved.join(', ') || '(none)'
-  );
-
-  // Refresh UI
-  try { syncBalanceDisplays(); } catch(_e) {}
-  try { renderMyBets && renderMyBets(); } catch(_e) {}
-  try { if (document.getElementById('results-section') && document.getElementById('results-section').style.display !== 'none') renderPlayerResults && renderPlayerResults(); } catch(_e) {}
-
-  // Post-reset verification
-  var _afterPbTickets   = JSON.parse(localStorage.getItem('pb-tickets')  || '[]');
-  var _afterHostBets    = JSON.parse(localStorage.getItem('hostActiveBets') || '[]');
-  var _mkCount = _afterHostBets.filter(function(t){ return /^MK\d+$/.test(t.id||''); }).length;
-  // Trigger Results re-render and check again
-  try { renderPlayerResults && renderPlayerResults(); } catch(_e) {}
-  var _afterResultsPbTickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]');
-  var _afterResultsHostBets  = JSON.parse(localStorage.getItem('hostActiveBets') || '[]');
-
-  console.log('[reset verification]',
-    '\n  afterClearPbTickets:          ', _afterPbTickets.length,
-    '\n  afterClearHostActiveBets:     ', _afterHostBets.length,
-    '\n  afterResultsRenderPbTickets:  ', _afterResultsPbTickets.length,
-    '\n  afterResultsRenderHostActiveBets:', _afterResultsHostBets.length,
-    '\n  mockSeederDisabled:           ', localStorage.getItem('pb-mock-seed-disabled') === '1',
-    '\n  mkTicketCount:                ', _mkCount
-  );
-
-  alert('[fresh test reset] Done.\n\npb-tickets: '+_afterPbTickets.length+' (expected 0)\nhostActiveBets: '+_afterHostBets.length+' (expected 0)\nMK tickets: '+_mkCount+' (expected 0)\nMock seeder: DISABLED\nBalance: $'+_BASE_BALANCE+'\n\nPreserved: '+preserved.join(', '));
-  return { wiped: wiped, preserved: preserved, newBalance: _BASE_BALANCE, verification: { pbTickets: _afterPbTickets.length, hostBets: _afterHostBets.length, mkCount: _mkCount } };
-}
-window.resetTicketStateForFreshTesting = resetTicketStateForFreshTesting;
-// ────────────────────────────────────────────────────────────────────────────
+window.repairAllTicketIdentities = repairAllTicketIdentities;
 // ════════════════════════════════════════════════════════════════════════════
 
 // Canonicalize team identifiers within `pick` and within the game's
@@ -9640,7 +8952,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · e3b5c27 · May 18, 04:06 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 540edab · May 18, 09:03 PM</span>
 </div>
 
 })();
