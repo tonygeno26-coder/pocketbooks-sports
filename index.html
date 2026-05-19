@@ -1035,12 +1035,14 @@ async function loadHostDashboardFromDb(trigger) {
     var profitEl = document.getElementById('stat-profit');
     if (profitEl) profitEl.style.color = s.profit>=0 ? 'var(--green,#00ff88)' : 'var(--red,#ff3d57)';
     _updateHostSourceBadge('db', data.warnings||[]);
+    _setHostDbPrimary(true);  // Lock DOM authority to DB
     console.log('[host db read] trigger='+trigger+' source=db clubId='+(cid||'?')+
       ' handle=$'+s.handle+' active='+s.activeBetCount+' profit=$'+s.profit);
     return { source:'db', stats:s, warnings:data.warnings||[] };
   } catch(e) {
     // Fallback to localStorage calculation
     console.warn('[host db read] fallback to localStorage: '+e.message);
+    _setHostDbPrimary(false); // Release DOM authority back to localStorage
     _updateHostSourceBadge('localStorage', [e.message]);
     refreshHostDashboardStats('db_fallback:'+trigger);
     return { source:'localStorage', fallbackReason:e.message };
@@ -1099,8 +1101,11 @@ async function runHostDbReadAudit() {
   );
   return { sourceUsed, dbStats, fallbackReason };
 }
-window.loadHostDashboardFromDb = loadHostDashboardFromDb;
-window.runHostDbReadAudit      = runHostDbReadAudit;
+window.loadHostDashboardFromDb    = loadHostDashboardFromDb;
+window.runHostDbReadAudit         = runHostDbReadAudit;
+window.enableHostDbPrimary        = function(){ _setHostDbPrimary(true);  return 'HOST_DB_PRIMARY=true'; };
+window.disableHostDbPrimary       = function(){ _setHostDbPrimary(false); return 'HOST_DB_PRIMARY=false'; };
+window.checkHostDbPrimaryStatus   = function(){ return { enabled: _HOST_DB_PRIMARY }; };
 // ────────────────────────────────────────────────────────────────────────────
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -3868,10 +3873,56 @@ function _showPlayerSettlementDetail(playerId) {
 // Only call manually via console: seedMockSettlementPlayers()
 checkWeeklySettlement();
 
+// ── HOST DB PRIMARY MODE FLAG ───────────────────────────────────────────────────────────────
+var _HOST_DB_PRIMARY = false;
+
+// Called by loadHostDashboardFromDb() on successful DB load.
+// Prevents localStorage poll/events from overwriting authoritative DB values.
+function _setHostDbPrimary(active) {
+  _HOST_DB_PRIMARY = active;
+  console.log('[host render authority] HOST_DB_PRIMARY_MODE =', active);
+}
+
+// Canonical host stats dispatch: uses DB when primary, localStorage otherwise.
+// All callers (init, poll, storage events) must go through this.
+async function _dispatchHostStatsRefresh(trigger) {
+  if (_HOST_DB_PRIMARY) {
+    // DB is authoritative — suppress local render, use DB
+    console.log('[host render authority]',
+      '\n  source=db',
+      '\n  localSuppressed=true',
+      '\n  trigger='+trigger
+    );
+    try {
+      var r = await loadHostDashboardFromDb('dispatch:'+trigger);
+      if (r && r.source === 'db') {
+        // Confirm DOM values after DB write
+        var domHandle  = (document.getElementById('stat-handle')||{}).textContent || '?';
+        var domProfit  = (document.getElementById('stat-profit')||{}).textContent || '?';
+        var domActive  = (document.getElementById('stat-active-bets')||{}).textContent || '?';
+        console.log('[host render authority]',
+          '\n  source=db',
+          '\n  domHandle='+domHandle,
+          '\n  domProfit='+domProfit,
+          '\n  domActiveBets='+domActive,
+          '\n  localSuppressed=true'
+        );
+        return;
+      }
+    } catch(_e) {
+      console.warn('[host render authority] DB dispatch failed, falling back:', _e.message);
+    }
+    // DB load failed — fall through to local, but clear the primary flag
+    _HOST_DB_PRIMARY = false;
+  }
+  // Local path (default or fallback)
+  refreshHostDashboardStats(trigger);
+}
+
 // ── INITIAL LOAD: populate stats immediately, no tab click required ──
 (function _hostDashboardInit() {
   function _doInit() {
-    refreshHostDashboardStats('page_load');
+    _dispatchHostStatsRefresh('page_load');
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', _doInit);
@@ -3881,11 +3932,11 @@ checkWeeklySettlement();
   // React to ticket changes from player tab (cross-tab via localStorage events)
   window.addEventListener('storage', function(e) {
     if (e.key === 'pb-tickets' || e.key === 'hostActiveBets' || e.key === 'pb-tickets-version') {
-      refreshHostDashboardStats('storage_event:' + e.key);
+      _dispatchHostStatsRefresh('storage_event:' + e.key);
     }
   });
-  // Poll every 30s as fallback for same-tab updates that don't fire storage events
-  setInterval(function() { refreshHostDashboardStats('poll_30s'); }, 30000);
+  // Poll: use DB when primary, localStorage otherwise
+  setInterval(function() { _dispatchHostStatsRefresh('poll_30s'); }, 30000);
 })();
 
 </script>
@@ -3905,7 +3956,7 @@ checkWeeklySettlement();
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · fca1a6e · May 18, 09:31 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · fe11ba1 · May 18, 09:37 PM</span>
 </div>
 
 })();
