@@ -4388,6 +4388,7 @@ function _renderHostDiamondWeeklyReport(container, data, weekStart) {
   html += '<button onclick="_prevWeekReport()" style="font-size:0.6rem;padding:2px 5px;background:#111;border:1px solid #333;border-radius:4px;color:#aaa;cursor:pointer">←</button>';
   html += '<button onclick="_nextWeekReport()" style="font-size:0.6rem;padding:2px 5px;background:#111;border:1px solid #333;border-radius:4px;color:#aaa;cursor:pointer">→</button>';
   html += '<button onclick="_exportBettorCSV()" style="font-size:0.6rem;padding:2px 6px;background:#0a1a0a;border:1px solid #1a4a1a;border-radius:4px;color:#4ade80;cursor:pointer">CSV</button>';
+  html += '<button onclick="_showInvoice()" style="font-size:0.6rem;padding:2px 6px;background:#0a0a1a;border:1px solid #1a1a4a;border-radius:4px;color:#a78bfa;cursor:pointer">🧾 Invoice</button>';
   html += '<button onclick="_hostWeeklyToggle()" style="font-size:0.6rem;padding:2px 5px;background:#111;border:1px solid #333;border-radius:4px;color:#aaa;cursor:pointer">'+(expanded?'▲':'▼')+'</button>';
   html += '</div></div>';
   html += '<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:0.7rem;color:#aaa;margin-bottom:4px">';
@@ -4426,6 +4427,73 @@ function _renderHostDiamondWeeklyReport(container, data, weekStart) {
   container.dataset.weekStart = data.weekStart || '';
   // Store report data for CSV export
   window._lastWeeklyReport = data;
+}
+
+async function _showInvoice() {
+  var c = document.getElementById('host-diamond-weekly-report');
+  var ws = c ? (c.dataset.weekStart||null) : null;
+  var url = '/api/host/diamond-invoice'+(ws?'?weekStart='+ws:'');
+  try {
+    var r = await _pbFetch(url);
+    var d = await r.json();
+    if (!d.ok) { showToast((d.error||'Invoice unavailable').replace(/_/g,' '),'error'); return; }
+    _renderInvoiceModal(d);
+  } catch(_e){ showToast('Network error','error'); }
+}
+
+function _renderInvoiceModal(inv) {
+  var existing = document.getElementById('_invoice-modal');
+  if (existing) existing.remove();
+  var overlay = document.createElement('div');
+  overlay.id = '_invoice-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
+  var rows = (inv.lineItems||[]).map(function(item){
+    return '<tr style="border-top:1px solid #222">'
+      +'<td style="padding:5px 8px;color:#ddd">'+item.description+'</td>'
+      +'<td style="padding:5px 8px;text-align:center;color:#aaa">'+item.quantity+'</td>'
+      +'<td style="padding:5px 8px;text-align:right;color:#aaa">'+item.unitPriceDiamonds+'d</td>'
+      +'<td style="padding:5px 8px;text-align:right;color:#a78bfa;font-weight:700">'+item.totalDiamonds+'d</td>'
+      +'</tr>';
+  }).join('');
+  var bettorList = (inv.activeBettors&&inv.activeBettors.length)
+    ? '<div style="margin-top:8px;font-size:0.65rem;color:#555">Active bettors:</div>'
+      +(inv.activeBettors||[]).map(function(b){
+        var at = (b.activatedAt||'').slice(0,16).replace('T',' ');
+        return '<div style="font-size:0.65rem;color:#aaa;display:flex;justify-content:space-between;padding:1px 0">'
+          +'<span style="color:#c4b5fd">'+b.playerId+'</span>'
+          +'<span>-'+b.chargedDiamonds+'d</span>'
+          +'<span style="color:#555">'+at+'</span></div>';
+      }).join('') : '';
+  overlay.innerHTML = '<div id="_invoice-modal-inner" style="background:#0f0f0f;border:1px solid #2a2a2a;border-radius:14px;padding:20px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;box-sizing:border-box">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+    +'<span style="font-weight:800;font-size:0.9rem">🧾 Diamond Invoice</span>'
+    +'<button onclick="document.getElementById(\'_invoice-modal\').remove()" style="background:none;border:none;color:#666;font-size:1.2rem;cursor:pointer">×</button>'
+    +'</div>'
+    +'<div style="font-size:0.7rem;color:#666;margin-bottom:4px">Invoice #: <span style="color:#a78bfa">'+inv.invoiceId+'</span></div>'
+    +'<div style="font-size:0.7rem;color:#666;margin-bottom:12px">Week: '+inv.weekStart+' → '+inv.weekEnd+'</div>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:0.72rem">'
+    +'<thead><tr style="background:#1a1a1a">'
+    +'<th style="padding:6px 8px;text-align:left;color:#888">Description</th>'
+    +'<th style="padding:6px 8px;text-align:center;color:#888">Qty</th>'
+    +'<th style="padding:6px 8px;text-align:right;color:#888">Unit</th>'
+    +'<th style="padding:6px 8px;text-align:right;color:#888">Total</th>'
+    +'</tr></thead>'
+    +'<tbody>'+rows+'</tbody>'
+    +'</table>'
+    +(inv.endingBalance!=null
+      ? '<div style="text-align:right;font-size:0.75rem;color:#aaa;margin-top:10px;padding-top:8px;border-top:1px solid #222">Ending balance: <b style="color:#4ade80">'+inv.endingBalance+'d</b></div>'
+      : '')
+    +bettorList
+    +'<div style="display:flex;gap:8px;margin-top:14px">'
+    +'<button onclick="window.print()" style="flex:1;padding:8px;background:#0a1a0a;border:1px solid #1a4a1a;border-radius:8px;color:#4ade80;font-size:0.75rem;font-weight:700;cursor:pointer">🖨 Print</button>'
+    +'<button onclick="document.getElementById(\'_invoice-modal\').remove()" style="flex:1;padding:8px;background:#1a1a1a;border:1px solid #333;border-radius:8px;color:#aaa;font-size:0.75rem;cursor:pointer">Close</button>'
+    +'</div>'
+    +'<div style="font-size:0.55rem;color:#333;margin-top:8px;text-align:right">Generated: '+inv.generatedAt.slice(0,19).replace('T',' ')+'</div>'
+    +'</div>';
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function(e){
+    if (e.target===overlay) overlay.remove();
+  });
 }
 
 function _hostWeeklyToggle() {
@@ -4963,7 +5031,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · a0883c2 · May 19, 08:19 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 6ebc505 · May 19, 08:25 PM</span>
 </div>
 
 })();
