@@ -4766,7 +4766,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 13537ed · May 19, 07:16 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · b204a52 · May 19, 07:27 PM</span>
 </div>
 
 })();
@@ -4936,11 +4936,27 @@ function _adminRender() {
     if (ddEmpty)    html += ' | <span style="color:#f87171">⚠ FULL — refill needed</span>';
     else if (ddLow) html += ' | <span style="color:#fbbf24">⚠ LOW</span>';
     html += '</div>';
-    html += '<div style="font-size:0.6rem;color:#aaa;display:flex;gap:10px">';
+    html += '<div style="font-size:0.6rem;color:#aaa;display:flex;gap:10px;align-items:center">';
     html += '<span>Fee: '+dd.feePerActiveBettor+'d/bettor</span>';
-    html += '<span style="color:'+ddColor+'">Capacity remaining: '+dd.capacityRemaining+'</span>';
-    html += '<span>Active this week: '+dd.activeBettorCount+'</span>';
+    html += '<span style="color:'+ddColor+'">Remaining: '+dd.capacityRemaining+'</span>';
+    html += '<span>Active: '+dd.activeBettorCount+'</span>';
+    html += '<button onclick="_adminHostTopup()" style="font-size:0.55rem;padding:1px 5px;border-radius:3px;background:#0a1a0a;border:1px solid #1a4a1a;color:#4ade80;cursor:pointer">+Top Up</button>';
+    html += '<button onclick="_adminHostAdjust()" style="font-size:0.55rem;padding:1px 5px;border-radius:3px;background:#1a1a0a;border:1px solid #3a3a1a;color:#fbbf24;cursor:pointer">Adjust</button>';
     html += '</div>';
+    // Recent ledger rows (last 3)
+    if (dd.recentLedger && dd.recentLedger.length) {
+      html += '<div style="font-size:0.58rem;color:#555;margin:2px 0 0">Recent:</div>';
+      (dd.recentLedger||[]).slice(0,3).forEach(function(e) {
+        var eColor = (e.event_type||e.eventType||'').includes('TOPUP') ? '#4ade80' : '#f87171';
+        var eAmt   = e.amount_diamonds||e.amountDiamonds||0;
+        var eType  = (e.event_type||e.eventType||'').replace('HOST_DIAMOND_','').replace('HOST_ACTIVE_BETTOR_','').toLowerCase();
+        html += '<div style="font-size:0.57rem;color:#aaa;display:flex;gap:6px">';
+        html += '<span style="color:'+eColor+'">'+(e.direction==='credit'?'+':'-')+eAmt+'d</span>';
+        html += '<span>'+eType+'</span>';
+        html += '<span style="color:#555">'+(e.reason||'').slice(0,30)+'</span>';
+        html += '</div>';
+      });
+    }
     html += '</div>';
   }
   // Crypto deposits section
@@ -5083,6 +5099,34 @@ async function _adminConfirmDeposit(intentId) {
     var d = await r.json();
     if (d.ok) { showToast(d.idempotent?'Already credited':'Deposit credited 💎 '+d.diamonds,'success'); _adminLoad(); }
     else showToast((d.error||'Credit failed').replace(/_/g,' '),'error');
+  } catch(_e){ showToast('Network error','error'); }
+}
+async function _adminHostTopup() {
+  var amt = prompt('Top up host diamonds — enter amount (diamonds):');
+  if (!amt||isNaN(parseFloat(amt))) return;
+  var method = prompt('Method: admin_credit / crypto / manual / promo / other') || 'admin_credit';
+  var reason = prompt('Reason:') || 'Admin top-up';
+  var idem = 'TOPUP_'+Date.now();
+  try {
+    var r = await _pbFetch('/api/admin/host-diamonds/topup',{ method:'POST',
+      body:JSON.stringify({ amountDiamonds:parseFloat(amt), method, reason, idempotencyKey:idem }) });
+    var d = await r.json();
+    if (d.ok) { showToast(d.idempotent?'Already processed':'+'+(d.amountDiamonds||amt)+'💎 added','success'); _adminLoad(); }
+    else showToast((d.error||'Topup failed').replace(/_/g,' '),'error');
+  } catch(_e){ showToast('Network error','error'); }
+}
+async function _adminHostAdjust() {
+  var amt = prompt('Adjust host diamonds — enter amount:');
+  if (!amt||isNaN(parseFloat(amt))) return;
+  var dir = prompt('Direction: credit or debit') || 'credit';
+  var reason = prompt('Reason (required):');
+  if (!reason) return;
+  try {
+    var r = await _pbFetch('/api/admin/host-diamonds/adjust',{ method:'POST',
+      body:JSON.stringify({ amountDiamonds:parseFloat(amt), direction:dir, reason }) });
+    var d = await r.json();
+    if (d.ok) { showToast('Adjusted: '+(dir==='credit'?'+':'-')+amt+'💎','success'); _adminLoad(); }
+    else showToast((d.error||'Adjust failed').replace(/_/g,' '),'error');
   } catch(_e){ showToast('Network error','error'); }
 }
 async function _adminScanDeposit(intentId) {
