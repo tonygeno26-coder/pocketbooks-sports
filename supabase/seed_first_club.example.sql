@@ -50,6 +50,17 @@ VALUES ('player_actor_002', 'your-club-id-001', 'player', 'active')
 ON CONFLICT (actor_id, club_id) DO UPDATE
   SET role = EXCLUDED.role, status = EXCLUDED.status;
 
+-- ── HOST DIAMOND BALANCE ────────────────────────────────────────────────────
+-- REQUIRED for Phase AA: without this row, all new bet placements are blocked.
+-- Starting balance example: 1500 diamonds = 100 active bettors capacity.
+-- Formula: capacity = balance / 15 (HOST_ACTIVE_BETTOR_FEE)
+
+INSERT INTO host_diamond_balances (club_id, host_actor_id, balance_diamonds, updated_at)
+VALUES ('your-club-id-001', 'owner_actor_001', 1500, NOW())
+ON CONFLICT (club_id) DO UPDATE
+  SET balance_diamonds = EXCLUDED.balance_diamonds,
+      updated_at       = NOW();
+
 -- ── CLUB RISK SETTINGS ────────────────────────────────────────────────────────
 -- Conservative defaults. Adjust after launch.
 -- All money values are in diamonds (virtual currency).
