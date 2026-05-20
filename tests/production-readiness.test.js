@@ -122,6 +122,13 @@ const ROUTE_INVENTORY = [
   { route:'/api/admin/risk-alerts',    method:'GET',  role:'full_admin',  idem:false, rateLimit:false, audit:false },
   { route:'/api/admin/risk-alerts/ack',     method:'POST', role:'full_admin', idem:false, rateLimit:false, audit:true },
   { route:'/api/admin/risk-alerts/dismiss', method:'POST', role:'full_admin', idem:false, rateLimit:false, audit:true },
+  // Host diamond economy
+  { route:'/api/host/diamond-usage',          method:'GET',  role:'settlement_manager', idem:false, rateLimit:false, audit:false },
+  { route:'/api/host/diamond-weekly-report',  method:'GET',  role:'settlement_manager', idem:false, rateLimit:false, audit:false },
+  { route:'/api/host/diamond-invoice',        method:'GET',  role:'settlement_manager', idem:false, rateLimit:false, audit:false },
+  { route:'/api/admin/host-diamonds/seed',    method:'POST', role:'full_admin',         idem:false, rateLimit:false, audit:true  },
+  { route:'/api/admin/host-diamonds/topup',   method:'POST', role:'full_admin',         idem:true,  rateLimit:false, audit:true  },
+  { route:'/api/admin/host-diamonds/adjust',  method:'POST', role:'full_admin',         idem:false, rateLimit:false, audit:true  },
 ];
 
 function generateRouteInventory() {
