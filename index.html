@@ -2285,6 +2285,13 @@ function setBN(el,tab){
   } else if(tab==='settlements'){
     var s=document.getElementById('settlements-section');
     if(s)s.style.display='block';
+    // Inject host diamond card container if not present
+    if(s && !document.getElementById('host-diamond-card')) {
+      var _hdDiv=document.createElement('div'); _hdDiv.id='host-diamond-card';
+      _hdDiv.style.cssText='padding:10px 8px 0';
+      s.insertBefore(_hdDiv,s.firstChild);
+    }
+    loadHostDiamondCard();
     renderSettlements();
   } else {
     var s=document.getElementById('home-content');
@@ -4278,6 +4285,77 @@ function _phasePReopenWeek(periodId, weekStart) {
 }
 // ────────────────────────────────────────────────────────────────────────────
 
+// ── Host Diamond Balance Card ───────────────────────────────────────────────────────────────
+function _renderHostDiamondCard(container, usage) {
+  if (!container) return;
+  if (!usage||!usage.ok) { container.innerHTML='<div style="font-size:0.7rem;color:#666;padding:4px">Diamond data unavailable</div>'; return; }
+  var balance   = usage.balanceDiamonds||0;
+  var used      = usage.capacityUsed||0;
+  var remaining = usage.capacityRemaining||0;
+  var total     = usage.capacityTotal||0;
+  var fee       = usage.feePerActiveBettor||15;
+  var topupsWk  = usage.totalTopupsThisWeek||0;
+  var chargesWk = usage.totalChargesThisWeek||0;
+  var ledger    = usage.recentLedger||[];
+  var status    = remaining===0?'critical':remaining<=3?'low':'ok';
+  var statusColor = {ok:'#4ade80',low:'#fbbf24',critical:'#f87171'}[status];
+  var statusLabel = {ok:'✅ Healthy',low:'⚠️ Low balance',critical:'🔴 FULL — refill needed'}[status];
+  var html = '<div style="background:#111;border:1px solid #222;border-radius:10px;padding:12px;margin-bottom:10px">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+  html += '<span style="font-weight:700;font-size:0.85rem">💎 Host Diamond Balance</span>';
+  html += '<span style="font-size:0.75rem;color:'+statusColor+'">'+statusLabel+'</span></div>';
+  html += '<div style="font-size:1.4rem;font-weight:800;color:'+statusColor+';margin-bottom:4px">'+balance+'</div>';
+  html += '<div style="font-size:0.72rem;color:#aaa;margin-bottom:2px">Active bettors: '+used+' / '+total+' &nbsp;•&nbsp; Remaining slots: '+remaining+'</div>';
+  html += '<div style="font-size:0.7rem;color:#666;margin-bottom:8px">Fee: '+fee+'d per active bettor/week</div>';
+  if (topupsWk||chargesWk) {
+    html += '<div style="font-size:0.68rem;color:#aaa;margin-bottom:6px">This week: <span style="color:#4ade80">+'+topupsWk+'d</span> credited &nbsp;•&nbsp; <span style="color:#f87171">−'+chargesWk+'d</span> charged</div>';
+  }
+  if (ledger.length) {
+    html += '<div style="font-size:0.65rem;color:#555;margin-bottom:3px">Recent activity:</div>';
+    html += '<div style="font-size:0.65rem">';
+    ledger.slice(0,4).forEach(function(e) {
+      var dir = e.direction==='credit'?'+':'-';
+      var amt = e.amount_diamonds||e.amountDiamonds||0;
+      var type= (e.event_type||e.eventType||'').replace('HOST_DIAMOND_','').replace('HOST_ACTIVE_BETTOR_','').toLowerCase().replace(/_/g,' ');
+      var col = e.direction==='credit'?'#4ade80':'#f87171';
+      html += '<div style="color:'+col+';margin:1px 0">'+dir+amt+'d &mdash; '+type+(e.reason?' ('+e.reason.slice(0,35)+')':'')+'</div>';
+    });
+    html += '</div>';
+  }
+  html += '<div style="display:flex;gap:8px;margin-top:8px">';
+  html += '<button onclick="_hostDiamondTopup()" style="flex:1;padding:6px;background:#0a1a0a;border:1px solid #1a4a1a;border-radius:8px;color:#4ade80;font-size:0.72rem;font-weight:700;cursor:pointer">➕ Top Up Diamonds</button>';
+  html += '</div></div>';
+  container.innerHTML = html;
+}
+
+async function _hostDiamondTopup() {
+  var amt = prompt('Top up host diamonds — enter amount:');
+  if (!amt||isNaN(parseFloat(amt))) return;
+  var method = prompt('Method: admin_credit / crypto / manual / promo / other')||'admin_credit';
+  var reason = prompt('Reason:')||'Host top-up';
+  var idem = 'TOPUP_HOST_'+Date.now();
+  try {
+    var r = await _pbFetch('/api/admin/host-diamonds/topup',{ method:'POST',
+      body:JSON.stringify({ amountDiamonds:parseFloat(amt), method, reason, idempotencyKey:idem }) });
+    var d = await r.json();
+    if (d.ok) {
+      showToast(d.idempotent?'Already processed':'+'+(d.amountDiamonds||amt)+'💎 added','success');
+      loadHostDiamondCard();
+    } else showToast((d.error||'Topup failed').replace(/_/g,' '),'error');
+  } catch(_e){ showToast('Network error','error'); }
+}
+
+async function loadHostDiamondCard() {
+  var container = document.getElementById('host-diamond-card');
+  if (!container) return;
+  try {
+    var r = await _pbFetch('/api/host/diamond-usage');
+    var d = await r.json();
+    _renderHostDiamondCard(container, d);
+  } catch(_e) { if (container) container.innerHTML='<div style="color:#666;font-size:0.7rem">Diamond data unavailable</div>'; }
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 function renderSettlements() {
   var el = document.getElementById('settlements-section');
   if (!el) return;
@@ -4766,7 +4844,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · b204a52 · May 19, 07:27 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 6502734 · May 19, 08:04 PM</span>
 </div>
 
 })();
