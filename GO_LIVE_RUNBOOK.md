@@ -84,6 +84,49 @@ Run each in Supabase → SQL Editor. **One at a time. No skipping.**
 
 ---
 
+## 3b. Host Diamond Balance (Required)
+
+Before players can place bets, the host **must** have a `host_diamond_balances` row. Without it, every bet placement returns `402 host_diamond_balance_missing` (fail-closed).
+
+### Seed the host diamond balance
+
+Run this in Supabase SQL Editor after migration 019:
+
+```sql
+INSERT INTO host_diamond_balances (club_id, host_actor_id, balance_diamonds, updated_at)
+VALUES ('your-club-id', 'owner_actor_id', 1500, NOW())
+ON CONFLICT (club_id) DO UPDATE
+  SET balance_diamonds = EXCLUDED.balance_diamonds, updated_at = NOW();
+```
+
+Or use the admin endpoint:
+```bash
+POST /api/admin/host-diamonds/seed
+{ "clubId": "your-club-id", "hostActorId": "owner_actor_id", "startingBalanceDiamonds": 1500 }
+```
+
+### Recommended starting balances
+
+| Balance | Weekly capacity |
+|---|---|
+| 150 diamonds | 10 active bettors |
+| 750 diamonds | 50 active bettors |
+| 1500 diamonds | 100 active bettors |
+| 3000 diamonds | 200 active bettors |
+
+**Formula:** `capacity = floor(balanceDiamonds / 15)`
+
+### Top up when needed
+
+Use the Settlements tab → Host Diamond Balance card → `+Top Up Diamonds`, or:
+```bash
+POST /api/admin/host-diamonds/topup
+{ "clubId": "...", "amountDiamonds": 1500, "method": "admin_credit",
+  "reason": "weekly refill", "idempotencyKey": "TOPUP_<date>_<clubId>" }
+```
+
+---
+
 ## 4. First Club Setup
 
 ### 4a. Run the seed script

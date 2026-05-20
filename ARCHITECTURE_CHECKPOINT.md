@@ -1,5 +1,5 @@
 # Pocketbooks Sports — Architecture Checkpoint (Phase Z)
-**Date:** 2026-05-19 | **Test count:** 1335/1335 | **Migrations:** 001–018
+**Date:** 2026-05-19 | **Test count:** 1459/1459 | **Migrations:** 001–020
 
 ---
 
@@ -158,6 +158,67 @@ Returns 4 datasets:
 
 ---
 
+## Host Diamond Economy (Phases AA–AD)
+
+### Model
+Hosts are charged **15 diamonds per unique active bettor per week**, not per bet.
+- 1 player placing 100 bets in a week = **15 diamonds total**
+- 10 unique bettors that week = **150 diamonds total**
+- Capacity formula: `floor(balanceDiamonds / 15)` = max new active bettors this week
+
+### Tables (Migrations 019–020)
+
+| Table | Purpose |
+|---|---|
+| `host_diamond_balances` | One row per club — current balance, `CHECK balance_diamonds >= 0` |
+| `weekly_active_bettors` | `PRIMARY KEY (club_id, player_id, week_start)` — one row per player per week |
+| `host_diamond_ledger` | Immutable audit trail — every balance movement with `balance_before / balance_after` |
+
+### Event Types
+```
+HOST_DIAMOND_TOPUP          — credit, admin funds the club
+HOST_ACTIVE_BETTOR_CHARGE   — debit, player's first bet of the week
+HOST_DIAMOND_ADJUSTMENT     — credit/debit, manual admin correction
+HOST_DIAMOND_REFUND         — credit, future use
+```
+
+### Fee Engine (place_bet step 2c)
+1. Get Monday-based `weekStart` for today
+2. Check `weekly_active_bettors` — already active → **no charge**, bet allowed
+3. Load `host_diamond_balances` — row missing in production → **fail-closed (402 `host_diamond_balance_missing`)** 
+4. `balance < 15` → **402 `host_diamond_balance_insufficient`** (player sees capacity message)
+5. Deduct 15d, insert `weekly_active_bettors` row, write `HOST_ACTIVE_BETTOR_CHARGE` ledger entry
+6. Dev bypass: `DEV_AUTH_BYPASS=true` skips fail-closed with loud `console.warn`
+
+### Fail-Closed Rule
+- **Production**: missing `host_diamond_balances` row → 402 `host_diamond_balance_missing` — bet blocked
+- No silent fail-open in production; host must seed their balance before players can bet
+
+### Capacity Examples
+| Balance | Max new active bettors |
+|---|---|
+| 150d | 10 |
+| 1500d | 100 |
+| 3000d | 200 |
+
+### Admin Endpoints
+| Route | Method | Role | Purpose |
+|---|---|---|---|
+| `/api/admin/host-diamonds/seed` | POST | full_admin | Bootstrap balance row (no overwrite without force) |
+| `/api/admin/host-diamonds/topup` | POST | full_admin | Credit diamonds (idempotent, all methods) |
+| `/api/admin/host-diamonds/adjust` | POST | full_admin | Manual debit/credit (reason required, neg-balance gate) |
+| `/api/host/diamond-usage` | GET | settlement_manager | Balance, capacity, weekly stats, recent ledger |
+| `/api/host/diamond-weekly-report` | GET | settlement_manager | Full week: active bettors, ledger rows, totals |
+| `/api/host/diamond-invoice` | GET | settlement_manager | Invoice-style summary: deterministic ID `HDI_<clubId>_<weekStart>`, line items, print |
+
+### Weekly Report & Invoice
+- `GET /api/host/diamond-weekly-report?weekStart=YYYY-MM-DD` — default current week, returns `activeBettors[]` + `ledgerRows[]` + totals
+- `GET /api/host/diamond-invoice?weekStart=YYYY-MM-DD` — deterministic `invoiceId=HDI_<clubId>_<weekStart>`, line items, printable
+- CSV export via client-side `Blob` — columns: `weekStart,playerId,firstTicketId,activatedAt,chargedDiamonds`
+- UI: host diamond card in Settlements tab — status (ok/low/critical), week nav, Invoice button, Print
+
+---
+
 ## Production Readiness Gaps
 
 ### Required (Railway env vars to set)
@@ -181,7 +242,7 @@ Returns 4 datasets:
 
 ### Pending Ops Tasks
 
-1. Run Supabase migrations 001–018 in sequence
+1. Run Supabase migrations 001–020 in sequence
 2. Seed `club_memberships` with existing club/player pairs + roles
 3. Set all required Railway env vars (see above)
 4. Run `runPhaseBReadValidation()` → confirm `sourceUsed: db`
@@ -235,3 +296,9 @@ Returns 4 datasets:
 | `/api/admin/risk-alerts` | GET | full_admin | — | — | — |
 | `/api/admin/risk-alerts/ack` | POST | full_admin | — | — | ✅ |
 | `/api/admin/risk-alerts/dismiss` | POST | full_admin | — | — | ✅ |
+| `/api/host/diamond-usage` | GET | settlement_manager | — | — | — |
+| `/api/host/diamond-weekly-report` | GET | settlement_manager | — | — | — |
+| `/api/host/diamond-invoice` | GET | settlement_manager | — | — | — |
+| `/api/admin/host-diamonds/seed` | POST | full_admin | — | — | ✅ |
+| `/api/admin/host-diamonds/topup` | POST | full_admin | ✅ | — | ✅ |
+| `/api/admin/host-diamonds/adjust` | POST | full_admin | — | — | ✅ |

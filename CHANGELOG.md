@@ -4,7 +4,7 @@
 
 ## Architecture Milestone — Phases A–Z (2026-05-19)
 
-Full server-authoritative betting platform — 1335 tests across 43 test files.
+Full server-authoritative betting platform — 1459 tests across 47 test files.
 
 ### Security / Auth (Phases H–M)
 - HS256 HMAC token auth (`SESSION_SECRET` signed); `jti` + session store on every request
@@ -60,6 +60,16 @@ Full server-authoritative betting platform — 1335 tests across 43 test files.
 - Player flow: create-intent → wallet assigned server-side → submit txHash → admin scan/credit
 - Scanner stub: `BLOCKCHAIN_SCANNER_ENABLED=false` (fail-closed); `AUTO_CREDIT_CONFIRMED_CRYPTO=false`
 - `GET /api/admin/crypto/reconciliation`: daily summary, wallet summary, 7-flag anomaly detection, player audit rows
+
+### Host Diamond Economy (Phases AA–AD)
+- **Active-bettor charging**: 15 diamonds/week per unique active bettor, not per bet. `weekly_active_bettors` table deduplicates by `(club_id, player_id, week_start)`. Weekly reset is automatic.
+- **Fail-closed**: missing `host_diamond_balances` row → `402 host_diamond_balance_missing` in production (dev bypass via `DEV_AUTH_BYPASS=true`)
+- **Ledger**: `host_diamond_ledger` table — every diamond movement has `balance_before/after`, event type, idempotency key
+- **Top-up/Adjust**: `POST /api/admin/host-diamonds/topup` (idempotent) + `POST /api/admin/host-diamonds/adjust` (reason required, neg-balance gate)
+- **Reporting**: `GET /api/host/diamond-weekly-report` + `GET /api/host/diamond-invoice` (deterministic `HDI_<clubId>_<weekStart>`)
+- **UI**: Host diamond balance card in Settlements tab (ok/low/critical status), week nav, CSV export, invoice modal with print button
+- **Migrations**: 019 (`host_diamond_balances` + `weekly_active_bettors`) + 020 (`host_diamond_ledger`)
+- **Tests**: 54 new tests across 4 test files (AA: 21, AA-1: 13, AB: 20, AC-AD: 24+27)
 
 ### Production Readiness (Phase Z + Ops Tasks 1–5)
 - Architecture checkpoint doc (`ARCHITECTURE_CHECKPOINT.md`)

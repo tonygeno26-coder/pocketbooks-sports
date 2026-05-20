@@ -1,5 +1,5 @@
 # Pocketbooks Sports — Production Deploy Checklist
-**Last updated:** 2026-05-19 | Phases A–Z complete | 1335 tests
+**Last updated:** 2026-05-19 | Phases A–Z complete | 1459 tests
 
 Work through each section top-to-bottom. Check off each item before proceeding.
 
@@ -65,6 +65,8 @@ Run each migration in Supabase → SQL Editor. Run one at a time. Verify no erro
 016_risk_alerts.sql
 017_crypto_deposit_intents.sql
 018_crypto_tx_scans.sql
+- [ ] `019_host_active_bettors.sql`
+- [ ] `020_host_diamond_ledger.sql`
 ```
 
 Files are in: `pocketbooks-sports/supabase/migrations/`
@@ -178,7 +180,7 @@ This runs verify + stamps build.json + patches index.html.
 ## 6. Deploy Order
 
 ```
-1. Run Supabase migrations 001–018 (if not done)
+1. Run Supabase migrations 001–020 (if not done)
 2. Seed club_memberships
 3. Set Railway env vars (required 5 + recommended)
 4. Deploy backend: git push origin main (Railway auto-deploys)
@@ -216,7 +218,7 @@ git push origin main
 
 ## 8. Known Blockers Before Go-Live
 
-- [ ] Supabase migrations 001–018 not yet run in production
+- [ ] Supabase migrations 001–020 not yet run in production
 - [ ] `club_memberships` not seeded (tokens will fail for all players)
 - [ ] `SESSION_SECRET` not confirmed set in Railway
 - [ ] `ALLOWED_ORIGINS` must include the live Vercel URL
