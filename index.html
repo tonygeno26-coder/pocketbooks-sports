@@ -4352,7 +4352,126 @@ async function loadHostDiamondCard() {
     var r = await _pbFetch('/api/host/diamond-usage');
     var d = await r.json();
     _renderHostDiamondCard(container, d);
+    // Also load weekly report below the balance card
+    loadHostDiamondWeeklyReport();
   } catch(_e) { if (container) container.innerHTML='<div style="color:#666;font-size:0.7rem">Diamond data unavailable</div>'; }
+}
+
+var _weeklyReportWeek = null; // null = current
+async function loadHostDiamondWeeklyReport(weekStart) {
+  var container = document.getElementById('host-diamond-weekly-report');
+  if (!container) {
+    var parent = document.getElementById('host-diamond-card');
+    if (!parent) return;
+    container = document.createElement('div');
+    container.id = 'host-diamond-weekly-report';
+    container.style.cssText = 'margin-top:6px';
+    parent.parentNode.insertBefore(container, parent.nextSibling);
+  }
+  var url = '/api/host/diamond-weekly-report';
+  if (weekStart) url += '?weekStart='+weekStart;
+  try {
+    var r = await _pbFetch(url);
+    var d = await r.json();
+    _renderHostDiamondWeeklyReport(container, d, weekStart);
+  } catch(_e) { container.innerHTML=''; }
+}
+
+function _renderHostDiamondWeeklyReport(container, data, weekStart) {
+  if (!data||!data.ok) { container.innerHTML=''; return; }
+  var wk = data.weekStart || weekStart || 'current week';
+  var expanded = container.dataset.expanded === 'true';
+  var html = '<div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:8px;padding:10px;box-sizing:border-box;max-width:100%;overflow:hidden">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+  html += '<span style="font-size:0.75rem;font-weight:700;color:#aaa">📅 Week of '+wk+'</span>';
+  html += '<div style="display:flex;gap:6px">';
+  html += '<button onclick="_prevWeekReport()" style="font-size:0.6rem;padding:2px 5px;background:#111;border:1px solid #333;border-radius:4px;color:#aaa;cursor:pointer">←</button>';
+  html += '<button onclick="_nextWeekReport()" style="font-size:0.6rem;padding:2px 5px;background:#111;border:1px solid #333;border-radius:4px;color:#aaa;cursor:pointer">→</button>';
+  html += '<button onclick="_exportBettorCSV()" style="font-size:0.6rem;padding:2px 6px;background:#0a1a0a;border:1px solid #1a4a1a;border-radius:4px;color:#4ade80;cursor:pointer">CSV</button>';
+  html += '<button onclick="_hostWeeklyToggle()" style="font-size:0.6rem;padding:2px 5px;background:#111;border:1px solid #333;border-radius:4px;color:#aaa;cursor:pointer">'+(expanded?'▲':'▼')+'</button>';
+  html += '</div></div>';
+  html += '<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:0.7rem;color:#aaa;margin-bottom:4px">';
+  html += '<span>Bettors: <b style="color:#a78bfa">'+data.totalActiveBettors+'</b></span>';
+  html += '<span>Charged: <b style="color:#f87171">−'+data.totalCharges+'d</b></span>';
+  html += '<span>Top-ups: <b style="color:#4ade80">+'+data.totalTopups+'d</b></span>';
+  if (data.totalAdjustments) html += '<span>Adj: <b style="color:#fbbf24">'+data.totalAdjustments+'d</b></span>';
+  html += '</div>';
+  if (expanded) {
+    if (data.activeBettors&&data.activeBettors.length) {
+      html += '<div style="font-size:0.62rem;color:#555;margin:4px 0 2px">Active bettors this week:</div>';
+      data.activeBettors.forEach(function(b) {
+        var at = b.activatedAt ? b.activatedAt.slice(0,16).replace('T',' ') : '';
+        html += '<div style="font-size:0.62rem;color:#aaa;display:flex;justify-content:space-between;padding:1px 0">';
+        html += '<span style="color:#c4b5fd">'+b.playerId+'</span>';
+        html += '<span>−15d</span><span style="color:#555">'+at+'</span>';
+        html += '</div>';
+      });
+    }
+    if (data.ledgerRows&&data.ledgerRows.length) {
+      html += '<div style="font-size:0.62rem;color:#555;margin:4px 0 2px">Ledger:</div>';
+      data.ledgerRows.forEach(function(l) {
+        var col = l.direction==='credit'?'#4ade80':'#f87171';
+        var pfx = l.direction==='credit'?'+':'−';
+        var tp  = (l.eventType||'').replace('HOST_DIAMOND_','').replace('HOST_ACTIVE_BETTOR_','').toLowerCase().replace(/_/g,' ');
+        html += '<div style="font-size:0.62rem;color:#aaa;display:flex;gap:8px;padding:1px 0">';
+        html += '<span style="color:'+col+'">'+pfx+(l.amountDiamonds||0)+'d</span>';
+        html += '<span>'+tp+'</span>';
+        html += '<span style="color:#555">'+(l.reason||'').slice(0,30)+'</span>';
+        html += '</div>';
+      });
+    }
+  }
+  html += '</div>';
+  container.innerHTML = html;
+  container.dataset.weekStart = data.weekStart || '';
+  // Store report data for CSV export
+  window._lastWeeklyReport = data;
+}
+
+function _hostWeeklyToggle() {
+  var c = document.getElementById('host-diamond-weekly-report');
+  if (!c) return;
+  c.dataset.expanded = c.dataset.expanded === 'true' ? 'false' : 'true';
+  loadHostDiamondWeeklyReport(c.dataset.weekStart||null);
+}
+
+function _prevWeekReport() {
+  var c = document.getElementById('host-diamond-weekly-report');
+  if (!c) return;
+  var ws = c.dataset.weekStart || _getWeekStartJS();
+  var d  = new Date(ws+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()-7);
+  loadHostDiamondWeeklyReport(d.toISOString().slice(0,10));
+}
+function _nextWeekReport() {
+  var c = document.getElementById('host-diamond-weekly-report');
+  if (!c) return;
+  var ws = c.dataset.weekStart || _getWeekStartJS();
+  var d  = new Date(ws+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+7);
+  var next = d.toISOString().slice(0,10);
+  var now  = _getWeekStartJS();
+  if (next > now) return; // don't navigate into future
+  loadHostDiamondWeeklyReport(next);
+}
+function _getWeekStartJS() {
+  var d=new Date(),day=d.getUTCDay(),diff=day===0?-6:1-day,mon=new Date(d);
+  mon.setUTCDate(d.getUTCDate()+diff); mon.setUTCHours(0,0,0,0);
+  return mon.toISOString().slice(0,10);
+}
+function _exportBettorCSV() {
+  var data = window._lastWeeklyReport;
+  if (!data||!data.activeBettors) { showToast('No report data to export','error'); return; }
+  var header = 'weekStart,playerId,firstTicketId,activatedAt,chargedDiamonds';
+  var rows = data.activeBettors.map(function(b){
+    return [data.weekStart,b.playerId||'',b.firstTicketId||'',
+            (b.activatedAt||'').slice(0,19),b.chargedDiamonds||15].join(',');
+  });
+  var csv = [header].concat(rows).join('\n');
+  var blob = new Blob([csv],{ type:'text/csv' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'host-bettors-'+data.weekStart+'.csv';
+  a.click(); URL.revokeObjectURL(a.href);
+  showToast('CSV exported','success');
 }
 // ───────────────────────────────────────────────────────────────────────────
 
@@ -4844,7 +4963,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 6c39e37 · May 19, 08:15 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · a0883c2 · May 19, 08:19 PM</span>
 </div>
 
 })();
