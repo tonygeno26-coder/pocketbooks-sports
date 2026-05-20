@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '6f756a7';
-window.PBS_BUILD_DATE = '2026-05-19T12:27:11.512Z';
+window.PBS_BUILD_SHA = '845fdf6';
+window.PBS_BUILD_DATE = '2026-05-20T02:09:06.172Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -3255,9 +3255,11 @@ function confirmBet() {
           player_open_risk_exceeded:'Open risk limit reached ($'+(_dbData.max||'?')+')',
           club_open_risk_exceeded:  'Club risk limit reached',
           event_risk_exceeded:      'Event risk limit reached',
-          market_risk_exceeded:     'Market risk limit reached'
+          market_risk_exceeded:     'Market risk limit reached',
+          host_diamond_balance_insufficient: _dbData.message || 'Host diamond balance is too low to activate another bettor this week. Ask host to refill diamonds.'
         };
         if (_RISK_CODES.has(_hardBlock) ||
+            _hardBlock === 'host_diamond_balance_insufficient' ||
             _hardBlock.includes('insufficient_balance') || _hardBlock.includes('conflict') ||
             _hardBlock.includes('market_closed') || _hardBlock.includes('game_started')) {
           closeBetConfirm();
@@ -9641,7 +9643,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 6f756a7 · May 19, 05:27 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 845fdf6 · May 19, 07:09 PM</span>
 </div>
 
 })();

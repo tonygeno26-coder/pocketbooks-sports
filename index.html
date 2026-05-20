@@ -4766,7 +4766,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 6f756a7 · May 19, 05:27 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 845fdf6 · May 19, 07:09 PM</span>
 </div>
 
 })();
@@ -4814,14 +4814,15 @@ async function _adminLoad() {
   try {
     var cl = {}; try{ cl=JSON.parse(localStorage.getItem('pb-club')||'{}'); }catch(_e){}
     var cid = cl.id||cl.clubId||'';
-    var [hResp,dResp,jResp,eResp,raResp,cdResp,reconResp] = await Promise.all([
+    var [hResp,dResp,jResp,eResp,raResp,cdResp,reconResp,diamondResp] = await Promise.all([
       fetch('/api/health'),
       _pbFetch('/api/admin/diagnostics'),
       _pbFetch('/api/admin/jobs?limit=20'),
       _pbFetch('/api/events?clubId='+encodeURIComponent(cid)+'&limit=25'),
       _pbFetch('/api/admin/risk-alerts?status=open&limit=20'),
       _pbFetch('/api/admin/crypto/deposits?limit=10'),
-      _pbFetch('/api/admin/crypto/reconciliation')
+      _pbFetch('/api/admin/crypto/reconciliation'),
+      _pbFetch('/api/host/diamond-usage')
     ]);
     _adminPanelState.health   = await hResp.json().catch(function(){ return null; });
     _adminPanelState.diag     = await dResp.json().catch(function(){ return null; });
@@ -4830,6 +4831,7 @@ async function _adminLoad() {
     _adminPanelState.alerts   = await raResp.json().catch(function(){ return null; });
     _adminPanelState.deposits = await cdResp.json().catch(function(){ return null; });
     _adminPanelState.recon    = await reconResp.json().catch(function(){ return null; });
+    _adminPanelState.diamond  = await diamondResp.json().catch(function(){ return null; });
   } catch(_e){ console.warn('[admin panel] load error:', _e.message); }
   _adminRender();
 }
@@ -4918,6 +4920,27 @@ function _adminRender() {
       html += '<button onclick="_adminDismissAlert('+aid+')" style="font-size:0.55rem;padding:1px 4px;border-radius:3px;background:#1a0a0a;border:1px solid #2a0a0a;color:#9ca3af;cursor:pointer">Dismiss</button>';
       html += '</div></div>';
     });
+    html += '</div>';
+  }
+  // Host diamond balance card
+  var dd = _adminPanelState.diamond&&_adminPanelState.diamond.ok ? _adminPanelState.diamond : null;
+  if (dd) {
+    var ddLow = dd.capacityRemaining <= 2;
+    var ddEmpty = dd.capacityRemaining === 0;
+    var ddColor = ddEmpty ? '#f87171' : ddLow ? '#fbbf24' : '#4ade80';
+    html += '<div style="border-top:1px solid #1a1a1a;padding:4px 14px 6px">';
+    html += '<div style="font-size:0.62rem;font-weight:800;color:'+ddColor+';margin-bottom:3px">';
+    html += '💎 HOST DIAMONDS';
+    html += ' | '+dd.balanceDiamonds+'d balance';
+    html += ' | '+dd.capacityUsed+'/'+dd.capacityTotal+' bettors this week';
+    if (ddEmpty)    html += ' | <span style="color:#f87171">⚠ FULL — refill needed</span>';
+    else if (ddLow) html += ' | <span style="color:#fbbf24">⚠ LOW</span>';
+    html += '</div>';
+    html += '<div style="font-size:0.6rem;color:#aaa;display:flex;gap:10px">';
+    html += '<span>Fee: '+dd.feePerActiveBettor+'d/bettor</span>';
+    html += '<span style="color:'+ddColor+'">Capacity remaining: '+dd.capacityRemaining+'</span>';
+    html += '<span>Active this week: '+dd.activeBettorCount+'</span>';
+    html += '</div>';
     html += '</div>';
   }
   // Crypto deposits section
