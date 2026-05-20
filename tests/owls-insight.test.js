@@ -69,13 +69,12 @@ function normalizeOwlsResponse(owlsData, sportKey) {
   }
 
   var allEvents = [];
-  // Merge events across books (dedup by event id)
+  // Merge events across books (dedup by event id) — handle flat array or per-book object
   var seen = {};
-  Object.values(owlsData.data).forEach(function(bookEvents) {
-    (bookEvents||[]).forEach(function(ev) {
-      if (!seen[ev.id]) { seen[ev.id] = true; allEvents.push(ev); }
-    });
-  });
+  function _addEv(ev){ if(ev&&ev.id&&!seen[ev.id]){seen[ev.id]=true;allEvents.push(ev);} }
+  var _rd = owlsData.data;
+  if (Array.isArray(_rd)) { _rd.forEach(_addEv); }
+  else { Object.values(_rd).forEach(function(v){ if(Array.isArray(v)) v.forEach(_addEv); else _addEv(v); }); }
 
   var games = [];
   var marketsByCanonicalKey = {};
@@ -100,9 +99,10 @@ function normalizeOwlsResponse(owlsData, sportKey) {
     (ev.bookmakers||[]).forEach(function(bm) {
       (bm.markets||[]).forEach(function(mkt) {
         var marketType = null;
-        if      (mkt.key === 'h2h')     marketType = 'moneyline';
-        else if (mkt.key === 'spreads') marketType = 'spread';
-        else if (mkt.key === 'totals')  marketType = 'total';
+        var _mk2 = mkt.key||'';
+        if      (_mk2==='h2h'||_mk2==='moneyline') marketType = 'moneyline';
+        else if (_mk2==='spreads'||_mk2==='spread') marketType = 'spread';
+        else if (_mk2==='totals'||_mk2==='total')   marketType = 'total';
         if (!marketType) return;
 
         if (mkt.suspended) {
@@ -116,7 +116,7 @@ function normalizeOwlsResponse(owlsData, sportKey) {
             sportsbook:    bm.key,
             sportsbookName:bm.title,
             teamOrSide:    oc.name,
-            odds:          oc.price,          // already American
+            odds:          _toAmericanOdds(parseFloat(oc.price)||0),
             lastUpdate:    bm.last_update,
             providerGameId:ev.id,
             canonicalKey
@@ -155,6 +155,17 @@ function classifyOwlsHttpError(status) {
   if (status === 429)                   return { ok:false, error:'provider_rate_limited',     status };
   if (status >= 500)                    return { ok:false, error:'owls_insight_server_error', status };
   return                                       { ok:false, error:'owls_insight_http_error',   status };
+}
+
+// ── Decimal to American odds conversion ─────────────────────────────────────
+
+function _toAmericanOdds(price) {
+  if (typeof price !== 'number') return price;
+  if (Math.abs(price) <= 30 && price > 0) {
+    if (price >= 2) return Math.round((price - 1) * 100);
+    else            return Math.round(-100 / (price - 1));
+  }
+  return price;
 }
 
 // ── Sample Owls response ──────────────────────────────────────────────────────
@@ -220,6 +231,67 @@ var SAMPLE_SUSPENDED = {
           { key:'h2h', suspended:true, outcomes:[
             { name:'Lakers', price:-120 },{ name:'Warriors', price:+100 }
           ]}
+        ]
+      }]
+    }]
+  },
+  meta:{}
+};
+
+// Sample flat-array response (Shape B — events at top level)
+var SAMPLE_FLAT_ARRAY = {
+  success: true,
+  data: [
+    {
+      id: 'OI_NFL_001', sport_key:'nfl',
+      commence_time: '2026-09-10T20:15:00Z',
+      home_team: 'Kansas City Chiefs', away_team: 'Baltimore Ravens',
+      bookmakers: [{
+        key:'pinnacle', title:'Pinnacle', last_update:'2026-09-10T18:00:00Z',
+        markets: [
+          { key:'h2h', suspended:false, outcomes:[{ name:'Kansas City Chiefs', price:-140 },{ name:'Baltimore Ravens', price:+120 }]},
+          { key:'spreads', suspended:false, outcomes:[{ name:'Kansas City Chiefs', price:-110, point:-2.5 },{ name:'Baltimore Ravens', price:-110, point:+2.5 }]}
+        ]
+      }]
+    }
+  ],
+  meta:{ sport:'nfl' }
+};
+
+// Sample with decimal odds
+var SAMPLE_DECIMAL_ODDS = {
+  success: true,
+  data: {
+    pinnacle: [{
+      id: 'OI_MLB_001', sport_key:'mlb',
+      commence_time:'2026-05-20T23:00:00Z',
+      home_team:'New York Yankees', away_team:'Boston Red Sox',
+      bookmakers: [{
+        key:'pinnacle', title:'Pinnacle', last_update:'2026-05-20T20:00:00Z',
+        markets: [{
+          key:'h2h', suspended:false,
+          outcomes:[{ name:'New York Yankees', price:1.65 },{ name:'Boston Red Sox', price:2.30 }]
+        }]
+      }]
+    }]
+  },
+  meta:{}
+};
+
+// Sample with alternate market key names
+var SAMPLE_ALT_KEYS = {
+  success: true,
+  data: {
+    fanduel: [{
+      id: 'OI_NBA_003', sport_key:'nba',
+      commence_time:'2026-05-20T23:00:00Z',
+      home_team:'Miami Heat', away_team:'Chicago Bulls',
+      bookmakers: [{
+        key:'fanduel', title:'FanDuel', last_update:'2026-05-20T20:00:00Z',
+        markets: [
+          { key:'moneyline', suspended:false, outcomes:[{ name:'Miami Heat', price:-180 },{ name:'Chicago Bulls', price:+150 }]},
+          { key:'spread',    suspended:false, outcomes:[{ name:'Miami Heat', price:-110, point:-4.5 }]},
+          { key:'total',     suspended:false, outcomes:[{ name:'Over', price:-110, point:220.5 },{ name:'Under', price:-110, point:220.5 }]}
         ]
       }]
     }]
@@ -368,6 +440,54 @@ test('sourceStatus = empty when no games', function() {
 test('invalid response returns error shape', function() {
   var r = normalizeOwlsResponse(null, 'nba');
   assert(!r.ok); assertEq(r.sourceStatus, 'error');
+});
+
+
+console.log('\n── Flat-array shape (Shape B) ──');
+
+test('flat array data normalized correctly', function() {
+  var r = normalizeOwlsResponse(SAMPLE_FLAT_ARRAY, 'nfl');
+  assert(r.ok, 'ok'); assertEq(r.games.length, 1);
+  var ml = r.games[0].markets.filter(function(m){ return m.marketType==='moneyline'; });
+  assert(ml.length > 0, 'moneyline from flat array');
+});
+
+test('flat array spread with point normalized', function() {
+  var r = normalizeOwlsResponse(SAMPLE_FLAT_ARRAY, 'nfl');
+  var sp = r.games[0].markets.filter(function(m){ return m.marketType==='spread'; });
+  assert(sp.length > 0, 'spread present'); assertEq(sp[0].line, -2.5);
+});
+
+console.log('\n── Alternate market key names ──');
+
+test('moneyline key variant normalized', function() {
+  var r = normalizeOwlsResponse(SAMPLE_ALT_KEYS, 'nba');
+  assert(r.games[0].markets.filter(function(m){ return m.marketType==='moneyline'; }).length > 0);
+});
+
+test('spread key variant normalized', function() {
+  var r = normalizeOwlsResponse(SAMPLE_ALT_KEYS, 'nba');
+  var sp = r.games[0].markets.filter(function(m){ return m.marketType==='spread'; });
+  assert(sp.length > 0); assertEq(sp[0].line, -4.5);
+});
+
+test('total key variant normalized', function() {
+  var r = normalizeOwlsResponse(SAMPLE_ALT_KEYS, 'nba');
+  assert(r.games[0].markets.filter(function(m){ return m.marketType==='total'; }).length >= 2);
+});
+
+console.log('\n── Decimal odds conversion ──');
+
+test('decimal 1.65 converts to American -154', function() { assertEq(_toAmericanOdds(1.65), -154); });
+test('decimal 2.30 converts to American +130', function() { assertEq(_toAmericanOdds(2.30), 130); });
+test('American -160 unchanged by converter', function() { assertEq(_toAmericanOdds(-160), -160); });
+test('American +135 unchanged by converter', function() { assertEq(_toAmericanOdds(135), 135); });
+test('decimal odds response converts to American scale', function() {
+  var r = normalizeOwlsResponse(SAMPLE_DECIMAL_ODDS, 'mlb');
+  assert(r.ok);
+  var ml = r.games[0].markets.filter(function(m){ return m.marketType==='moneyline'; });
+  assert(ml.length > 0, 'moneyline present');
+  assert(Math.abs(ml[0].odds) > 30, 'converted to American; got '+ml[0].odds);
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────
