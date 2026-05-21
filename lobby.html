@@ -1262,7 +1262,7 @@ function renderClubsList() {
       ? `<button onclick="event.stopPropagation();selectClub('${c.id}');setTimeout(()=>{window.location='index.html'},50)" style="padding:8px 16px;background:${ownerRole?'#f5c842':'#c084fc'};color:#000;border:none;border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Host Dashboard</button>`
       : isPending&&c.status==='demo'
         ? `<button onclick="event.stopPropagation();openModal('modal-join')" style="padding:8px 16px;background:rgba(0,194,255,0.15);color:#00c2ff;border:1px solid rgba(0,194,255,0.3);border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Join Club</button>`
-        : `<button onclick="event.stopPropagation();selectClub('${c.id}');setTimeout(()=>{window.location='player.html'},50)" style="padding:8px 16px;background:#00ff88;color:#000;border:none;border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Sportsbook</button>`;
+        : `<button onclick="event.stopPropagation();selectClub('${c.id}')" style="padding:8px 16px;background:#00ff88;color:#000;border:none;border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Sportsbook</button>`;
     return `<div onclick="selectClub(${c.id})" style="background:#141414;border:1px solid #252525;border-radius:16px;padding:16px;margin-bottom:10px;cursor:pointer;transition:border-color 0.15s" onmouseenter="this.style.borderColor='#333'" onmouseleave="this.style.borderColor='#252525'">
       <div style="display:flex;align-items:center;gap:12px">
         <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#1a2a1a,#0a1a0a);border:1px solid #333;display:flex;align-items:center;justify-content:center;font-size:1rem;font-weight:900;color:#00ff88;flex-shrink:0">${(c.name||'').slice(0,2).toUpperCase()}</div>
@@ -1325,6 +1325,35 @@ function selectClub(id) {
   enterActiveClub();
 }
 
+// ─── TOKEN ACQUISITION FOR CLUB ENTRY ────────────────────────────────────────
+// Called before navigating to player.html or index.html.
+// Issues a club-scoped JWT via /api/auth/token so player.html always has one.
+async function _acquireClubToken(playerId, clubId) {
+  console.log('TOKEN_WRITE_ATTEMPT playerId='+playerId+' clubId='+clubId);
+  try {
+    var resp = await fetch(API + '/api/auth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json',
+                 'Authorization': TOKEN ? ('Bearer ' + TOKEN) : '' },
+      body: JSON.stringify({ actorId: playerId, clubId: clubId })
+    });
+    var data = await resp.json();
+    if (data.token) {
+      TOKEN = data.token;
+      localStorage.setItem('pb-sports-token', TOKEN);
+      console.log('TOKEN_WRITE_SUCCESS playerId='+playerId+' clubId='+clubId);
+      return true;
+    } else {
+      console.warn('TOKEN_WRITE_FAILED reason='+(data.error||data.code||'no_token_in_response'));
+      return false;
+    }
+  } catch(e) {
+    console.warn('TOKEN_WRITE_FAILED reason=network err='+e.message);
+    return false;
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function enterActiveClub() {
   // Fallback: restore activeClub from pb-club or pb-club-players if returning from player/host
   if (!activeClub) {
@@ -1347,10 +1376,22 @@ function enterActiveClub() {
     openModal('modal-pending');
     return;
   }
-  if (isHostRole(activeClub.role)) {
-    window.location.href = 'index.html';
+  // Acquire a fresh club-scoped token before navigating
+  var _navPlayer = null;
+  try { _navPlayer = JSON.parse(localStorage.getItem('pb-player')||'null'); } catch(_){}
+  var _navPid = _navPlayer && (_navPlayer.id != null ? String(_navPlayer.id) : _navPlayer.username) || null;
+  var _navCid = String(activeClub.id != null ? activeClub.id : (activeClub.clubId || ''));
+  var _dest = isHostRole(activeClub.role) ? 'index.html' : 'player.html';
+
+  if (_navPid && _navCid) {
+    _acquireClubToken(_navPid, _navCid).then(function(ok) {
+      if (!ok) console.warn('TOKEN_WRITE_FAILED — navigating anyway with existing token');
+      window.location.href = _dest + '?from=lobby';
+    });
   } else {
-    window.location.href = 'player.html';
+    // No pid/cid to acquire token — navigate anyway (existing token or dev mode)
+    console.warn('TOKEN_WRITE_SKIPPED pid='+(String(_navPid||'(none)'))+' cid='+(String(_navCid||'(none)')));
+    window.location.href = _dest + '?from=lobby';
   }
 }
 
