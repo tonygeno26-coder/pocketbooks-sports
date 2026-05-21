@@ -2971,8 +2971,20 @@ function openBetConfirm() {
   // Wire ALL cancel buttons (X in header + Cancel in footer)
   var _cancelBtns = sheet.querySelectorAll('[data-action="cancel"]');
   if (_confirmBtn) _confirmBtn.addEventListener('click', function(){
-    console.log('[CONFIRM BUTTON CLICKED]', bsType, '_pendingRisk:', _pendingRisk);
-    confirmBet();
+    // ── DIAGNOSTIC: trace every confirm click — catches "button does nothing" reports
+    console.log('CONFIRM_BET_CLICKED bsType='+bsType
+      +' _pendingRisk='+_pendingRisk
+      +' slipLegs='+(Array.isArray(betSlip)?betSlip.length:0)
+      +' snapshot='+(_pendingSnapshot ? 'set' : 'NULL')
+      +' disabled='+!!_confirmBtn.disabled);
+    try { dbgBanner('CONFIRM_BET_CLICKED', '#024'); } catch(_dbg){}
+    try {
+      confirmBet();
+    } catch (_clickErr) {
+      // Defensive: if confirmBet itself throws synchronously, surface it.
+      console.error('CONFIRM_BET_ERROR phase=invoke error='+(_clickErr && _clickErr.message));
+      try { showToast('Place-bet failed: ' + (_clickErr && _clickErr.message || 'unknown'), 'error'); } catch(_t){}
+    }
   });
   _cancelBtns.forEach(function(btn){
     btn.addEventListener('click', function(e){
@@ -3170,7 +3182,8 @@ function _makeSelection(b) {
 // no more lenient than Node here — the page lived on the prior build
 // that didn't have these awaits).
 async function confirmBet() {
-  console.log("confirm bet clicked");
+  console.log('CONFIRM_BET_ENTERED bsType='+bsType+' slipLegs='+(Array.isArray(betSlip)?betSlip.length:0)
+    +' _pendingRisk='+_pendingRisk+' _DB_PRIMARY_READS_ENABLED='+(typeof _DB_PRIMARY_READS_ENABLED!=='undefined'?_DB_PRIMARY_READS_ENABLED:'undef'));
   // BUG #5: read EVERYTHING from the snapshot captured at openBetConfirm time.
   // Live globals (bsStakes, bsStake, betSlip, bsType, rrStakes, teaserPts) are
   // not consulted here — they may have been mutated by re-renders or async UI
@@ -3178,9 +3191,12 @@ async function confirmBet() {
   var snap = _pendingSnapshot;
   if (!snap) {
     showToast('Bet expired · reopen confirmation', 'warning');
-    console.warn('[confirmBet] no snapshot — aborting');
+    console.warn('CONFIRM_BET_ABORT reason=no_snapshot');
     return;
   }
+  console.log('CONFIRM_BET_SNAPSHOT type='+snap.type+' legs='+(snap.legs||[]).length
+    +' risk='+snap.risk+' payout='+snap.payout
+    +' stakeKeys='+Object.keys(snap.stakes||{}).join(','));
 
   // Re-check teaser gate at confirm time (prevents direct confirmBet() injection)
   if (snap.type === 'teaser') {
@@ -3307,15 +3323,26 @@ async function confirmBet() {
       })
     };
     try {
+      console.log('CONFIRM_BET_POSTING endpoint=/api/bets/place'
+        +' betType='+_dbPayload.betType
+        +' stake='+_dbPayload.stake
+        +' legs='+(_dbPayload.legs||[]).length
+        +' idempotencyKey='+_iKey
+        +' firstLegCKey='+((_dbPayload.legs[0]||{}).canonicalGameKey||'(empty)')
+        +' firstLegSchedStart='+((_dbPayload.legs[0]||{}).scheduledStart||'(empty)')
+        +' firstLegOdds='+((_dbPayload.legs[0]||{}).odds));
       var _dbResp = await _pbFetch('/api/bets/place', {
         method: 'POST', body: JSON.stringify(_dbPayload)
       });
+      var _dbStatus = _dbResp.status;
       var _dbData = await _dbResp.json();
       if (_dbData.ok) {
         _dbPlacementAttempted = true;
-        console.log('[bet placement] DB success ticketId='+_dbData.ticketId+' ledger='+_dbData.ledgerEntryId);
+        console.log('CONFIRM_BET_SUCCESS ticketId='+_dbData.ticketId+' ledger='+_dbData.ledgerEntryId);
+        try { dbgBanner('CONFIRM_BET_SUCCESS\n'+(_dbData.ticketId||''), '#020'); } catch(_d){}
         try { loadPlayerDashboardFromDb(); } catch(_e){}
       } else if (_dbData.code === 'odds_changed') {
+        console.warn('CONFIRM_BET_ERROR status='+_dbStatus+' code=odds_changed leg='+_dbData.leg);
         // ── ODDS CHANGED MODAL ──────────────────────────────────────────────
         console.warn('[bet placement] odds_changed:', _dbData.leg, _dbData.oldOdds, '→', _dbData.newOdds);
         closeBetConfirm();
@@ -3364,7 +3391,24 @@ async function confirmBet() {
         return; // Do NOT write localStorage
         // ───────────────────────────────────────────────────────────────────────
       } else {
-        console.warn('[bet placement] DB rejected:', _dbData.code||_dbData.error||JSON.stringify(_dbData.errors));
+        // ── DIAGNOSTIC: full backend rejection surface (was silent until now) ──
+        var _rejBody = _dbData.code || _dbData.error || JSON.stringify(_dbData.errors||_dbData||{});
+        console.warn('CONFIRM_BET_ERROR status='+_dbStatus+' body='+_rejBody);
+        try {
+          var _rejMsg;
+          if (Array.isArray(_dbData.errors) && _dbData.errors.length) {
+            // Backend 400 validation — surface the field problems verbatim, e.g.
+            // "leg0_missing_canonicalGameKey". Most useful diagnostic right now.
+            _rejMsg = 'Bet rejected: ' + _dbData.errors.join(', ').replace(/_/g,' ');
+          } else if (_dbData.code) {
+            _rejMsg = 'Bet rejected: ' + String(_dbData.code).replace(/_/g,' ');
+          } else if (_dbData.error) {
+            _rejMsg = 'Bet rejected: ' + String(_dbData.error).replace(/_/g,' ');
+          } else {
+            _rejMsg = 'Bet rejected by server (HTTP ' + _dbStatus + ')';
+          }
+          showToast(_rejMsg, 'error');
+        } catch(_te){}
         // Hard blocks: balance, conflict, market closed, game started
         var _hardBlock = _dbData.code || _dbData.error || '';
         // Risk limit rejection codes (422)
@@ -3404,10 +3448,18 @@ async function confirmBet() {
         }
       }
     } catch(_e) {
-      console.warn('[bet placement] DB fetch failed, using localStorage fallback:', _e.message);
+      console.warn('CONFIRM_BET_ERROR phase=network error='+(_e && _e.message)+' — falling back to localStorage');
+      try { showToast('Network error placing bet — saved locally, syncing when back online', 'warning'); } catch(_te){}
     }
   }
   // ── localStorage path (Phase A fallback or DB not enabled) ────────────────────────
+  // DIAGNOSTIC: detect the "no tickets built" silent-failure (e.g. Single with no per-leg stake hydration)
+  if (!newTickets.length) {
+    console.warn('CONFIRM_BET_ERROR phase=local_save status=0 body=no_tickets_built'
+      +' (likely cause: per-leg stake hydration missed — bsStakes empty for Singles, or all stakes==0)');
+    try { showToast('Bet not placed: enter a stake amount before confirming', 'error'); } catch(_te){}
+    return;
+  }
   newTickets.forEach(function(t){ betTickets.unshift(t); });
   saveTickets();
 
