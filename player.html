@@ -828,8 +828,8 @@ function _showSessionExpiredModal(result) {
 // ══════════════════════════════════════════════════════════════════════════════
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'e8451c2';
-window.PBS_BUILD_DATE = '2026-05-21T08:59:24.872Z';
+window.PBS_BUILD_SHA = '542d5a5';
+window.PBS_BUILD_DATE = '2026-05-21T09:05:42.133Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -2028,6 +2028,65 @@ function returnToLobby() {
 }
 // ══════════════════════════════════════════════════════════════════════════════
 
+// ── SESSION SCOPE ENFORCEMENT ────────────────────────────────────────────────────
+function _checkSessionScope() {
+  var _tok  = localStorage.getItem('pb-sports-token') || '';
+  var _pl   = null; try { _pl   = JSON.parse(localStorage.getItem('pb-player')||'null'); } catch(_){}
+  var _club = null; try { _club = JSON.parse(localStorage.getItem('pb-club')||'null');   } catch(_){}
+  var _activeRaw = localStorage.getItem('pb-active-club');
+  var _activeClubId = null;
+  try { var _ap = JSON.parse(_activeRaw); _activeClubId = (typeof _ap === 'string') ? _ap : (_ap && (_ap.id || _ap.clubId) || null); } catch(_){ _activeClubId = _activeRaw || null; }
+
+  var pid      = _safeId(_pl  && (_pl.id  != null  ? _pl.id  : _pl.username));
+  var localCid = _safeId(_club && (_club.id != null ? _club.id : _club.clubId));
+
+  if (_pPreview) return { valid:true, reason:'preview_bypass', tokenClubId:null, localClubId:localCid, activeClubId:_activeClubId, playerId:pid };
+  var isDev = false; try { isDev = _isDevIdentity(); } catch(_){}
+  if (isDev)    return { valid:true, reason:'dev_bypass',     tokenClubId:null, localClubId:localCid, activeClubId:_activeClubId, playerId:pid };
+
+  var tokenClubId = null; var tokenExpired = false;
+  try {
+    var _parts = _tok.split('.');
+    if (_parts.length === 3) {
+      var _tp = JSON.parse(atob(_parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+      tokenClubId = _tp.clubId || null;
+      if (_tp.exp && Math.floor(Date.now()/1000) >= _tp.exp) tokenExpired = true;
+    }
+  } catch(_){}
+
+  var result = { tokenClubId:tokenClubId, localClubId:localCid, activeClubId:_activeClubId, playerId:pid };
+  if (!_tok)        return Object.assign(result, { valid:false, reason:'missing_token' });
+  if (tokenExpired) return Object.assign(result, { valid:false, reason:'token_expired' });
+  if (!pid)         return Object.assign(result, { valid:false, reason:'missing_playerId' });
+  if (!localCid)    return Object.assign(result, { valid:false, reason:'missing_clubId' });
+  if (tokenClubId && localCid && tokenClubId !== localCid)
+    return Object.assign(result, { valid:false, reason:'club_scope_mismatch' });
+  return Object.assign(result, { valid:true, reason:'ok' });
+}
+
+function _handleScopeFailure(scope, source) {
+  var banner = 'SESSION_SCOPE_INVALID'
+    + ' source='        + (source||'?')
+    + ' tokenClubId='   + (scope.tokenClubId  || '(none)')
+    + ' localClubId='   + (scope.localClubId  || '(none)')
+    + ' activeClubId='  + (scope.activeClubId || '(none)')
+    + ' playerId='      + (scope.playerId     || '(none)')
+    + ' reason='        + (scope.reason       || '?');
+  console.warn(banner);
+  try { dbgBanner(banner, '#800'); } catch(_){}
+  // Hard-wipe stale credentials on mismatch or missing token
+  localStorage.removeItem('pb-sports-token');
+  localStorage.removeItem('pb-active-club');
+  try {
+    var _c = JSON.parse(localStorage.getItem('pb-club')||'null');
+    if (_c) { _c.id = null; _c.clubId = null; localStorage.setItem('pb-club', JSON.stringify(_c)); }
+  } catch(_){}
+  _sessionValid = false;
+  TOKEN = '';
+  _showSessionExpiredModal({ missing:[], reason: scope.reason });
+}
+// ──────────────────────────────────────────────────────────────────────────────
+
 
 // ══ BOOT SEQUENCE ─────────────────────────────────────────────────────────────────────────
 // Each step wrapped individually so one failure cannot stall the rest.
@@ -2892,7 +2951,13 @@ function bsRenderLegs() {
 
 
 window.bsPlaceBet = function bsPlaceBet() {
-  // Fallback: if bsStakes is empty but numpad/input has a value, hydrate now
+  // ── Session scope gate: hard block before any UI action ───────────────────────────
+  var _scope = _checkSessionScope();
+  if (!_scope.valid) {
+    _handleScopeFailure(_scope, 'bsPlaceBet');
+    return;
+  }
+  // ── Fallback: if bsStakes is empty but numpad/input has a value, hydrate now
   var _numDisplay = document.getElementById('numpad-display');
   var _numVal = _numDisplay ? (parseFloat(_numDisplay.textContent) || 0) : 0;
   var _stakeInp = document.getElementById('bs-stake-inp');
@@ -3620,6 +3685,14 @@ async function confirmBet() {
       if (_cbAbortTimer) { clearTimeout(_cbAbortTimer); _cbAbortTimer = null; }
       _cbRespStatus = _dbResp.status;
       _cbLog('CONFIRM_BET_FETCH_RESOLVED', 'status='+_cbRespStatus);
+      // ── Hard auth error at HTTP level: re-check scope + wipe if invalid ─────────
+      if (_cbRespStatus === 401 || _cbRespStatus === 403) {
+        var _httpScope = _checkSessionScope();
+        if (!_httpScope.valid) {
+          _handleScopeFailure(_httpScope, 'confirmBet_http_'+_cbRespStatus);
+          return;
+        }
+      }
 
       // ── Safe JSON parse: surface HTML/non-JSON responses explicitly ───────
       _cbStep = 'JSON_PARSE';
@@ -3737,6 +3810,15 @@ async function confirmBet() {
         var _rejBody = _dbData.code || _dbData.error || JSON.stringify(_dbData.errors||_dbData||{});
         _cbErr('CONFIRM_BET_ERROR', null,
           'status='+_cbRespStatus+' code='+(_dbData.code||'none')+' body='+String(_rejBody).slice(0,300));
+        // ── Backend scope rejection: wipe session + show modal ──────────────────────
+        if (_dbData.code === 'club_scope_mismatch' || _dbData.error === 'club_scope_mismatch') {
+          _handleScopeFailure({
+            reason:'club_scope_mismatch',
+            tokenClubId: _tokenClubId || null,
+            localClubId: _cid || null, activeClubId: null, playerId: _pid || null
+          }, 'confirmBet_backend_403');
+          return;
+        }
         var _rejMsg;
         if (Array.isArray(_dbData.errors) && _dbData.errors.length) {
           _rejMsg='Bet rejected: '+_dbData.errors.join(', ').replace(/_/g,' ');
@@ -10357,7 +10439,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · e8451c2 · May 21, 01:59 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 542d5a5 · May 21, 02:05 AM</span>
 </div>
 
 <!-- Orphan IIFE closer removed (was rendering as a literal IIFE close
