@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '97be739';
-window.PBS_BUILD_DATE = '2026-05-21T07:50:10.459Z';
+window.PBS_BUILD_SHA = '891a630';
+window.PBS_BUILD_DATE = '2026-05-21T07:51:05.608Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -1256,7 +1256,7 @@ async function loadGames(sport, opts){
     var _isMlb    = (_sportLc === 'mlb' || _sportLc === 'baseball_mlb');
     const _sport  = _isMlb ? 'mlb' : _sportLc;
     // MLB sportsbook ALWAYS hits the local Vercel proxy at exactly
-    // /api/odds/mlb. Never /api/odds/baseball_mlb, never api.the-odds-api.com
+    // /api/odds/mlb. Never /api/odds/baseball_mlb, never any external odds host.
     // directly, never the legacy Railway path for MLB.
     const _url = _isMlb ? '/api/odds/mlb' : ('/api/odds/' + _sport);
     // MLB sportsbook fetch marker (kept post-cleanup — useful operational
@@ -1276,8 +1276,12 @@ async function loadGames(sport, opts){
     if(!_res.ok) {
       let _errBody = {};
       try { _errBody = await _res.json(); } catch(e){}
-      const _msg = _errBody.error_code === 'OUT_OF_USAGE_CREDITS'
-        ? 'Odds API quota exhausted — resets monthly. Upgrade at the-odds-api.com.'
+      // Provider-neutral error text. The legacy OUT_OF_USAGE_CREDITS code
+      // is kept as a defensive check (Vercel MLB proxy can still emit it on
+      // 402), but the message the player sees is the same generic
+      // "temporarily unavailable" string — no provider name, no billing URL.
+      const _msg = (_errBody.error_code === 'OUT_OF_USAGE_CREDITS' || _res.status === 402)
+        ? 'Odds temporarily unavailable. Try again shortly.'
         : (_errBody.error || 'Backend error HTTP '+_res.status);
       throw new Error(_msg);
     }
@@ -1308,13 +1312,35 @@ async function loadGames(sport, opts){
       } catch(_be){}
     }
     console.log('[PBS fetch success] gamesLoaded:', games.length, _xCount ? ('(server X-Games-Count='+_xCount+')') : '');
+    // Safe debug signal for production troubleshooting. Reads response
+    // headers populated by the new Owls-aware backend (X-Provider /
+    // X-Source-Status / X-Games-Count); falls back to '-' when absent so
+    // legacy responses don't crash the log.
+    try {
+      var _provHdr = (_res.headers && _res.headers.get) ? (_res.headers.get('X-Provider') || '-') : '-';
+      var _ssHdr   = (_res.headers && _res.headers.get) ? (_res.headers.get('X-Source-Status') || '-') : '-';
+      var _mktCnt  = 0;
+      for (var _gi = 0; _gi < games.length; _gi++) {
+        var _g = games[_gi];
+        _mktCnt += (Array.isArray(_g.moneyline) ? _g.moneyline.length : 0);
+        _mktCnt += (Array.isArray(_g.spreads)   ? _g.spreads.length   : 0);
+        _mktCnt += (Array.isArray(_g.totals)    ? _g.totals.length    : 0);
+      }
+      console.log('FRONTEND_ODDS_RENDER games='+games.length+' markets='+_mktCnt
+        +' provider='+_provHdr+' sourceStatus='+_ssHdr+' sport='+_sport);
+      // Tagged diagnostics requested for the sport catalog rollout. Each tag
+      // prints on its own line so grepping production console output is
+      // trivial (e.g. "[games count] sport=nhl n=12").
+      console.log('[render sport] sport='+_sport+' provider='+_provHdr+' sourceStatus='+_ssHdr+' liveOnly='+!!_liveOnly);
+      console.log('[games count] sport='+_sport+' n='+games.length);
+      console.log('[markets count] sport='+_sport+' n='+_mktCnt);
+    } catch (_dbg) {}
     console.log('[PBS render start]');
     if(!games.length){
-      console.warn('[odds] empty response — check ODDS_API_KEY is set in Railway env vars');
       if (_liveOnly) {
         el.innerHTML='<div class="empty" style="padding:60px 20px;text-align:center;color:#888">No live games right now.</div>';
       } else {
-        el.innerHTML='<div class="empty">No games available right now.<br><span style="font-size:0.75rem;color:#888">If this persists, check backend ODDS_API_KEY config.</span></div>';
+        el.innerHTML='<div class="empty" style="padding:60px 20px;text-align:center;color:#888">No games available right now.</div>';
       }
       return;
     }
@@ -1341,7 +1367,7 @@ async function loadGames(sport, opts){
     el.innerHTML=games.map(g=>{
       window.gamesCache[g.id]=g;
       try {
-      // Defensive: tolerate Odds API v4 raw shape if normalization is
+      // Defensive: tolerate legacy raw odds-payload shape if normalization is
       // bypassed (e.g. proxy fallback during shape drift). Prefer flat
       // fields, fall back to v4 names. Skip the card entirely if neither
       // team name is resolvable — better an empty slot than red error.
@@ -1624,19 +1650,80 @@ function _checkTicketSportAccess(legs) {
   return { allowed: true };
 }
 
-// Update sport tabs: grey out/disable blocked sports
+// Update sport tabs: grey out/disable host-blocked sports + hide tabs the
+// current odds provider can't deliver. We read window._sportsCatalog (filled
+// asynchronously by _loadSportsCatalog below) when present; if it's missing,
+// every hardcoded tab stays visible (legacy behavior).
 function _updateSportTabs() {
   var tabMap = { mlb:'st-mlb', nba:'st-nba', nhl:'st-nhl', nfl:'st-nfl',
                  soccer:'st-soccer', ufl:'st-ufl', tennis:'st-tennis', golf:'st-golf' };
+  // Build a quick lookup: which sports does the backend currently know about?
+  // catalog === null  -> endpoint not yet polled / unreachable -> show all (legacy)
+  // catalog === {…}   -> hide tabs missing from catalog, keep those present
+  var catalog = window._sportsCatalog;
+  var sportsByKey = null;
+  if (catalog && Array.isArray(catalog.sports)) {
+    sportsByKey = {};
+    for (var i = 0; i < catalog.sports.length; i++) {
+      var s = catalog.sports[i];
+      if (s && s.key) sportsByKey[String(s.key).toLowerCase()] = s;
+    }
+  }
+  // Counters for the post-apply diagnostic line.
+  var _vis = 0, _hidden = 0, _dim = 0;
   Object.keys(tabMap).forEach(function(sport) {
     var tab = document.getElementById(tabMap[sport]);
     if (!tab) return;
     var blocked = isSportBlocked(sport);
-    tab.style.opacity  = blocked ? '0.35' : '';
+    // Catalog-driven visibility:
+    //   no catalog yet            -> show every hardcoded tab (legacy)
+    //   catalog present + missing -> hide the tab entirely (provider truly
+    //                                doesn't support this sport, e.g. golf)
+    //   catalog present + 0 games -> dim + tooltip (provider supports it,
+    //                                no live slate right now)
+    //   catalog present + games   -> full color, no tooltip
+    var inCatalog = !sportsByKey || !!sportsByKey[sport];
+    var entry     = sportsByKey ? sportsByKey[sport] : null;
+    var hasGames  = !sportsByKey || (entry && entry.games > 0);
+    if (!inCatalog) { tab.style.display = 'none'; _hidden++; return; }
+    tab.style.display = '';
+    tab.style.opacity = blocked ? '0.35' : (hasGames ? '' : '0.55');
     tab.style.pointerEvents = blocked ? 'none' : '';
-    tab.title = blocked ? 'Your host has disabled ' + sport.toUpperCase() + ' betting' : '';
+    tab.title = blocked
+      ? ('Your host has disabled ' + sport.toUpperCase() + ' betting')
+      : (hasGames ? '' : 'No games available right now');
+    if (!hasGames) _dim++; else _vis++;
   });
+  // Always log so we can debug catalog drift in production.
+  console.log('[sport catalog] applied tabs visible='+_vis+' dim='+_dim+' hidden='+_hidden
+    +' catalogLoaded='+!!sportsByKey);
 }
+
+// Fetch the backend's sport catalog so tab visibility can adapt to whatever
+// the current odds provider supports. Non-blocking: failure leaves the
+// hardcoded tabs intact. Refreshes every 5 minutes — sport availability
+// doesn't churn faster than that in practice.
+async function _loadSportsCatalog() {
+  try {
+    var res = await fetch('/api/sports', { cache: 'no-store' });
+    if (!res.ok) { console.warn('[sports catalog] HTTP '+res.status+' — using hardcoded tabs'); return; }
+    var data = await res.json();
+    if (data && Array.isArray(data.sports)) {
+      window._sportsCatalog = data;
+      // Detailed catalog dump: tag + per-sport games count so a single
+      // grep -F '[sports catalog]' surfaces full provider state.
+      console.log('[sports catalog] provider='+(data.provider||'?')
+        +' sourceStatus='+(data.sourceStatus||'?')
+        +' updatedAt='+(data.updatedAt||'?')
+        +' count='+data.sports.length
+        +' sports='+data.sports.map(function(s){ return s.key+':'+s.games; }).join(','));
+      try { _updateSportTabs(); } catch(e) { console.warn('[sports catalog] _updateSportTabs after refresh failed:', e && e.message || e); }
+    }
+  } catch (e) {
+    console.warn('[sports catalog] fetch failed (legacy tabs remain):', e && e.message || e);
+  }
+}
+try { _loadSportsCatalog(); setInterval(_loadSportsCatalog, 5 * 60 * 1000); } catch(_se) { console.warn('[sports catalog] init failed:', _se && _se.message || _se); }
 // ════════════════════════════════════════════════════════════════════════════
 
 function setSport(el,sport){
@@ -1678,7 +1765,7 @@ function setBNav(el,tab){
     if(ss) ss.style.display='none';
     if(pb) pb.style.display='none';
     // Live tab now reads from the cached SportsDataIO GamesByDate proxy.
-    // The Odds API is no longer used for Live. Falls back to the original
+    // Live tab uses SportsDataIO only. Falls back to the original
     // loadGames if the new loader isn't available (older cached page).
     if (typeof loadLiveGamesFromSportsDataIO === 'function') {
       loadLiveGamesFromSportsDataIO();
@@ -2091,9 +2178,18 @@ function bsSetType(t) {
   var tab = document.getElementById('bs-tab-'+t);
   if (tab) tab.classList.add('active');
   bsRenderLegs();
-  // Sync footer input value with current stake
+  // Tab switch: clear footer input AND the matching state so the visual
+  // stake and the bsStake/bsStakes globals stay in lockstep. Previously only
+  // the input was cleared, which left bsStake (or per-card bsStakes for
+  // singles) holding a value the player could no longer see — leading to
+  // "input empty but button enabled" OR "input shows value but bsStake=0"
+  // depending on the cross-tab transition.
   var inp = document.getElementById('bs-stake-inp');
-  if (inp) inp.value = ''; // never restore old stake on tab switch
+  if (inp) inp.value = '';
+  bsStake = 0;
+  if (t === 'parlay' || t === 'teaser' || t === 'rr') {
+    bsStakes = {};   // singles' per-card stakes are meaningless on these tabs
+  }
   bsSyncPlaceBtn();
 }
 
@@ -2152,13 +2248,51 @@ function _updateTeaserTab() {
     try { console.error('[teaser] _updateTeaserTab guarded against:', _e && _e.message || _e); } catch(_e2){}
   }
 }
-var TEASER_ELIGIBLE = ['run line','spread','total','over','under'];
+// Markets that *could* be teased on an eligible sport. Moneyline / 3-way
+// outcomes are never teaser-eligible (no line to shift).
+var TEASER_ELIGIBLE_MARKETS = ['run line','spread','total','over','under'];
+
+// Sports that real sportsbooks allow in teasers (DraftKings / FanDuel parity):
+//   NFL  / NCAAF: any spread or total leg.
+//   NBA  / NCAAB: spread or total only (no moneyline).
+//   MLB  / NHL  / soccer / tennis / golf / esports: NOT eligible.
+// Conservative on purpose — widen later only when we have explicit confirmation.
+var TEASER_SPORTS_FULL    = { nfl:1, ncaaf:1, americanfootball_nfl:1, americanfootball_ncaaf:1 };
+var TEASER_SPORTS_LINEONLY= { nba:1, ncaab:1, basketball_nba:1, basketball_ncaab:1 };
+
+function _teaserSportKey(b) {
+  // Normalize sport string off a slip entry. Falls back to _currentSport so a
+  // slip built without a sport tag (older code paths) still gets gated by the
+  // sport tab the player was on when picks were added.
+  var s = (b && (b.sport || b.sportKey)) || '';
+  s = String(s).toLowerCase().trim();
+  if (!s && typeof _currentSport !== 'undefined') s = String(_currentSport||'').toLowerCase();
+  return s;
+}
+
 function isTeaserEligible(b) {
   // Defensive against malformed slip entries after upstream odds failures.
   if (!b || typeof b !== 'object') return false;
-  var m = String(b.market || b.pick || '').toLowerCase();
-  if (!m) return false;
-  return TEASER_ELIGIBLE.some(function(t){ return t && m.indexOf(t) !== -1; });
+  var market = String(b.market || b.pick || '').toLowerCase();
+  if (!market) return false;
+  var sport  = _teaserSportKey(b);
+  if (!sport) return false;
+  var marketOK = TEASER_ELIGIBLE_MARKETS.some(function(t){ return t && market.indexOf(t) !== -1; });
+  if (!marketOK) return false; // moneyline / 3-way never teaserable
+  if (TEASER_SPORTS_FULL[sport])     return true;  // NFL/NCAAF
+  if (TEASER_SPORTS_LINEONLY[sport]) return true;  // NBA/NCAAB — already marketOK so spread/total
+  return false;                                    // MLB/NHL/soccer/tennis/golf/anything else
+}
+
+// True iff the *entire* slip can be teased: every leg must individually pass.
+// A single ineligible leg (e.g. one MLB run-line in an NFL teaser slip) is
+// enough to disable the Teaser tab and force an auto-switch back to Singles/Parlay.
+function isSlipTeaserEligible() {
+  if (!Array.isArray(betSlip) || betSlip.length < 2) return false;
+  for (var i = 0; i < betSlip.length; i++) {
+    if (!isTeaserEligible(betSlip[i])) return false;
+  }
+  return true;
 }
 function getTeaserLegs() {
   if (!Array.isArray(betSlip)) return [];
@@ -2863,8 +2997,20 @@ function openBetConfirm() {
   // Wire ALL cancel buttons (X in header + Cancel in footer)
   var _cancelBtns = sheet.querySelectorAll('[data-action="cancel"]');
   if (_confirmBtn) _confirmBtn.addEventListener('click', function(){
-    console.log('[CONFIRM BUTTON CLICKED]', bsType, '_pendingRisk:', _pendingRisk);
-    confirmBet();
+    // ── DIAGNOSTIC: trace every confirm click — catches "button does nothing" reports
+    console.log('CONFIRM_BET_CLICKED bsType='+bsType
+      +' _pendingRisk='+_pendingRisk
+      +' slipLegs='+(Array.isArray(betSlip)?betSlip.length:0)
+      +' snapshot='+(_pendingSnapshot ? 'set' : 'NULL')
+      +' disabled='+!!_confirmBtn.disabled);
+    try { dbgBanner('CONFIRM_BET_CLICKED', '#024'); } catch(_dbg){}
+    try {
+      confirmBet();
+    } catch (_clickErr) {
+      // Defensive: if confirmBet itself throws synchronously, surface it.
+      console.error('CONFIRM_BET_ERROR phase=invoke error='+(_clickErr && _clickErr.message));
+      try { showToast('Place-bet failed: ' + (_clickErr && _clickErr.message || 'unknown'), 'error'); } catch(_t){}
+    }
   });
   _cancelBtns.forEach(function(btn){
     btn.addEventListener('click', function(e){
@@ -2995,7 +3141,7 @@ function _makeSelection(b) {
   var placedDate = now.toISOString().slice(0,10);
   // commenceTime: prefer raw ISO from betSlip entry (set at add-to-slip time)
   var commenceTime = (b.time != null && b.time !== '') ? b.time : null;
-  // Odds API game ID: strip the market suffix from cellId (e.g. 'abc123-sp-aw' -> 'abc123')
+  // Provider game ID: strip the market suffix from cellId (e.g. 'abc123-sp-aw' -> 'abc123')
   var oddsApiGameId = b.cellId ? b.cellId.split('-').slice(0,4).join('-') : null;
   // Pull full game object from render-time cache for richer identity
   var cachedGame = (window.gamesCache && oddsApiGameId) ? window.gamesCache[oddsApiGameId] : null;
@@ -3053,8 +3199,17 @@ function _makeSelection(b) {
   };
 }
 
-function confirmBet() {
-  console.log("confirm bet clicked");
+// NOTE: `async` is required — this function uses `await _pbFetch(...)` for
+// the DB-side bet placement. The legacy declaration omitted async even
+// though the body has been awaiting since the DB path was added; Vercel's
+// `node --check` build step rejects this, so the deploy pipeline never
+// shipped the change to the edge. Without async, calling this in a real
+// browser raises a SyntaxError at parse time (modern Chrome/Safari are
+// no more lenient than Node here — the page lived on the prior build
+// that didn't have these awaits).
+async function confirmBet() {
+  console.log('CONFIRM_BET_ENTERED bsType='+bsType+' slipLegs='+(Array.isArray(betSlip)?betSlip.length:0)
+    +' _pendingRisk='+_pendingRisk+' _DB_PRIMARY_READS_ENABLED='+(typeof _DB_PRIMARY_READS_ENABLED!=='undefined'?_DB_PRIMARY_READS_ENABLED:'undef'));
   // BUG #5: read EVERYTHING from the snapshot captured at openBetConfirm time.
   // Live globals (bsStakes, bsStake, betSlip, bsType, rrStakes, teaserPts) are
   // not consulted here — they may have been mutated by re-renders or async UI
@@ -3062,9 +3217,12 @@ function confirmBet() {
   var snap = _pendingSnapshot;
   if (!snap) {
     showToast('Bet expired · reopen confirmation', 'warning');
-    console.warn('[confirmBet] no snapshot — aborting');
+    console.warn('CONFIRM_BET_ABORT reason=no_snapshot');
     return;
   }
+  console.log('CONFIRM_BET_SNAPSHOT type='+snap.type+' legs='+(snap.legs||[]).length
+    +' risk='+snap.risk+' payout='+snap.payout
+    +' stakeKeys='+Object.keys(snap.stakes||{}).join(','));
 
   // Re-check teaser gate at confirm time (prevents direct confirmBet() injection)
   if (snap.type === 'teaser') {
@@ -3191,15 +3349,26 @@ function confirmBet() {
       })
     };
     try {
+      console.log('CONFIRM_BET_POSTING endpoint=/api/bets/place'
+        +' betType='+_dbPayload.betType
+        +' stake='+_dbPayload.stake
+        +' legs='+(_dbPayload.legs||[]).length
+        +' idempotencyKey='+_iKey
+        +' firstLegCKey='+((_dbPayload.legs[0]||{}).canonicalGameKey||'(empty)')
+        +' firstLegSchedStart='+((_dbPayload.legs[0]||{}).scheduledStart||'(empty)')
+        +' firstLegOdds='+((_dbPayload.legs[0]||{}).odds));
       var _dbResp = await _pbFetch('/api/bets/place', {
         method: 'POST', body: JSON.stringify(_dbPayload)
       });
+      var _dbStatus = _dbResp.status;
       var _dbData = await _dbResp.json();
       if (_dbData.ok) {
         _dbPlacementAttempted = true;
-        console.log('[bet placement] DB success ticketId='+_dbData.ticketId+' ledger='+_dbData.ledgerEntryId);
+        console.log('CONFIRM_BET_SUCCESS ticketId='+_dbData.ticketId+' ledger='+_dbData.ledgerEntryId);
+        try { dbgBanner('CONFIRM_BET_SUCCESS\n'+(_dbData.ticketId||''), '#020'); } catch(_d){}
         try { loadPlayerDashboardFromDb(); } catch(_e){}
       } else if (_dbData.code === 'odds_changed') {
+        console.warn('CONFIRM_BET_ERROR status='+_dbStatus+' code=odds_changed leg='+_dbData.leg);
         // ── ODDS CHANGED MODAL ──────────────────────────────────────────────
         console.warn('[bet placement] odds_changed:', _dbData.leg, _dbData.oldOdds, '→', _dbData.newOdds);
         closeBetConfirm();
@@ -3248,7 +3417,24 @@ function confirmBet() {
         return; // Do NOT write localStorage
         // ───────────────────────────────────────────────────────────────────────
       } else {
-        console.warn('[bet placement] DB rejected:', _dbData.code||_dbData.error||JSON.stringify(_dbData.errors));
+        // ── DIAGNOSTIC: full backend rejection surface (was silent until now) ──
+        var _rejBody = _dbData.code || _dbData.error || JSON.stringify(_dbData.errors||_dbData||{});
+        console.warn('CONFIRM_BET_ERROR status='+_dbStatus+' body='+_rejBody);
+        try {
+          var _rejMsg;
+          if (Array.isArray(_dbData.errors) && _dbData.errors.length) {
+            // Backend 400 validation — surface the field problems verbatim, e.g.
+            // "leg0_missing_canonicalGameKey". Most useful diagnostic right now.
+            _rejMsg = 'Bet rejected: ' + _dbData.errors.join(', ').replace(/_/g,' ');
+          } else if (_dbData.code) {
+            _rejMsg = 'Bet rejected: ' + String(_dbData.code).replace(/_/g,' ');
+          } else if (_dbData.error) {
+            _rejMsg = 'Bet rejected: ' + String(_dbData.error).replace(/_/g,' ');
+          } else {
+            _rejMsg = 'Bet rejected by server (HTTP ' + _dbStatus + ')';
+          }
+          showToast(_rejMsg, 'error');
+        } catch(_te){}
         // Hard blocks: balance, conflict, market closed, game started
         var _hardBlock = _dbData.code || _dbData.error || '';
         // Risk limit rejection codes (422)
@@ -3288,10 +3474,18 @@ function confirmBet() {
         }
       }
     } catch(_e) {
-      console.warn('[bet placement] DB fetch failed, using localStorage fallback:', _e.message);
+      console.warn('CONFIRM_BET_ERROR phase=network error='+(_e && _e.message)+' — falling back to localStorage');
+      try { showToast('Network error placing bet — saved locally, syncing when back online', 'warning'); } catch(_te){}
     }
   }
   // ── localStorage path (Phase A fallback or DB not enabled) ────────────────────────
+  // DIAGNOSTIC: detect the "no tickets built" silent-failure (e.g. Single with no per-leg stake hydration)
+  if (!newTickets.length) {
+    console.warn('CONFIRM_BET_ERROR phase=local_save status=0 body=no_tickets_built'
+      +' (likely cause: per-leg stake hydration missed — bsStakes empty for Singles, or all stakes==0)');
+    try { showToast('Bet not placed: enter a stake amount before confirming', 'error'); } catch(_te){}
+    return;
+  }
   newTickets.forEach(function(t){ betTickets.unshift(t); });
   saveTickets();
 
@@ -3789,7 +3983,7 @@ function _gradeTicket(ticket, resultsMap, normalizedGames) {
 }
 
 // ============================================================================
-// SCORES PIPELINE — SportsDataIO only (Odds API is NEVER used for grading).
+// SCORES PIPELINE — SportsDataIO only (the live odds provider is never used for grading).
 // ============================================================================
 
 // MLB TLA → full team name dictionary. Tickets are persisted with full names
@@ -5177,7 +5371,7 @@ async function checkOpenTickets() {
       return;
     }
 
-    // SportsDataIO ONLY — grading never reads from the Odds API.
+    // SportsDataIO ONLY — grading never reads from any live odds provider.
     var scores = await _fetchAndNormalizeScores({ daysBack: 2 });
     if (scores.error) {
       console.warn('[grading] scores fetch error:', scores.error);
@@ -5821,7 +6015,7 @@ async function _autoGradePoll() {
       return; // nothing to do, skip API call
     }
 
-    // SportsDataIO ONLY — grading never reads from the Odds API.
+    // SportsDataIO ONLY — grading never reads from any live odds provider.
     var scores = await _fetchAndNormalizeScores({ daysBack: 2 });
     if (scores.error) {
       console.log('[auto grade poll] scores unavailable:', scores.error);
@@ -6978,8 +7172,33 @@ function bsAddStake(a) {
   // Enable/disable tabs based on selections
   var rrTab = document.getElementById('bs-tab-rr');
   var teaserTab = document.getElementById('bs-tab-teaser');
-  if (rrTab) { rrTab.style.opacity = betSlip.length >= 3 ? "1" : "0.5"; }
-  if (teaserTab) { teaserTab.style.opacity = getTeaserLegs().length >= 2 ? "1" : "0.5"; }
+  if (rrTab) {
+    var rrOk = betSlip.length >= 3;
+    rrTab.style.opacity = rrOk ? '1' : '0.5';
+    rrTab.disabled = !rrOk;
+  }
+  if (teaserTab) {
+    // Hard gate: tab is only available if EVERY leg is teaser-eligible AND
+    // there are 2+ legs. This blocks MLB / NHL / soccer slips at the tab,
+    // not just at confirm time, so the UI never offers an impossible bet.
+    var teaserOk = isSlipTeaserEligible();
+    teaserTab.style.opacity     = teaserOk ? '1' : '0.35';
+    teaserTab.disabled          = !teaserOk;
+    teaserTab.style.cursor      = teaserOk ? 'pointer' : 'not-allowed';
+    teaserTab.title             = teaserOk ? '' :
+      (betSlip.length < 2 ? 'Add 2+ NFL/NCAAF/NBA/NCAAB spread or total picks for a teaser'
+                          : 'Teaser unavailable for this mix of sports/markets');
+    // Auto-switch off teaser if the slip became ineligible (e.g. user added
+    // an MLB leg to an existing teaser). Falls back to Parlay when there are
+    // 2+ legs, otherwise Singles. Never throw out of the leg-sync path.
+    if (!teaserOk && typeof bsType !== 'undefined' && bsType === 'teaser') {
+      try {
+        var fallback = (betSlip.length >= 2) ? 'parlay' : 'straight';
+        console.log('[bet slip] teaser auto-switch → ' + fallback + ' (slip became teaser-ineligible)');
+        bsSetType(fallback);
+      } catch (_e) { /* swallow — leg sync must not break */ }
+    }
+  }
   // Sync fixed Place Bet bar — show whenever drawer is open
   bsSyncPlaceBtn();
 }
@@ -7089,6 +7308,27 @@ function bsSyncPlaceBtn() {
   var badge2 = document.getElementById('bs-badge2');
   if (badge2) badge2.textContent = betSlip.length;
 
+  // PARLAY-FOOTER REGRESSION FIX:
+  // Always trust the FOOTER INPUT as the source of truth for parlay / teaser /
+  // round-robin stake before deciding validity. Without this, any code path
+  // that touched the input value without also writing back to bsStake (e.g.
+  // bsSetType clearing inp.value on tab switch but not resetting bsStake,
+  // openBetSlip's 30ms input-clear after the bsStake=0 reset, etc.) leaves
+  // the player staring at "Enter stake to continue" while the visible input
+  // shows a value. For straight (singles), per-card bsStakes is authoritative
+  // — not the footer — so we leave bsStake alone on that path.
+  var _stakeInp     = document.getElementById('bs-stake-inp');
+  var _stakeInpRaw  = _stakeInp ? _stakeInp.value : '';
+  var _stakeInpNum  = parseFloat(String(_stakeInpRaw).replace(/[^0-9.]/g,'')) || 0;
+  if ((bsType === 'parlay' || bsType === 'teaser') && _stakeInpNum > 0 && bsStake !== _stakeInpNum) {
+    bsStake = _stakeInpNum;
+  } else if ((bsType === 'parlay' || bsType === 'teaser') && _stakeInpNum === 0 && bsStake > 0) {
+    // Input was cleared (e.g. bsSetType tab switch). Keep bsStake matching the
+    // visible state so the user can't accidentally place a bet with no
+    // visible stake.
+    bsStake = 0;
+  }
+
   // Valid = has picks AND has a non-zero stake
   var valid = bsType === 'parlay'
     ? (betSlip.length >= 2 && bsStake > 0)
@@ -7188,21 +7428,43 @@ function bsSyncPlaceBtn() {
     var _w3 = document.getElementById('_slip-suspension-warn');
     if (_w3) _w3.remove();
   }
-  // ────────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Place Bet button is ALWAYS visible inside the slip footer once the slip
+  // has selections. When stake is missing or the bet type doesn't have enough
+  // legs, the button stays in a disabled "Enter stake / Add picks" state so
+  // the player can see it on mobile and knows what's missing. (Previously the
+  // button was display:none when invalid, which made it look broken — the
+  // regression Tony reported.)
   if (btn) {
-    if (!valid) {
-      btn.style.display = 'none';
-    } else {
-      btn.style.display = 'block';
-      btn.dataset.disabled = 'false';
-      btn.style.background = '#00c853';
-      btn.style.color = '#fff';
-      btn.style.cursor = 'pointer';
+    var hasPicks = (bsType === 'parlay') ? (betSlip.length >= 2)
+                 : (bsType === 'rr')     ? (betSlip.length >= 3)
+                 : (betSlip.length > 0);
+    btn.style.display = 'block';
+    if (valid) {
+      btn.dataset.disabled  = 'false';
+      btn.style.background  = '#00c853';
+      btn.style.color       = '#fff';
+      btn.style.cursor      = 'pointer';
+      btn.style.opacity     = '1';
+      btn.style.pointerEvents = 'auto';
       var label = bsType === 'rr' ? 'Place Round Robin'
         : bsType === 'parlay' ? 'Place Parlay'
         : bsType === 'straight' && betSlip.length > 1 ? 'Place ' + betSlip.length + ' Bets'
         : 'Place Bet';
       btn.textContent = label + '  ' + fmtDollar(totalRisk);
+    } else {
+      // Disabled state — still visible so the player knows where it is.
+      btn.dataset.disabled  = 'true';
+      btn.style.background  = '#e0e0e0';
+      btn.style.color       = '#888';
+      btn.style.cursor      = 'not-allowed';
+      btn.style.opacity     = '0.85';
+      btn.style.pointerEvents = 'none';
+      btn.textContent = !hasPicks
+        ? (bsType === 'parlay' ? 'Add 2+ picks for a parlay'
+          : bsType === 'rr'    ? 'Add 3+ picks for a round robin'
+          : 'Add picks to continue')
+        : 'Enter stake to continue';
     }
   }
 
@@ -7214,6 +7476,30 @@ function bsSyncPlaceBtn() {
     } else {
       payRow.style.display = 'none';
     }
+  }
+
+  // Diagnostic: one-line snapshot of the parlay/teaser/rr footer state.
+  // Used to debug "input shows $X but button says Enter stake to continue"
+  // reports. Combined-odds string is derived from the live slip legs.
+  if (bsType === 'parlay' || bsType === 'teaser' || bsType === 'rr') {
+    try {
+      var _combinedDec = (Array.isArray(betSlip) ? betSlip : [])
+        .filter(function(b){ return b && b.odds && !isNaN(b.odds); })
+        .reduce(function(p,b){ return p * amToDecimal(b.odds); }, 1);
+      var _combinedAmer;
+      if (_combinedDec <= 1)      _combinedAmer = '--';
+      else if (_combinedDec >= 2) _combinedAmer = '+' + Math.round((_combinedDec - 1) * 100);
+      else                        _combinedAmer = '' + Math.round(-100 / (_combinedDec - 1));
+      console.log('PARLAY_FOOTER_STATE'
+        + ' bsType=' + bsType
+        + ' legs=' + (Array.isArray(betSlip) ? betSlip.length : 0)
+        + ' stakeRaw=' + JSON.stringify(_stakeInpRaw)
+        + ' stakeNum=' + _stakeInpNum
+        + ' bsStake=' + bsStake
+        + ' combinedOdds=' + _combinedAmer
+        + ' payout=' + (totalPay > 0 ? totalPay.toFixed(2) : '--')
+        + ' disabled=' + (!valid));
+    } catch (_dbg) { /* never let the diagnostic break the sync */ }
   }
 }
 
@@ -9106,7 +9392,7 @@ try { _backfillLegacySettledMetadata(); } catch(_e){}
 
 // =============================================================================
 // LIVE TAB — SportsDataIO via /api/sportsdataio/mlb (cached 60s client +
-// 120s proxy). Read-only display. The Odds API path is no longer used here.
+// 120s proxy). Read-only display. No live odds provider path is used here.
 // Honors the scores suspension circuit breaker: if scores are unavailable,
 // shows an explanatory empty state instead of polling.
 // =============================================================================
@@ -9694,11 +9980,11 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 97be739 · May 21, 12:50 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 891a630 · May 21, 12:51 AM</span>
 </div>
 
-})();
-// ────────────────────────────────────────────────────────────────────────────
+<!-- Orphan IIFE closer removed (was rendering as a literal IIFE close
+     between the build-info footer and the version-guard script block). -->
 
 <script>
 // VERSION GUARD — fetches /build.json, shows stale banner if SHA mismatch
