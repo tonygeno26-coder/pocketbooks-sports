@@ -3123,7 +3123,15 @@ function _makeSelection(b) {
   };
 }
 
-function confirmBet() {
+// NOTE: `async` is required — this function uses `await _pbFetch(...)` for
+// the DB-side bet placement. The legacy declaration omitted async even
+// though the body has been awaiting since the DB path was added; Vercel's
+// `node --check` build step rejects this, so the deploy pipeline never
+// shipped the change to the edge. Without async, calling this in a real
+// browser raises a SyntaxError at parse time (modern Chrome/Safari are
+// no more lenient than Node here — the page lived on the prior build
+// that didn't have these awaits).
+async function confirmBet() {
   console.log("confirm bet clicked");
   // BUG #5: read EVERYTHING from the snapshot captured at openBetConfirm time.
   // Live globals (bsStakes, bsStake, betSlip, bsType, rrStakes, teaserPts) are
