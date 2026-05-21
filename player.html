@@ -721,6 +721,7 @@ var _sessionValid = false; // set true by _validatePlayerSession if all checks p
 
 function _validatePlayerSession() {
   // Dev / preview bypass
+  if (_pDev)     { _sessionValid = true; return { ok:true, reason:'dev_bypass' }; }
   if (_pPreview) { _sessionValid = true; return { ok:true, reason:'preview_bypass' }; }
 
   var _tok  = localStorage.getItem('pb-sports-token') || '';
@@ -872,8 +873,8 @@ function _showSessionExpiredModal(result) {
 // ══════════════════════════════════════════════════════════════════════════════
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'ba3ee8b';
-window.PBS_BUILD_DATE = '2026-05-21T09:28:09.129Z';
+window.PBS_BUILD_SHA = 'f8c2ee3';
+window.PBS_BUILD_DATE = '2026-05-21T09:33:53.728Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -2034,12 +2035,50 @@ function showToast(msg, type) {
 // Preview mode — standardized params
 const _pp = new URLSearchParams(window.location.search);
 const _pPreview = _pp.get('preview') === '1';
+// Dev bypass: ?dev=1, ?preview=1, ?from=dev, or loading from /dev.html
+const _pDev = _pp.get('dev') === '1'
+           || _pp.get('preview') === '1'
+           || _pp.get('from') === 'dev'
+           || (typeof window !== 'undefined' && window.location.pathname.includes('dev.html'));
 const _pScreen = _pp.get('screen') || 'home';
 const _pRole = _pp.get('role') || 'player';
 const _pState = _pp.get('state') || 'active';
 const _pTheme = _pp.get('theme') || 'dark';
 const _pAnim = _pp.get('anim') !== 'off';
 const _pDevice = _pp.get('device') || 'iphone';
+// ── DEV SESSION BYPASS ───────────────────────────────────────────────────────
+// Seeds localStorage with a valid-looking mock session so the session gate
+// passes and the backend dev-bypass path handles bets without a real JWT.
+function _installDevSession() {
+  var _devPid   = 'dev-player';
+  var _devCid   = 'dev-club';
+  var _devRole  = 'owner';
+  // Build a mock JWT payload (backend won't verify sig in dev/bypass mode)
+  var _mockPayload = { sub:_devPid, actorId:_devPid, role:_devRole,
+    clubId:_devCid, exp: Math.floor(Date.now()/1000) + 86400*7, iat: Math.floor(Date.now()/1000) };
+  var _b64u = function(s){ return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); };
+  var _mockToken = _b64u('{"alg":"HS256","typ":"JWT"}')
+    + '.' + _b64u(JSON.stringify(_mockPayload))
+    + '.dev-bypass-sig';
+  // Write all required session state
+  localStorage.setItem('pb-sports-token', _mockToken);
+  TOKEN = _mockToken;
+  localStorage.setItem('pb-player', JSON.stringify({
+    id: _devPid, username: _devPid, name: 'Dev Player',
+    role: _devRole, email: 'dev@pocketbooks.local'
+  }));
+  localStorage.setItem('pb-club', JSON.stringify({
+    id: _devCid, clubId: _devCid, name: 'Dev Club',
+    role: _devRole, balance: 1000
+  }));
+  localStorage.setItem('pb-active-club', JSON.stringify({ id:_devCid, clubId:_devCid, name:'Dev Club', role:_devRole }));
+  localStorage.setItem('pb-balance-start', '1000');
+  console.log('DEV_SESSION_BYPASS_ACTIVE clubId='+_devCid+' playerId='+_devPid+' role='+_devRole+' balance=1000');
+  try { dbgBanner('DEV SESSION BYPASS clubId='+_devCid+' playerId='+_devPid, '#240'); } catch(_){}
+}
+if (_pDev) { _installDevSession(); }
+// ─────────────────────────────────────────────────────────────────────────────
+
 if (_pPreview) {
   if (_pDevice === 'tablet') document.body.style.maxWidth = '600px';
   if (_pTheme === 'casino') { document.documentElement.style.setProperty('--green','#f5c842'); document.documentElement.style.setProperty('--cyan','#e8a020'); document.body.style.background='#0a0500'; }
@@ -2084,6 +2123,7 @@ function _checkSessionScope() {
   var pid      = _safeId(_pl  && (_pl.id  != null  ? _pl.id  : _pl.username));
   var localCid = _safeId(_club && (_club.id != null ? _club.id : _club.clubId));
 
+  if (_pDev)     return { valid:true, reason:'dev_bypass',     tokenClubId:'dev-club', localClubId:'dev-club', activeClubId:'dev-club', playerId:'dev-player' };
   if (_pPreview) return { valid:true, reason:'preview_bypass', tokenClubId:null, localClubId:localCid, activeClubId:_activeClubId, playerId:pid };
   var isDev = false; try { isDev = _isDevIdentity(); } catch(_){}
   if (isDev)    return { valid:true, reason:'dev_bypass',     tokenClubId:null, localClubId:localCid, activeClubId:_activeClubId, playerId:pid };
@@ -10489,7 +10529,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · ba3ee8b · May 21, 02:28 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · f8c2ee3 · May 21, 02:33 AM</span>
 </div>
 
 <!-- Orphan IIFE closer removed (was rendering as a literal IIFE close
