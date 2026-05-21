@@ -715,8 +715,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'c383189';
-window.PBS_BUILD_DATE = '2026-05-21T08:26:51.194Z';
+window.PBS_BUILD_SHA = '265b1c6';
+window.PBS_BUILD_DATE = '2026-05-21T08:29:03.354Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -3023,7 +3023,7 @@ function closeBetConfirm() {
   if (ov) ov.remove();
   // Invalidate snapshot so a stale confirm cannot fire after close.
   _pendingSnapshot = null;
-  console.log('[cancel confirm bet] modal closed, balance unchanged, no ticket placed');
+  console.log('[closeBetConfirm] modal closed');
 }
 // Alias for user-facing requests
 var closeConfirmBet = closeBetConfirm;
@@ -3454,10 +3454,16 @@ async function confirmBet() {
 
         _cbStep = 'TICKET_SAVE';
         _cbLog('CONFIRM_BET_TICKET_SAVE_BEGIN');
+        // Merge server ticketId back into local ticket object if provided
+        if (_dbData.ticketId && newTickets[0]) newTickets[0].id = _dbData.ticketId;
+        if (_dbData.status   && newTickets[0]) newTickets[0].status = _dbData.status || newTickets[0].status;
         try {
+          // Prevent duplicate: remove any pre-existing entry with same id before unshift
+          var _tid = newTickets[0] && newTickets[0].id;
+          if (_tid) betTickets = betTickets.filter(function(t){ return t.id !== _tid; });
           betTickets.unshift(newTickets[0]);
           saveTickets();
-          _cbLog('CONFIRM_BET_TICKET_SAVE_SUCCESS');
+          _cbLog('CONFIRM_BET_TICKET_SAVE_SUCCESS', 'ticketId='+(_tid||'?')+' pbTickets='+betTickets.length);
         } catch(_se) { _cbErr('CONFIRM_BET_TICKET_SAVE_WARN', _se, 'non-fatal'); }
 
         _cbStep = 'BALANCE_SYNC';
@@ -3469,10 +3475,23 @@ async function confirmBet() {
         try { closeBetConfirm(); } catch(_) {}
         try { closeBetSlip();   } catch(_) {}
         try { clearSlip();      } catch(_) {}
-        try { loadPlayerDashboardFromDb(); } catch(_) {}
+
+        // Render My Bets immediately with the locally-saved ticket
         try { renderMyBets(); } catch(_) {}
         showToast('\u2705 Bet placed!', 'success');
-        _cbLog('CONFIRM_BET_COMPLETE', 'ticketId='+_dbData.ticketId);
+
+        // Dashboard refresh is deferred 400ms — backend propagation lag means
+        // immediate /api/player/dashboard may not yet include the new ticket,
+        // and a count-based gate in loadPlayerDashboardFromDb would refuse to
+        // overwrite local storage, leaving the displayed balance stale.
+        setTimeout(function(){
+          try { loadPlayerDashboardFromDb().then(function(){
+            try { renderMyBets(); } catch(_) {}
+            try { syncBalanceDisplays(); } catch(_) {}
+          }).catch(function(){}); } catch(_) {}
+        }, 400);
+
+        _cbLog('CONFIRM_BET_COMPLETE', 'ticketId='+_dbData.ticketId+' path=DB');
         return;
 
       // ── Odds changed ──────────────────────────────────────────────────────
@@ -5749,11 +5768,9 @@ async function loadPlayerDashboardFromDb() {
     // Hydrate betTickets from DB-derived active tickets
     var allTix = (data.tickets.active||[]).concat(data.tickets.settled||[]).concat(data.tickets.canceled||[]);
     if (allTix.length > 0) {
-      // Only update if DB has more/equal data (stale local protection)
-      var localCount = 0; try { localCount = JSON.parse(localStorage.getItem('pb-tickets')||'[]').length; } catch(_e){}
-      if (allTix.length >= localCount) {
-        try { localStorage.setItem('pb-tickets', JSON.stringify(allTix)); betTickets = allTix; } catch(_e){}
-      }
+      // DB is authoritative — always overwrite local cache when DB has tickets.
+      // Exception: if DB returns 0 tickets, keep local cache (propagation lag).
+      try { localStorage.setItem('pb-tickets', JSON.stringify(allTix)); betTickets = allTix; } catch(_e){}
     }
     syncBalanceDisplays();
     _updatePlayerSourceBadge('db');
@@ -10127,7 +10144,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · c383189 · May 21, 01:26 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 265b1c6 · May 21, 01:29 AM</span>
 </div>
 
 <!-- Orphan IIFE closer removed (was rendering as a literal IIFE close
