@@ -1276,8 +1276,13 @@ async function loadGames(sport, opts){
     if(!_res.ok) {
       let _errBody = {};
       try { _errBody = await _res.json(); } catch(e){}
-      const _msg = _errBody.error_code === 'OUT_OF_USAGE_CREDITS'
-        ? 'Odds API quota exhausted — resets monthly. Upgrade at the-odds-api.com.'
+      // Provider-neutral error text. The legacy 'OUT_OF_USAGE_CREDITS' code
+      // came from The Odds API era — once Owls Insight is wired through
+      // /api/odds/:sport (backend), the only way to see it is if the legacy
+      // path is somehow still being exercised. Either way, the player just
+      // sees "temporarily unavailable" and a retry path, not a billing URL.
+      const _msg = (_errBody.error_code === 'OUT_OF_USAGE_CREDITS' || _res.status === 402)
+        ? 'Odds temporarily unavailable. Try again shortly.'
         : (_errBody.error || 'Backend error HTTP '+_res.status);
       throw new Error(_msg);
     }
@@ -1308,13 +1313,29 @@ async function loadGames(sport, opts){
       } catch(_be){}
     }
     console.log('[PBS fetch success] gamesLoaded:', games.length, _xCount ? ('(server X-Games-Count='+_xCount+')') : '');
+    // Safe debug signal for production troubleshooting. Reads response
+    // headers populated by the new Owls-aware backend (X-Provider /
+    // X-Source-Status / X-Games-Count); falls back to '-' when absent so
+    // legacy responses don't crash the log.
+    try {
+      var _provHdr = (_res.headers && _res.headers.get) ? (_res.headers.get('X-Provider') || '-') : '-';
+      var _ssHdr   = (_res.headers && _res.headers.get) ? (_res.headers.get('X-Source-Status') || '-') : '-';
+      var _mktCnt  = 0;
+      for (var _gi = 0; _gi < games.length; _gi++) {
+        var _g = games[_gi];
+        _mktCnt += (Array.isArray(_g.moneyline) ? _g.moneyline.length : 0);
+        _mktCnt += (Array.isArray(_g.spreads)   ? _g.spreads.length   : 0);
+        _mktCnt += (Array.isArray(_g.totals)    ? _g.totals.length    : 0);
+      }
+      console.log('FRONTEND_ODDS_RENDER games='+games.length+' markets='+_mktCnt
+        +' provider='+_provHdr+' sourceStatus='+_ssHdr+' sport='+_sport);
+    } catch (_dbg) {}
     console.log('[PBS render start]');
     if(!games.length){
-      console.warn('[odds] empty response — check ODDS_API_KEY is set in Railway env vars');
       if (_liveOnly) {
         el.innerHTML='<div class="empty" style="padding:60px 20px;text-align:center;color:#888">No live games right now.</div>';
       } else {
-        el.innerHTML='<div class="empty">No games available right now.<br><span style="font-size:0.75rem;color:#888">If this persists, check backend ODDS_API_KEY config.</span></div>';
+        el.innerHTML='<div class="empty" style="padding:60px 20px;text-align:center;color:#888">No games available right now.</div>';
       }
       return;
     }
@@ -1624,19 +1645,69 @@ function _checkTicketSportAccess(legs) {
   return { allowed: true };
 }
 
-// Update sport tabs: grey out/disable blocked sports
+// Update sport tabs: grey out/disable host-blocked sports + hide tabs the
+// current odds provider can't deliver. We read window._sportsCatalog (filled
+// asynchronously by _loadSportsCatalog below) when present; if it's missing,
+// every hardcoded tab stays visible (legacy behavior).
 function _updateSportTabs() {
   var tabMap = { mlb:'st-mlb', nba:'st-nba', nhl:'st-nhl', nfl:'st-nfl',
                  soccer:'st-soccer', ufl:'st-ufl', tennis:'st-tennis', golf:'st-golf' };
+  // Build a quick lookup: which sports does the backend currently know about?
+  // catalog === null  -> endpoint not yet polled / unreachable -> show all (legacy)
+  // catalog === {…}   -> hide tabs missing from catalog, keep those present
+  var catalog = window._sportsCatalog;
+  var sportsByKey = null;
+  if (catalog && Array.isArray(catalog.sports)) {
+    sportsByKey = {};
+    for (var i = 0; i < catalog.sports.length; i++) {
+      var s = catalog.sports[i];
+      if (s && s.key) sportsByKey[String(s.key).toLowerCase()] = s;
+    }
+  }
   Object.keys(tabMap).forEach(function(sport) {
     var tab = document.getElementById(tabMap[sport]);
     if (!tab) return;
     var blocked = isSportBlocked(sport);
-    tab.style.opacity  = blocked ? '0.35' : '';
+    // Catalog-driven visibility: if we have a catalog AND this sport isn't
+    // in it, hide the tab entirely. If catalog says the sport exists but
+    // has 0 games, keep the tab visible but dim it (the user can still
+    // click; they'll get "No games available right now").
+    var inCatalog  = !sportsByKey || !!sportsByKey[sport];
+    var hasGames   = !sportsByKey || (sportsByKey[sport] && sportsByKey[sport].games > 0);
+    if (!inCatalog) {
+      tab.style.display = 'none';
+      return;
+    }
+    tab.style.display = '';
+    tab.style.opacity = blocked ? '0.35' : (hasGames ? '' : '0.55');
     tab.style.pointerEvents = blocked ? 'none' : '';
-    tab.title = blocked ? 'Your host has disabled ' + sport.toUpperCase() + ' betting' : '';
+    tab.title = blocked
+      ? ('Your host has disabled ' + sport.toUpperCase() + ' betting')
+      : (hasGames ? '' : 'No games available right now');
   });
 }
+
+// Fetch the backend's sport catalog so tab visibility can adapt to whatever
+// the current odds provider supports. Non-blocking: failure leaves the
+// hardcoded tabs intact. Refreshes every 5 minutes — sport availability
+// doesn't churn faster than that in practice.
+async function _loadSportsCatalog() {
+  try {
+    var res = await fetch('/api/sports', { cache: 'no-store' });
+    if (!res.ok) { console.warn('[sports catalog] HTTP '+res.status+' — using hardcoded tabs'); return; }
+    var data = await res.json();
+    if (data && Array.isArray(data.sports)) {
+      window._sportsCatalog = data;
+      console.log('[sports catalog] provider='+(data.provider||'?')
+        +' sourceStatus='+(data.sourceStatus||'?')
+        +' sports='+data.sports.map(function(s){ return s.key+':'+s.games; }).join(','));
+      try { _updateSportTabs(); } catch(e) { console.warn('[sports catalog] _updateSportTabs after refresh failed:', e && e.message || e); }
+    }
+  } catch (e) {
+    console.warn('[sports catalog] fetch failed (legacy tabs remain):', e && e.message || e);
+  }
+}
+try { _loadSportsCatalog(); setInterval(_loadSportsCatalog, 5 * 60 * 1000); } catch(_se) { console.warn('[sports catalog] init failed:', _se && _se.message || _se); }
 // ════════════════════════════════════════════════════════════════════════════
 
 function setSport(el,sport){
@@ -9648,8 +9719,8 @@ window.openGradingConsole = openGradingConsole;
   <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · feed6c2 · May 20, 05:52 AM</span>
 </div>
 
-})();
-// ────────────────────────────────────────────────────────────────────────────
+<!-- Orphan IIFE closer removed (was rendering as a literal IIFE close
+     between the build-info footer and the version-guard script block). -->
 
 <script>
 // VERSION GUARD — fetches /build.json, shows stale banner if SHA mismatch
