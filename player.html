@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'cdf268a';
-window.PBS_BUILD_DATE = '2026-05-21T08:02:44.701Z';
+window.PBS_BUILD_SHA = '80b69c2';
+window.PBS_BUILD_DATE = '2026-05-21T08:07:16.293Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -2368,6 +2368,16 @@ function bsTeamAbbr(pickStr, game) {
 
 function bsValidate() {
   var warnings = [];
+
+  // SGP leg validity: flag invalid same-game combinations in parlay/rr
+  if (bsType === 'parlay' || bsType === 'rr') {
+    var _sgpViolations = _validateSlipSGP(betSlip);
+    _sgpViolations.forEach(function(v){
+      var label = (v.leg1.game || v.gameKey).split('|').slice(0,3).join(' ');
+      var already = warnings.some(function(w){ return w.includes(label); });
+      if (!already) warnings.push('Invalid SGP combination: '+label+' — this combination is not allowed.');
+    });
+  }
 
   // Only flag TRUE contradictions: same game + same market category + opposite side
   // e.g. Over 8.5 + Under 8.5, Phillies -1.5 + Marlins +1.5, Phillies ML + Marlins ML
@@ -7334,6 +7344,19 @@ function bsSyncPlaceBtn() {
     }
   }
 
+  // ── SGP validity gate: disable Place Bet on invalid SGP combinations ──
+  if (valid && (bsType === 'parlay' || bsType === 'rr')) {
+    var _sgpV = _validateSlipSGP(betSlip);
+    if (_sgpV.length > 0) {
+      if (btn) {
+        btn.style.display='block'; btn.dataset.disabled='true';
+        btn.style.background='#1a0000'; btn.style.color='#f87171'; btn.style.cursor='default';
+        btn.style.border='1px solid #7f1d1d'; btn.textContent='⚠️ Invalid SGP combination';
+      }
+      return;
+    }
+  }
+
   // ── Button: hidden when no valid stake ──────────────────────────────────
   // ── Phase L: hard gate when market service is unavailable ────────────────────────
   if (valid && !_marketServiceOk) {
@@ -7748,6 +7771,58 @@ function _checkTicketPlacementGate(legs, nowMs) {
 // Prevents betting both sides of the same game in slip or vs active tickets.
 // Uses canonicalGameKey as primary conflict key.
 // ════════════════════════════════════════════════════════════════════════════
+// ── SGP leg validity engine ───────────────────────────────────────────────────────────────
+function _sgpIsML(market) {
+  var m=(market||'').toLowerCase();
+  return m.includes('moneyline')||m.includes('to win')||m.includes('h2h')||m==='ml';
+}
+function _sgpIsSpread(market) {
+  var m=(market||'').toLowerCase();
+  return m.includes('spread')||m.includes('run line')||m.includes('puck line')||
+         m.includes('handicap')||m.includes('point spread');
+}
+function _sgpIsTotal(market) {
+  var m=(market||'').toLowerCase();
+  return m.includes('total')||m.includes('over')||m.includes('under')||m.includes('o/u');
+}
+
+function _checkSGPLegValidity(existingSameGameLegs, newLeg) {
+  var nm=newLeg.market||''; var np=(newLeg.pick||'').toLowerCase();
+  var newML=_sgpIsML(nm); var newSp=_sgpIsSpread(nm); var newTo=_sgpIsTotal(nm);
+  for (var i=0;i<existingSameGameLegs.length;i++) {
+    var ex=existingSameGameLegs[i]; var em=ex.market||''; var ep=(ex.pick||'').toLowerCase();
+    var exML=_sgpIsML(em); var exSp=_sgpIsSpread(em); var exTo=_sgpIsTotal(em);
+    if (newML&&exML) return {invalid:true,reason:'two_moneylines_same_game',
+      message:'This same-game combination is not allowed.'};
+    if ((newML&&exSp)||(newSp&&exML)) return {invalid:true,reason:'moneyline_plus_spread_same_game',
+      message:'This same-game combination is not allowed.'};
+    if (newSp&&exSp) return {invalid:true,reason:'two_spreads_same_game',
+      message:'This same-game combination is not allowed.'};
+    if (newTo&&exTo) return {invalid:true,reason:'two_totals_same_game',
+      message:'This same-game combination is not allowed.'};
+  }
+  return {invalid:false,reason:null};
+}
+
+function _validateSlipSGP(legs) {
+  var byGame={};
+  (legs||[]).forEach(function(l){
+    var gk=l.canonicalGameKey||l.game||'__x';
+    if(!byGame[gk]) byGame[gk]=[];
+    byGame[gk].push(l);
+  });
+  var violations=[];
+  Object.keys(byGame).forEach(function(gk){
+    var gl=byGame[gk]; if(gl.length<2) return;
+    for (var i=0;i<gl.length;i++) for (var j=i+1;j<gl.length;j++) {
+      var r=_checkSGPLegValidity([gl[i]],gl[j]);
+      if(r.invalid) violations.push({gameKey:gk,leg1:gl[i],leg2:gl[j],reason:r.reason});
+    }
+  });
+  return violations;
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 function _pickConflictToken(leg) {
   var market = (leg.market || '').toLowerCase();
   var pick   = (leg.pick   || '').toLowerCase();
@@ -7770,6 +7845,19 @@ function _pickConflictToken(leg) {
 function _checkBetConflict(newLeg) {
   var newToken = _pickConflictToken(newLeg);
   if (!newToken) return { conflict: false };
+
+  // ── SGP leg validity check: block invalid same-game combinations ──
+  if (newLeg.canonicalGameKey) {
+    var _sameGameLegs = betSlip.filter(function(b){
+      return b.cellId !== newLeg.cellId && b.canonicalGameKey === newLeg.canonicalGameKey;
+    });
+    if (_sameGameLegs.length > 0) {
+      var _sgpCheck = _checkSGPLegValidity(_sameGameLegs, newLeg);
+      if (_sgpCheck.invalid) {
+        return { conflict:true, reason:_sgpCheck.reason, message:_sgpCheck.message };
+      }
+    }
+  }
 
   // Check current slip
   for (var i = 0; i < betSlip.length; i++) {
@@ -9930,7 +10018,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · cdf268a · May 21, 01:02 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 80b69c2 · May 21, 01:07 AM</span>
 </div>
 
 <!-- Orphan IIFE closer removed (was rendering as a literal IIFE close
