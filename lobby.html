@@ -1258,11 +1258,15 @@ function renderClubsList() {
     const roleLabel = roleDisplay(c);
     const roleColor = ownerRole ? '#f5c842' : hostRole ? '#c084fc' : isPending ? '#888' : '#00c2ff';
     const members = c.members||0;
-    const actionBtn = hostRole
-      ? `<button onclick="event.stopPropagation();selectClub('${c.id}');setTimeout(()=>{window.location='index.html'},50)" style="padding:8px 16px;background:${ownerRole?'#f5c842':'#c084fc'};color:#000;border:none;border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Host Dashboard</button>`
-      : isPending&&c.status==='demo'
-        ? `<button onclick="event.stopPropagation();openModal('modal-join')" style="padding:8px 16px;background:rgba(0,194,255,0.15);color:#00c2ff;border:1px solid rgba(0,194,255,0.3);border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Join Club</button>`
-        : `<button onclick="event.stopPropagation();selectClub('${c.id}')" style="padding:8px 16px;background:#00ff88;color:#000;border:none;border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Sportsbook</button>`;
+    // Owners/hosts get two buttons so they can access both views
+    const actionBtn = isPending&&c.status==='demo'
+      ? `<button onclick="event.stopPropagation();openModal('modal-join')" style="padding:8px 16px;background:rgba(0,194,255,0.15);color:#00c2ff;border:1px solid rgba(0,194,255,0.3);border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Join Club</button>`
+      : hostRole
+        ? `<div style="display:flex;gap:6px">` +
+            `<button onclick="event.stopPropagation();selectClub('${c.id}','host')" style="padding:7px 12px;background:${ownerRole?'#f5c842':'#c084fc'};color:#000;border:none;border-radius:20px;font-size:0.68rem;font-weight:900;cursor:pointer;white-space:nowrap">Host</button>` +
+            `<button onclick="event.stopPropagation();selectClub('${c.id}','player')" style="padding:7px 12px;background:#00ff88;color:#000;border:none;border-radius:20px;font-size:0.68rem;font-weight:900;cursor:pointer;white-space:nowrap">Sportsbook</button>` +
+          `</div>`
+        : `<button onclick="event.stopPropagation();selectClub('${c.id}','player')" style="padding:8px 16px;background:#00ff88;color:#000;border:none;border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Sportsbook</button>`;
     return `<div onclick="selectClub(${c.id})" style="background:#141414;border:1px solid #252525;border-radius:16px;padding:16px;margin-bottom:10px;cursor:pointer;transition:border-color 0.15s" onmouseenter="this.style.borderColor='#333'" onmouseleave="this.style.borderColor='#252525'">
       <div style="display:flex;align-items:center;gap:12px">
         <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#1a2a1a,#0a1a0a);border:1px solid #333;display:flex;align-items:center;justify-content:center;font-size:1rem;font-weight:900;color:#00ff88;flex-shrink:0">${(c.name||'').slice(0,2).toUpperCase()}</div>
@@ -1317,12 +1321,12 @@ function setActiveClub(club) {
   document.getElementById('ac-logo').style.display = 'block';
 }
 
-function selectClub(id) {
+function selectClub(id, action) {
   const club = userClubs.find(c => String(c.id) === String(id) || (c.code && String(c.code) === String(id)));
   if (!club) return;
   setActiveClub(club);
   closeAllModals();
-  enterActiveClub();
+  enterActiveClub(action); // action = 'player' | 'host' | undefined (role-based default)
 }
 
 // ─── TOKEN ACQUISITION FOR CLUB ENTRY ────────────────────────────────────────
@@ -1354,7 +1358,7 @@ async function _acquireClubToken(playerId, clubId) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-function enterActiveClub() {
+function enterActiveClub(action) {
   // Fallback: restore activeClub from pb-club or pb-club-players if returning from player/host
   if (!activeClub) {
     var _pbClub = JSON.parse(localStorage.getItem('pb-club') || 'null');
@@ -1381,16 +1385,28 @@ function enterActiveClub() {
   try { _navPlayer = JSON.parse(localStorage.getItem('pb-player')||'null'); } catch(_){}
   var _navPid = _navPlayer && (_navPlayer.id != null ? String(_navPlayer.id) : _navPlayer.username) || null;
   var _navCid = String(activeClub.id != null ? activeClub.id : (activeClub.clubId || ''));
-  var _dest = isHostRole(activeClub.role) ? 'index.html' : 'player.html';
+  // Determine destination: explicit action overrides role-based default
+  var _role = activeClub.role || 'player';
+  var _dest;
+  if (action === 'player') {
+    _dest = 'player.html';
+  } else if (action === 'host') {
+    _dest = 'index.html';
+  } else {
+    // No explicit action: role-based default
+    _dest = isHostRole(_role) ? 'index.html' : 'player.html';
+  }
+  console.log('ROUTE_DECISION action='+(action||'(default)')+' role='+_role+' route='+_dest);
 
   if (_navPid && _navCid) {
     _acquireClubToken(_navPid, _navCid).then(function(ok) {
       if (!ok) console.warn('TOKEN_WRITE_FAILED — navigating anyway with existing token');
+      console.log('ROUTE_DECISION navigating to '+_dest);
       window.location.href = _dest + '?from=lobby';
     });
   } else {
-    // No pid/cid to acquire token — navigate anyway (existing token or dev mode)
     console.warn('TOKEN_WRITE_SKIPPED pid='+(String(_navPid||'(none)'))+' cid='+(String(_navCid||'(none)')));
+    console.log('ROUTE_DECISION navigating to '+_dest+' (no token acquired)');
     window.location.href = _dest + '?from=lobby';
   }
 }
