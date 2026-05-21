@@ -468,6 +468,7 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
   to   { opacity:1; transform:translateX(0); }
 }
 
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 
 <script>
@@ -714,8 +715,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '3b708b1';
-window.PBS_BUILD_DATE = '2026-05-21T08:19:58.745Z';
+window.PBS_BUILD_SHA = 'c383189';
+window.PBS_BUILD_DATE = '2026-05-21T08:26:51.194Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -3200,207 +3201,295 @@ function _makeSelection(b) {
 // no more lenient than Node here — the page lived on the prior build
 // that didn't have these awaits).
 async function confirmBet() {
-  console.log('CONFIRM_BET_ENTERED bsType='+bsType+' slipLegs='+(Array.isArray(betSlip)?betSlip.length:0)
-    +' _pendingRisk='+_pendingRisk+' _DB_PRIMARY_READS_ENABLED='+(typeof _DB_PRIMARY_READS_ENABLED!=='undefined'?_DB_PRIMARY_READS_ENABLED:'undef'));
-  // BUG #5: read EVERYTHING from the snapshot captured at openBetConfirm time.
-  // Live globals (bsStakes, bsStake, betSlip, bsType, rrStakes, teaserPts) are
-  // not consulted here — they may have been mutated by re-renders or async UI
-  // events between modal-open and modal-confirm.
+  // ══════════════════════════════════════════════════════════════════════════
+  //  FULL PLACEMENT TRACE — every step logged; any throw surfaces stack+body
+  // ══════════════════════════════════════════════════════════════════════════
+  var _cbStep = 'INIT';
+  var _cbBtn  = null;  // confirm button reference (set once located)
+  var _cbAbortCtrl  = null;
+  var _cbAbortTimer = null;
+  var _cbRespStatus = null;
+  var _cbRespText   = null;  // raw response body for JSON-parse-fail diagnosis
+
+  function _cbLog(tag, extra) {
+    var msg = '[confirmBet] ' + tag + (extra ? ' ' + extra : '');
+    console.log(msg);
+    try { dbgBanner(tag, '#024'); } catch(_){}
+  }
+  function _cbErr(tag, err, extra) {
+    var stack = (err && err.stack) ? '\n  stack: ' + err.stack.split('\n').slice(0,4).join(' | ') : '';
+    var msg = '[confirmBet] ' + tag
+      + ' step=' + _cbStep
+      + ' respStatus=' + _cbRespStatus
+      + (extra ? ' ' + extra : '')
+      + (err ? ' err=' + (err.message || String(err)) : '')
+      + stack;
+    console.warn(msg);
+    try { dbgBanner(tag, '#800'); } catch(_){}
+  }
+
+  // ── Locate + disable confirm button (spinner) ─────────────────────────────
+  _cbBtn = document.getElementById('bs-confirm-btn')
+        || document.querySelector('[data-action="confirm"]')
+        || document.querySelector('[data-action="confirm-bet"]')
+        || document.querySelector('.bs-confirm-btn');
+  function _cbBtnBusy(label) {
+    if (!_cbBtn) return;
+    _cbBtn.disabled = true;
+    _cbBtn.dataset.cbBusy = '1';
+    _cbBtn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px">'
+      + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"'
+      + ' style="animation:spin 0.8s linear infinite"><circle cx="12" cy="12" r="10" stroke-opacity=".25"/>'
+      + '<path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/></svg>'
+      + (label||'Placing\u2026') + '</span>';
+  }
+  function _cbBtnReady() {
+    if (!_cbBtn) return;
+    _cbBtn.disabled = false;
+    _cbBtn.dataset.cbBusy = '';
+    _cbBtn.textContent = 'Confirm Bet';
+  }
+
+  _cbLog('CONFIRM_BET_ENTERED', 'bsType='+bsType+' slipLegs='+(Array.isArray(betSlip)?betSlip.length:0)
+    +' _pendingRisk='+_pendingRisk
+    +' _DB_PRIMARY='+(typeof _DB_PRIMARY_READS_ENABLED!=='undefined'?_DB_PRIMARY_READS_ENABLED:'undef')
+    +' snapshot='+(_pendingSnapshot?'set':'NULL'));
+
+  // ── Snapshot guard ────────────────────────────────────────────────────────
+  _cbStep = 'SNAPSHOT_CHECK';
   var snap = _pendingSnapshot;
   if (!snap) {
-    showToast('Bet expired · reopen confirmation', 'warning');
-    console.warn('CONFIRM_BET_ABORT reason=no_snapshot');
+    _cbErr('CONFIRM_BET_ERROR', null, 'reason=no_snapshot');
+    showToast('Bet expired \xb7 reopen confirmation', 'warning');
     return;
   }
-  console.log('CONFIRM_BET_SNAPSHOT type='+snap.type+' legs='+(snap.legs||[]).length
-    +' risk='+snap.risk+' payout='+snap.payout
-    +' stakeKeys='+Object.keys(snap.stakes||{}).join(','));
+  _cbLog('CONFIRM_BET_SNAPSHOT', 'type='+snap.type+' legs='+(snap.legs||[]).length
+    +' risk='+snap.risk+' payout='+snap.payout);
 
-  // Re-check teaser gate at confirm time (prevents direct confirmBet() injection)
+  // ── Teaser gate ───────────────────────────────────────────────────────────
+  _cbStep = 'TEASER_GATE';
   if (snap.type === 'teaser') {
-    var _teaserSport = (snap.legs && snap.legs[0] && (snap.legs[0].sport || _currentSport)) || _currentSport || '';
-    var _teaserAllowed = Array.isArray(TEASER_ENABLED_SPORTS) && TEASER_ENABLED_SPORTS.indexOf(_teaserSport.toLowerCase()) !== -1;
-    console.log('[teaser gate]',
-      '\n  sport='+(_teaserSport||'?'),
-      '\n  allowed='+_teaserAllowed,
-      '\n  reason='+((!_teaserAllowed) ? _teaserSport.toUpperCase()+'_teasers_disabled' : 'allowed')
-    );
-    if (!_teaserAllowed) {
+    var _tSport = (snap.legs && snap.legs[0] && (snap.legs[0].sport || _currentSport)) || _currentSport || '';
+    var _tOk = Array.isArray(TEASER_ENABLED_SPORTS) && TEASER_ENABLED_SPORTS.indexOf(_tSport.toLowerCase()) !== -1;
+    _cbLog('[teaser gate]', 'sport='+_tSport+' allowed='+_tOk);
+    if (!_tOk) {
       closeBetConfirm();
-      showToast('Teasers unavailable for ' + (_teaserSport||'this sport').toUpperCase(), 'warning');
+      showToast('Teasers unavailable for ' + (_tSport||'this sport').toUpperCase(), 'warning');
       return;
     }
   }
 
-  // Re-check sport access on all legs at confirm time (prevents console injection)
-  var _sportAccessCheck = _checkTicketSportAccess(snap.legs || []);
-  if (!_sportAccessCheck.allowed) {
+  // ── Sport access gate ─────────────────────────────────────────────────────
+  _cbStep = 'SPORT_ACCESS';
+  var _sportCheck = _checkTicketSportAccess(snap.legs || []);
+  if (!_sportCheck.allowed) {
     closeBetConfirm();
-    showToast(_sportAccessCheck.message || 'Sport unavailable: your host has disabled betting on this sport.', 'error');
-    console.warn('[player sport access gate] BLOCKED at confirm', { sport: _sportAccessCheck.sport, reason: _sportAccessCheck.blockedReason, legIndex: _sportAccessCheck.legIndex });
+    showToast(_sportCheck.message || 'Sport unavailable: your host has disabled betting on this sport.', 'error');
+    _cbErr('CONFIRM_BET_ERROR', null, 'reason=sport_blocked sport='+_sportCheck.sport);
     return;
   }
 
-  // Re-check placement gate on all legs at confirm time (catches stale board)
-  var _confirmNowMs = Date.now();
-  var _confirmLegs = (snap.legs || []).map(function(b) {
-    return {
-      cellId: b.cellId, pick: b.pick, market: b.market,
-      canonicalGameKey: b.canonicalGameKey || null,
-      scheduledStart: b.scheduledStart || b.commenceTime || b.time || null,
-      gameStatus: b.gameStatus || ''
-    };
+  // ── Placement gate ────────────────────────────────────────────────────────
+  _cbStep = 'PLACEMENT_GATE';
+  var _pgLegs = (snap.legs || []).map(function(b) {
+    return { cellId:b.cellId, pick:b.pick, market:b.market,
+      canonicalGameKey:b.canonicalGameKey||null,
+      scheduledStart:b.scheduledStart||b.commenceTime||b.time||null,
+      gameStatus:b.gameStatus||'' };
   });
-  var _confirmGate = _checkTicketPlacementGate(_confirmLegs, _confirmNowMs);
-  if (!_confirmGate.allowed) {
+  var _pg = _checkTicketPlacementGate(_pgLegs, Date.now());
+  if (!_pg.allowed) {
     closeBetConfirm();
-    showToast(_confirmGate.message || 'Bet unavailable: this game has already started or finalized.', 'error');
-    console.warn('[confirmBet] placement gate blocked at confirm', { reason: _confirmGate.blockedReason, legIndex: _confirmGate.legIndex });
+    showToast(_pg.message || 'Bet unavailable: this game has already started or finalized.', 'error');
+    _cbErr('CONFIRM_BET_ERROR', null, 'reason=placement_gate leg='+_pg.legIndex);
     return;
   }
 
+  // ── Balance check ─────────────────────────────────────────────────────────
+  _cbStep = 'BALANCE_CHECK';
   var _avail = calcAvailableBalance().available;
   playerBalance = _avail;
   var riskAmount = snap.risk;
-  bsStake = riskAmount; // keep live var in sync for any UI reading it post-confirm
-  if (_avail < riskAmount) { showToast('Insufficient balance · have '+fmtBalance(), 'error'); return; }
+  bsStake = riskAmount;
+  if (_avail < riskAmount) {
+    showToast('Insufficient balance \xb7 have '+fmtBalance(), 'error');
+    _cbErr('CONFIRM_BET_ERROR', null, 'reason=insufficient_balance avail='+_avail+' risk='+riskAmount);
+    return;
+  }
 
-  var pl = _resolvePlayer();
+  // ── Build local ticket objects ────────────────────────────────────────────
+  _cbStep = 'BUILD_TICKETS';
+  var pl  = _resolvePlayer();
   var now = new Date().toISOString();
   var newTickets = [];
-
   if (snap.type === 'straight') {
-    // ═ SINGLES: one ticket per leg, using snapshotted per-leg stakes ═
     snap.legs.forEach(function(b) {
       var st = snap.stakes[b.cellId] || 0;
       if (!st) return;
       var dec = amToDecimal(b.odds);
       var tPayout = Math.round(st * dec * 100) / 100;
-      var tProfit = Math.round((tPayout - st) * 100) / 100;
-      var tid = 'T' + Date.now() + Math.floor(Math.random()*10000);
       newTickets.push({
-        id: tid,
-        playerId: pl.id, playerUsername: pl.name, playerRealName: pl.realName,
-        playerName: pl.name, clubId: pl.clubId, clubName: pl.clubName,
-        type: 'Single', status: 'active', source: 'player', placedAt: now,
-        selections: [_makeSelection(b)],
-        odds: fmtOdds(b.odds),
-        riskAmount: st,
-        estimatedPayout: tPayout,
-        potentialProfit: tProfit
+        id: 'T'+Date.now()+Math.floor(Math.random()*10000),
+        playerId:pl.id, playerUsername:pl.name, playerRealName:pl.realName,
+        playerName:pl.name, clubId:pl.clubId, clubName:pl.clubName,
+        type:'Single', status:'active', source:'player', placedAt:now,
+        selections:[_makeSelection(b)],
+        odds:fmtOdds(b.odds), riskAmount:st,
+        estimatedPayout:tPayout, potentialProfit:Math.round((tPayout-st)*100)/100
       });
     });
   } else {
-    // ═ PARLAY / TEASER / RR: one combined ticket ═
-    var typeLabel = {parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[snap.type] || snap.type;
-    var tid = 'T' + Date.now();
+    var _tLabel = {parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[snap.type] || snap.type;
     newTickets.push({
-      id: tid,
-      playerId: pl.id, playerUsername: pl.name, playerRealName: pl.realName,
-      playerName: pl.name, clubId: pl.clubId, clubName: pl.clubName,
-      type: typeLabel, status: 'active', source: 'player', placedAt: now,
-      selections: snap.legs.map(_makeSelection),
-      odds: snap.legs.length === 1 ? fmtOdds(snap.legs[0].odds) : (function(){
-        var d=snap.legs.reduce(function(acc,b){return acc*amToDecimal(b.odds);},1);
-        var raw=Math.round((d-1)*100);
-        return isNaN(raw)?'--':(raw>0?'+'+raw:''+Math.round(-100/(d-1)));
+      id:'T'+Date.now(),
+      playerId:pl.id, playerUsername:pl.name, playerRealName:pl.realName,
+      playerName:pl.name, clubId:pl.clubId, clubName:pl.clubName,
+      type:_tLabel, status:'active', source:'player', placedAt:now,
+      selections:snap.legs.map(_makeSelection),
+      odds:(function(){
+        var d=snap.legs.reduce(function(a,b){return a*amToDecimal(b.odds);},1);
+        var r=Math.round((d-1)*100);
+        return isNaN(r)?'--':(r>0?'+'+r:''+Math.round(-100/(d-1)));
       })(),
-      riskAmount: snap.risk,
-      estimatedPayout: Math.round(snap.payout * 100) / 100,
-      potentialProfit: Math.round(snap.profit * 100) / 100
+      riskAmount:snap.risk,
+      estimatedPayout:Math.round(snap.payout*100)/100,
+      potentialProfit:Math.round(snap.profit*100)/100
     });
   }
+  _cbLog('CONFIRM_BET_TICKETS_BUILT', 'count='+newTickets.length);
 
-  // ── DB-FIRST BET PLACEMENT (Phase C) ────────────────────────────────────────────────
-  // Try backend first when DB primary mode is enabled.
-  // On success: DB is authoritative, localStorage is updated from DB response.
-  // On failure or dev mode: localStorage flow runs as fallback.
+  // ── Spinner on ────────────────────────────────────────────────────────────
+  _cbBtnBusy();
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  DB-PRIMARY PATH
+  // ══════════════════════════════════════════════════════════════════════════
   var _dbPlacementAttempted = false;
   if (_DB_PRIMARY_READS_ENABLED && newTickets.length > 0) {
-    var _t0 = newTickets[0]; // primary ticket for single/parlay
-    var _pl  = {}; try { _pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
-    var _club = {}; try { _club = JSON.parse(localStorage.getItem('pb-club')||'{}');  } catch(_e){}
-    var _pid  = _safeId(_pl.id  != null ? _pl.id  : _pl.username);
-    var _cid  = _safeId(_club.id != null ? _club.id : _club.clubId);
-    var _iKey = 'BET_' + (_pid||'?') + '_' + now.replace(/[^0-9]/g,'').slice(0,14);
+    _cbStep = 'DB_PAYLOAD_BUILD';
+    var _t0   = newTickets[0];
+    var _lspl = {}; try { _lspl = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_){}
+    var _lscl = {}; try { _lscl = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_){}
+    var _pid  = _safeId(_lspl.id  != null ? _lspl.id  : _lspl.username);
+    var _cid  = _safeId(_lscl.id  != null ? _lscl.id  : _lscl.clubId);
+    var _iKey = 'BET_'+(_pid||'?')+'_'+now.replace(/[^0-9]/g,'').slice(0,14);
     var _dbPayload = {
-      clubId: _cid, playerId: _pid, playerUsername: _pl.username || _pid,
-      betType: snap.type === 'straight' ? 'Single' : snap.type === 'parlay' ? 'Parlay' : snap.type === 'rr' ? 'RoundRobin' : 'Teaser',
-      stake: snap.risk, payout: snap.payout, potentialProfit: snap.profit,
-      idempotencyKey: _iKey,
-      legs: (_t0.selections || snap.legs || []).map(function(leg){
-        return {
-          legId: leg.legId, pick: leg.pick, market: leg.market, odds: leg.odds,
-          line: leg.line || null, side: leg.side || null,
-          canonicalGameKey: leg.canonicalGameKey || leg.canonical_game_key || '',
-          sport: leg.sport || _currentSport || 'mlb',
-          homeTeam: leg.homeTeam || '', awayTeam: leg.awayTeam || '',
-          scheduledStart: leg.scheduledStart || leg.commenceTime || null,
-          providerGameId: leg.providerGameId || null, providerName: leg.providerName || 'odds-api'
-        };
+      clubId:_cid, playerId:_pid, playerUsername:_lspl.username||_pid,
+      betType: snap.type==='straight'?'Single':snap.type==='parlay'?'Parlay':snap.type==='rr'?'RoundRobin':'Teaser',
+      stake:snap.risk, payout:snap.payout, potentialProfit:snap.profit,
+      idempotencyKey:_iKey,
+      legs:(_t0.selections||snap.legs||[]).map(function(leg){
+        return { legId:leg.legId, pick:leg.pick, market:leg.market, odds:leg.odds,
+          line:leg.line||null, side:leg.side||null,
+          canonicalGameKey:leg.canonicalGameKey||leg.canonical_game_key||'',
+          sport:leg.sport||_currentSport||'mlb',
+          homeTeam:leg.homeTeam||'', awayTeam:leg.awayTeam||'',
+          scheduledStart:leg.scheduledStart||leg.commenceTime||null,
+          providerGameId:leg.providerGameId||null, providerName:leg.providerName||'odds-api' };
       })
     };
-    // ── Disable confirm button to prevent double-tap ──────────────────────
-    var _confirmBtn = document.getElementById('bs-confirm-btn') ||
-                      document.querySelector('[data-action="confirm-bet"]') ||
-                      document.querySelector('.bs-confirm-btn');
-    if (_confirmBtn) { _confirmBtn.disabled = true; _confirmBtn.textContent = 'Placing…'; }
-    console.log('CONFIRM_BET_VALIDATED type='+_dbPayload.betType
-      +' legs='+(_dbPayload.legs||[]).length+' stake='+_dbPayload.stake);
-    // ── AbortController: abort + toast after 10 s ─────────────────────────
-    var _abortCtrl  = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    var _abortTimer = _abortCtrl ? setTimeout(function(){
-      _abortCtrl.abort();
-      console.warn('CONFIRM_BET_ERROR reason=fetch_timeout after 10s');
+
+    // ── AbortController 10 s timeout ─────────────────────────────────────
+    _cbAbortCtrl  = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    _cbAbortTimer = _cbAbortCtrl ? setTimeout(function(){
+      _cbAbortCtrl.abort();
+      _cbErr('CONFIRM_BET_ERROR', null,
+        'reason=fetch_timeout_10s endpoint=/api/bets/place step='+_cbStep
+        +' respStatus='+_cbRespStatus);
       showToast('Bet placement timed out. Check your connection and try again.', 'error');
-      if (_confirmBtn) { _confirmBtn.disabled = false; _confirmBtn.textContent = 'Confirm Bet'; }
+      _cbBtnReady();
     }, 10000) : null;
+
     try {
-      console.log('CONFIRM_BET_POSTING endpoint=/api/bets/place'
-        +' betType='+_dbPayload.betType
-        +' stake='+_dbPayload.stake
-        +' legs='+(_dbPayload.legs||[]).length
+      // ── POSTING ──────────────────────────────────────────────────────────
+      _cbStep = 'FETCH';
+      _cbLog('CONFIRM_BET_POSTING',
+        'endpoint=/api/bets/place betType='+_dbPayload.betType
+        +' stake='+_dbPayload.stake+' legs='+(_dbPayload.legs||[]).length
         +' idempotencyKey='+_iKey
-        +' firstLegCKey='+((_dbPayload.legs[0]||{}).canonicalGameKey||'(empty)')
-        +' firstLegSchedStart='+((_dbPayload.legs[0]||{}).scheduledStart||'(empty)')
-        +' firstLegOdds='+((_dbPayload.legs[0]||{}).odds));
+        +' leg0CKey='+((_dbPayload.legs[0]||{}).canonicalGameKey||'(empty)')
+        +' leg0Odds='+((_dbPayload.legs[0]||{}).odds||'?'));
+
+      _cbLog('CONFIRM_BET_FETCH_BEGIN', 'url=/api/bets/place');
       var _dbResp = await _pbFetch('/api/bets/place', {
-        method: 'POST', body: JSON.stringify(_dbPayload),
-        signal: _abortCtrl ? _abortCtrl.signal : undefined
+        method:'POST', body:JSON.stringify(_dbPayload),
+        signal: _cbAbortCtrl ? _cbAbortCtrl.signal : undefined
       });
-      if (_abortTimer) clearTimeout(_abortTimer);
-      var _dbStatus = _dbResp.status;
-      console.log('CONFIRM_BET_RESPONSE status='+_dbStatus);
-      var _dbData = await _dbResp.json();
-      if (_dbData.ok) {
-        _dbPlacementAttempted = true;
-        console.log('CONFIRM_BET_SUCCESS ticketId='+_dbData.ticketId+' ledger='+_dbData.ledgerEntryId);
-        try { dbgBanner('CONFIRM_BET_SUCCESS\n'+(_dbData.ticketId||''), '#020'); } catch(_d){}
-        console.log('CONFIRM_BET_MODAL_CLOSE');
+      if (_cbAbortTimer) { clearTimeout(_cbAbortTimer); _cbAbortTimer = null; }
+      _cbRespStatus = _dbResp.status;
+      _cbLog('CONFIRM_BET_FETCH_RESOLVED', 'status='+_cbRespStatus);
+
+      // ── Safe JSON parse: surface HTML/non-JSON responses explicitly ───────
+      _cbStep = 'JSON_PARSE';
+      _cbRespText = null;
+      var _dbData;
+      try {
+        _cbRespText = await _dbResp.text();
+        _dbData = JSON.parse(_cbRespText);
+      } catch(_parseErr) {
+        _cbErr('CONFIRM_BET_ERROR', _parseErr,
+          'reason=invalid_json status='+_cbRespStatus
+          +' body_preview='+(_cbRespText||'').slice(0,200).replace(/\n/g,' '));
+        showToast('Server returned invalid response (HTTP '+_cbRespStatus+'). Check Railway logs.', 'error');
         closeBetConfirm();
-        closeBetSlip();
-        clearSlip();
-        syncBalanceDisplays();
-        try { loadPlayerDashboardFromDb(); } catch(_e){}
-        try { renderMyBets(); } catch(_e){}
-        showToast('✅ Bet placed!', 'success');
-        return; // success — skip localStorage fallback
+        return;
+      }
+      _cbLog('CONFIRM_BET_JSON_PARSED', 'ok='+_dbData.ok+' code='+(_dbData.code||'none'));
+
+      // ── Success ───────────────────────────────────────────────────────────
+      if (_dbData.ok) {
+        _cbStep = 'SUCCESS';
+        _dbPlacementAttempted = true;
+        _cbLog('CONFIRM_BET_SUCCESS', 'ticketId='+_dbData.ticketId+' ledger='+_dbData.ledgerEntryId);
+
+        _cbStep = 'LEDGER_WRITE';
+        _cbLog('CONFIRM_BET_LEDGER_WRITE_BEGIN');
+        try {
+          addLedgerEntry({ id:'L'+Date.now()+Math.random().toString(36).slice(2,6),
+            type:'bet_placed', ticketIds:[_dbData.ticketId||newTickets[0].id],
+            amount:-riskAmount, balanceBefore:_avail+riskAmount, balanceAfter:_avail,
+            createdAt:now, betType:snap.type, count:1 });
+          _cbLog('CONFIRM_BET_LEDGER_WRITE_SUCCESS');
+        } catch(_le) { _cbErr('CONFIRM_BET_LEDGER_WRITE_WARN', _le, 'non-fatal'); }
+
+        _cbStep = 'TICKET_SAVE';
+        _cbLog('CONFIRM_BET_TICKET_SAVE_BEGIN');
+        try {
+          betTickets.unshift(newTickets[0]);
+          saveTickets();
+          _cbLog('CONFIRM_BET_TICKET_SAVE_SUCCESS');
+        } catch(_se) { _cbErr('CONFIRM_BET_TICKET_SAVE_WARN', _se, 'non-fatal'); }
+
+        _cbStep = 'BALANCE_SYNC';
+        _cbLog('CONFIRM_BET_BALANCE_SYNC');
+        try { syncBalanceDisplays(); } catch(_) {}
+
+        _cbStep = 'MODAL_CLOSE';
+        _cbLog('CONFIRM_BET_MODAL_CLOSE');
+        try { closeBetConfirm(); } catch(_) {}
+        try { closeBetSlip();   } catch(_) {}
+        try { clearSlip();      } catch(_) {}
+        try { loadPlayerDashboardFromDb(); } catch(_) {}
+        try { renderMyBets(); } catch(_) {}
+        showToast('\u2705 Bet placed!', 'success');
+        _cbLog('CONFIRM_BET_COMPLETE', 'ticketId='+_dbData.ticketId);
+        return;
+
+      // ── Odds changed ──────────────────────────────────────────────────────
       } else if (_dbData.code === 'odds_changed') {
-        console.warn('CONFIRM_BET_ERROR status='+_dbStatus+' code=odds_changed leg='+_dbData.leg);
-        // ── ODDS CHANGED MODAL ──────────────────────────────────────────────
-        console.warn('[bet placement] odds_changed:', _dbData.leg, _dbData.oldOdds, '→', _dbData.newOdds);
+        _cbStep = 'ODDS_CHANGED';
+        _cbErr('CONFIRM_BET_ERROR', null, 'code=odds_changed leg='+_dbData.leg
+          +' old='+_dbData.oldOdds+' new='+_dbData.newOdds);
         closeBetConfirm();
         var _od = _dbData;
         var _odModal = document.createElement('div');
         _odModal.id = 'odds-changed-modal';
-        _odModal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center';
-        _odModal.innerHTML = [
+        _odModal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center';
+        _odModal.innerHTML=[
           '<div style="background:#1a1a1a;border:1.5px solid #ea580c;border-radius:18px;padding:28px 24px;max-width:340px;width:90%;text-align:center">',
-            '<div style="font-size:1.5rem;margin-bottom:8px">⚠️ Line Moved</div>',
-            '<div style="font-weight:700;font-size:1rem;margin-bottom:6px">' + (_od.leg||'Selection') + '</div>',
-            '<div style="color:#aaa;font-size:0.9rem;margin-bottom:16px">',
-              'Line changed from <b style="color:#fff">' + _od.oldOdds + '</b> to <b style="color:#00ff87">' + _od.newOdds + '</b>',
-            '</div>',
+            '<div style="font-size:1.5rem;margin-bottom:8px">\u26a0\ufe0f Line Moved</div>',
+            '<div style="font-weight:700;font-size:1rem;margin-bottom:6px">'+(_od.leg||'Selection')+'</div>',
+            '<div style="color:#aaa;font-size:0.9rem;margin-bottom:16px">Line changed from <b style="color:#fff">'+_od.oldOdds+'</b> to <b style="color:#00ff87">'+_od.newOdds+'</b></div>',
             '<div style="display:flex;gap:10px;justify-content:center">',
               '<button id="odds-reject-btn" style="flex:1;padding:12px;background:#222;border:1px solid #444;border-radius:10px;color:#fff;font-weight:700;font-size:0.9rem">Cancel Bet</button>',
               '<button id="odds-accept-btn" style="flex:1;padding:12px;background:#00ff87;border:none;border-radius:10px;color:#000;font-weight:700;font-size:0.9rem">Accept New Odds</button>',
@@ -3408,161 +3497,147 @@ async function confirmBet() {
           '</div>'
         ].join('');
         document.body.appendChild(_odModal);
-        document.getElementById('odds-reject-btn').onclick = function() { _odModal.remove(); showToast('Bet canceled — line moved', 'info'); };
-        document.getElementById('odds-accept-btn').onclick = async function() {
+        document.getElementById('odds-reject-btn').onclick=function(){ _odModal.remove(); showToast('Bet canceled \u2014 line moved','info'); };
+        document.getElementById('odds-accept-btn').onclick=async function(){
           _odModal.remove();
-          // Resubmit with updatedLegs from server + oddsAccepted:true flag
-          var _rePayload = Object.assign({}, _dbPayload, {
-            legs: _od.updatedLegs || _dbPayload.legs,
-            oddsAccepted: true,
-            idempotencyKey: _dbPayload.idempotencyKey + '_oa'  // new key to avoid idempotency collision
-          });
+          var _rp=Object.assign({},_dbPayload,{legs:_od.updatedLegs||_dbPayload.legs,oddsAccepted:true,idempotencyKey:_dbPayload.idempotencyKey+'_oa'});
           try {
-            var _re2 = await _pbFetch('/api/bets/place', {
-              method:'POST', body: JSON.stringify(_rePayload)
-            });
-            var _rd2 = await _re2.json();
-            if (_rd2.ok) {
-              console.log('[bet placement] accepted-odds resubmit ok ticketId='+_rd2.ticketId);
-              showToast('✅ Bet placed at new odds', 'success');
-              try { loadPlayerDashboardFromDb(); } catch(_e){}
-              try { renderMyBets(); } catch(_e){}
-            } else {
-              showToast((_rd2.code||_rd2.error||'placement failed').replace(/_/g,' '), 'error');
-            }
-          } catch(_e2) { showToast('Network error — try again', 'error'); }
+            var _r2=await _pbFetch('/api/bets/place',{method:'POST',body:JSON.stringify(_rp)});
+            var _rt=await _r2.text(); var _rd2; try{ _rd2=JSON.parse(_rt); }catch(_){ _rd2={}; }
+            if (_rd2.ok) { showToast('\u2705 Bet placed at new odds','success'); try{loadPlayerDashboardFromDb();}catch(_){} try{renderMyBets();}catch(_){} }
+            else { showToast((_rd2.code||_rd2.error||'placement failed').replace(/_/g,' '),'error'); }
+          } catch(_e2){ showToast('Network error \u2014 try again','error'); }
         };
-        return; // Do NOT write localStorage
-        // ───────────────────────────────────────────────────────────────────────
+        return;
+
+      // ── Backend rejection ─────────────────────────────────────────────────
       } else {
-        // ── DIAGNOSTIC: full backend rejection surface (was silent until now) ──
+        _cbStep = 'BACKEND_REJECTION';
         var _rejBody = _dbData.code || _dbData.error || JSON.stringify(_dbData.errors||_dbData||{});
-        console.warn('CONFIRM_BET_ERROR status='+_dbStatus+' body='+_rejBody);
-        try {
-          var _rejMsg;
-          if (Array.isArray(_dbData.errors) && _dbData.errors.length) {
-            // Backend 400 validation — surface the field problems verbatim, e.g.
-            // "leg0_missing_canonicalGameKey". Most useful diagnostic right now.
-            _rejMsg = 'Bet rejected: ' + _dbData.errors.join(', ').replace(/_/g,' ');
-          } else if (_dbData.code) {
-            _rejMsg = 'Bet rejected: ' + String(_dbData.code).replace(/_/g,' ');
-          } else if (_dbData.error) {
-            _rejMsg = 'Bet rejected: ' + String(_dbData.error).replace(/_/g,' ');
-          } else {
-            _rejMsg = 'Bet rejected by server (HTTP ' + _dbStatus + ')';
-          }
-          showToast(_rejMsg, 'error');
-        } catch(_te){}
-        // Hard blocks: balance, conflict, market closed, game started
-        var _hardBlock = _dbData.code || _dbData.error || '';
-        // Risk limit rejection codes (422)
-        var _RISK_CODES = new Set(['player_suspended','stake_below_min','stake_above_max',
-          'payout_above_max','parlays_disabled','teasers_disabled','round_robins_disabled',
-          'too_many_parlay_legs','sport_blocked','sport_not_allowed','market_blocked',
-          'live_betting_disabled','player_open_risk_exceeded','club_open_risk_exceeded',
-          'event_risk_exceeded','market_risk_exceeded']);
-        var _RISK_MESSAGES = {
-          player_suspended:         'Your account is suspended',
-          stake_below_min:          'Stake too small (min: $'+(_dbData.min||'?')+')',
-          stake_above_max:          'Stake too large (max: $'+(_dbData.max||'?')+')',
-          payout_above_max:         'Potential payout exceeds limit ($'+(_dbData.max||'?')+')',
-          parlays_disabled:         'Parlays are not allowed in this club',
-          teasers_disabled:         'Teasers are not allowed in this club',
-          too_many_parlay_legs:     'Too many legs (max: '+(_dbData.max||'?')+')',
-          sport_blocked:            'Sport not available: '+(_dbData.sport||''),
-          sport_not_allowed:        'Sport not in your allowed list: '+(_dbData.sport||''),
-          market_blocked:           'Market not available: '+(_dbData.market||''),
-          live_betting_disabled:    'Live betting is not allowed',
-          player_open_risk_exceeded:'Open risk limit reached ($'+(_dbData.max||'?')+')',
-          club_open_risk_exceeded:  'Club risk limit reached',
-          event_risk_exceeded:      'Event risk limit reached',
-          market_risk_exceeded:     'Market risk limit reached',
-          host_diamond_balance_insufficient: _dbData.message || 'The club has reached its weekly bettor capacity. Ask the host to top up diamonds.',
-          host_diamond_balance_missing: _dbData.message || 'This club account is not fully set up. Contact the host.'
-        };
-        if (_RISK_CODES.has(_hardBlock) ||
-            _hardBlock === 'host_diamond_balance_insufficient' ||
-            _hardBlock === 'host_diamond_balance_missing' ||
-            _hardBlock.includes('insufficient_balance') || _hardBlock.includes('conflict') ||
-            _hardBlock.includes('market_closed') || _hardBlock.includes('game_started')) {
+        _cbErr('CONFIRM_BET_ERROR', null,
+          'status='+_cbRespStatus+' code='+(_dbData.code||'none')+' body='+String(_rejBody).slice(0,300));
+        var _rejMsg;
+        if (Array.isArray(_dbData.errors) && _dbData.errors.length) {
+          _rejMsg='Bet rejected: '+_dbData.errors.join(', ').replace(/_/g,' ');
+        } else if (_dbData.code) {
+          _rejMsg='Bet rejected: '+String(_dbData.code).replace(/_/g,' ');
+        } else if (_dbData.error) {
+          _rejMsg='Bet rejected: '+String(_dbData.error).replace(/_/g,' ');
+        } else {
+          _rejMsg='Bet rejected by server (HTTP '+_cbRespStatus+')';
+        }
+        showToast(_rejMsg, 'error');
+        var _hardBlock=String(_dbData.code||_dbData.error||'');
+        var _RISK_CODES=new Set(['player_suspended','stake_below_min','stake_above_max','payout_above_max',
+          'parlays_disabled','teasers_disabled','round_robins_disabled','too_many_parlay_legs',
+          'sport_blocked','sport_not_allowed','market_blocked','live_betting_disabled',
+          'player_open_risk_exceeded','club_open_risk_exceeded','event_risk_exceeded','market_risk_exceeded']);
+        if (_RISK_CODES.has(_hardBlock)||_hardBlock.includes('host_diamond')||
+            _hardBlock.includes('insufficient_balance')||_hardBlock.includes('conflict')||
+            _hardBlock.includes('market_closed')||_hardBlock.includes('game_started')) {
           closeBetConfirm();
-          var _msg = _RISK_MESSAGES[_hardBlock] || _hardBlock.replace(/_/g,' ');
-          showToast(_msg, 'error');
           return;
         }
+        // Soft rejection: close confirm, let user try again
+        closeBetConfirm();
+        return;
       }
+
     } catch(_e) {
-      if (_abortTimer) clearTimeout(_abortTimer);
-      var _isAbort = _e && (_e.name === 'AbortError' || ((_e.message||'').toLowerCase().includes('abort')));
-      if (!_isAbort) {
-        console.warn('CONFIRM_BET_ERROR phase=network error='+(_e && _e.message)+' — falling back to localStorage');
-        try { showToast('Network error placing bet — saved locally, syncing when back online', 'warning'); } catch(_te){}
+      if (_cbAbortTimer) { clearTimeout(_cbAbortTimer); _cbAbortTimer=null; }
+      var _isAbort = _e && (_e.name==='AbortError'||String(_e.message||'').toLowerCase().includes('abort'));
+      if (_isAbort) {
+        // Timeout toast already shown by AbortController handler
+        _cbErr('CONFIRM_BET_ERROR', _e, 'reason=fetch_aborted step='+_cbStep);
+      } else {
+        _cbErr('CONFIRM_BET_ERROR', _e,
+          'phase=network step='+_cbStep
+          +' endpoint=/api/bets/place'
+          +' respStatus='+_cbRespStatus
+          +' respBodyPreview='+(_cbRespText||'').slice(0,200).replace(/\n/g,' '));
+        showToast('Network error placing bet \u2014 saved locally, syncing when back online', 'warning');
       }
-      // else: timeout toast already shown by AbortController timer
+      // Fall through to localStorage
     } finally {
-      // Always re-enable confirm button so user is never stuck
-      if (_confirmBtn) { _confirmBtn.disabled = false; _confirmBtn.textContent = 'Confirm Bet'; }
+      if (_cbAbortTimer) { clearTimeout(_cbAbortTimer); _cbAbortTimer=null; }
+      _cbBtnReady(); // always re-enable button
     }
-  }
-  // ── localStorage path (Phase A fallback or DB not enabled) ────────────────────────
-  // DIAGNOSTIC: detect the "no tickets built" silent-failure (e.g. Single with no per-leg stake hydration)
+  } // end DB path
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  LOCALSTORAGE FALLBACK PATH
+  // ══════════════════════════════════════════════════════════════════════════
+  _cbStep = 'LOCALSTORAGE';
+  _cbLog('CONFIRM_BET_LOCALSTORAGE_PATH', '_DB_PRIMARY='+_DB_PRIMARY_READS_ENABLED+' tickets='+newTickets.length);
   if (!newTickets.length) {
-    console.warn('CONFIRM_BET_ERROR phase=local_save status=0 body=no_tickets_built'
-      +' (likely cause: per-leg stake hydration missed — bsStakes empty for Singles, or all stakes==0)');
-    try { showToast('Bet not placed: enter a stake amount before confirming', 'error'); } catch(_te){}
+    _cbErr('CONFIRM_BET_ERROR', null,
+      'phase=local_save reason=no_tickets_built'
+      +' (likely: Singles with zero stake, or per-leg hydration missed)');
+    showToast('Bet not placed: enter a stake amount before confirming', 'error');
+    _cbBtnReady();
+    closeBetConfirm(); // unlock modal regardless
     return;
   }
-  newTickets.forEach(function(t){ betTickets.unshift(t); });
-  saveTickets();
 
-  // Mirror to Supabase (fire-and-forget) when DB placement was not attempted
+  _cbLog('CONFIRM_BET_TICKET_SAVE_BEGIN', 'count='+newTickets.length);
+  try {
+    newTickets.forEach(function(t){ betTickets.unshift(t); });
+    saveTickets();
+    _cbLog('CONFIRM_BET_TICKET_SAVE_SUCCESS');
+  } catch(_se) {
+    _cbErr('CONFIRM_BET_ERROR', _se, 'phase=saveTickets');
+    showToast('Failed to save bet locally: '+(_se.message||'storage error'), 'error');
+    _cbBtnReady();
+    closeBetConfirm();
+    return;
+  }
+
+  // Mirror to Supabase fire-and-forget (never block UI)
   if (!_dbPlacementAttempted) {
-    newTickets.forEach(function(t) {
-      try { _mirrorTicketToBackend(t); } catch(_e) { /* never block placement */ }
+    newTickets.forEach(function(t){
+      try { _mirrorTicketToBackend(t); } catch(_) {}
     });
   }
 
-  // Save to hostActiveBets
-  var hostBets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
-  newTickets.forEach(function(t){ hostBets.unshift(t); });
-  localStorage.setItem('hostActiveBets', JSON.stringify(hostBets));
-
-  // Sync balance (derives from active tickets)
-  var _bs = syncBalanceDisplays();
-  addLedgerEntry({ id:'L'+Date.now()+Math.random().toString(36).slice(2,6), type:'bet_placed',
-    ticketIds: newTickets.map(function(t){return t.id;}),
-    amount: -riskAmount, balanceBefore: _bs.available + riskAmount,
-    balanceAfter: _bs.available, createdAt: now,
-    betType: snap.type, count: newTickets.length });
-  // Spec-format BET_PLACED rows (one per ticket) so the audit panel + balance
-  // history have the canonical entry shape per ticket.
+  // hostActiveBets cache
   try {
-    if (typeof recordSpecLedger === 'function') {
+    var _hb=JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
+    newTickets.forEach(function(t){ _hb.unshift(t); });
+    localStorage.setItem('hostActiveBets', JSON.stringify(_hb));
+  } catch(_) {}
+
+  _cbLog('CONFIRM_BET_LEDGER_WRITE_BEGIN');
+  try {
+    var _bs = syncBalanceDisplays();
+    _cbLog('CONFIRM_BET_BALANCE_SYNC');
+    addLedgerEntry({ id:'L'+Date.now()+Math.random().toString(36).slice(2,6),
+      type:'bet_placed', ticketIds:newTickets.map(function(t){return t.id;}),
+      amount:-riskAmount, balanceBefore:_bs.available+riskAmount,
+      balanceAfter:_bs.available, createdAt:now, betType:snap.type, count:newTickets.length });
+    _cbLog('CONFIRM_BET_LEDGER_WRITE_SUCCESS');
+    if (typeof recordSpecLedger==='function') {
       newTickets.forEach(function(t){
-        var risk = parseFloat(t.riskAmount) || 0;
-        recordSpecLedger({
-          type:          'BET_PLACED',
-          playerId:      t.playerId || null,
-          ticketId:      t.id,
-          amount:        -risk,
-          timestamp:     t.placedAt,
-          balanceBefore: _bs.available + riskAmount,
-          balanceAfter:  _bs.available,
-          note:          (t.type || 'Single') + ' · ' + (t.selections && t.selections.length ? t.selections.length+' leg(s)' : ''),
-        });
+        var risk=parseFloat(t.riskAmount)||0;
+        recordSpecLedger({ type:'BET_PLACED', playerId:t.playerId||null, ticketId:t.id,
+          amount:-risk, timestamp:t.placedAt,
+          balanceBefore:_bs.available+riskAmount, balanceAfter:_bs.available,
+          note:(t.type||'Single')+' \xb7 '+(t.selections&&t.selections.length?t.selections.length+' leg(s)':'') });
       });
     }
-  } catch(_e){}
+  } catch(_le) {
+    _cbErr('CONFIRM_BET_LEDGER_WARN', _le, 'non-fatal — continuing to close');
+  }
 
-  dbgBanner('CONFIRMED: '+newTickets.length+' ticket(s)\nRisk: $'+riskAmount.toFixed(2)+'\nBalance: $'+_bs.available.toFixed(2), '#020');
-  console.log('[confirmBet] tickets saved:', newTickets.length, 'balance:', _bs.available, 'snapshotAt:', snap.capturedAt);
-
-  closeBetConfirm();
-  closeBetSlip();
-  clearSlip();
-  syncBalanceDisplays();
-  renderMyBets();
-  showToast('✅ '+newTickets.length+' bet'+(newTickets.length>1?'s':'')+' placed · Balance: ' + fmtBalance());
+  _cbLog('CONFIRM_BET_MODAL_CLOSE');
+  try { closeBetConfirm(); } catch(_) {}
+  try { closeBetSlip();   } catch(_) {}
+  try { clearSlip();      } catch(_) {}
+  try { syncBalanceDisplays(); } catch(_) {}
+  try { renderMyBets(); } catch(_) {}
+  try { dbgBanner('CONFIRMED: '+newTickets.length+' ticket(s)\nRisk: $'+riskAmount.toFixed(2),'#020'); } catch(_){}
+  showToast('\u2705 '+newTickets.length+' bet'+(newTickets.length>1?'s':'')+' placed \xb7 Balance: '+fmtBalance());
+  _cbLog('CONFIRM_BET_COMPLETE', 'path=localStorage tickets='+newTickets.length);
+  _cbBtnReady();
 }
 
 
@@ -10052,7 +10127,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 3b708b1 · May 21, 01:19 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · c383189 · May 21, 01:26 AM</span>
 </div>
 
 <!-- Orphan IIFE closer removed (was rendering as a literal IIFE close
