@@ -2178,9 +2178,18 @@ function bsSetType(t) {
   var tab = document.getElementById('bs-tab-'+t);
   if (tab) tab.classList.add('active');
   bsRenderLegs();
-  // Sync footer input value with current stake
+  // Tab switch: clear footer input AND the matching state so the visual
+  // stake and the bsStake/bsStakes globals stay in lockstep. Previously only
+  // the input was cleared, which left bsStake (or per-card bsStakes for
+  // singles) holding a value the player could no longer see — leading to
+  // "input empty but button enabled" OR "input shows value but bsStake=0"
+  // depending on the cross-tab transition.
   var inp = document.getElementById('bs-stake-inp');
-  if (inp) inp.value = ''; // never restore old stake on tab switch
+  if (inp) inp.value = '';
+  bsStake = 0;
+  if (t === 'parlay' || t === 'teaser' || t === 'rr') {
+    bsStakes = {};   // singles' per-card stakes are meaningless on these tabs
+  }
   bsSyncPlaceBtn();
 }
 
@@ -7282,6 +7291,27 @@ function bsSyncPlaceBtn() {
   var badge2 = document.getElementById('bs-badge2');
   if (badge2) badge2.textContent = betSlip.length;
 
+  // PARLAY-FOOTER REGRESSION FIX:
+  // Always trust the FOOTER INPUT as the source of truth for parlay / teaser /
+  // round-robin stake before deciding validity. Without this, any code path
+  // that touched the input value without also writing back to bsStake (e.g.
+  // bsSetType clearing inp.value on tab switch but not resetting bsStake,
+  // openBetSlip's 30ms input-clear after the bsStake=0 reset, etc.) leaves
+  // the player staring at "Enter stake to continue" while the visible input
+  // shows a value. For straight (singles), per-card bsStakes is authoritative
+  // — not the footer — so we leave bsStake alone on that path.
+  var _stakeInp     = document.getElementById('bs-stake-inp');
+  var _stakeInpRaw  = _stakeInp ? _stakeInp.value : '';
+  var _stakeInpNum  = parseFloat(String(_stakeInpRaw).replace(/[^0-9.]/g,'')) || 0;
+  if ((bsType === 'parlay' || bsType === 'teaser') && _stakeInpNum > 0 && bsStake !== _stakeInpNum) {
+    bsStake = _stakeInpNum;
+  } else if ((bsType === 'parlay' || bsType === 'teaser') && _stakeInpNum === 0 && bsStake > 0) {
+    // Input was cleared (e.g. bsSetType tab switch). Keep bsStake matching the
+    // visible state so the user can't accidentally place a bet with no
+    // visible stake.
+    bsStake = 0;
+  }
+
   // Valid = has picks AND has a non-zero stake
   var valid = bsType === 'parlay'
     ? (betSlip.length >= 2 && bsStake > 0)
@@ -7410,6 +7440,30 @@ function bsSyncPlaceBtn() {
     } else {
       payRow.style.display = 'none';
     }
+  }
+
+  // Diagnostic: one-line snapshot of the parlay/teaser/rr footer state.
+  // Used to debug "input shows $X but button says Enter stake to continue"
+  // reports. Combined-odds string is derived from the live slip legs.
+  if (bsType === 'parlay' || bsType === 'teaser' || bsType === 'rr') {
+    try {
+      var _combinedDec = (Array.isArray(betSlip) ? betSlip : [])
+        .filter(function(b){ return b && b.odds && !isNaN(b.odds); })
+        .reduce(function(p,b){ return p * amToDecimal(b.odds); }, 1);
+      var _combinedAmer;
+      if (_combinedDec <= 1)      _combinedAmer = '--';
+      else if (_combinedDec >= 2) _combinedAmer = '+' + Math.round((_combinedDec - 1) * 100);
+      else                        _combinedAmer = '' + Math.round(-100 / (_combinedDec - 1));
+      console.log('PARLAY_FOOTER_STATE'
+        + ' bsType=' + bsType
+        + ' legs=' + (Array.isArray(betSlip) ? betSlip.length : 0)
+        + ' stakeRaw=' + JSON.stringify(_stakeInpRaw)
+        + ' stakeNum=' + _stakeInpNum
+        + ' bsStake=' + bsStake
+        + ' combinedOdds=' + _combinedAmer
+        + ' payout=' + (totalPay > 0 ? totalPay.toFixed(2) : '--')
+        + ' disabled=' + (!valid));
+    } catch (_dbg) { /* never let the diagnostic break the sync */ }
   }
 }
 
