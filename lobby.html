@@ -1345,6 +1345,19 @@ async function _acquireClubToken(playerId, clubId) {
     if (data.token) {
       TOKEN = data.token;
       localStorage.setItem('pb-sports-token', TOKEN);
+      // Decode token and sync pb-player.id to token's actorId so backend self-check passes
+      try {
+        var _tp = JSON.parse(atob(data.token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+        var _tokenActorId = _tp.actorId || _tp.sub || null;
+        var _tokenRole = _tp.role || null;
+        if (_tokenActorId) {
+          var _lpl = JSON.parse(localStorage.getItem('pb-player')||'{}');
+          _lpl.id = _tokenActorId; // ensure pb-player.id matches token actorId
+          if (_tokenRole) _lpl.role = _tokenRole;
+          localStorage.setItem('pb-player', JSON.stringify(_lpl));
+          console.log('TOKEN_SCOPE role='+(_tokenRole||'?')+' clubId='+clubId+' playerCapable=true actorId='+_tokenActorId);
+        }
+      } catch(_td){}
       console.log('TOKEN_WRITE_SUCCESS playerId='+playerId+' clubId='+clubId);
       return true;
     } else {
