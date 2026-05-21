@@ -714,8 +714,8 @@ function _debugClearTickets() {
 <script>
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'feed6c2';
-window.PBS_BUILD_DATE = '2026-05-20T12:52:33.911Z';
+window.PBS_BUILD_SHA = '97be739';
+window.PBS_BUILD_DATE = '2026-05-21T07:50:10.459Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -2234,6 +2234,23 @@ function bsTeamAbbr(pickStr, game) {
 
 function bsValidate() {
   var warnings = [];
+
+  // Same-game parlay check (MVP): any two legs from same game in Parlay/RR = error
+  if (bsType === 'parlay' || bsType === 'rr') {
+    var _seenGames = {};
+    betSlip.forEach(function(b) {
+      var gk = b.canonicalGameKey || b.game || null;
+      if (!gk) return;
+      if (_seenGames[gk]) {
+        var label = b.game || gk.split('|').slice(0,3).join(' vs ');
+        var already = warnings.some(function(w){ return w.includes(label) && w.includes('same game'); });
+        if (!already) warnings.push('Same-game parlay not supported: remove one leg from “' + (b.game || 'this game') + '”');
+      } else {
+        _seenGames[gk] = true;
+      }
+    });
+  }
+
   // Only flag TRUE contradictions: same game + same market category + opposite side
   // e.g. Over 8.5 + Under 8.5, Phillies -1.5 + Marlins +1.5, Phillies ML + Marlins ML
   var byGame = {};
@@ -7095,6 +7112,25 @@ function bsSyncPlaceBtn() {
     }
   }
 
+  // ── Same-game parlay gate: disable Place Bet if slip has SGP conflicts ──
+  if (valid && (bsType === 'parlay' || bsType === 'rr')) {
+    var _sgpConflicts = {}; var _hasSGPConflict = false;
+    betSlip.forEach(function(b) {
+      var gk = b.canonicalGameKey || b.game;
+      if (!gk) return;
+      if (_sgpConflicts[gk]) _hasSGPConflict = true;
+      else _sgpConflicts[gk] = true;
+    });
+    if (_hasSGPConflict) {
+      if (btn) {
+        btn.style.display='block'; btn.dataset.disabled='true';
+        btn.style.background='#1a0000'; btn.style.color='#f87171'; btn.style.cursor='default';
+        btn.style.border='1px solid #7f1d1d'; btn.textContent='⚠️ Same-game conflict — remove a leg';
+      }
+      return;
+    }
+  }
+
   // ── Button: hidden when no valid stake ──────────────────────────────────
   // ── Phase L: hard gate when market service is unavailable ────────────────────────
   if (valid && !_marketServiceOk) {
@@ -7485,6 +7521,19 @@ function _pickConflictToken(leg) {
 function _checkBetConflict(newLeg) {
   var newToken = _pickConflictToken(newLeg);
   if (!newToken) return { conflict: false };
+
+  // ── Same-game parlay gate (MVP: no two legs from same game in Parlay/RR) ──
+  var _isParleyType = (bsType === 'parlay' || bsType === 'rr');
+  if (_isParleyType && newLeg.canonicalGameKey) {
+    for (var _si = 0; _si < betSlip.length; _si++) {
+      var _sl = betSlip[_si];
+      if (_sl.cellId === newLeg.cellId) continue; // same cell toggle, not a new leg
+      if (_sl.canonicalGameKey && _sl.canonicalGameKey === newLeg.canonicalGameKey) {
+        return { conflict: true, reason: 'same_game_parlay',
+          message: 'Same-game parlays are not supported yet. Remove the existing leg from this game first.' };
+      }
+    }
+  }
 
   // Check current slip
   for (var i = 0; i < betSlip.length; i++) {
@@ -9645,7 +9694,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · feed6c2 · May 20, 05:52 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 97be739 · May 21, 12:50 AM</span>
 </div>
 
 })();
