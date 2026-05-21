@@ -1256,7 +1256,7 @@ async function loadGames(sport, opts){
     var _isMlb    = (_sportLc === 'mlb' || _sportLc === 'baseball_mlb');
     const _sport  = _isMlb ? 'mlb' : _sportLc;
     // MLB sportsbook ALWAYS hits the local Vercel proxy at exactly
-    // /api/odds/mlb. Never /api/odds/baseball_mlb, never api.the-odds-api.com
+    // /api/odds/mlb. Never /api/odds/baseball_mlb, never any external odds host.
     // directly, never the legacy Railway path for MLB.
     const _url = _isMlb ? '/api/odds/mlb' : ('/api/odds/' + _sport);
     // MLB sportsbook fetch marker (kept post-cleanup — useful operational
@@ -1276,11 +1276,10 @@ async function loadGames(sport, opts){
     if(!_res.ok) {
       let _errBody = {};
       try { _errBody = await _res.json(); } catch(e){}
-      // Provider-neutral error text. The legacy 'OUT_OF_USAGE_CREDITS' code
-      // came from The Odds API era — once Owls Insight is wired through
-      // /api/odds/:sport (backend), the only way to see it is if the legacy
-      // path is somehow still being exercised. Either way, the player just
-      // sees "temporarily unavailable" and a retry path, not a billing URL.
+      // Provider-neutral error text. The legacy OUT_OF_USAGE_CREDITS code
+      // is kept as a defensive check (Vercel MLB proxy can still emit it on
+      // 402), but the message the player sees is the same generic
+      // "temporarily unavailable" string — no provider name, no billing URL.
       const _msg = (_errBody.error_code === 'OUT_OF_USAGE_CREDITS' || _res.status === 402)
         ? 'Odds temporarily unavailable. Try again shortly.'
         : (_errBody.error || 'Backend error HTTP '+_res.status);
@@ -1329,6 +1328,12 @@ async function loadGames(sport, opts){
       }
       console.log('FRONTEND_ODDS_RENDER games='+games.length+' markets='+_mktCnt
         +' provider='+_provHdr+' sourceStatus='+_ssHdr+' sport='+_sport);
+      // Tagged diagnostics requested for the sport catalog rollout. Each tag
+      // prints on its own line so grepping production console output is
+      // trivial (e.g. "[games count] sport=nhl n=12").
+      console.log('[render sport] sport='+_sport+' provider='+_provHdr+' sourceStatus='+_ssHdr+' liveOnly='+!!_liveOnly);
+      console.log('[games count] sport='+_sport+' n='+games.length);
+      console.log('[markets count] sport='+_sport+' n='+_mktCnt);
     } catch (_dbg) {}
     console.log('[PBS render start]');
     if(!games.length){
@@ -1362,7 +1367,7 @@ async function loadGames(sport, opts){
     el.innerHTML=games.map(g=>{
       window.gamesCache[g.id]=g;
       try {
-      // Defensive: tolerate Odds API v4 raw shape if normalization is
+      // Defensive: tolerate legacy raw odds-payload shape if normalization is
       // bypassed (e.g. proxy fallback during shape drift). Prefer flat
       // fields, fall back to v4 names. Skip the card entirely if neither
       // team name is resolvable — better an empty slot than red error.
@@ -1664,27 +1669,34 @@ function _updateSportTabs() {
       if (s && s.key) sportsByKey[String(s.key).toLowerCase()] = s;
     }
   }
+  // Counters for the post-apply diagnostic line.
+  var _vis = 0, _hidden = 0, _dim = 0;
   Object.keys(tabMap).forEach(function(sport) {
     var tab = document.getElementById(tabMap[sport]);
     if (!tab) return;
     var blocked = isSportBlocked(sport);
-    // Catalog-driven visibility: if we have a catalog AND this sport isn't
-    // in it, hide the tab entirely. If catalog says the sport exists but
-    // has 0 games, keep the tab visible but dim it (the user can still
-    // click; they'll get "No games available right now").
-    var inCatalog  = !sportsByKey || !!sportsByKey[sport];
-    var hasGames   = !sportsByKey || (sportsByKey[sport] && sportsByKey[sport].games > 0);
-    if (!inCatalog) {
-      tab.style.display = 'none';
-      return;
-    }
+    // Catalog-driven visibility:
+    //   no catalog yet            -> show every hardcoded tab (legacy)
+    //   catalog present + missing -> hide the tab entirely (provider truly
+    //                                doesn't support this sport, e.g. golf)
+    //   catalog present + 0 games -> dim + tooltip (provider supports it,
+    //                                no live slate right now)
+    //   catalog present + games   -> full color, no tooltip
+    var inCatalog = !sportsByKey || !!sportsByKey[sport];
+    var entry     = sportsByKey ? sportsByKey[sport] : null;
+    var hasGames  = !sportsByKey || (entry && entry.games > 0);
+    if (!inCatalog) { tab.style.display = 'none'; _hidden++; return; }
     tab.style.display = '';
     tab.style.opacity = blocked ? '0.35' : (hasGames ? '' : '0.55');
     tab.style.pointerEvents = blocked ? 'none' : '';
     tab.title = blocked
       ? ('Your host has disabled ' + sport.toUpperCase() + ' betting')
       : (hasGames ? '' : 'No games available right now');
+    if (!hasGames) _dim++; else _vis++;
   });
+  // Always log so we can debug catalog drift in production.
+  console.log('[sport catalog] applied tabs visible='+_vis+' dim='+_dim+' hidden='+_hidden
+    +' catalogLoaded='+!!sportsByKey);
 }
 
 // Fetch the backend's sport catalog so tab visibility can adapt to whatever
@@ -1698,8 +1710,12 @@ async function _loadSportsCatalog() {
     var data = await res.json();
     if (data && Array.isArray(data.sports)) {
       window._sportsCatalog = data;
+      // Detailed catalog dump: tag + per-sport games count so a single
+      // grep -F '[sports catalog]' surfaces full provider state.
       console.log('[sports catalog] provider='+(data.provider||'?')
         +' sourceStatus='+(data.sourceStatus||'?')
+        +' updatedAt='+(data.updatedAt||'?')
+        +' count='+data.sports.length
         +' sports='+data.sports.map(function(s){ return s.key+':'+s.games; }).join(','));
       try { _updateSportTabs(); } catch(e) { console.warn('[sports catalog] _updateSportTabs after refresh failed:', e && e.message || e); }
     }
@@ -1749,7 +1765,7 @@ function setBNav(el,tab){
     if(ss) ss.style.display='none';
     if(pb) pb.style.display='none';
     // Live tab now reads from the cached SportsDataIO GamesByDate proxy.
-    // The Odds API is no longer used for Live. Falls back to the original
+    // Live tab uses SportsDataIO only. Falls back to the original
     // loadGames if the new loader isn't available (older cached page).
     if (typeof loadLiveGamesFromSportsDataIO === 'function') {
       loadLiveGamesFromSportsDataIO();
@@ -3049,7 +3065,7 @@ function _makeSelection(b) {
   var placedDate = now.toISOString().slice(0,10);
   // commenceTime: prefer raw ISO from betSlip entry (set at add-to-slip time)
   var commenceTime = (b.time != null && b.time !== '') ? b.time : null;
-  // Odds API game ID: strip the market suffix from cellId (e.g. 'abc123-sp-aw' -> 'abc123')
+  // Provider game ID: strip the market suffix from cellId (e.g. 'abc123-sp-aw' -> 'abc123')
   var oddsApiGameId = b.cellId ? b.cellId.split('-').slice(0,4).join('-') : null;
   // Pull full game object from render-time cache for richer identity
   var cachedGame = (window.gamesCache && oddsApiGameId) ? window.gamesCache[oddsApiGameId] : null;
@@ -3843,7 +3859,7 @@ function _gradeTicket(ticket, resultsMap, normalizedGames) {
 }
 
 // ============================================================================
-// SCORES PIPELINE — SportsDataIO only (Odds API is NEVER used for grading).
+// SCORES PIPELINE — SportsDataIO only (the live odds provider is never used for grading).
 // ============================================================================
 
 // MLB TLA → full team name dictionary. Tickets are persisted with full names
@@ -5231,7 +5247,7 @@ async function checkOpenTickets() {
       return;
     }
 
-    // SportsDataIO ONLY — grading never reads from the Odds API.
+    // SportsDataIO ONLY — grading never reads from any live odds provider.
     var scores = await _fetchAndNormalizeScores({ daysBack: 2 });
     if (scores.error) {
       console.warn('[grading] scores fetch error:', scores.error);
@@ -5875,7 +5891,7 @@ async function _autoGradePoll() {
       return; // nothing to do, skip API call
     }
 
-    // SportsDataIO ONLY — grading never reads from the Odds API.
+    // SportsDataIO ONLY — grading never reads from any live odds provider.
     var scores = await _fetchAndNormalizeScores({ daysBack: 2 });
     if (scores.error) {
       console.log('[auto grade poll] scores unavailable:', scores.error);
@@ -9128,7 +9144,7 @@ try { _backfillLegacySettledMetadata(); } catch(_e){}
 
 // =============================================================================
 // LIVE TAB — SportsDataIO via /api/sportsdataio/mlb (cached 60s client +
-// 120s proxy). Read-only display. The Odds API path is no longer used here.
+// 120s proxy). Read-only display. No live odds provider path is used here.
 // Honors the scores suspension circuit breaker: if scores are unavailable,
 // shows an explanatory empty state instead of polling.
 // =============================================================================
