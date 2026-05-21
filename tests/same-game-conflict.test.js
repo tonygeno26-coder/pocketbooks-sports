@@ -1,6 +1,11 @@
 /**
- * PocketBooks Sports — Same-Game Conflict Detection Tests
+ * PocketBooks Sports — Same-Game Parlay Logic Tests
  * Run: node tests/same-game-conflict.test.js
+ *
+ * NOTE (2026-05-21): SGP is ALLOWED. The blocking gate was removed.
+ * These tests document the detection logic (still used for labeling SGP vs Parlay)
+ * and the payout/math helpers. The conflict gate (tryAddLeg blocking) is no longer
+ * wired into the UI for Parlay/RR. It remains available for future SGP correlation engine.
  * Pure logic — no network.
  */
 'use strict';
