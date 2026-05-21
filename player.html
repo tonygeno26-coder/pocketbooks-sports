@@ -2239,13 +2239,51 @@ function _updateTeaserTab() {
     try { console.error('[teaser] _updateTeaserTab guarded against:', _e && _e.message || _e); } catch(_e2){}
   }
 }
-var TEASER_ELIGIBLE = ['run line','spread','total','over','under'];
+// Markets that *could* be teased on an eligible sport. Moneyline / 3-way
+// outcomes are never teaser-eligible (no line to shift).
+var TEASER_ELIGIBLE_MARKETS = ['run line','spread','total','over','under'];
+
+// Sports that real sportsbooks allow in teasers (DraftKings / FanDuel parity):
+//   NFL  / NCAAF: any spread or total leg.
+//   NBA  / NCAAB: spread or total only (no moneyline).
+//   MLB  / NHL  / soccer / tennis / golf / esports: NOT eligible.
+// Conservative on purpose — widen later only when we have explicit confirmation.
+var TEASER_SPORTS_FULL    = { nfl:1, ncaaf:1, americanfootball_nfl:1, americanfootball_ncaaf:1 };
+var TEASER_SPORTS_LINEONLY= { nba:1, ncaab:1, basketball_nba:1, basketball_ncaab:1 };
+
+function _teaserSportKey(b) {
+  // Normalize sport string off a slip entry. Falls back to _currentSport so a
+  // slip built without a sport tag (older code paths) still gets gated by the
+  // sport tab the player was on when picks were added.
+  var s = (b && (b.sport || b.sportKey)) || '';
+  s = String(s).toLowerCase().trim();
+  if (!s && typeof _currentSport !== 'undefined') s = String(_currentSport||'').toLowerCase();
+  return s;
+}
+
 function isTeaserEligible(b) {
   // Defensive against malformed slip entries after upstream odds failures.
   if (!b || typeof b !== 'object') return false;
-  var m = String(b.market || b.pick || '').toLowerCase();
-  if (!m) return false;
-  return TEASER_ELIGIBLE.some(function(t){ return t && m.indexOf(t) !== -1; });
+  var market = String(b.market || b.pick || '').toLowerCase();
+  if (!market) return false;
+  var sport  = _teaserSportKey(b);
+  if (!sport) return false;
+  var marketOK = TEASER_ELIGIBLE_MARKETS.some(function(t){ return t && market.indexOf(t) !== -1; });
+  if (!marketOK) return false; // moneyline / 3-way never teaserable
+  if (TEASER_SPORTS_FULL[sport])     return true;  // NFL/NCAAF
+  if (TEASER_SPORTS_LINEONLY[sport]) return true;  // NBA/NCAAB — already marketOK so spread/total
+  return false;                                    // MLB/NHL/soccer/tennis/golf/anything else
+}
+
+// True iff the *entire* slip can be teased: every leg must individually pass.
+// A single ineligible leg (e.g. one MLB run-line in an NFL teaser slip) is
+// enough to disable the Teaser tab and force an auto-switch back to Singles/Parlay.
+function isSlipTeaserEligible() {
+  if (!Array.isArray(betSlip) || betSlip.length < 2) return false;
+  for (var i = 0; i < betSlip.length; i++) {
+    if (!isTeaserEligible(betSlip[i])) return false;
+  }
+  return true;
 }
 function getTeaserLegs() {
   if (!Array.isArray(betSlip)) return [];
@@ -7056,8 +7094,33 @@ function bsAddStake(a) {
   // Enable/disable tabs based on selections
   var rrTab = document.getElementById('bs-tab-rr');
   var teaserTab = document.getElementById('bs-tab-teaser');
-  if (rrTab) { rrTab.style.opacity = betSlip.length >= 3 ? "1" : "0.5"; }
-  if (teaserTab) { teaserTab.style.opacity = getTeaserLegs().length >= 2 ? "1" : "0.5"; }
+  if (rrTab) {
+    var rrOk = betSlip.length >= 3;
+    rrTab.style.opacity = rrOk ? '1' : '0.5';
+    rrTab.disabled = !rrOk;
+  }
+  if (teaserTab) {
+    // Hard gate: tab is only available if EVERY leg is teaser-eligible AND
+    // there are 2+ legs. This blocks MLB / NHL / soccer slips at the tab,
+    // not just at confirm time, so the UI never offers an impossible bet.
+    var teaserOk = isSlipTeaserEligible();
+    teaserTab.style.opacity     = teaserOk ? '1' : '0.35';
+    teaserTab.disabled          = !teaserOk;
+    teaserTab.style.cursor      = teaserOk ? 'pointer' : 'not-allowed';
+    teaserTab.title             = teaserOk ? '' :
+      (betSlip.length < 2 ? 'Add 2+ NFL/NCAAF/NBA/NCAAB spread or total picks for a teaser'
+                          : 'Teaser unavailable for this mix of sports/markets');
+    // Auto-switch off teaser if the slip became ineligible (e.g. user added
+    // an MLB leg to an existing teaser). Falls back to Parlay when there are
+    // 2+ legs, otherwise Singles. Never throw out of the leg-sync path.
+    if (!teaserOk && typeof bsType !== 'undefined' && bsType === 'teaser') {
+      try {
+        var fallback = (betSlip.length >= 2) ? 'parlay' : 'straight';
+        console.log('[bet slip] teaser auto-switch → ' + fallback + ' (slip became teaser-ineligible)');
+        bsSetType(fallback);
+      } catch (_e) { /* swallow — leg sync must not break */ }
+    }
+  }
   // Sync fixed Place Bet bar — show whenever drawer is open
   bsSyncPlaceBtn();
 }
@@ -7247,21 +7310,43 @@ function bsSyncPlaceBtn() {
     var _w3 = document.getElementById('_slip-suspension-warn');
     if (_w3) _w3.remove();
   }
-  // ────────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Place Bet button is ALWAYS visible inside the slip footer once the slip
+  // has selections. When stake is missing or the bet type doesn't have enough
+  // legs, the button stays in a disabled "Enter stake / Add picks" state so
+  // the player can see it on mobile and knows what's missing. (Previously the
+  // button was display:none when invalid, which made it look broken — the
+  // regression Tony reported.)
   if (btn) {
-    if (!valid) {
-      btn.style.display = 'none';
-    } else {
-      btn.style.display = 'block';
-      btn.dataset.disabled = 'false';
-      btn.style.background = '#00c853';
-      btn.style.color = '#fff';
-      btn.style.cursor = 'pointer';
+    var hasPicks = (bsType === 'parlay') ? (betSlip.length >= 2)
+                 : (bsType === 'rr')     ? (betSlip.length >= 3)
+                 : (betSlip.length > 0);
+    btn.style.display = 'block';
+    if (valid) {
+      btn.dataset.disabled  = 'false';
+      btn.style.background  = '#00c853';
+      btn.style.color       = '#fff';
+      btn.style.cursor      = 'pointer';
+      btn.style.opacity     = '1';
+      btn.style.pointerEvents = 'auto';
       var label = bsType === 'rr' ? 'Place Round Robin'
         : bsType === 'parlay' ? 'Place Parlay'
         : bsType === 'straight' && betSlip.length > 1 ? 'Place ' + betSlip.length + ' Bets'
         : 'Place Bet';
       btn.textContent = label + '  ' + fmtDollar(totalRisk);
+    } else {
+      // Disabled state — still visible so the player knows where it is.
+      btn.dataset.disabled  = 'true';
+      btn.style.background  = '#e0e0e0';
+      btn.style.color       = '#888';
+      btn.style.cursor      = 'not-allowed';
+      btn.style.opacity     = '0.85';
+      btn.style.pointerEvents = 'none';
+      btn.textContent = !hasPicks
+        ? (bsType === 'parlay' ? 'Add 2+ picks for a parlay'
+          : bsType === 'rr'    ? 'Add 3+ picks for a round robin'
+          : 'Add picks to continue')
+        : 'Enter stake to continue';
     }
   }
 
