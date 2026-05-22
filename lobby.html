@@ -1123,22 +1123,28 @@ async function loadUser() {
   } catch(e) {}
 }
 
-// Auto-route after sign-in: approved player with one player-role club → player.html;
-// host with one host-role club → index.html. Otherwise stay on lobby.
+// Auto-route after sign-in: approved player with one player-role club → player.html.
+// We do NOT auto-route owners/cohosts — they need to pick Host vs Sportsbook per
+// club from the dual-button card. Without this gate, an owner with one club
+// gets bounced to index.html on every lobby visit and can never reach
+// player.html for their own club to test the betting flow.
+//
+// Suppressed by ?from=player|host|lobby (back-button) and ?stay=1.
 function _maybeAutoRoute() {
-  var fromParam = new URLSearchParams(window.location.search).get('from');
-  if (fromParam === 'player' || fromParam === 'host') return;
+  var params = new URLSearchParams(window.location.search);
+  var fromParam = params.get('from');
+  if (fromParam === 'player' || fromParam === 'host' || fromParam === 'lobby') return;
+  if (params.get('stay') === '1') return;
   var clubs = userClubs || [];
   if (!clubs.length) return;
-  var hostClubs = clubs.filter(function(c){ return isHostRole(c.role) && c.status==='approved'; });
-  if (hostClubs.length === 1) {
-    try { localStorage.setItem('pb-active-club', JSON.stringify(hostClubs[0])); localStorage.setItem('pb-active-club-id', String(hostClubs[0].id)); } catch(_e){}
-    window.location.href = 'index.html?from=lobby';
-    return;
-  }
+  // Only auto-route players with exactly one approved player-role club.
+  // Owners/cohosts always see the lobby so they can choose mode per club.
   var approvedPlayerClubs = clubs.filter(function(c){ return !isHostRole(c.role) && c.status==='approved'; });
   if (approvedPlayerClubs.length === 1) {
-    try { localStorage.setItem('pb-active-club', JSON.stringify(approvedPlayerClubs[0])); } catch(_e){}
+    try {
+      localStorage.setItem('pb-active-club', JSON.stringify(approvedPlayerClubs[0]));
+      if (approvedPlayerClubs[0].id != null) localStorage.setItem('pb-active-club-id', String(approvedPlayerClubs[0].id));
+    } catch(_e){}
     window.location.href = 'player.html?from=lobby';
   }
 }
