@@ -1123,22 +1123,27 @@ async function loadUser() {
   } catch(e) {}
 }
 
-// Auto-route after sign-in: approved player with one player-role club → player.html;
-// host with one host-role club → index.html. Otherwise stay on lobby.
+// Auto-route after sign-in: approved player with one player-role club → player.html.
+// We do NOT auto-route owners/cohosts — they need to explicitly choose Host Dashboard
+// vs Sportsbook from the club card, otherwise an owner can never enter their own
+// club as a player to test the betting flow.
+//
+// Suppressed when ?from=player|host|lobby (back-button from dashboards) or ?stay=1.
 function _maybeAutoRoute() {
-  var fromParam = new URLSearchParams(window.location.search).get('from');
-  if (fromParam === 'player' || fromParam === 'host') return;
+  var params = new URLSearchParams(window.location.search);
+  var fromParam = params.get('from');
+  if (fromParam === 'player' || fromParam === 'host' || fromParam === 'lobby') return;
+  if (params.get('stay') === '1') return;
   var clubs = userClubs || [];
   if (!clubs.length) return;
-  var hostClubs = clubs.filter(function(c){ return isHostRole(c.role) && c.status==='approved'; });
-  if (hostClubs.length === 1) {
-    try { localStorage.setItem('pb-active-club', JSON.stringify(hostClubs[0])); localStorage.setItem('pb-active-club-id', String(hostClubs[0].id)); } catch(_e){}
-    window.location.href = 'index.html?from=lobby';
-    return;
-  }
+  // Auto-route ONLY for players with exactly one approved player-role club.
+  // Owners/cohosts always stay on the lobby so they can pick a mode per club.
   var approvedPlayerClubs = clubs.filter(function(c){ return !isHostRole(c.role) && c.status==='approved'; });
   if (approvedPlayerClubs.length === 1) {
-    try { localStorage.setItem('pb-active-club', JSON.stringify(approvedPlayerClubs[0])); } catch(_e){}
+    try {
+      localStorage.setItem('pb-active-club', JSON.stringify(approvedPlayerClubs[0]));
+      if (approvedPlayerClubs[0].id != null) localStorage.setItem('pb-active-club-id', String(approvedPlayerClubs[0].id));
+    } catch(_e){}
     window.location.href = 'player.html?from=lobby';
   }
 }
@@ -1258,11 +1263,17 @@ function renderClubsList() {
     const roleLabel = roleDisplay(c);
     const roleColor = ownerRole ? '#f5c842' : hostRole ? '#c084fc' : isPending ? '#888' : '#00c2ff';
     const members = c.members||0;
+    // Owners/cohosts get TWO actions so they can enter the SAME club as either
+    // host (manage) or player (test the betting flow). Player-only members get
+    // a single Sportsbook button. Demo / pending get the Join modal.
+    var hostBtnHtml = `<button onclick="event.stopPropagation();enterClubAs('${c.id}','host')" style="padding:8px 14px;background:${ownerRole?'#f5c842':'#c084fc'};color:#000;border:none;border-radius:20px;font-size:0.7rem;font-weight:900;cursor:pointer;white-space:nowrap">Host</button>`;
+    var playerBtnHtml = `<button onclick="event.stopPropagation();enterClubAs('${c.id}','player')" style="padding:8px 14px;background:#00ff88;color:#000;border:none;border-radius:20px;font-size:0.7rem;font-weight:900;cursor:pointer;white-space:nowrap">Sportsbook</button>`;
+    var joinBtnHtml = `<button onclick="event.stopPropagation();openModal('modal-join')" style="padding:8px 16px;background:rgba(0,194,255,0.15);color:#00c2ff;border:1px solid rgba(0,194,255,0.3);border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Join Club</button>`;
     const actionBtn = hostRole
-      ? `<button onclick="event.stopPropagation();selectClub('${c.id}');setTimeout(()=>{window.location='index.html'},50)" style="padding:8px 16px;background:${ownerRole?'#f5c842':'#c084fc'};color:#000;border:none;border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Host Dashboard</button>`
-      : isPending&&c.status==='demo'
-        ? `<button onclick="event.stopPropagation();openModal('modal-join')" style="padding:8px 16px;background:rgba(0,194,255,0.15);color:#00c2ff;border:1px solid rgba(0,194,255,0.3);border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Join Club</button>`
-        : `<button onclick="event.stopPropagation();selectClub('${c.id}');setTimeout(()=>{window.location='player.html'},50)" style="padding:8px 16px;background:#00ff88;color:#000;border:none;border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Sportsbook</button>`;
+      ? `<div style="display:flex;gap:6px;flex-wrap:nowrap">${hostBtnHtml}${playerBtnHtml}</div>`
+      : isPending && c.status === 'demo'
+        ? joinBtnHtml
+        : playerBtnHtml;
     return `<div onclick="selectClub(${c.id})" style="background:#141414;border:1px solid #252525;border-radius:16px;padding:16px;margin-bottom:10px;cursor:pointer;transition:border-color 0.15s" onmouseenter="this.style.borderColor='#333'" onmouseleave="this.style.borderColor='#252525'">
       <div style="display:flex;align-items:center;gap:12px">
         <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#1a2a1a,#0a1a0a);border:1px solid #333;display:flex;align-items:center;justify-content:center;font-size:1rem;font-weight:900;color:#00ff88;flex-shrink:0">${(c.name||'').slice(0,2).toUpperCase()}</div>
@@ -1325,6 +1336,29 @@ function selectClub(id) {
   enterActiveClub();
 }
 
+// New: explicit mode entry for the dual-button owner cards. Owners/cohosts can
+// choose 'host' or 'player' explicitly; the chosen mode overrides the
+// role-based default in enterActiveClub. Writes the same storage keys as
+// setActiveClub + a one-shot pb-active-club-mode hint that player.html and
+// index.html can read if they want to show a banner.
+window.enterClubAs = function enterClubAs(id, mode) {
+  const club = userClubs.find(c => String(c.id) === String(id) || (c.code && String(c.code) === String(id)));
+  if (!club) return;
+  setActiveClub(club);
+  try { localStorage.setItem('pb-active-club-mode', mode === 'host' ? 'host' : 'player'); } catch(_e){}
+  closeAllModals();
+  if (club.status === 'pending') {
+    document.getElementById('pending-club-name').textContent = club.name;
+    document.getElementById('pending-club-code').textContent = 'PB-' + (club.code||club.id);
+    openModal('modal-pending');
+    return;
+  }
+  // Explicit choice beats role-based default. Owner picking 'player' lands on
+  // player.html with active club populated — fixes the "can't enter as player"
+  // routing trap.
+  window.location.href = (mode === 'host') ? 'index.html' : 'player.html';
+};
+
 function enterActiveClub() {
   // Fallback: restore activeClub from pb-club or pb-club-players if returning from player/host
   if (!activeClub) {
@@ -1347,6 +1381,13 @@ function enterActiveClub() {
     openModal('modal-pending');
     return;
   }
+  // Honor an explicit mode override if the caller set one (enterClubAs path).
+  // This lets an owner enter their own club as player without being yanked to
+  // index.html by the role check below.
+  var _explicitMode = null;
+  try { _explicitMode = localStorage.getItem('pb-active-club-mode'); } catch(_e){}
+  if (_explicitMode === 'player') { window.location.href = 'player.html'; return; }
+  if (_explicitMode === 'host')   { window.location.href = 'index.html';  return; }
   if (isHostRole(activeClub.role)) {
     window.location.href = 'index.html';
   } else {
