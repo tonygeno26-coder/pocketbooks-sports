@@ -3957,6 +3957,106 @@ function seedMockSettlementPlayers(force) {
   localStorage.setItem('hostActiveBets', JSON.stringify(tix.concat(existingBets)));
   return true;
 }
+// One-shot cleanup at script load: purge any MK# tickets and mock
+// players from prior runs of the host-side seeder. Idempotent. Touches
+// only mock data; real players + real tickets are preserved.
+//
+// Cherry-picked from safety branch commit 45b754c. Main keeps the
+// gated seedMockSettlementPlayers() above for manual console testing;
+// this function only cleans up legacy contamination from before that
+// gate landed.
+function _purgeHostMockData() {
+  try {
+    var summary = { mkTicketsRemoved: 0, mockPlayersRemoved: 0, mockLimitsRemoved: 0 };
+    var MOCK_PIDS = { TP01:1, JD01:1, BS01:1, CT01:1, MW01:1, RG01:1 };
+
+    // 1. Remove MK\d+ ticket ids from hostActiveBets.
+    try {
+      var betsRaw = localStorage.getItem('hostActiveBets');
+      if (betsRaw) {
+        var bets = JSON.parse(betsRaw);
+        if (Array.isArray(bets)) {
+          var before = bets.length;
+          bets = bets.filter(function(t){ return !(t && t.id && /^MK\d+$/.test(t.id)); });
+          summary.mkTicketsRemoved = before - bets.length;
+          if (summary.mkTicketsRemoved > 0) {
+            localStorage.setItem('hostActiveBets', JSON.stringify(bets));
+          }
+        }
+      }
+    } catch(_e){}
+
+    // 2. Remove mock players from pb-club-players, but ONLY when that
+    // player has zero tickets across BOTH stores. Anyone who placed real
+    // bets (under a mock id, however that happened) is preserved.
+    try {
+      var playersRaw = localStorage.getItem('pb-club-players');
+      if (playersRaw) {
+        var players = JSON.parse(playersRaw);
+        if (Array.isArray(players)) {
+          var beforeP = players.length;
+          var hostBetsForCheck = [];
+          var pbForCheck = [];
+          try { hostBetsForCheck = JSON.parse(localStorage.getItem('hostActiveBets') || '[]') || []; } catch(_e){}
+          try { pbForCheck       = JSON.parse(localStorage.getItem('pb-tickets')     || '[]') || []; } catch(_e){}
+          function _hasAnyTickets(pid) {
+            return hostBetsForCheck.some(function(t){ return t && t.playerId === pid; }) ||
+                   pbForCheck.some(function(t){      return t && t.playerId === pid; });
+          }
+          players = players.filter(function(p){
+            var pid = p && (p.playerId || p.id);
+            if (!pid) return true;
+            if (!MOCK_PIDS[pid]) return true;
+            return _hasAnyTickets(pid);
+          });
+          summary.mockPlayersRemoved = beforeP - players.length;
+          if (summary.mockPlayersRemoved > 0) {
+            localStorage.setItem('pb-club-players', JSON.stringify(players));
+          }
+        }
+      }
+    } catch(_e){}
+
+    // 3. Remove pb-player-limits entries for any mock pid we just dropped.
+    try {
+      var limsRaw = localStorage.getItem('pb-player-limits');
+      if (limsRaw) {
+        var lims = JSON.parse(limsRaw);
+        if (lims && typeof lims === 'object' && !Array.isArray(lims)) {
+          var remainingPlayersRaw = localStorage.getItem('pb-club-players');
+          var remainingPlayers = [];
+          try { remainingPlayers = JSON.parse(remainingPlayersRaw || '[]') || []; } catch(_e){}
+          var keep = {};
+          remainingPlayers.forEach(function(p){
+            var pid = p && (p.playerId || p.id);
+            if (pid) keep[pid] = true;
+          });
+          Object.keys(lims).forEach(function(pid){
+            if (MOCK_PIDS[pid] && !keep[pid]) {
+              delete lims[pid];
+              summary.mockLimitsRemoved++;
+            }
+          });
+          if (summary.mockLimitsRemoved > 0) {
+            localStorage.setItem('pb-player-limits', JSON.stringify(lims));
+          }
+        }
+      }
+    } catch(_e){}
+
+    if (summary.mkTicketsRemoved || summary.mockPlayersRemoved || summary.mockLimitsRemoved) {
+      console.log('[host mock purge]',
+        'tickets=' + summary.mkTicketsRemoved,
+        'players=' + summary.mockPlayersRemoved,
+        'limits='  + summary.mockLimitsRemoved);
+    }
+    return summary;
+  } catch (err) {
+    console.warn('[host mock purge] error:', err && err.message || err);
+    return { error: String(err && err.message || err) };
+  }
+}
+window._purgeHostMockData = _purgeHostMockData;
 // Per-day net (won-lost across all players) for the active week.
 function _dailyNetsForWeek(weekStart, weekEnd) {
   var bets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
@@ -4946,6 +5046,11 @@ function _showPlayerSettlementDetail(playerId) {
 }
 // seedMockSettlementPlayers: DISABLED for production/dev testing.
 // Only call manually via console: seedMockSettlementPlayers()
+// Legacy contamination cleanup: removes MK# tickets and TP01/JD01/BS01/
+// CT01/MW01/RG01 mock players left in localStorage from older builds
+// where the seeder auto-ran. Idempotent + safe (only purges mock ids
+// with zero real ticket activity).
+try { _purgeHostMockData(); } catch(_e){}
 checkWeeklySettlement();
 
 // ── HOST DB PRIMARY MODE FLAG ───────────────────────────────────────────────────────────────
