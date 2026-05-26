@@ -172,6 +172,81 @@ test('owner role in membership → preserved', function() {
   assertEq(actor.role, 'owner');
 });
 
+
+// ── Test: _checkClubScope empty-clubId never mismatches ───────────────────────
+console.log('\n── _checkClubScope empty-clubId passthrough ──');
+
+function _simulateScopeCheckFixed(actor, requestedClubId) {
+  if (actor.error) return { ok: false, reason: actor.error };
+  if (!requestedClubId) return { ok: true };
+  if (actor.membershipVerified) return { ok: true };
+  // Empty clubId = legacy token — passthrough (membership lookup will verify)
+  if (actor.clubId && actor.clubId !== requestedClubId) {
+    return { ok: false, reason: 'club_scope_mismatch', actorClubId: actor.clubId, requestedClubId };
+  }
+  return { ok: true };
+}
+
+test('empty actor.clubId + requestedClubId → scope passes (legacy token passthrough)', function() {
+  var actor = { actorId:'4', role:'view_only', clubId:'', legacyToken:true };
+  var scope = _simulateScopeCheckFixed(actor, '1');
+  assert(scope.ok, 'empty clubId should NOT trigger club_scope_mismatch; got: '+JSON.stringify(scope));
+});
+
+test('non-empty actorClub mismatching requestedClub → scope rejects', function() {
+  var actor = { actorId:'4', role:'player', clubId:'99' };
+  var scope = _simulateScopeCheckFixed(actor, '1');
+  assert(!scope.ok);
+  assertEq(scope.reason, 'club_scope_mismatch');
+});
+
+test('membershipVerified actor always passes scope', function() {
+  var actor = { actorId:'4', role:'full_admin', clubId:'1', membershipVerified:true };
+  var scope = _simulateScopeCheckFixed(actor, '1');
+  assert(scope.ok);
+});
+
+// ── Test: IS_PRODUCTION + no jti + legacy login token shape ───────────────────
+console.log('\n── Legacy login token jti bypass (IS_PRODUCTION path) ──');
+
+function _simulateRequireActorProd(tokenPayload, reqClub) {
+  // Simulate IS_PRODUCTION=true path
+  var p = tokenPayload;
+  var club = p.clubId || '';
+  var jti  = p.jti   || null;
+  // Check if it's a legacy login token
+  var isLegacyLogin = !p.sub && !p.actorId && !p.clubId && (p.id || p.email);
+  if (!jti && isLegacyLogin) {
+    // Tagged for membership lookup instead of rejected
+    return { actorId: String(p.id || ''), role:'view_only', clubId:'',
+             legacyToken:true, reqClub:reqClub, fromToken:true };
+  }
+  if (!jti) return { error:'legacy_token_missing_jti', status:401 };
+  return { actorId:p.sub||p.actorId, role:p.role||'view_only', clubId:club, fromToken:true };
+}
+
+test('IS_PRODUCTION + {id,email,role} token (no jti) → tagged as legacyToken not rejected', function() {
+  var token = { id:4, email:'signal+tonyjj@pocketbooks.local', role:'user' };
+  var actor = _simulateRequireActorProd(token, '1');
+  assert(!actor.error, 'should not return error; got: '+JSON.stringify(actor));
+  assertEq(actor.legacyToken, true);
+  assertEq(actor.reqClub, '1');
+  assertEq(actor.actorId, '4');
+});
+
+test('IS_PRODUCTION + club-claim token with jti → normal path (not legacyToken)', function() {
+  var token = { sub:'4', actorId:'4', role:'player', clubId:'1', jti:'jti_abc' };
+  var actor = _simulateRequireActorProd(token, '1');
+  assert(!actor.legacyToken);
+  assertEq(actor.clubId, '1');
+});
+
+test('IS_PRODUCTION + no jti + has sub/actorId → still rejects (not a legacy login token)', function() {
+  var token = { sub:'4', actorId:'4', role:'player', clubId:'1' }; // no jti
+  var actor = _simulateRequireActorProd(token, '1');
+  assertEq(actor.error, 'legacy_token_missing_jti');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('\n' + '─'.repeat(56));
 console.log('Legacy token auth tests: ' + pass + ' passed, ' + fail + ' failed');
