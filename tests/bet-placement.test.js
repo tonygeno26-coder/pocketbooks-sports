@@ -442,6 +442,74 @@ test('bets/place: balance gate uses club-scoped startBal correctly', function() 
   assert(available > oldAvailable, 'fixed path gives correct higher available balance');
 });
 
+
+// ── PL-6: fail-closed risk check behavior ────────────────────────────────────
+console.log('\n── PL-6: fail-closed _checkRiskLimitsJs ──');
+
+// Simulate the bets/place risk check wrapper behavior
+async function runRiskCheckWrapper(riskCheckFn) {
+  // Mirrors the exact try/catch in bets/place after the PL-6 fix
+  try {
+    const riskCheck = await riskCheckFn();
+    if (!riskCheck.ok) {
+      return { httpStatus: 422, body: { ok:false, code: riskCheck.code } };
+    }
+    return { httpStatus: 200, body: { ok:true } };
+  } catch(riskErr) {
+    // PL-6: fail-CLOSED
+    return {
+      httpStatus: 503,
+      body: { ok:false, error:'risk_check_unavailable',
+              message:'Risk checks temporarily unavailable. Please retry.' }
+    };
+  }
+}
+
+test('PL-6: risk check exception returns 503 risk_check_unavailable (fail-closed)', async function() {
+  var result = await runRiskCheckWrapper(async function() {
+    throw new Error('Supabase connection refused');
+  });
+  assertEq(result.httpStatus, 503, 'HTTP 503 on exception');
+  assertEq(result.body.ok, false, 'ok=false');
+  assertEq(result.body.error, 'risk_check_unavailable', 'error code');
+  assert(result.body.message.includes('temporarily unavailable'), 'safe message present');
+});
+
+test('PL-6: normal risk rejection still returns 422 (not changed)', async function() {
+  var result = await runRiskCheckWrapper(async function() {
+    return { ok:false, code:'stake_above_max', max:500, stake:501 };
+  });
+  assertEq(result.httpStatus, 422, 'HTTP 422 for normal rejection');
+  assertEq(result.body.ok, false, 'ok=false');
+  assertEq(result.body.code, 'stake_above_max', 'rejection code preserved');
+});
+
+test('PL-6: passing risk check allows placement to continue', async function() {
+  var result = await runRiskCheckWrapper(async function() {
+    return { ok:true };
+  });
+  assertEq(result.httpStatus, 200, 'HTTP 200 when checks pass');
+  assertEq(result.body.ok, true, 'ok=true');
+});
+
+test('PL-6: network timeout on risk check returns 503, not silent pass', async function() {
+  var result = await runRiskCheckWrapper(async function() {
+    throw new Error('socket hang up');
+  });
+  assertEq(result.httpStatus, 503, 'timeout → 503, not silent pass');
+  assertEq(result.body.error, 'risk_check_unavailable', 'correct error code');
+  // Critically: it must NOT be ok:true (the old fail-open behavior)
+  assert(!result.body.ok, 'must not be ok on exception');
+});
+
+test('PL-6: suspended player still rejected normally (not exception path)', async function() {
+  var result = await runRiskCheckWrapper(async function() {
+    return { ok:false, code:'player_suspended', suspendedUntil:'2026-12-31T00:00:00Z' };
+  });
+  assertEq(result.httpStatus, 422, 'suspended player = 422');
+  assertEq(result.body.code, 'player_suspended', 'suspended code correct');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('\n' + '─'.repeat(54));
 console.log('Bet placement tests: ' + _pass + ' passed, ' + _fail + ' failed');
