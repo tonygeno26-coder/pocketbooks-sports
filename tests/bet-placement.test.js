@@ -387,6 +387,61 @@ test('multi-club player: each club sees only its own settled net', function() {
   assert(availB !== brokenBoth, 'club B differs from broken result');
 });
 
+
+// ── club_members cleanup: bets/place startBal uses player_limits ─────────────
+console.log('\n── club_members cleanup: bets/place uses player_limits (club-scoped) ──');
+
+// Mirror the fixed backend startBal resolution:
+// player_limits WHERE club_id=? AND player_id=? — with club_id filter
+function resolveStartBalFromPlayerLimits(playerLimitRows, clubId, playerId) {
+  var row = (playerLimitRows||[]).find(function(r) {
+    return String(r.club_id) === String(clubId) && String(r.player_id) === String(playerId);
+  });
+  return row ? parseFloat(row.balance_start)||1000 : 1000;
+}
+
+var CLUB_A_ID = 'club-uuid-cccc';
+var CLUB_B_ID = 'club-uuid-dddd';
+
+test('bets/place: uses balance_start=2500 from player_limits for club A (not fallback 1000)', function() {
+  var limits = [
+    { club_id: CLUB_A_ID, player_id: 'P1', balance_start: 2500 },
+    { club_id: CLUB_B_ID, player_id: 'P1', balance_start: 500  }, // club B row must be ignored
+  ];
+  var bal = resolveStartBalFromPlayerLimits(limits, CLUB_A_ID, 'P1');
+  assertApprox(bal, 2500, 'startBal = 2500 from club A player_limits');
+  assert(bal !== 1000, 'must not fall back to 1000 when row exists');
+});
+
+test('bets/place: does not use club B player_limits row for club A bet', function() {
+  var limits = [
+    // No club A row for P2
+    { club_id: CLUB_B_ID, player_id: 'P2', balance_start: 9999 },
+  ];
+  var bal = resolveStartBalFromPlayerLimits(limits, CLUB_A_ID, 'P2');
+  assertApprox(bal, 1000, 'club B row must not pollute club A startBal');
+  assert(bal !== 9999, 'club B balance 9999 must not appear in club A');
+});
+
+test('bets/place: fallback remains 1000 when no player_limits row exists', function() {
+  var limits = []; // no rows at all
+  var bal = resolveStartBalFromPlayerLimits(limits, CLUB_A_ID, 'P3');
+  assertApprox(bal, 1000, 'fallback to 1000 when no row');
+});
+
+test('bets/place: balance gate uses club-scoped startBal correctly', function() {
+  // Player has $2500 start, $200 open risk, $100 losses, $50 gains
+  // available = 2500 - 200 - 100 + 50 = 2250
+  var startBal = 2500;
+  var openRisk = 200, settledLosses = 100, settledGains = 50;
+  var available = Math.round((startBal - openRisk - settledLosses + settledGains)*100)/100;
+  assertApprox(available, 2250, 'available = 2250 with startBal=2500');
+  // Old code with fallback 1000: available = 1000 - 200 - 100 + 50 = 750 (wrong — would block valid bet)
+  var oldAvailable = Math.round((1000 - openRisk - settledLosses + settledGains)*100)/100;
+  assertApprox(oldAvailable, 750, 'old fallback gives wrong 750');
+  assert(available > oldAvailable, 'fixed path gives correct higher available balance');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('\n' + '─'.repeat(54));
 console.log('Bet placement tests: ' + _pass + ' passed, ' + _fail + ' failed');

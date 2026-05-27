@@ -237,6 +237,66 @@ test('valid response → no fallback', function() {
   assert(!shouldFallbackPlayer({ok:true,balance:b}).fallback);
 });
 
+
+// ── club_members cleanup: player/dashboard uses player_limits (club-scoped) ──
+console.log('\n── club_members cleanup: player/dashboard uses player_limits ──');
+
+// Mirror the fixed backend startingBalance resolution for dashboard
+function resolveStartingBalanceForDashboard(playerLimitRows, clubId, playerId) {
+  var row = (playerLimitRows||[]).find(function(r) {
+    return String(r.club_id) === String(clubId) && String(r.player_id) === String(playerId);
+  });
+  return (row && row.balance_start) ? parseFloat(row.balance_start)||1000 : 1000;
+}
+
+function computeAvailable(startingBalance, openRisk, settledLosses, settledGains) {
+  return Math.round((startingBalance - openRisk - settledLosses + settledGains)*100)/100;
+}
+
+var DASH_CLUB_A = 'club-uuid-dash-a';
+var DASH_CLUB_B = 'club-uuid-dash-b';
+
+test('player/dashboard: startingBalance=2500 read from player_limits for club A', function() {
+  var limits = [
+    { club_id: DASH_CLUB_A, player_id: 'PD1', balance_start: 2500 },
+    { club_id: DASH_CLUB_B, player_id: 'PD1', balance_start: 100 }, // must be ignored
+  ];
+  var start = resolveStartingBalanceForDashboard(limits, DASH_CLUB_A, 'PD1');
+  assertApprox(start, 2500, 'startingBalance=2500 from club A player_limits');
+});
+
+test('player/dashboard: availableBalance formula uses club-scoped startingBalance', function() {
+  var limits = [{ club_id: DASH_CLUB_A, player_id: 'PD2', balance_start: 2500 }];
+  var start = resolveStartingBalanceForDashboard(limits, DASH_CLUB_A, 'PD2');
+  // active bets: $300 open risk; settled: $100 loss, $50 win
+  var available = computeAvailable(start, 300, 100, 50);
+  assertApprox(available, 2150, 'available = 2500 - 300 - 100 + 50 = 2150');
+  // Old fallback 1000 path: 1000 - 300 - 100 + 50 = 650 (wrong)
+  var oldAvail = computeAvailable(1000, 300, 100, 50);
+  assertApprox(oldAvail, 650, 'old fallback gives wrong 650');
+  assert(available > oldAvail, 'fixed path gives correct higher available balance');
+});
+
+test('player/dashboard: does not use club B player_limits row for club A display', function() {
+  var limits = [
+    { club_id: DASH_CLUB_B, player_id: 'PD3', balance_start: 9999 }, // club B only
+  ];
+  var start = resolveStartingBalanceForDashboard(limits, DASH_CLUB_A, 'PD3');
+  assertApprox(start, 1000, 'no club A row: fallback 1000 (club B row ignored)');
+  assert(start !== 9999, 'club B balance must not appear in club A dashboard');
+});
+
+test('player/dashboard: fallback to 1000 when no player_limits row exists', function() {
+  var start = resolveStartingBalanceForDashboard([], DASH_CLUB_A, 'PD4');
+  assertApprox(start, 1000, 'fallback to 1000 when no row');
+});
+
+test('player/dashboard: null balance_start falls back to 1000', function() {
+  var limits = [{ club_id: DASH_CLUB_A, player_id: 'PD5', balance_start: null }];
+  var start = resolveStartingBalanceForDashboard(limits, DASH_CLUB_A, 'PD5');
+  assertApprox(start, 1000, 'null balance_start → fallback 1000');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('\n' + '─'.repeat(54));
 console.log('Player dashboard tests: ' + _pass + ' passed, ' + _fail + ' failed');
