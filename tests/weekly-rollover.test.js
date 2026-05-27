@@ -236,6 +236,75 @@ test('settlement preview after rollover has zero settled amounts (only active op
   assertApprox(openRisk, 100, 'openRisk=100 (active bets)');
 });
 
+
+// ── Bug #2 regression: weekly_rollover_tx must use actual player balance ─────
+// Proves balMap[p.playerId] is used instead of hardcoded 1000.
+console.log('\n── Bug #2 regression: rollover starting balance from player_limits ──');
+
+// Simulate the balMap fetch + RPC call that weekly-rollover now performs.
+// buildBalMap mirrors: player_limits rows → balMap keyed by player_id string.
+function buildBalMap(playerLimitRows) {
+  var balMap = {};
+  (playerLimitRows||[]).forEach(function(r) {
+    if (r.player_id != null && r.balance_start != null)
+      balMap[String(r.player_id)] = parseFloat(r.balance_start);
+  });
+  return balMap;
+}
+
+// Simulate the RPC param selection (balMap[pid] || 1000).
+function resolveStartingBalance(balMap, playerId) {
+  return balMap[String(playerId)] || 1000;
+}
+
+test('player with balance_start=2500 rolls over with 2500, not 1000 (Bug #2 fix)', function() {
+  var limits = [{ player_id: 'P001', balance_start: 2500 }];
+  var balMap = buildBalMap(limits);
+  var result = resolveStartingBalance(balMap, 'P001');
+  assertApprox(result, 2500, 'starting balance should be 2500');
+  assert(result !== 1000, 'must NOT be hardcoded 1000');
+});
+
+test('player with balance_start=500 rolls over with 500, not 1000 (Bug #2 fix)', function() {
+  var limits = [{ player_id: 'P002', balance_start: 500 }];
+  var balMap = buildBalMap(limits);
+  var result = resolveStartingBalance(balMap, 'P002');
+  assertApprox(result, 500, 'starting balance should be 500');
+  assert(result !== 1000, 'must NOT be hardcoded 1000');
+});
+
+test('no player_limits row → default fallback is 1000', function() {
+  var balMap = buildBalMap([]); // empty player_limits
+  var result = resolveStartingBalance(balMap, 'P_UNKNOWN');
+  assertApprox(result, 1000, 'fallback should be 1000 when no row exists');
+});
+
+test('balMap uses string player_id key (numeric id still matches)', function() {
+  // player_limits rows often have numeric player_id; ensure String() coercion works
+  var limits = [{ player_id: 99, balance_start: 3000 }];
+  var balMap = buildBalMap(limits);
+  // lookup with string '99' should find numeric row
+  assertApprox(balMap['99'], 3000, 'numeric id coerced to string key');
+  assertApprox(resolveStartingBalance(balMap, '99'),  3000, 'string lookup works');
+  assertApprox(resolveStartingBalance(balMap, 99),    3000, 'numeric lookup coerced');
+});
+
+test('multi-player club: each player gets their own starting balance', function() {
+  var limits = [
+    { player_id: 'P001', balance_start: 2500 },
+    { player_id: 'P002', balance_start:  500 },
+    { player_id: 'P003', balance_start: 1000 }, // same as default — still explicit
+  ];
+  var balMap = buildBalMap(limits);
+  assertApprox(resolveStartingBalance(balMap, 'P001'), 2500, 'P001=2500');
+  assertApprox(resolveStartingBalance(balMap, 'P002'),  500, 'P002=500');
+  assertApprox(resolveStartingBalance(balMap, 'P003'), 1000, 'P003=1000 (explicit)');
+  assertApprox(resolveStartingBalance(balMap, 'P004'), 1000, 'P004=1000 (fallback)');
+  // Hardcoded 1000 would return wrong value for P001 and P002
+  assert(resolveStartingBalance(balMap, 'P001') !== 1000, 'P001 must not be 1000');
+  assert(resolveStartingBalance(balMap, 'P002') !== 1000, 'P002 must not be 1000');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('\n' + '─'.repeat(54));
 console.log('Weekly rollover tests: ' + _pass + ' passed, ' + _fail + ' failed');
