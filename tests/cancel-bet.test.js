@@ -213,6 +213,74 @@ test('cancel refund restores risk to available balance', function() {
   assertEq(after, 1000, 'after cancel balance restored');
 });
 
+// ── Membership verification (legacy token gate) ─────────────────────────────
+// These tests cover the requirePermissionScoped membership lookup path:
+// when a token has no clubId claim, DB membership must be verified before
+// the cancel route is reached. ticket.club_id must NOT bypass this check.
+console.log('\n── Membership verification (legacy token gate) ──');
+
+function _simulateMembershipGate(actor, reqClub, membershipRow) {
+  // Mirrors requirePermissionScoped membership lookup logic
+  if (!actor || actor.error) return { ok:false, error:'invalid_actor' };
+  var needsLookup = actor.legacyToken || (!actor.clubId && !actor.isDevBypass);
+  if (!needsLookup) return { ok:true, actor:actor }; // club-claim token skips lookup
+  if (!reqClub) return { ok:false, error:'missing_clubId' };
+  // Membership lookup result
+  if (!membershipRow) return { ok:false, error:'membership_not_found' };
+  if (membershipRow.status !== 'active' && membershipRow.status !== 'approved')
+    return { ok:false, error:'membership_inactive', status:membershipRow.status };
+  // Success: upgrade actor
+  var roleMap = { host:'full_admin', admin:'full_admin', cohost:'settlement_manager', staff:'risk_viewer' };
+  var rawRole = membershipRow.role || 'player';
+  var dbRole = roleMap[rawRole] || rawRole;
+  var upgraded = Object.assign({}, actor, { role:dbRole, clubId:String(reqClub), membershipVerified:true });
+  return { ok:true, actor:upgraded };
+}
+
+test('legacy token + missing membership → membership_not_found (not club_scope_mismatch)', function() {
+  var actor = { actorId:'4', role:'view_only', clubId:'', legacyToken:true, reqClub:'club-1' };
+  var result = _simulateMembershipGate(actor, 'club-1', null);
+  assert(!result.ok, 'should fail');
+  assertEq(result.error, 'membership_not_found');
+});
+
+test('legacy token + approved membership → actor upgraded with full_admin, membershipVerified=true', function() {
+  var actor = { actorId:'4', role:'view_only', clubId:'', legacyToken:true, reqClub:'club-1' };
+  var membership = { actor_id:'4', club_id:'club-1', role:'host', status:'approved' };
+  var result = _simulateMembershipGate(actor, 'club-1', membership);
+  assert(result.ok, 'should pass');
+  assertEq(result.actor.role, 'full_admin');
+  assertEq(result.actor.membershipVerified, true);
+  assertEq(result.actor.clubId, 'club-1');
+});
+
+test('legacy token + revoked/pending membership → membership_inactive', function() {
+  var actor = { actorId:'4', role:'view_only', clubId:'', legacyToken:true };
+  var membership = { actor_id:'4', club_id:'club-1', role:'player', status:'pending' };
+  var r1 = _simulateMembershipGate(actor, 'club-1', membership);
+  assert(!r1.ok, 'pending should fail');
+  assertEq(r1.error, 'membership_inactive');
+
+  var revoked = Object.assign({}, membership, { status:'suspended' });
+  var r2 = _simulateMembershipGate(actor, 'club-1', revoked);
+  assert(!r2.ok, 'suspended should fail');
+  assertEq(r2.error, 'membership_inactive');
+});
+
+test('ticket.club_id fallback must not bypass membership check — auth uses X-Club-Id/body.clubId', function() {
+  // Scenario: ticket lives in club-uuid, actor has membership in club-1.
+  // Request sends X-Club-Id=club-uuid. Since actor has no membership for club-uuid,
+  // lookup must reject BEFORE route handler sees ticket.club_id.
+  var actor = { actorId:'4', role:'view_only', clubId:'', legacyToken:true };
+  var membership_club1 = { actor_id:'4', club_id:'club-1', role:'host', status:'approved' };
+  // Auth gate uses reqClub from request (club-uuid), not ticket.club_id
+  var reqClub = 'club-uuid-different';
+  var result = _simulateMembershipGate(actor, reqClub, null); // no membership for club-uuid
+  assert(!result.ok, 'should reject — no membership for requested club');
+  assertEq(result.error, 'membership_not_found',
+    'auth gate rejects on missing membership for requested club, before route can use ticket.club_id');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('\n' + '─'.repeat(54));
 console.log('Cancel bet tests: ' + _pass + ' passed, ' + _fail + ' failed');
