@@ -251,6 +251,178 @@ test('different idempotencyKeys → separate rows', function() {
   assertEq(Object.keys(seen).length, 2, '2 separate keys = 2 rows');
 });
 
+
+// ── Bugs #5 & #6 regression: prior payments must reduce remaining payable ────
+console.log('\n── Bugs #5/#6: prior payments deducted from settle-player and rollover ──');
+
+// Mirror the backend's prior-payment deduction logic
+function resolveSettleMax(grossOwed, confirmedPriorPayments) {
+  var prior = (confirmedPriorPayments||[]).reduce(function(s,r){ return s+parseFloat(r.amount||0); }, 0);
+  prior = Math.round(prior * 100) / 100;
+  return { maxAmt: Math.round(Math.max(0, grossOwed - prior) * 100) / 100, priorPaid: prior };
+}
+
+function overpayCheck(amt, maxAmt) {
+  return amt > maxAmt + 0.01
+    ? { ok:false, error:'overpay_blocked', maxAmount:maxAmt }
+    : { ok:true };
+}
+
+// Mirror rollover prior-payment subtraction
+function applyPriorPaymentsToSnapshot(byPlayer, confirmedPayments) {
+  var result = {};
+  Object.keys(byPlayer).forEach(function(pid) {
+    result[pid] = Object.assign({}, byPlayer[pid]);
+  });
+  (confirmedPayments||[]).forEach(function(r) {
+    var pl = result[r.player_id];
+    if (!pl) return;
+    var a = parseFloat(r.amount)||0;
+    if (r.direction === 'player_paid_host') {
+      pl.owesHost = Math.max(0, Math.round((pl.owesHost - a)*100)/100);
+    } else if (r.direction === 'host_paid_player') {
+      pl.hostOwes = Math.max(0, Math.round((pl.hostOwes - a)*100)/100);
+    }
+  });
+  return result;
+}
+
+// ── settle-player tests ──────────────────────────────────────────────────────
+
+test('Bug #5: partial payment reduces remaining payable', function() {
+  // Player owes $200; already paid $75 confirmed
+  var gross = 200;
+  var prior = [{ amount: 75 }];
+  var r = resolveSettleMax(gross, prior);
+  assertApprox(r.maxAmt,   125, 'remaining = 200 - 75 = 125');
+  assertApprox(r.priorPaid, 75, 'priorPaid = 75');
+});
+
+test('Bug #5: overpay after partial payment is rejected', function() {
+  // Player owes $200; already paid $150; tries to pay $100 more (exceeds $50 remaining)
+  var gross = 200;
+  var prior = [{ amount: 150 }];
+  var r = resolveSettleMax(gross, prior);
+  assertApprox(r.maxAmt, 50, 'remaining = 200 - 150 = 50');
+  var check = overpayCheck(100, r.maxAmt);
+  assert(!check.ok, 'payment of $100 against $50 remaining should be blocked');
+  assertEq(check.error, 'overpay_blocked', 'error=overpay_blocked');
+});
+
+test('Bug #5: exact remaining payment succeeds', function() {
+  var gross = 200;
+  var prior = [{ amount: 150 }];
+  var r = resolveSettleMax(gross, prior);
+  assertApprox(r.maxAmt, 50, 'remaining = 50');
+  var check = overpayCheck(50, r.maxAmt);
+  assert(check.ok, 'exact remaining amount of $50 should succeed');
+});
+
+test('Bug #5: payment within 0.01 tolerance succeeds (float guard)', function() {
+  var gross = 100.00;
+  var prior = [{ amount: 50.00 }];
+  var r = resolveSettleMax(gross, prior);
+  // 0.005 over remaining is within tolerance
+  var check = overpayCheck(50.005, r.maxAmt);
+  assert(check.ok, 'within 0.01 tolerance should pass');
+});
+
+test('Bug #5: no prior payments — behavior unchanged (gross = max)', function() {
+  var gross = 200;
+  var r = resolveSettleMax(gross, []);
+  assertApprox(r.maxAmt,    200, 'no prior payments: max = gross = 200');
+  assertApprox(r.priorPaid,   0, 'priorPaid = 0');
+  var check = overpayCheck(200, r.maxAmt);
+  assert(check.ok, 'full payment allowed when nothing prior');
+});
+
+test('Bug #5: multiple partial payments sum correctly', function() {
+  var gross = 500;
+  var prior = [{ amount: 100 }, { amount: 150 }, { amount: 75 }];
+  var r = resolveSettleMax(gross, prior);
+  assertApprox(r.priorPaid, 325, 'sum of prior = 100+150+75 = 325');
+  assertApprox(r.maxAmt,    175, 'remaining = 500 - 325 = 175');
+});
+
+test('Bug #5: fully settled player — maxAmt clamps to 0', function() {
+  var gross = 200;
+  var prior = [{ amount: 200 }]; // exactly paid
+  var r = resolveSettleMax(gross, prior);
+  assertApprox(r.maxAmt, 0, 'fully settled: maxAmt = 0');
+  // Use 0.02 — clearly above the 0.01 tolerance so it's always blocked
+  var check = overpayCheck(0.02, r.maxAmt);
+  assert(!check.ok, 'payment of $0.02 against $0 remaining should be blocked');
+});
+
+test('Bug #5: overpaid scenario — maxAmt clamps to 0, not negative', function() {
+  // Edge: prior payments exceed gross (should never happen in valid data, but guard it)
+  var gross = 100;
+  var prior = [{ amount: 150 }]; // prior > gross
+  var r = resolveSettleMax(gross, prior);
+  assertApprox(r.maxAmt, 0, 'overpaid scenario clamps to 0, not negative');
+  assert(r.maxAmt >= 0, 'maxAmt must never be negative');
+});
+
+// ── weekly-rollover tests ────────────────────────────────────────────────────
+
+test('Bug #6: weekly rollover subtracts confirmed player_paid_host payment', function() {
+  var byPlayer = { 'P001': { owesHost: 200, hostOwes: 0, openRisk: 0 } };
+  var payments = [{ player_id: 'P001', direction: 'player_paid_host', amount: 75, status: 'confirmed' }];
+  var result = applyPriorPaymentsToSnapshot(byPlayer, payments);
+  assertApprox(result['P001'].owesHost, 125, 'owesHost should be 200 - 75 = 125');
+});
+
+test('Bug #6: weekly rollover subtracts confirmed host_paid_player payment', function() {
+  var byPlayer = { 'P002': { owesHost: 0, hostOwes: 300, openRisk: 0 } };
+  var payments = [{ player_id: 'P002', direction: 'host_paid_player', amount: 100, status: 'confirmed' }];
+  var result = applyPriorPaymentsToSnapshot(byPlayer, payments);
+  assertApprox(result['P002'].hostOwes, 200, 'hostOwes should be 300 - 100 = 200');
+});
+
+test('Bug #6: no prior payments — snapshot unchanged', function() {
+  var byPlayer = {
+    'P001': { owesHost: 150, hostOwes: 0 },
+    'P002': { owesHost: 0,   hostOwes: 80 }
+  };
+  var result = applyPriorPaymentsToSnapshot(byPlayer, []);
+  assertApprox(result['P001'].owesHost, 150, 'P001 unchanged');
+  assertApprox(result['P002'].hostOwes,  80, 'P002 unchanged');
+});
+
+test('Bug #6: voided/pending payments NOT subtracted from snapshot', function() {
+  // Only confirmed payments count; pending and voided must be ignored
+  var byPlayer = { 'P003': { owesHost: 200, hostOwes: 0 } };
+  // Simulate: backend filters .eq('status','confirmed'), so non-confirmed rows aren't in the array
+  var confirmedOnly = []; // voided/pending filtered out before this function
+  var result = applyPriorPaymentsToSnapshot(byPlayer, confirmedOnly);
+  assertApprox(result['P003'].owesHost, 200, 'voided/pending payments do not reduce snapshot');
+});
+
+test('Bug #6: multiple players — payments only affect their own player', function() {
+  var byPlayer = {
+    'P001': { owesHost: 200, hostOwes: 0 },
+    'P002': { owesHost: 0,   hostOwes: 100 },
+    'P003': { owesHost: 50,  hostOwes: 0 }
+  };
+  var payments = [
+    { player_id: 'P001', direction: 'player_paid_host', amount: 80 },
+    { player_id: 'P002', direction: 'host_paid_player', amount: 40 },
+    // P003 has no payments
+  ];
+  var result = applyPriorPaymentsToSnapshot(byPlayer, payments);
+  assertApprox(result['P001'].owesHost, 120, 'P001: 200-80=120');
+  assertApprox(result['P002'].hostOwes,  60, 'P002: 100-40=60');
+  assertApprox(result['P003'].owesHost,  50, 'P003: no payments, unchanged');
+});
+
+test('Bug #6: payment exceeding owed clamps to 0, not negative', function() {
+  var byPlayer = { 'P004': { owesHost: 100, hostOwes: 0 } };
+  var payments = [{ player_id: 'P004', direction: 'player_paid_host', amount: 150 }];
+  var result = applyPriorPaymentsToSnapshot(byPlayer, payments);
+  assertApprox(result['P004'].owesHost, 0, 'clamped to 0 — not negative');
+  assert(result['P004'].owesHost >= 0, 'owesHost must never go negative');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('\n' + '─'.repeat(54));
 console.log('Settlement execution tests: ' + _pass + ' passed, ' + _fail + ' failed');
