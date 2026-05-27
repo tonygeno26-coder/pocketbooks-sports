@@ -2215,9 +2215,7 @@ try { startAutoGradeDaemon(); } catch(e) { console.error('[auto grade daemon] fa
 try { revertFutureGrades(); }   catch(e) { console.error('[revertFutureGrades] startup error:', e.message); }
 
 try {
-  _maybeAutoEnableDbPrimaryReads().then(function(){
-    return _initDbPrimaryRead();
-  }).catch(function(e){ console.warn('[db primary read] init error:', e.message); });
+  _maybeAutoEnableDbPrimaryReads().catch(function(e){ console.warn('[db primary read] init error:', e.message); });
 } catch(e) { console.warn('[db primary read] sync error:', e.message); }
 
 try { renderMyBets(); } catch(e) { console.error('[PBS init] renderMyBets failed:', e.message); }
@@ -4974,8 +4972,8 @@ async function runServerGrade(opts) {
 
     if (data.graded > 0) {
       // Hydrate My Bets from DB after server grading
-      var hydrateResult = await _initDbPrimaryRead();
-      if (hydrateResult && hydrateResult.sourceUsed === 'db') {
+      var hydrateResult = await loadPlayerDashboardFromDb();
+      if (hydrateResult && hydrateResult.ok) {
         console.log('[server grade] hydrated betTickets from DB after grading');
         syncBalanceDisplays();
         try { renderMyBets(); } catch(_e){}
@@ -10770,7 +10768,6 @@ async function _maybeAutoEnableDbPrimaryReads() {
     if (!env.hasSupabaseUrl || !env.hasSupabaseServiceKey) return;
     // Supabase is ready and this is a dev identity — auto-enable
     _DB_PRIMARY_READS_ENABLED = true;
-    sessionStorage.setItem('pb-db-primary', 'true');
     console.log('[db primary read] AUTO-ENABLED for dev identity — sourceUsed will be determined by safety checks');
   } catch(_e) { /* network error — stay on localStorage */ }
 }
