@@ -299,6 +299,94 @@ test('different idempotencyKeys → separate rows', function() {
   assertEq(Object.keys(seen).length, 2, '2 separate rows');
 });
 
+
+// ── Bug #1 regression: balance gate must be club-scoped ──────────────────────
+// Proves: .eq('club_id', clubId) added to the tickets query in bets/place
+// prevents cross-club balance contamination (Bug #1).
+console.log('\n── Bug #1 regression: cross-club balance isolation ──');
+
+function deriveAvailableClubScoped(allTickets, clubId, startingBalance) {
+  var clubTickets = allTickets.filter(function(t) { return t.club_id === clubId; });
+  var openRisk = 0, settledGains = 0, settledLosses = 0;
+  clubTickets.forEach(function(t) {
+    var s = (t.status||'').toLowerCase();
+    var r = parseFloat(t.risk_amount) || 0;
+    var p = parseFloat(t.potential_profit) || 0;
+    if (s === 'canceled' || s === 'voided' || s === 'push' || s === 'pushed') return;
+    if (s === 'active' || s === 'open') openRisk += r;
+    else if (s === 'won')  settledGains  += p;
+    else if (s === 'lost') settledLosses += r;
+  });
+  return Math.round((startingBalance - openRisk - settledLosses + settledGains) * 100) / 100;
+}
+function deriveAvailableUnscoped(allTickets, startingBalance) {
+  var openRisk = 0, settledGains = 0, settledLosses = 0;
+  allTickets.forEach(function(t) {
+    var s = (t.status||'').toLowerCase();
+    var r = parseFloat(t.risk_amount) || 0;
+    var p = parseFloat(t.potential_profit) || 0;
+    if (s === 'canceled' || s === 'voided' || s === 'push' || s === 'pushed') return;
+    if (s === 'active' || s === 'open') openRisk += r;
+    else if (s === 'won')  settledGains  += p;
+    else if (s === 'lost') settledLosses += r;
+  });
+  return Math.round((startingBalance - openRisk - settledLosses + settledGains) * 100) / 100;
+}
+var CLUB_A = 'club-uuid-aaaa';
+var CLUB_B = 'club-uuid-bbbb';
+
+test('club B loss/open-risk does not reduce club A balance (Bug #1 fix)', function() {
+  var tix = [
+    { club_id: CLUB_A, player_id: 'P1', status: 'active', risk_amount: 50,  potential_profit: 90 },
+    { club_id: CLUB_A, player_id: 'P1', status: 'won',    risk_amount: 30,  potential_profit: 30 },
+    { club_id: CLUB_B, player_id: 'P1', status: 'lost',   risk_amount: 400, potential_profit: 0  },
+    { club_id: CLUB_B, player_id: 'P1', status: 'active', risk_amount: 200, potential_profit: 0  },
+  ];
+  // fixed: 1000 - 50 (openA) + 30 (wonA) = 980
+  var fixed   = deriveAvailableClubScoped(tix, CLUB_A, 1000);
+  // broken: 1000 - 250 (openA+B) - 400 (lossB) + 30 (wonA) = 380
+  var broken  = deriveAvailableUnscoped(tix, 1000);
+  assertApprox(fixed,  980, 'club A available = 980');
+  assertApprox(broken, 380, 'broken cross-club = 380');
+  assert(fixed > broken, 'fix restores correct balance');
+});
+
+test('player with zero club A tickets: full starting balance (not reduced by club B)', function() {
+  var tix = [
+    { club_id: CLUB_B, player_id: 'P1', status: 'active', risk_amount: 500, potential_profit: 0 },
+  ];
+  assertApprox(deriveAvailableClubScoped(tix, CLUB_A, 1000), 1000, 'club A: no tickets = full balance');
+  assertApprox(deriveAvailableUnscoped(tix, 1000), 500, 'unscoped wrongly deducts club B open risk');
+});
+
+test('club B losses do not bleed into club A (isolated loss)', function() {
+  var tix = [{ club_id: CLUB_B, player_id: 'P1', status: 'lost', risk_amount: 300, potential_profit: 0 }];
+  assertApprox(deriveAvailableClubScoped(tix, CLUB_A, 1000), 1000, 'club A unaffected by club B loss');
+});
+
+test('canceled ticket in club B does not affect club A availability', function() {
+  var tix = [
+    { club_id: CLUB_B, player_id: 'P1', status: 'canceled', risk_amount: 200, potential_profit: 0 },
+    { club_id: CLUB_A, player_id: 'P1', status: 'active',   risk_amount: 50,  potential_profit: 90 },
+  ];
+  assertApprox(deriveAvailableClubScoped(tix, CLUB_A, 1000), 950, 'only club A $50 open risk subtracted');
+});
+
+test('multi-club player: each club sees only its own settled net', function() {
+  var tix = [
+    { club_id: CLUB_A, player_id: 'P1', status: 'lost', risk_amount: 100, potential_profit: 0   },
+    { club_id: CLUB_B, player_id: 'P1', status: 'won',  risk_amount: 100, potential_profit: 200 },
+  ];
+  var availA = deriveAvailableClubScoped(tix, CLUB_A, 1000); // 1000 - 100 = 900
+  var availB = deriveAvailableClubScoped(tix, CLUB_B, 1000); // 1000 + 200 = 1200
+  assertApprox(availA, 900,  'club A: start 1000 - $100 loss = 900');
+  assertApprox(availB, 1200, 'club B: start 1000 + $200 win = 1200');
+  var brokenBoth = deriveAvailableUnscoped(tix, 1000); // net = -100+200 = +100 -> 1100
+  assertApprox(brokenBoth, 1100, 'unscoped cross-club net = 1100 (wrong for both)');
+  assert(availA !== brokenBoth, 'club A differs from broken result');
+  assert(availB !== brokenBoth, 'club B differs from broken result');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('\n' + '─'.repeat(54));
 console.log('Bet placement tests: ' + _pass + ' passed, ' + _fail + ' failed');
