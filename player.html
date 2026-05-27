@@ -3995,12 +3995,13 @@ async function confirmBet() {
           +' endpoint=/api/bets/place'
           +' respStatus='+_cbRespStatus
           +' respBodyPreview='+(_cbRespText||'').slice(0,200).replace(/\n/g,' '));
-        showToast('Network error placing bet \u2014 saved locally, syncing when back online', 'warning');
+        showToast('Network error \u2014 bet not placed. Please try again.', 'error');
       }
-      // Fall through to localStorage
+      closeBetConfirm(); // clears _pendingSnapshot; do not fall through to local write
+      return;            // LF-7: prevent ghost localStorage ticket on network failure
     } finally {
       if (_cbAbortTimer) { clearTimeout(_cbAbortTimer); _cbAbortTimer=null; }
-      _cbBtnReady(); // always re-enable button
+      _cbBtnReady(); // always re-enable button (finally runs despite return above)
     }
   } // end DB path
 
