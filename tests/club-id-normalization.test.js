@@ -21,10 +21,12 @@ const _NUMERIC_CLUB_ID_RE = /^\d+$/;
 function simulateGuard(clubId, isProduction, devBypass) {
   // No clubId — pass through (missing-clubId is handled by downstream guards)
   if (!clubId) return { blocked: false, reason: 'no_clubId' };
-  // Dev bypass
-  var bypassAllowed = !isProduction || devBypass;
-  if (bypassAllowed) return { blocked: false, reason: 'dev_bypass' };
-  // Reject numeric
+  // Non-production environments always allowed
+  if (!isProduction) return { blocked: false, reason: 'dev_bypass' };
+  // NOTE: DEV_AUTH_BYPASS does NOT bypass the club-ID format check.
+  // It only bypasses auth token verification. Club ID normalization is a
+  // data-integrity constraint that applies regardless of auth bypass state.
+  // Reject numeric in production
   if (_NUMERIC_CLUB_ID_RE.test(clubId)) {
     return { blocked: true, error: 'legacy_club_id_not_supported', clubId };
   }
@@ -90,10 +92,11 @@ test('numeric "1" allowed when NODE_ENV=development', function() {
   assertEq(r.reason, 'dev_bypass');
 });
 
-test('numeric "1" allowed when DEV_AUTH_BYPASS=true even in production', function() {
-  var r = simulateGuard('1', true, true); // production but bypass enabled
-  assert(!r.blocked, 'dev bypass should allow');
-  assertEq(r.reason, 'dev_bypass');
+test('numeric "1" still BLOCKED in production even when DEV_AUTH_BYPASS=true', function() {
+  // DEV_AUTH_BYPASS only bypasses token auth, not club-ID format validation
+  var r = simulateGuard('1', true, true); // production + devBypass
+  assert(r.blocked, 'club-ID format guard is NOT bypassed by DEV_AUTH_BYPASS');
+  assertEq(r.error, 'legacy_club_id_not_supported');
 });
 
 // ── Tests: missing clubId passes through ─────────────────────────────────────
