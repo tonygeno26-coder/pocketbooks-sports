@@ -5325,14 +5325,15 @@ function runBalanceReconciliation() {
     var hb = hostActiveBets[i];
     if (hb && hb.id) hostById[hb.id] = hb;
   }
-  // Index ledger by ticketId. Sum settlement-related balanceChange per
-  // ticket so a re-grade with two rows doesn't trigger a false mismatch.
+  // Index ledger by ticketId. Handles both ledger_entries (ticketId) and
+  // canonical ledger (ticket_id) column naming. RA-2: dual-vocabulary support.
   var ledgerByTicket = {};
   for (var j = 0; j < ledger.length; j++) {
     var L = ledger[j];
-    if (!L || !L.ticketId) continue;
-    if (!ledgerByTicket[L.ticketId]) ledgerByTicket[L.ticketId] = [];
-    ledgerByTicket[L.ticketId].push(L);
+    var _lid = L && (L.ticketId || L.ticket_id);
+    if (!L || !_lid) continue;
+    if (!ledgerByTicket[_lid]) ledgerByTicket[_lid] = [];
+    ledgerByTicket[_lid].push(L);
   }
 
   var rows = [];
@@ -5378,8 +5379,12 @@ function runBalanceReconciliation() {
     }
 
     // 4. Settled ticket without any settlement ledger row
+    // RA-2: accepts both snake_case (ledger_entries) and UPPER_CASE (canonical ledger)
     var ledgerRows = ledgerByTicket[t.id] || [];
+    var _GRADE_UPPER = { 'BET_GRADED_WIN':1, 'BET_GRADED_LOSS':1, 'BET_GRADED_PUSH':1 };
     var hasSettlementLedger = ledgerRows.some(function(L){
+      var evtUpper = String(L.event_type || '').toUpperCase();
+      if (_GRADE_UPPER[evtUpper]) return true;
       var typ = String(L.type || '').toLowerCase();
       return typ === 'bet_won' || typ === 'bet_lost' || typ === 'bet_push' ||
              typ === 'bet_won_settle' || typ === 'bet_settled' ||
@@ -5392,6 +5397,8 @@ function runBalanceReconciliation() {
     // 5. Ledger balanceChange consistency (only on settlement rows).
     if (hasSettlementLedger) {
       var settleRow = ledgerRows.filter(function(L){
+        var evtUpper = String(L.event_type || '').toUpperCase();
+        if (_GRADE_UPPER[evtUpper]) return true;
         var typ = String(L.type || '').toLowerCase();
         return typ.indexOf('bet_won') === 0 || typ.indexOf('bet_lost') === 0 || typ.indexOf('bet_push') === 0 ||
                typ === 'won' || typ === 'lost' || typ === 'push';
