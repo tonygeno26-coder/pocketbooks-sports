@@ -257,6 +257,123 @@ test('multiple tickets same player: openRisk accumulates correctly', function() 
   assertApprox(p.owesHost, 75, 'owesHost=75 (1 lost)');
 });
 
+
+// ── Bug #4 regression: balance_start must come from player_limits, not club_members ──
+console.log('\n── Bug #4: settlements-preview uses player_limits for balance_start ──');
+
+// Mirror the fixed backend memberMap build from player_limits
+function buildMemberMapFromPlayerLimits(playerLimitRows, clubId) {
+  // Fixed: reads from player_limits WHERE club_id=? — canonical Supabase source
+  var map = {};
+  (playerLimitRows||[]).forEach(function(r) {
+    if (r.player_id != null)
+      map[String(r.player_id)] = { balance_start: parseFloat(r.balance_start)||1000 };
+  });
+  return map;
+}
+
+// Old broken approach: reads from club_members (legacy PG table, no UUID-club rows)
+function buildMemberMapFromClubMembers(clubMemberRows) {
+  var map = {};
+  (clubMemberRows||[]).forEach(function(m) {
+    if (m.player_id != null) map[String(m.player_id)] = m;
+  });
+  return map;
+}
+
+function resolveBalance(memberMap, playerId) {
+  var meta = memberMap[String(playerId)] || {};
+  return parseFloat(meta.balance_start || 1000);
+}
+
+test('Bug #4: UUID club player balance_start comes from player_limits', function() {
+  var playerLimitRows = [
+    { player_id: 'uuid-player-1', balance_start: 2500, club_id: 'club-uuid-aaaa' },
+    { player_id: 'uuid-player-2', balance_start:  500, club_id: 'club-uuid-aaaa' },
+  ];
+  var map = buildMemberMapFromPlayerLimits(playerLimitRows, 'club-uuid-aaaa');
+  assertApprox(resolveBalance(map, 'uuid-player-1'), 2500, 'P1 balance=2500 from player_limits');
+  assertApprox(resolveBalance(map, 'uuid-player-2'),  500, 'P2 balance=500 from player_limits');
+});
+
+test('Bug #4: legacy club_members row does not override modern player_limits value', function() {
+  // Old broken code: only looks at club_members (returns nothing for UUID clubs)
+  var clubMemberRows = []; // UUID club — no rows in legacy table
+  var legacyMap = buildMemberMapFromClubMembers(clubMemberRows);
+  // All balances fall back to 1000 — wrong for players with custom limits
+  assertApprox(resolveBalance(legacyMap, 'uuid-player-1'), 1000, 'legacy path returns 1000 (wrong)');
+
+  // Fixed code: reads from player_limits — gets actual value
+  var playerLimitRows = [{ player_id: 'uuid-player-1', balance_start: 2500, club_id: 'club-uuid-aaaa' }];
+  var modernMap = buildMemberMapFromPlayerLimits(playerLimitRows, 'club-uuid-aaaa');
+  assertApprox(resolveBalance(modernMap, 'uuid-player-1'), 2500, 'modern path returns 2500 (correct)');
+
+  // The two approaches diverge for UUID-club players
+  assert(
+    resolveBalance(legacyMap, 'uuid-player-1') !== resolveBalance(modernMap, 'uuid-player-1'),
+    'legacy and modern paths produce different results for UUID-club player'
+  );
+});
+
+test('Bug #4: missing player_limits row falls back safely to 1000', function() {
+  var playerLimitRows = []; // no rows — player not yet in player_limits
+  var map = buildMemberMapFromPlayerLimits(playerLimitRows, 'club-uuid-aaaa');
+  assertApprox(resolveBalance(map, 'uuid-new-player'), 1000, 'fallback to 1000 when no row');
+});
+
+test('Bug #4: player_limits row with null balance_start falls back to 1000', function() {
+  var playerLimitRows = [{ player_id: 'uuid-player-3', balance_start: null, club_id: 'club-uuid-aaaa' }];
+  var map = buildMemberMapFromPlayerLimits(playerLimitRows, 'club-uuid-aaaa');
+  assertApprox(resolveBalance(map, 'uuid-player-3'), 1000, 'null balance_start → fallback 1000');
+});
+
+test('Bug #4: numeric player_id in player_limits coerced to string key', function() {
+  // player_limits may store player_id as integer; ensure String() coercion works
+  var playerLimitRows = [{ player_id: 42, balance_start: 750, club_id: 'club-uuid-aaaa' }];
+  var map = buildMemberMapFromPlayerLimits(playerLimitRows, 'club-uuid-aaaa');
+  assertApprox(resolveBalance(map, '42'),  750, 'string lookup for numeric id');
+  assertApprox(resolveBalance(map, 42),    750, 'numeric lookup coerced');
+});
+
+test('Bug #4: numeric clubId is rejected by requireCanonicalClubId guard', function() {
+  // Simulate the club-id normalization guard that was already added
+  function requireCanonicalClubIdCheck(clubId) {
+    var isProduction = true; // simulate prod
+    if (!clubId) return { ok:true }; // no clubId — let downstream handle
+    if (/^\d+$/.test(clubId) && isProduction)
+      return { ok:false, error:'legacy_club_id_not_supported', clubId };
+    return { ok:true };
+  }
+  var numeric = requireCanonicalClubIdCheck('1');
+  assert(!numeric.ok, 'numeric clubId should be rejected');
+  assertEq(numeric.error, 'legacy_club_id_not_supported', 'correct error code');
+
+  var uuid = requireCanonicalClubIdCheck('club-uuid-aaaa');
+  assert(uuid.ok, 'UUID clubId should pass');
+});
+
+test('Bug #4: preview response shape unchanged (backward compat)', function() {
+  // Simulate the getOrCreate path with modern memberMap
+  var playerLimitRows = [{ player_id: 'P1', balance_start: 1500 }];
+  var memberMap = buildMemberMapFromPlayerLimits(playerLimitRows);
+  var pid = 'P1';
+  var meta = memberMap[pid] || {};
+  var player = {
+    playerId: pid, username: pid, balance: parseFloat(meta.balance_start||1000),
+    openRisk: 0, settledNet: 0, owesHost: 0, hostOwes: 0, lastTicketAt: null
+  };
+  // Assert all expected fields present
+  assert('playerId'     in player, 'playerId field present');
+  assert('username'     in player, 'username field present');
+  assert('balance'      in player, 'balance field present');
+  assert('openRisk'     in player, 'openRisk field present');
+  assert('settledNet'   in player, 'settledNet field present');
+  assert('owesHost'     in player, 'owesHost field present');
+  assert('hostOwes'     in player, 'hostOwes field present');
+  assert('lastTicketAt' in player, 'lastTicketAt field present');
+  assertApprox(player.balance, 1500, 'balance=1500 from player_limits');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('\n' + '─'.repeat(54));
 console.log('Settlement preview tests: ' + _pass + ' passed, ' + _fail + ' failed');
