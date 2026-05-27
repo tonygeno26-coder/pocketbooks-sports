@@ -2203,6 +2203,11 @@ if (!_sessionValid) {
   try { _updateTeaserTab(); }  catch(e) { console.error('[PBS init] _updateTeaserTab failed (continuing):', e && e.message || e); }
   try { _updateSportTabs(); }  catch(e) { console.error('[PBS init] _updateSportTabs failed (continuing):', e && e.message || e); }
   try { loadGames('mlb'); }    catch(e) { console.error('[PBS fetch failed]', e); }
+  if (!window._loadGamesIntervalId) {
+    window._loadGamesIntervalId = setInterval(function(){
+      try { loadGames(_currentSport || 'mlb'); } catch(e) { console.error('[auto-refresh loadGames]', e.message); }
+    }, 5 * 60 * 1000);
+  }
   console.log('BOOT_STAGE=load_games_end (async fetch in flight)');
 }
 
@@ -3588,6 +3593,18 @@ async function confirmBet() {
   _cbLog('CONFIRM_BET_SNAPSHOT', 'type='+snap.type+' legs='+(snap.legs||[]).length
     +' risk='+snap.risk+' payout='+snap.payout);
 
+  // ── Snapshot age gate ─────────────────────────────────────────────────────
+  _cbStep = 'SNAPSHOT_AGE';
+  var SNAPSHOT_MAX_AGE_MS = 90 * 1000;
+  if (snap.capturedAt && (Date.now() - snap.capturedAt) > SNAPSHOT_MAX_AGE_MS) {
+    var _snapshotAge = Date.now() - snap.capturedAt;
+    console.warn('[snapshot age gate] stale snapshot blocked age=' + _snapshotAge + 'ms limit=' + SNAPSHOT_MAX_AGE_MS + 'ms');
+    _pendingSnapshot = null;
+    closeBetConfirm();
+    showToast('Odds have refreshed \xb7 please review your slip.', 'warning');
+    return;
+  }
+
   // ── Teaser gate ───────────────────────────────────────────────────────────
   _cbStep = 'TEASER_GATE';
   if (snap.type === 'teaser') {
@@ -3757,20 +3774,23 @@ async function confirmBet() {
       + ' tokenClubId='      + (_tokenClubId || '(no-token)'));
 
     var _iKey = 'BET_'+(_pid||'?')+'_'+now.replace(/[^0-9]/g,'').slice(0,14);
+    var _dbLegs = (_t0.selections||snap.legs||[]).map(function(leg){
+      return { legId:leg.legId, pick:leg.pick, market:leg.market, odds:leg.odds,
+        line:leg.line||null, side:leg.side||null,
+        canonicalGameKey:leg.canonicalGameKey||leg.canonical_game_key||'',
+        sport:leg.sport||_currentSport||'mlb',
+        homeTeam:leg.homeTeam||'', awayTeam:leg.awayTeam||'',
+        scheduledStart:leg.scheduledStart||leg.commenceTime||null,
+        providerGameId:leg.providerGameId||null, providerName:leg.providerName||'odds-api',
+        isLive:!!leg.isLive };
+    });
     var _dbPayload = {
       clubId:_cid, playerId:_pid, playerUsername:_lspl.username||_pid,
       betType: snap.type==='straight'?'Single':snap.type==='parlay'?'Parlay':snap.type==='rr'?'RoundRobin':'Teaser',
       stake:snap.risk, payout:snap.payout, potentialProfit:snap.profit,
       idempotencyKey:_iKey,
-      legs:(_t0.selections||snap.legs||[]).map(function(leg){
-        return { legId:leg.legId, pick:leg.pick, market:leg.market, odds:leg.odds,
-          line:leg.line||null, side:leg.side||null,
-          canonicalGameKey:leg.canonicalGameKey||leg.canonical_game_key||'',
-          sport:leg.sport||_currentSport||'mlb',
-          homeTeam:leg.homeTeam||'', awayTeam:leg.awayTeam||'',
-          scheduledStart:leg.scheduledStart||leg.commenceTime||null,
-          providerGameId:leg.providerGameId||null, providerName:leg.providerName||'odds-api' };
-      })
+      is_live: _dbLegs.some(function(l){ return l.isLive; }),
+      legs: _dbLegs
     };
 
     // ── AbortController 10 s timeout ─────────────────────────────────────
@@ -7966,7 +7986,21 @@ function bsSyncPlaceBtn() {
             var _w2 = document.getElementById('_slip-suspension-warn');
             if (_w2) _w2.remove();
           }
-        }).catch(function(_e){ /* fail open */ });
+        }).catch(function(_e){
+          console.warn('[suspension check] fetch failed — failing closed', _e && _e.message || _e);
+          var _btnF = document.getElementById('bs-place-btn');
+          if (_btnF) {
+            _btnF.style.background='#92400e'; _btnF.style.color='#fde68a'; _btnF.style.cursor='default';
+            _btnF.dataset.disabled='true';
+            _btnF.textContent='⚠️ Market status unavailable';
+            _btnF.style.display='block';
+          }
+          var _warnF = document.getElementById('_slip-suspension-warn');
+          if (!_warnF) { _warnF=document.createElement('div'); _warnF.id='_slip-suspension-warn';
+            _warnF.style.cssText='text-align:center;font-size:0.78rem;color:#fbbf24;padding:6px 0 2px'; }
+          _warnF.textContent='Market status unavailable — try again';
+          if (_btnF && _btnF.parentNode) _btnF.parentNode.insertBefore(_warnF, _btnF);
+        });
     })();
   } else {
     var _w3 = document.getElementById('_slip-suspension-warn');
@@ -8502,6 +8536,7 @@ function bsToggle(cellId, game, time, market, pick, odds) {
     sel.homeTeam = homeT || cachedGame.home || '';
     sel.awayTeam = awayT || cachedGame.away || '';
     sel.scheduledStart = ctRaw;
+    sel.isLive = !!(cachedGame.live || cachedGame.in_play || cachedGame._mockLive);
   }
 
   console.log('selected bet:', sel);
