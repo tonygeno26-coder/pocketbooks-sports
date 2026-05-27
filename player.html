@@ -4007,9 +4007,28 @@ async function confirmBet() {
 
   // ══════════════════════════════════════════════════════════════════════════
   //  LOCALSTORAGE FALLBACK PATH
+  //  ─────────────────────────────────────────────────────────────────────
+  //  INTENTIONAL OFFLINE / DEMO USE ONLY — NOT production placement.
+  //  Reached only when _DB_PRIMARY_READS_ENABLED === false (set manually
+  //  for offline demos or local dev without Supabase). Bypasses all backend
+  //  validation intentionally: no odds check, no risk limits, no balance
+  //  enforcement, no ledger write. Tickets are local-only; they will not
+  //  appear in host DB views or be graded server-side.
+  //
+  //  If _DB_PRIMARY_READS_ENABLED is true and code reaches here, that is
+  //  a logic error — the DB path must return before this point.
   // ══════════════════════════════════════════════════════════════════════════
   _cbStep = 'LOCALSTORAGE';
   _cbLog('CONFIRM_BET_LOCALSTORAGE_PATH', '_DB_PRIMARY='+_DB_PRIMARY_READS_ENABLED+' tickets='+newTickets.length);
+
+  // Guard: DB primary ON means the DB path above must have returned.
+  // Reaching here with the flag on is a logic error — block and surface it.
+  if (_DB_PRIMARY_READS_ENABLED) {
+    console.error('[confirmBet] LOCALSTORAGE_PATH reached with DB primary ON — logic error');
+    showToast('Placement error — please refresh and try again.', 'error');
+    closeBetConfirm();
+    return;
+  }
   if (!newTickets.length) {
     _cbErr('CONFIRM_BET_ERROR', null,
       'phase=local_save reason=no_tickets_built'
