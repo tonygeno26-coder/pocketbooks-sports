@@ -64,6 +64,13 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .odds-box:active{transform:scale(0.97)}
 .odds-box:hover{border-color:#444;background:#2a2a2a}
 .odds-box.sel,.odds-cell.selected{border:2px solid #fff !important;outline:2px solid rgba(255,255,255,0.4) !important;box-shadow:0 0 14px rgba(255,255,255,.9),0 0 18px rgba(0,255,136,.6) !important;background:rgba(0,255,136,0.18) !important}
+.odds-box.live-stale,.odds-cell.live-stale{opacity:0.48;cursor:not-allowed!important;pointer-events:none;filter:saturate(0.65)}
+.odds-box.odds-move-up,.mkt-odds-box.odds-move-up{animation:pbOddsUp 0.85s ease-out}
+.odds-box.odds-move-down,.mkt-odds-box.odds-move-down{animation:pbOddsDown 0.85s ease-out}
+@keyframes pbOddsUp{0%{box-shadow:0 0 0 0 rgba(0,255,136,0.75);border-color:#00ff88}100%{box-shadow:0 0 0 12px rgba(0,255,136,0);}}
+@keyframes pbOddsDown{0%{box-shadow:0 0 0 0 rgba(255,61,87,0.75);border-color:#ff3d57}100%{box-shadow:0 0 0 12px rgba(255,61,87,0);}}
+#live-odds-refresh-status{margin:8px 12px;padding:7px 10px;border-radius:8px;background:#06281b;border:1px solid rgba(0,255,136,0.24);color:#9ef6c2;font-size:0.7rem;font-weight:800;text-align:center}
+#live-odds-refresh-status.stale{background:#351a05;border-color:#f59e0b;color:#fde68a}
 .odds-pos{color:#00ff88;text-shadow:0 0 10px rgba(0,255,136,0.5)}
 .odds-line{font-size:0.65rem;color:#666;line-height:1}
 .odds-num{font-size:0.95rem;font-weight:900;letter-spacing:-0.3px}
@@ -876,8 +883,8 @@ function _showSessionExpiredModal(result) {
 // ══════════════════════════════════════════════════════════════════════════════
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '1303b49';
-window.PBS_BUILD_DATE = '2026-05-28T00:10:01.706Z';
+window.PBS_BUILD_SHA = '8a51766';
+window.PBS_BUILD_DATE = '2026-05-28T08:52:52.037Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -1407,30 +1414,151 @@ function teamAvatar(name) {
 // flagged but cards exist, the first 2 are tagged _mockLive=true and
 // rendered as live placeholders so the tab demos correctly until
 // SportsDataIO live data is wired (existing odds-card layout reused).
+var _pbActiveTab = 'sportsbook';
+var _pbSportsbookRefreshTimer = null;
+var _pbLiveOddsStatus = {
+  refreshing:false,
+  stale:false,
+  cacheAgeMs:null,
+  liveSnapshotTtlMs:10000,
+  pollIntervalMs:5000,
+  lastSuccessfulPollAt:null
+};
+var _pbLastRenderedOdds = {};
+
+function _pbIsSportsbookVisible() {
+  if (document.hidden) return false;
+  if (_pbActiveTab !== 'sportsbook' && _pbActiveTab !== 'sports' && _pbActiveTab !== 'live') return false;
+  var id = _pbActiveTab === 'live' ? 'live-section' : 'sportsbook-section';
+  var sec = document.getElementById(id);
+  return !sec || sec.style.display !== 'none';
+}
+
+function _pbEnsureLiveRefreshStatus() {
+  var list = document.getElementById(_pbActiveTab === 'live' ? 'live-games-list' : 'games-list') ||
+             document.getElementById('games-list');
+  if (!list || !list.parentNode) return null;
+  var el = document.getElementById('live-odds-refresh-status');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'live-odds-refresh-status';
+    list.parentNode.insertBefore(el, list);
+  }
+  return el;
+}
+
+function _pbUpdateLiveRefreshStatus(text, stale) {
+  var el = _pbEnsureLiveRefreshStatus();
+  if (!el) return;
+  el.textContent = text || 'Live odds updating';
+  el.className = stale ? 'stale' : '';
+}
+
+function _pbApplyLiveFreshnessState() {
+  var stale = !!_pbLiveOddsStatus.stale;
+  document.querySelectorAll('.odds-cell[data-live-market="true"]').forEach(function(cell) {
+    cell.classList.toggle('live-stale', stale);
+    if (stale) cell.setAttribute('aria-disabled', 'true');
+    else cell.removeAttribute('aria-disabled');
+  });
+  if (stale) {
+    _pbUpdateLiveRefreshStatus('Live odds updating — betting disabled while lines refresh', true);
+  }
+  if (typeof bsSyncPlaceBtn === 'function') {
+    try { bsSyncPlaceBtn(); } catch(_e) {}
+  }
+}
+
+function _pbMarketIsLive(g) {
+  if (!g) return false;
+  if (g.live === true || g.in_play === true || g.eventLive === true || g._mockLive === true) return true;
+  var s = String(g.status || g.state || g.gameStatus || '').toLowerCase();
+  return s === 'live' || s === 'in_play' || s === 'inprogress' || s === 'in_progress';
+}
+
+async function _pbFetchMarketStatus() {
+  try {
+    var res = await fetch(API + '/api/markets/status', { cache:'no-store' });
+    if (!res.ok) throw new Error('HTTP '+res.status);
+    var body = await res.json();
+    var liveTtl = Number(body.liveSnapshotTtlMs || 10000);
+    var cacheAge = body.cacheAgeMs == null ? null : Number(body.cacheAgeMs);
+    _pbLiveOddsStatus.liveSnapshotTtlMs = liveTtl;
+    _pbLiveOddsStatus.pollIntervalMs = Number(body.pollIntervalMs || 5000);
+    _pbLiveOddsStatus.cacheAgeMs = cacheAge;
+    _pbLiveOddsStatus.lastSuccessfulPollAt = body.lastSuccessfulPollAt || body.lastSuccessAt || null;
+    _pbLiveOddsStatus.stale = cacheAge != null && cacheAge > liveTtl;
+    return body;
+  } catch(e) {
+    _pbLiveOddsStatus.stale = true;
+    _pbUpdateLiveRefreshStatus('Live odds updating — provider status unavailable', true);
+    return null;
+  }
+}
+
+function _pbFlashLineMovements() {
+  document.querySelectorAll('.odds-cell[data-id]').forEach(function(cell) {
+    var id = cell.getAttribute('data-id');
+    var odds = Number(cell.getAttribute('data-odds'));
+    var line = cell.querySelector('.odds-line,.mkt-odds-line');
+    var point = line ? String(line.textContent || '') : '';
+    var key = id;
+    var prev = _pbLastRenderedOdds[key];
+    if (prev && (prev.odds !== odds || prev.point !== point)) {
+      cell.classList.remove('odds-move-up','odds-move-down');
+      var up = Number.isFinite(odds) && Number.isFinite(prev.odds) ? odds > prev.odds : point !== prev.point;
+      void cell.offsetWidth;
+      cell.classList.add(up ? 'odds-move-up' : 'odds-move-down');
+    }
+    _pbLastRenderedOdds[key] = { odds:odds, point:point };
+  });
+}
+
+function _pbScheduleSportsbookLiveRefresh() {
+  if (_pbSportsbookRefreshTimer) clearInterval(_pbSportsbookRefreshTimer);
+  var delay = document.hidden ? 30000 : 5000;
+  _pbSportsbookRefreshTimer = setInterval(function() {
+    if (!_pbIsSportsbookVisible()) return;
+    _pbRefreshSportsbookOdds({ silent:true });
+  }, delay);
+}
+
+async function _pbRefreshSportsbookOdds(opts) {
+  opts = opts || {};
+  if (!_pbIsSportsbookVisible()) return;
+  _pbLiveOddsStatus.refreshing = true;
+  _pbUpdateLiveRefreshStatus('Refreshing live odds...', false);
+  await _pbFetchMarketStatus();
+  try {
+    if (_pbActiveTab === 'live') {
+      if (typeof loadGames === 'function') await loadGames(_currentSport || 'mlb', { targetId:'live-games-list', liveOnly:true, silent:!!opts.silent });
+    } else if (typeof loadGames === 'function') {
+      await loadGames(_currentSport || 'mlb', { silent:!!opts.silent });
+    }
+  } finally {
+    _pbLiveOddsStatus.refreshing = false;
+    if (!_pbLiveOddsStatus.stale) _pbUpdateLiveRefreshStatus('Live odds updated', false);
+    _pbApplyLiveFreshnessState();
+  }
+}
+
 async function loadGames(sport, opts){
   opts = opts || {};
   const _targetId = opts.targetId || 'games-list';
   const _liveOnly = !!opts.liveOnly;
   const el=document.getElementById(_targetId);
   if (!el) return;
-  el.innerHTML='<div class="empty">Loading...</div>';
+  if (!opts.silent) el.innerHTML='<div class="empty">Loading...</div>';
   try{
-    // Normalize sport key. Accept 'mlb' or 'baseball_mlb' — both map to the
-    // local MLB-only Vercel proxy at /api/odds/mlb. Anything else uses the
-    // legacy /api/odds/<sport> path (Railway) until those sports get their
-    // own local proxies.
+    // Normalize sport key. Odds now come from the backend Owls-only pipeline;
+    // live refresh paths intentionally avoid local proxy fallback.
     var _rawSport = sport || 'mlb';
     var _sportLc  = String(_rawSport).toLowerCase();
     var _isMlb    = (_sportLc === 'mlb' || _sportLc === 'baseball_mlb');
     const _sport  = _isMlb ? 'mlb' : _sportLc;
-    // MLB sportsbook ALWAYS hits the local Vercel proxy at exactly
-    // /api/odds/mlb. Never /api/odds/baseball_mlb, never any external odds host.
-    // directly, never the legacy Railway path for MLB.
-    const _url = _isMlb ? '/api/odds/mlb' : ('/api/odds/' + _sport);
-    // MLB sportsbook fetch marker (kept post-cleanup — useful operational
-    // signal that loadGames is wired to the local MLB proxy).
+    const _url = API + '/api/odds/' + _sport;
     if (_isMlb && !_liveOnly) {
-      console.log('[sportsbook fetch] sport=baseball_mlb url=/api/odds/mlb');
+      console.log('[sportsbook fetch] sport=baseball_mlb url='+_url);
     }
     console.log('[PBS fetch start] sport:', _sport, 'url:', _url, 'live:', _liveOnly);
     let _res;
@@ -1453,7 +1581,7 @@ async function loadGames(sport, opts){
         : (_errBody.error || 'Backend error HTTP '+_res.status);
       throw new Error(_msg);
     }
-    // Surface cache source (HIT/MISS/STALE) from our Vercel proxy.
+    // Surface cache source (HIT/MISS/STALE) from the backend if present.
     const _xCache = (_res.headers && _res.headers.get) ? (_res.headers.get('X-Cache') || '') : '';
     const _xCount = (_res.headers && _res.headers.get) ? (_res.headers.get('X-Games-Count') || '') : '';
     const _raw = await _res.text();
@@ -1554,6 +1682,7 @@ async function loadGames(sport, opts){
       const time=timeRaw?new Date(timeRaw).toLocaleString('en-US',{weekday:'short',hour:'2-digit',minute:'2-digit'}):'TBD';
       const sp=(g.sport?g.sport.toUpperCase():null)||'MLB';
       const icon=icons[sp]||'🏅';
+      const isLiveMarket = _pbMarketIsLive(g);
 
       function cell(id,top,odds,marketType,teamPick,teamName){
         if(!odds)return'<div class="odds-box" style="cursor:default;pointer-events:none"><span style="color:var(--gray)">—</span></div>';
@@ -1576,12 +1705,13 @@ async function loadGames(sport, opts){
           data-odds="${odds}"
           data-sport="${sp}"
           data-status="${(g.status||g.state||'')}"
+          data-live-market="${isLiveMarket ? 'true' : 'false'}"
           >${top?`<span class="odds-line">${top}</span>`:''}
           <span class="odds-num ${c}">${f}</span></div>`;
       }
 
       return`<div class="market-card" style="margin-bottom:14px">
-        <div class="mc-header"><span style="font-size:0.9rem">${icon}</span><span class="mc-sport">${sp}</span>${(_liveOnly||g._mockLive||g.live||g.in_play)?'<span style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:rgba(255,61,87,0.12);border:1px solid rgba(255,61,87,0.35);color:#ff3d57;font-size:0.55rem;font-weight:900;letter-spacing:0.5px;text-transform:uppercase;padding:2px 7px;border-radius:6px"><span style="width:6px;height:6px;border-radius:50%;background:#ff3d57;animation:pbLivePulse 1.4s ease-in-out infinite"></span>Live</span>':''}</div>
+        <div class="mc-header"><span style="font-size:0.9rem">${icon}</span><span class="mc-sport">${sp}</span>${isLiveMarket?'<span style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:rgba(255,61,87,0.12);border:1px solid rgba(255,61,87,0.35);color:#ff3d57;font-size:0.55rem;font-weight:900;letter-spacing:0.5px;text-transform:uppercase;padding:2px 7px;border-radius:6px"><span style="width:6px;height:6px;border-radius:50%;background:#ff3d57;animation:pbLivePulse 1.4s ease-in-out infinite"></span>Live</span>':''}</div>
         <div class="mc-cols"><div></div><div class="mc-col-label">Run Line</div><div class="mc-col-label">Total</div><div class="mc-col-label">To Win</div></div>
         <div class="mc-team-row">
           <div class="mc-team">${teamAvatar(aw)}<div><div class="mc-city">${awC}</div><div class="mc-name">${awN}</div></div></div>
@@ -1611,6 +1741,8 @@ async function loadGames(sport, opts){
       }
     }).filter(function(s){ return s; }).join('');
     console.log('games rendered');
+    _pbFlashLineMovements();
+    _pbApplyLiveFreshnessState();
     // Re-sync highlights after DOM update
     setTimeout(function(){
       betSlip.forEach(function(b){
@@ -1892,6 +2024,13 @@ async function _loadSportsCatalog() {
   }
 }
 try { _loadSportsCatalog(); setInterval(_loadSportsCatalog, 5 * 60 * 1000); } catch(_se) { console.warn('[sports catalog] init failed:', _se && _se.message || _se); }
+try {
+  document.addEventListener('visibilitychange', function() {
+    _pbScheduleSportsbookLiveRefresh();
+    if (!document.hidden) _pbRefreshSportsbookOdds({ silent:true });
+  });
+  _pbScheduleSportsbookLiveRefresh();
+} catch(_lr) { console.warn('[live odds refresh] init failed:', _lr && _lr.message || _lr); }
 // ════════════════════════════════════════════════════════════════════════════
 
 function setSport(el,sport){
@@ -1906,10 +2045,12 @@ function setSport(el,sport){
   _currentSport = sport;
   _updateTeaserTab();
   loadGames(sport);
+  _pbScheduleSportsbookLiveRefresh();
 }
 // setFilter removed — replaced by setMarketFilter
 function setBNav(el,tab){
   console.log('[nav] tab:', tab);
+  _pbActiveTab = (tab==='home'||tab==='sportsbook'||tab==='sports') ? 'sportsbook' : tab;
   document.querySelectorAll('.bn').forEach(function(n){ n.classList.remove('active'); });
   el.classList.add('active');
   ['sportsbook-section','mybets-section','predictions-section','live-section','results-section'].forEach(id=>{
@@ -1926,19 +2067,16 @@ function setBNav(el,tab){
     if(sec) sec.style.display='block';
     if(ss) ss.style.display='flex';
     if(pb) pb.style.display='flex';
-    loadGames('mlb');
+    loadGames(_currentSport || 'mlb');
+    _pbScheduleSportsbookLiveRefresh();
   } else if(tab==='live'){
     const sec=document.getElementById('live-section');
     if(sec) sec.style.display='block';
     if(ss) ss.style.display='none';
     if(pb) pb.style.display='none';
-    // Live tab now reads from the cached SportsDataIO GamesByDate proxy.
-    // Live tab uses SportsDataIO only. Falls back to the original
-    // loadGames if the new loader isn't available (older cached page).
-    if (typeof loadLiveGamesFromSportsDataIO === 'function') {
-      loadLiveGamesFromSportsDataIO();
-    } else if (typeof loadGames === 'function') {
-      loadGames('mlb', { targetId:'live-games-list', liveOnly:true });
+    if (typeof loadGames === 'function') {
+      loadGames(_currentSport || 'mlb', { targetId:'live-games-list', liveOnly:true });
+      _pbScheduleSportsbookLiveRefresh();
     }
   } else if(tab==='predictions'){
     const sec=document.getElementById('predictions-section');
@@ -7922,6 +8060,20 @@ function bsSyncPlaceBtn() {
     }
     return; // skip rest of sync
   }
+  if (valid && _pbLiveOddsStatus && _pbLiveOddsStatus.stale) {
+    var _hasLiveSlipLeg = betSlip.some(function(b) {
+      var cell = b && b.cellId ? document.getElementById('c-'+b.cellId) : null;
+      if (cell && cell.getAttribute('data-live-market') === 'true') return true;
+      var status = String((cell && cell.getAttribute('data-status')) || b.status || b.state || '').toLowerCase();
+      return status === 'live' || status === 'in_play' || status === 'inprogress' || status === 'in_progress';
+    });
+    if (_hasLiveSlipLeg && btn) {
+      btn.style.display='block'; btn.dataset.disabled='true';
+      btn.style.background='#78350f'; btn.style.color='#fde68a'; btn.style.cursor='default';
+      btn.textContent='Refreshing live odds';
+      return;
+    }
+  }
   // ── Market suspension check: poll server cache for any suspended slip legs ────────
   var _slipSuspendedMsg = null;
   if (valid && _DB_PRIMARY_READS_ENABLED && betSlip.length > 0) {
@@ -10573,7 +10725,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 1303b49 · May 27, 05:10 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 8a51766 · May 28, 01:52 AM</span>
 </div>
 
 <!-- Orphan IIFE closer removed (was rendering as a literal IIFE close
