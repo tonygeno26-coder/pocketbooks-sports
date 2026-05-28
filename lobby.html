@@ -1142,10 +1142,10 @@ function _maybeAutoRoute() {
   var approvedPlayerClubs = clubs.filter(function(c){ return !isHostRole(c.role) && c.status==='approved'; });
   if (approvedPlayerClubs.length === 1) {
     try {
-      localStorage.setItem('pb-active-club', JSON.stringify(approvedPlayerClubs[0]));
-      if (approvedPlayerClubs[0].id != null) localStorage.setItem('pb-active-club-id', String(approvedPlayerClubs[0].id));
+      syncSelectedClubStorage(approvedPlayerClubs[0]);
     } catch(_e){}
-    window.location.href = 'player.html?from=lobby';
+    activeClub = approvedPlayerClubs[0];
+    enterActiveClub('player');
   }
 }
 
@@ -1167,9 +1167,22 @@ function normRole(r) { return String(r||'').toLowerCase().trim(); }
 function isOwnerRole(r) { return ['owner','host','creator'].includes(normRole(r)); }
 function isCohostRole(r) {
   var n = normRole(r);
-  return n === 'cohost' || n.startsWith('cohost_') || n === 'staff' || n.startsWith('staff_');
+  return n === 'cohost' || n.startsWith('cohost_') || n === 'staff' || n.startsWith('staff_') ||
+         n === 'full_admin' || n === 'settlement_manager' || n === 'risk_viewer' || n === 'view_only';
 }
 function isHostRole(r) { return isOwnerRole(r) || isCohostRole(r); }
+function canonicalStatus(s) { return String(s||'').toLowerCase().trim(); }
+function syncSelectedClubStorage(club) {
+  if (!club) return;
+  localStorage.setItem('pb-active-club', JSON.stringify(club));
+  localStorage.setItem('pb-club', JSON.stringify(club));
+  if (club.id != null) localStorage.setItem('pb-active-club-id', String(club.id));
+}
+function clearSelectedClubStorage() {
+  try { localStorage.removeItem('pb-active-club'); } catch(_e){}
+  try { localStorage.removeItem('pb-active-club-id'); } catch(_e){}
+  try { localStorage.removeItem('pb-club'); } catch(_e){}
+}
 function roleDisplay(c) {
   var r = normRole(c && c.role);
   if (c && c.status === 'pending') return 'Pending';
@@ -1220,6 +1233,10 @@ async function loadMyClubs() {
     ]);
     var hostedNorm = (hosted||[]).map(c => normalizeMembership(c, c.role || 'owner'));
     var joinedNorm = (joined||[]).map(c => normalizeMembership(c, c.role || 'player'));
+    // TODO: replace legacy /api/clubs + /api/my-clubs with the same canonical
+    // membership source used by /api/auth/token. Routing below still rechecks
+    // every entry with backend token issuance before navigation.
+    console.warn('LOBBY_LEGACY_MEMBERSHIP_SOURCE_CONSUMED routeAuthority=auth_token');
     userClubs = dedupClubs([...hostedNorm, ...joinedNorm]);
     localStorage.setItem('pb-clubs', JSON.stringify(userClubs));
     renderClubsList();
@@ -1264,14 +1281,11 @@ function renderClubsList() {
     const roleLabel = roleDisplay(c);
     const roleColor = ownerRole ? '#f5c842' : hostRole ? '#c084fc' : isPending ? '#888' : '#00c2ff';
     const members = c.members||0;
-    // Owners/hosts get two buttons so they can access both views
+    // Owners/hosts enter host tools only. They cannot bet in their own hosted club.
     const actionBtn = isPending&&c.status==='demo'
       ? `<button onclick="event.stopPropagation();openModal('modal-join')" style="padding:8px 16px;background:rgba(0,194,255,0.15);color:#00c2ff;border:1px solid rgba(0,194,255,0.3);border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Join Club</button>`
       : hostRole
-        ? `<div style="display:flex;gap:6px">` +
-            `<button onclick="event.stopPropagation();selectClub('${c.id}','host')" style="padding:7px 12px;background:${ownerRole?'#f5c842':'#c084fc'};color:#000;border:none;border-radius:20px;font-size:0.68rem;font-weight:900;cursor:pointer;white-space:nowrap">Host</button>` +
-            `<button onclick="event.stopPropagation();selectClub('${c.id}','player')" style="padding:7px 12px;background:#00ff88;color:#000;border:none;border-radius:20px;font-size:0.68rem;font-weight:900;cursor:pointer;white-space:nowrap">Sportsbook</button>` +
-          `</div>`
+        ? `<button onclick="event.stopPropagation();selectClub('${c.id}','host')" style="padding:8px 16px;background:${ownerRole?'#f5c842':'#c084fc'};color:#000;border:none;border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Host</button>`
         : `<button onclick="event.stopPropagation();selectClub('${c.id}','player')" style="padding:8px 16px;background:#00ff88;color:#000;border:none;border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Sportsbook</button>`;
     return `<div onclick="selectClub(${c.id})" style="background:#141414;border:1px solid #252525;border-radius:16px;padding:16px;margin-bottom:10px;cursor:pointer;transition:border-color 0.15s" onmouseenter="this.style.borderColor='#333'" onmouseleave="this.style.borderColor='#252525'">
       <div style="display:flex;align-items:center;gap:12px">
@@ -1315,8 +1329,7 @@ function updateClubsTilePreview() {
 function setActiveClub(club) {
   activeClub = club;
   try {
-    localStorage.setItem('pb-active-club', JSON.stringify(club));
-    if (club && club.id != null) localStorage.setItem('pb-active-club-id', String(club.id));
+    syncSelectedClubStorage(club);
   } catch(_e){}
   document.getElementById('ac-id-display').textContent = 'ID: PB-' + (club.code||club.id);
   document.getElementById('ac-club-name').textContent = club.name;
@@ -1348,7 +1361,7 @@ async function _acquireClubToken(playerId, clubId) {
       body: JSON.stringify({ actorId: playerId, clubId: clubId })
     });
     var data = await resp.json();
-    if (data.token) {
+    if (data.ok && data.token) {
       TOKEN = data.token;
       localStorage.setItem('pb-sports-token', TOKEN);
       // Decode token and sync pb-player.id to token's actorId so backend self-check passes
@@ -1365,14 +1378,14 @@ async function _acquireClubToken(playerId, clubId) {
         }
       } catch(_td){}
       console.log('TOKEN_WRITE_SUCCESS playerId='+playerId+' clubId='+clubId);
-      return true;
+      return { ok:true, token:data.token, role:data.role, status:data.status || 'active', club_id:data.club_id || data.clubId || clubId };
     } else {
       console.warn('TOKEN_WRITE_FAILED reason='+(data.error||data.code||'no_token_in_response'));
-      return false;
+      return { ok:false, error:data.error||data.code||'token_denied', status:data.status || null };
     }
   } catch(e) {
     console.warn('TOKEN_WRITE_FAILED reason=network err='+e.message);
-    return false;
+    return { ok:false, error:'network_error', message:e.message };
   }
 }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1393,10 +1406,24 @@ function enterActiveClub(action) {
     }
   }
   if (!activeClub) { openModal('modal-join'); return; }
-  if (activeClub.status === 'pending') {
+  var _status = canonicalStatus(activeClub.status || 'unknown');
+  if (_status === 'pending') {
     document.getElementById('pending-club-name').textContent = activeClub.name;
     document.getElementById('pending-club-code').textContent = 'PB-' + (activeClub.code||activeClub.id);
     openModal('modal-pending');
+    return;
+  }
+  if (_status === 'rejected' || _status === 'denied') {
+    showToast('Club access denied. Request access again or contact the host.');
+    return;
+  }
+  if (_status === 'suspended' || _status === 'inactive') {
+    showToast('Club access is currently inactive.');
+    return;
+  }
+  if (_status !== 'approved' && _status !== 'active') {
+    console.warn('ROUTE_DECISION_BLOCKED unknown_status='+_status+' clubId='+(activeClub.id||activeClub.clubId||'?'));
+    showToast('Club access status could not be verified.');
     return;
   }
   // Acquire a fresh club-scoped token before navigating
@@ -1404,29 +1431,31 @@ function enterActiveClub(action) {
   try { _navPlayer = JSON.parse(localStorage.getItem('pb-player')||'null'); } catch(_){}
   var _navPid = _navPlayer && (_navPlayer.id != null ? String(_navPlayer.id) : _navPlayer.username) || null;
   var _navCid = String(activeClub.id != null ? activeClub.id : (activeClub.clubId || ''));
-  // Determine destination: explicit action overrides role-based default
-  var _role = activeClub.role || 'player';
-  var _dest;
-  if (action === 'player') {
-    _dest = 'player.html';
-  } else if (action === 'host') {
-    _dest = 'index.html';
-  } else {
-    // No explicit action: role-based default
-    _dest = isHostRole(_role) ? 'index.html' : 'player.html';
-  }
-  console.log('ROUTE_DECISION action='+(action||'(default)')+' role='+_role+' route='+_dest);
+  console.log('ROUTE_DECISION action='+(action||'(default)')+' localRole='+(activeClub.role||'player')+' pending_token=true');
 
   if (_navPid && _navCid) {
-    _acquireClubToken(_navPid, _navCid).then(function(ok) {
-      if (!ok) console.warn('TOKEN_WRITE_FAILED — navigating anyway with existing token');
-      console.log('ROUTE_DECISION navigating to '+_dest);
-      window.location.href = _dest + '?from=lobby';
+    _acquireClubToken(_navPid, _navCid).then(function(result) {
+      if (!result || !result.ok) {
+        console.warn('TOKEN_WRITE_FAILED — navigation blocked reason='+(result&&result.error||'unknown'));
+        if (result && (result.error === 'membership_not_found' || result.error === 'membership_inactive')) clearSelectedClubStorage();
+        showToast('Club access could not be verified: '+((result&&result.error)||'session error').replace(/_/g,' '));
+        return;
+      }
+      var canonicalRole = result.role || 'player';
+      var dest = isHostRole(canonicalRole) ? 'index.html' : 'player.html';
+      var syncedClub = Object.assign({}, activeClub, {
+        id: result.club_id || result.clubId || activeClub.id,
+        clubId: result.club_id || result.clubId || activeClub.clubId || activeClub.id,
+        role: canonicalRole,
+        status: result.status || 'active'
+      });
+      try { syncSelectedClubStorage(syncedClub); } catch(_e){}
+      console.log('ROUTE_DECISION canonicalRole='+canonicalRole+' route='+dest);
+      window.location.href = dest + '?from=lobby';
     });
   } else {
     console.warn('TOKEN_WRITE_SKIPPED pid='+(String(_navPid||'(none)'))+' cid='+(String(_navCid||'(none)')));
-    console.log('ROUTE_DECISION navigating to '+_dest+' (no token acquired)');
-    window.location.href = _dest + '?from=lobby';
+    showToast('Club access could not be verified. Please sign in again.');
   }
 }
 
