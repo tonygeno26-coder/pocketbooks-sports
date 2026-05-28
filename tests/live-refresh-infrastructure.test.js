@@ -49,5 +49,17 @@ test('line movement animation is wired', function() {
   assert(html.indexOf('function _pbFlashLineMovements()') !== -1, 'missing movement detector');
 });
 
+test('live network failure cannot fall back to local ticket placement', function() {
+  assert(html.indexOf('function _confirmBetHasLiveLeg') !== -1, 'missing live-leg detector in confirmBet');
+  assert(html.indexOf('live_local_fallback_blocked') !== -1, 'missing local fallback block for live bets');
+  assert(html.indexOf('Live bet not placed') !== -1, 'missing live failure message');
+});
+
+test('line_changed backend response asks user to review slip', function() {
+  assert(html.indexOf("_dbData.code === 'line_changed'") !== -1, 'missing line_changed branch');
+  assert(html.indexOf('function _showLineChangedReview') !== -1, 'missing line review UI');
+  assert(html.indexOf('Review Slip') !== -1, 'missing review slip action');
+});
+
 console.log('\nLive refresh infrastructure tests: ' + pass + ' passed, ' + fail + ' failed');
 if (fail > 0) process.exit(1);
