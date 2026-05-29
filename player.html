@@ -883,8 +883,8 @@ function _showSessionExpiredModal(result) {
 // ══════════════════════════════════════════════════════════════════════════════
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'd427f21';
-window.PBS_BUILD_DATE = '2026-05-28T09:59:54.802Z';
+window.PBS_BUILD_SHA = 'eb15737';
+window.PBS_BUILD_DATE = '2026-05-29T09:38:26.123Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -3930,6 +3930,9 @@ async function confirmBet() {
       betType: snap.type==='straight'?'Single':snap.type==='parlay'?'Parlay':snap.type==='rr'?'RoundRobin':'Teaser',
       stake:snap.risk, payout:snap.payout, potentialProfit:snap.profit,
       idempotencyKey:_iKey,
+      // RR: include rrStakes so the backend can expand combos server-side.
+      // undefined for Single/Parlay/Teaser so it is omitted from the JSON body.
+      rrStakes: snap.type === 'rr' ? snap.rrStakes : undefined,
       legs:(_t0.selections||snap.legs||[]).map(function(leg){
         return { legId:leg.legId, pick:leg.pick, market:leg.market, odds:leg.odds,
           line:leg.line||null, side:leg.side||null,
@@ -4000,23 +4003,37 @@ async function confirmBet() {
       if (_dbData.ok) {
         _cbStep = 'SUCCESS';
         _dbPlacementAttempted = true;
-        _cbLog('CONFIRM_BET_SUCCESS', 'ticketId='+_dbData.ticketId+' ledger='+_dbData.ledgerEntryId);
+        var _isRrResp = !!(snap.type === 'rr' && _dbData.groupId);
+        _cbLog('CONFIRM_BET_SUCCESS',
+          _isRrResp
+            ? 'groupId='+_dbData.groupId+' comboCount='+_dbData.comboCount+' ledger='+_dbData.ledgerEntryId
+            : 'ticketId='+_dbData.ticketId+' ledger='+_dbData.ledgerEntryId);
 
         _cbStep = 'LEDGER_WRITE';
         _cbLog('CONFIRM_BET_LEDGER_WRITE_BEGIN');
         try {
+          // For RR, use groupId as the ticket reference; no single ticketId exists.
+          var _ledgerTicketRef = _isRrResp ? _dbData.groupId : (_dbData.ticketId || (newTickets[0] && newTickets[0].id));
           addLedgerEntry({ id:'L'+Date.now()+Math.random().toString(36).slice(2,6),
-            type:'bet_placed', ticketIds:[_dbData.ticketId||newTickets[0].id],
+            type:'bet_placed', ticketIds:[_ledgerTicketRef],
             amount:-riskAmount, balanceBefore:_avail+riskAmount, balanceAfter:_avail,
-            createdAt:now, betType:snap.type, count:1 });
+            createdAt:now, betType:snap.type, count: _isRrResp ? _dbData.comboCount : 1 });
           _cbLog('CONFIRM_BET_LEDGER_WRITE_SUCCESS');
         } catch(_le) { _cbErr('CONFIRM_BET_LEDGER_WRITE_WARN', _le, 'non-fatal'); }
 
         _cbStep = 'TICKET_SAVE';
         _cbLog('CONFIRM_BET_TICKET_SAVE_BEGIN');
-        // Merge server ticketId back into local ticket object if provided
-        if (_dbData.ticketId && newTickets[0]) newTickets[0].id = _dbData.ticketId;
-        if (_dbData.status   && newTickets[0]) newTickets[0].status = _dbData.status || newTickets[0].status;
+        if (_isRrResp && newTickets[0]) {
+          // Tag the local slip ticket with groupId and comboCount so
+          // renderMyBets can group it even before the deferred DB refresh.
+          newTickets[0].id          = _dbData.groupId;
+          newTickets[0].rrGroupId   = _dbData.groupId;
+          newTickets[0].comboCount  = _dbData.comboCount;
+        } else {
+          // Merge server ticketId back into local ticket object if provided
+          if (_dbData.ticketId && newTickets[0]) newTickets[0].id = _dbData.ticketId;
+        }
+        if (_dbData.status && newTickets[0]) newTickets[0].status = _dbData.status || newTickets[0].status;
         try {
           // Prevent duplicate: remove any pre-existing entry with same id before unshift
           var _tid = newTickets[0] && newTickets[0].id;
@@ -4038,7 +4055,11 @@ async function confirmBet() {
 
         // Render My Bets immediately with the locally-saved ticket
         try { renderMyBets(); } catch(_) {}
-        showToast('\u2705 Bet placed!', 'success');
+        if (_isRrResp) {
+          showToast('\u2705 Round Robin placed \xb7 ' + _dbData.comboCount + ' combo ticket' + (_dbData.comboCount !== 1 ? 's' : '') + '!', 'success');
+        } else {
+          showToast('\u2705 Bet placed!', 'success');
+        }
 
         // Dashboard refresh is deferred 400ms — backend propagation lag means
         // immediate /api/player/dashboard may not yet include the new ticket,
@@ -4051,7 +4072,8 @@ async function confirmBet() {
           }).catch(function(){}); } catch(_) {}
         }, 400);
 
-        _cbLog('CONFIRM_BET_COMPLETE', 'ticketId='+_dbData.ticketId+' path=DB');
+        _cbLog('CONFIRM_BET_COMPLETE',
+          _isRrResp ? 'groupId='+_dbData.groupId+' path=DB' : 'ticketId='+_dbData.ticketId+' path=DB');
         return;
 
       // ── Odds changed ──────────────────────────────────────────────────────
@@ -7207,6 +7229,59 @@ function renderMyBets() {
     catch(e){ _parseErr = e; betTickets = Array.isArray(betTickets) ? betTickets : []; }
     if (!Array.isArray(betTickets)) betTickets = [];
     if (_parseErr) console.error('[renderMyBets] pb-tickets JSON parse failed — falling back to []', _parseErr);
+
+    // ── RR grouping: collapse per-combo Parlay tickets into a single slip card ─
+    // After loadPlayerDashboardFromDb(), betTickets may contain N Parlay tickets
+    // with rr_group_id set — one per combo.  Group them into a synthetic "Round
+    // Robin" slip ticket so My Bets shows one card per slip, not N combo cards.
+    // Local slip tickets (type='Round Robin', rrGroupId set) pass through as-is.
+    (function() {
+      var _groups = {}; var _ungrouped = [];
+      betTickets.forEach(function(t) {
+        var gid = t.rr_group_id || t.rrGroupId;
+        // Only collapse DB-originated Parlay combos (type=Parlay + rr_group_id).
+        // Locally-stored slip tickets already have type='Round Robin'.
+        if (gid && (t.type === 'Parlay' || t.type === 'parlay') && t.rr_group_id) {
+          if (!_groups[gid]) _groups[gid] = [];
+          _groups[gid].push(t);
+        } else {
+          _ungrouped.push(t);
+        }
+      });
+      var _grouped = _ungrouped.slice();
+      Object.keys(_groups).forEach(function(gid) {
+        var combos = _groups[gid];
+        var totalRisk   = combos.reduce(function(s, c) { return s + (parseFloat(c.risk_amount   || c.riskAmount)        || 0); }, 0);
+        var totalProfit = combos.reduce(function(s, c) { return s + (parseFloat(c.potential_profit || c.potentialProfit) || 0); }, 0);
+        var totalPayout = combos.reduce(function(s, c) { return s + (parseFloat(c.estimated_payout || c.estimatedPayout) || 0); }, 0);
+        var anyActive   = combos.some(function(c) { var s = String(c.status||'').toLowerCase(); return s === 'active' || s === 'open'; });
+        var wonCount    = combos.filter(function(c) { return String(c.status||'').toLowerCase() === 'won';  }).length;
+        var lostCount   = combos.filter(function(c) { return String(c.status||'').toLowerCase() === 'lost'; }).length;
+        var slipStatus  = anyActive ? 'active' : (wonCount > 0 ? (lostCount < combos.length ? 'partial' : 'won') : (lostCount === combos.length ? 'lost' : 'push'));
+        var first = combos[0];
+        _grouped.unshift({
+          id:               gid,
+          rrGroupId:        gid,
+          type:             'Round Robin',
+          status:           slipStatus,
+          riskAmount:       Math.round(totalRisk   * 100) / 100,
+          potentialProfit:  Math.round(totalProfit * 100) / 100,
+          estimatedPayout:  Math.round(totalPayout * 100) / 100,
+          placedAt:         first.placed_at || first.placedAt,
+          comboCount:       combos.length,
+          _rrCombos:        combos,
+          selections:       first.selections || [],
+          source:           'db-grouped'
+        });
+      });
+      // Sort merged list by placedAt descending so grouped slips appear in time order.
+      _grouped.sort(function(a, b) {
+        return new Date(b.placedAt || 0) - new Date(a.placedAt || 0);
+      });
+      betTickets = _grouped;
+    })();
+    // ── end RR grouping ────────────────────────────────────────────────────────
+
     // Header counts source data (graded/ledger were referenced but undefined,
     // throwing ReferenceError and blanking the tab). Define them here.
     var graded = [];
@@ -7504,7 +7579,42 @@ function renderMyBets() {
     if (typeof typeLabel !== 'string' || !typeLabel.trim() || typeLabel.toLowerCase() === 'undefined') {
       typeLabel = 'Bet';
     }
-    return '<div style="background:#fff;border-radius:14px;margin:8px 0;padding:16px;border:1px solid #e8e8e8;box-shadow:0 1px 4px rgba(0,0,0,0.06)">' +
+    // RR grouped slip: augment type label with combo count badge and override picks
+    var _isRrSlip = (t.rrGroupId || t.rr_group_id) && (typeLabel === 'Round Robin');
+    if (_isRrSlip && t.comboCount) {
+      typeLabel = 'Round Robin <span style="font-size:0.6rem;font-weight:700;color:#7c3aed;background:#f3f0ff;border:1px solid #c4b5fd;border-radius:6px;padding:1px 7px;margin-left:4px;vertical-align:middle">'
+                  + t.comboCount + ' combo' + (t.comboCount !== 1 ? 's' : '') + '</span>';
+    }
+    if (_isRrSlip && rawLegs.length === 0) {
+      // No leg detail available for grouped RR (DB returns only ticket-level fields).
+      // Build a summary row from _rrCombos if available.
+      var _rrCombosArr = t._rrCombos || [];
+      var _rrLegCount  = _rrCombosArr.length > 0 ? ((_rrCombosArr[0].selections || []).length || 'N') : 'N';
+      picks = '<div style="font-size:0.8rem;color:#444;padding:6px 0;border-bottom:1px solid #f0f0f0">' +
+              '<span style="font-weight:700">'+t.comboCount+' independent combo ticket'+(t.comboCount !== 1 ? 's' : '')+'</span>' +
+              '</div>';
+      morePicks = '';
+    }
+    // RR composite status badge overrides the single-ticket badge when we
+    // have per-combo breakdown.
+    var _rrCombosLocal = t._rrCombos || [];
+    if (_isRrSlip && _rrCombosLocal.length > 0) {
+      var _rrWon  = _rrCombosLocal.filter(function(c){ return String(c.status||'').toLowerCase() === 'won';  }).length;
+      var _rrLost = _rrCombosLocal.filter(function(c){ return String(c.status||'').toLowerCase() === 'lost'; }).length;
+      var _rrAct  = _rrCombosLocal.filter(function(c){ var s=String(c.status||'').toLowerCase(); return s==='active'||s==='open'; }).length;
+      if (_rrAct > 0) {
+        statusBadge = '<span style="font-size:0.68rem;font-weight:800;color:#0064c8;background:#f0f4ff;padding:4px 10px;border-radius:20px;border:1px solid #0064c8">'
+                    + _rrAct + ' ACTIVE' + (_rrWon ? ' · '+_rrWon+' WON' : '') + (_rrLost ? ' · '+_rrLost+' LOST' : '') + '</span>';
+      } else if (_rrWon > 0 && _rrLost > 0) {
+        statusBadge = '<span style="font-size:0.68rem;font-weight:800;color:#d97706;background:#fffbeb;padding:4px 10px;border-radius:20px;border:1px solid #d97706">'
+                    + _rrWon + ' WON · ' + _rrLost + ' LOST</span>';
+      } else if (_rrWon === _rrCombosLocal.length) {
+        statusBadge = '<span style="font-size:0.68rem;font-weight:800;color:#00875a;background:#f0fff4;padding:4px 10px;border-radius:20px;border:1px solid #00875a">ALL WON</span>';
+      } else if (_rrLost === _rrCombosLocal.length) {
+        statusBadge = '<span style="font-size:0.68rem;font-weight:800;color:#cc0000;background:#fff0f0;padding:4px 10px;border-radius:20px;border:1px solid #cc0000">ALL LOST</span>';
+      }
+    }
+    return '<div style="background:#fff;border-radius:14px;margin:8px 0;padding:16px;border:1px solid ' + (_isRrSlip ? '#e9d5ff' : '#e8e8e8') + ';box-shadow:0 1px 4px rgba(0,0,0,0.06)">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
         '<div>' +
           '<div style="font-size:0.88rem;font-weight:900;color:#111">' + sportBadge + typeLabel+'</div>' +
@@ -10771,7 +10881,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · d427f21 · May 28, 02:59 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · eb15737 · May 29, 02:38 AM</span>
 </div>
 
 <!-- Orphan IIFE closer removed (was rendering as a literal IIFE close
