@@ -1161,8 +1161,8 @@ document.addEventListener('DOMContentLoaded', function(){ syncBalanceDisplays();
 var CURRENCY_RATES = { USD:1, EUR:0.92, GBP:0.79, CAD:1.36, AUD:1.51, MXN:17.20 };
 var CURRENCY_SYMBOLS = { USD:'$', EUR:'€', GBP:'£', CAD:'CA$', AUD:'A$', MXN:'MX$' };
 function loadPlayerSettings() {
-  try { return Object.assign({theme:'dark',currency:'USD',signalContact:''}, JSON.parse(localStorage.getItem('pb-player-settings')||'{}')); }
-  catch(_e) { return { theme:'dark', currency:'USD', signalContact:'' }; }
+  try { return Object.assign({theme:'dark',currency:'USD',signalContact:'',contactMethod:'',contactValue:''}, JSON.parse(localStorage.getItem('pb-player-settings')||'{}')); }
+  catch(_e) { return { theme:'dark', currency:'USD', signalContact:'', contactMethod:'', contactValue:'' }; }
 }
 function savePlayerSettings(s) { localStorage.setItem('pb-player-settings', JSON.stringify(s||{})); }
 function _curr() { return loadPlayerSettings().currency || 'USD'; }
@@ -1209,17 +1209,18 @@ function showPlayerSettings() {
       '<button id="ps-close" style="background:#1c1c1c;border:1px solid #252525;color:#fff;width:34px;height:34px;border-radius:50%;font-size:1rem;cursor:pointer">✕</button>' +
     '</div>' +
     '<div style="flex:1;overflow-y:auto;padding:16px">' +
-      // Signal
+      // Contact method
       '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;margin-bottom:12px">' +
-        '<div style="font-size:0.62rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Signal Contact</div>' +
-        '<input id="ps-signal" placeholder="Signal username / phone" value="'+(s.signalContact||'').replace(/"/g,'&quot;')+'" style="width:100%;background:#0a0a0a;border:1px solid #252525;border-radius:10px;padding:10px 12px;color:#fff;font-size:0.85rem;outline:none">' +
-        '<div style="font-size:0.62rem;color:#666;margin-top:6px">Used to deliver settlement receipts.</div>' +
-      '</div>' +
-      // Email
-      '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;margin-bottom:12px">' +
-        '<div style="font-size:0.62rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Email</div>' +
-        '<input id="ps-email" placeholder="you@example.com" value="'+(((JSON.parse(localStorage.getItem("pb-player")||"{}")||{}).email||localStorage.getItem("pb-dev-email")||"").replace(/"/g,"&quot;"))+'" style="width:100%;background:#0a0a0a;border:1px solid #252525;border-radius:10px;padding:10px 12px;color:#fff;font-size:0.85rem;outline:none">' +
-        '<div style="font-size:0.62rem;color:#666;margin-top:6px">Backup contact — either Signal or email is enough.</div>' +
+        '<div style="font-size:0.62rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Contact Method</div>' +
+        '<div style="display:flex;gap:8px;margin-bottom:8px">' +
+          '<select id="ps-contact-method" style="background:#0a0a0a;border:1px solid #252525;border-radius:10px;padding:10px 12px;color:#fff;font-size:0.85rem;outline:none;cursor:pointer">' +
+            '<option value="telegram"'+((!s.contactMethod||s.contactMethod==='telegram')?' selected':'')+'>Telegram</option>' +
+            '<option value="signal"'+(s.contactMethod==='signal'?' selected':'')+'>Signal</option>' +
+            '<option value="email"'+(s.contactMethod==='email'?' selected':'')+'>Email</option>' +
+          '</select>' +
+          '<input id="ps-contact-value" type="'+(s.contactMethod==='email'?'email':'text')+'" placeholder="'+(s.contactMethod==='signal'?'Phone number or username':s.contactMethod==='email'?'Email address':'@username')+'" value="'+(s.contactValue||'').replace(/"/g,'&quot;')+'" style="flex:1;background:#0a0a0a;border:1px solid #252525;border-radius:10px;padding:10px 12px;color:#fff;font-size:0.85rem;outline:none">' +
+        '</div>' +
+        '<div style="font-size:0.62rem;color:#666">Select how we can reach you — required for account recovery.</div>' +
       '</div>' +
       // Theme
       '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;margin-bottom:12px">' +
@@ -1252,19 +1253,30 @@ function showPlayerSettings() {
   Array.prototype.forEach.call(ov.querySelectorAll('[data-pset-currency]'), function(b){
     b.addEventListener('click', function() { s.currency = b.dataset.psetCurrency; savePlayerSettings(s); showPlayerSettings(); });
   });
+  (function() {
+    var mSel = ov.querySelector('#ps-contact-method');
+    var vInp = ov.querySelector('#ps-contact-value');
+    var placeholders = { telegram: '@username', signal: 'Phone number or username', email: 'Email address' };
+    mSel.addEventListener('change', function() {
+      vInp.type = mSel.value === 'email' ? 'email' : 'text';
+      vInp.placeholder = placeholders[mSel.value] || '';
+    });
+  })();
   ov.querySelector('#ps-save').addEventListener('click', function() {
-    var sigEl = ov.querySelector('#ps-signal');
-    if (sigEl) s.signalContact = sigEl.value.trim();
+    var mSel = ov.querySelector('#ps-contact-method');
+    var vInp = ov.querySelector('#ps-contact-value');
+    s.contactMethod = mSel ? mSel.value : '';
+    s.contactValue  = vInp ? vInp.value.trim() : '';
+    // keep legacy fields in sync for host receipt code
+    s.signalContact = s.contactMethod === 'signal' ? s.contactValue : '';
     savePlayerSettings(s);
-    // Sync email + signalContact onto pb-player record (read by host receipts).
     try {
-      var emEl = ov.querySelector('#ps-email');
-      var newEmail = emEl ? emEl.value.trim() : '';
       var pl = JSON.parse(localStorage.getItem('pb-player')||'{}') || {};
-      pl.email         = newEmail;
-      pl.signalContact = s.signalContact || '';
+      pl.signalContact    = s.signalContact;
+      pl.telegramContact  = s.contactMethod === 'telegram' ? s.contactValue : '';
+      pl.email            = s.contactMethod === 'email' ? s.contactValue : '';
       localStorage.setItem('pb-player', JSON.stringify(pl));
-      if (newEmail) localStorage.setItem('pb-dev-email', newEmail);
+      if (pl.email) localStorage.setItem('pb-dev-email', pl.email);
     } catch(_e){}
     applyPlayerTheme();
     if (typeof syncBalanceDisplays === 'function') syncBalanceDisplays();
