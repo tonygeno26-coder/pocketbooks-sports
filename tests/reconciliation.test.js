@@ -392,6 +392,208 @@ test('reconcile: active-only club is balanced', function() {
   assertEq(r.status, 'balanced', JSON.stringify(r.mismatches));
 });
 
+
+// ── Bug #11 regression: real ledger cross-check (ticket net vs canonical ledger net) ──
+console.log('\n── Bug #11: settlement-reconciliation ledger cross-check ──');
+
+// Mirror the fixed backend cross-check logic.
+// ticketNetByPlayer: from tickets (won=+profit, lost=-risk, skip canceled/voided/push/active/open)
+// ledgerNetByPlayer: from canonical ledger (credit=+, debit=-, only settlement event types)
+// Returns array of { playerId, ticketNet, ledgerNet, delta } for delta > 0.02
+
+var SETTLEMENT_CREDIT_EVENTS = new Set(['BET_GRADED_WIN','BET_GRADED_PUSH','BET_CANCELED_REFUND','SETTLEMENT_APPLIED']);
+var SETTLEMENT_DEBIT_EVENTS  = new Set(['BET_PLACED','BET_GRADED_LOSS']);
+
+function buildTicketNetByPlayer(tickets) {
+  var map = {};
+  (tickets||[]).forEach(function(t) {
+    var s = (t.status||'').toLowerCase();
+    if (s==='canceled'||s==='voided'||s==='push'||s==='pushed'||s==='active'||s==='open') return;
+    var pid = t.player_id||'unknown';
+    if (!map[pid]) map[pid] = 0;
+    if (s==='won')  map[pid] += parseFloat(t.potential_profit)||0;
+    if (s==='lost') map[pid] -= parseFloat(t.risk_amount)||0;
+  });
+  return map;
+}
+
+function buildLedgerNetByPlayer(ledgerRows) {
+  var map = {};
+  (ledgerRows||[]).forEach(function(r) {
+    var et = (r.event_type||'').toUpperCase();
+    if (!SETTLEMENT_CREDIT_EVENTS.has(et) && !SETTLEMENT_DEBIT_EVENTS.has(et)) return;
+    var pid = r.player_id||'unknown';
+    if (!map[pid]) map[pid] = 0;
+    var amt = parseFloat(r.amount||0);
+    if (r.direction==='credit') map[pid] += amt;
+    else if (r.direction==='debit') map[pid] -= amt;
+  });
+  return map;
+}
+
+function runLedgerXCheck(tickets, ledgerRows) {
+  var rnd = function(v){ return Math.round((isNaN(v)?0:v)*100)/100; };
+  var ticketNet = buildTicketNetByPlayer(tickets);
+  var ledgerNet = buildLedgerNetByPlayer(ledgerRows);
+  var allPids = new Set(Object.keys(ticketNet).concat(Object.keys(ledgerNet)));
+  var mismatches = [];
+  allPids.forEach(function(pid) {
+    var tNet = rnd(ticketNet[pid]||0);
+    var lNet = rnd(ledgerNet[pid]||0);
+    var delta = rnd(tNet - lNet);
+    if (Math.abs(delta) > 0.02) {
+      mismatches.push({ playerId:pid, ticketNet:tNet, ledgerNet:lNet, delta:delta });
+    }
+  });
+  return { mismatches, status: mismatches.length===0 ? 'balanced' : 'mismatch' };
+}
+
+// ── Test data helpers ─────────────────────────────────────────────────────────
+var CLUB = 'club-uuid-test-11';
+
+function ticket(pid, status, risk, profit, id) {
+  return { id:id||('T_'+pid+'_'+status), player_id:pid, club_id:CLUB,
+           status:status, risk_amount:risk, potential_profit:profit };
+}
+
+function ledger(pid, eventType, direction, amount, id) {
+  return { ledger_id:id||('LE_'+pid+'_'+eventType), player_id:pid, club_id:CLUB,
+           event_type:eventType, direction:direction, amount:amount };
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+test('Bug #11: balanced tickets+ledger returns ok/balanced', function() {
+  // P1 won $100 profit → ticket: +100; ledger: BET_GRADED_WIN credit 100
+  var tickets = [ ticket('P1','won',80,100) ];
+  var rows    = [ ledger('P1','BET_GRADED_WIN','credit',100) ];
+  var r = runLedgerXCheck(tickets, rows);
+  assertEq(r.status, 'balanced', 'should be balanced');
+  assertEq(r.mismatches.length, 0, '0 mismatches');
+});
+
+test('Bug #11: missing ledger entry is detected', function() {
+  // Ticket shows P1 won $200 but no ledger entry exists
+  var tickets = [ ticket('P1','won',150,200) ];
+  var rows    = []; // no ledger
+  var r = runLedgerXCheck(tickets, rows);
+  assertEq(r.status, 'mismatch', 'missing ledger should be mismatch');
+  assertEq(r.mismatches.length, 1, '1 mismatch');
+  assertEq(r.mismatches[0].playerId, 'P1', 'mismatch for P1');
+  assertApprox(r.mismatches[0].ticketNet,  200, 'ticketNet=200');
+  assertApprox(r.mismatches[0].ledgerNet,    0, 'ledgerNet=0');
+  assertApprox(r.mismatches[0].delta,      200, 'delta=200');
+});
+
+test('Bug #11: extra ledger entry (no matching ticket) is detected', function() {
+  // Ledger has a BET_GRADED_WIN for P2 but no won ticket exists
+  var tickets = [];
+  var rows    = [ ledger('P2','BET_GRADED_WIN','credit',150) ];
+  var r = runLedgerXCheck(tickets, rows);
+  assertEq(r.status, 'mismatch', 'extra ledger entry should be mismatch');
+  assertEq(r.mismatches[0].playerId, 'P2', 'mismatch for P2');
+  assertApprox(r.mismatches[0].ticketNet,    0, 'ticketNet=0');
+  assertApprox(r.mismatches[0].ledgerNet,  150, 'ledgerNet=150');
+  assertApprox(r.mismatches[0].delta,     -150, 'delta=-150');
+});
+
+test('Bug #11: wrong amount ledger entry is detected', function() {
+  // Ticket won $100 but ledger only credited $60
+  var tickets = [ ticket('P3','won',80,100) ];
+  var rows    = [ ledger('P3','BET_GRADED_WIN','credit',60) ];
+  var r = runLedgerXCheck(tickets, rows);
+  assertEq(r.status, 'mismatch', 'wrong amount should be mismatch');
+  assertApprox(r.mismatches[0].ticketNet, 100, 'ticketNet=100');
+  assertApprox(r.mismatches[0].ledgerNet,  60, 'ledgerNet=60');
+  assertApprox(r.mismatches[0].delta,      40, 'delta=40');
+});
+
+test('Bug #11: canceled tickets excluded from ticket-side net', function() {
+  // Canceled ticket with large risk should have zero contribution to ticketNet
+  var tickets = [
+    ticket('P4','canceled',500,900),  // must be excluded
+    ticket('P4','won',80,100)         // only this counts
+  ];
+  var rows = [ ledger('P4','BET_GRADED_WIN','credit',100) ];
+  var r = runLedgerXCheck(tickets, rows);
+  assertEq(r.status, 'balanced', 'canceled ticket excluded → balanced');
+});
+
+test('Bug #11: voided and push tickets excluded', function() {
+  var tickets = [
+    ticket('P5','voided',200,300),
+    ticket('P5','push',100,100),
+    ticket('P5','pushed',100,100),
+    ticket('P5','lost',50,0)      // only this counts: -50
+  ];
+  var rows = [ ledger('P5','BET_PLACED','debit',50) ];  // debit=loss risk at placement
+  var r = runLedgerXCheck(tickets, rows);
+  // ticketNet[P5] = -50; ledgerNet[P5] = -50 (BET_PLACED debit)
+  assertEq(r.status, 'balanced', 'voided/push excluded → balanced');
+});
+
+test('Bug #11: active/open tickets excluded from ticket-side net', function() {
+  var tickets = [
+    ticket('P6','active',200,360),   // excluded — still in play
+    ticket('P6','won',50,50)         // only settled counts
+  ];
+  var rows = [ ledger('P6','BET_GRADED_WIN','credit',50) ];
+  var r = runLedgerXCheck(tickets, rows);
+  assertEq(r.status, 'balanced', 'active ticket excluded → balanced');
+});
+
+test('Bug #11: non-settlement ledger event types excluded from ledger net', function() {
+  // WEEKLY_ROLLOVER and BALANCE_ADJUSTMENT are not settlement events — must not skew comparison
+  var tickets = [ ticket('P7','won',80,100) ];
+  var rows = [
+    ledger('P7','BET_GRADED_WIN','credit',100),
+    ledger('P7','WEEKLY_ROLLOVER','neutral',999),   // must be excluded
+    ledger('P7','BALANCE_ADJUSTMENT','credit',500), // must be excluded
+  ];
+  var r = runLedgerXCheck(tickets, rows);
+  assertEq(r.status, 'balanced', 'non-settlement ledger events excluded → balanced');
+});
+
+test('Bug #11: multi-player — only diverging player flagged', function() {
+  var tickets = [
+    ticket('PA','won',80,100),
+    ticket('PB','lost',50,0),
+    ticket('PC','won',200,200)
+  ];
+  var rows = [
+    ledger('PA','BET_GRADED_WIN','credit',100),  // PA balanced
+    ledger('PB','BET_PLACED','debit',50),        // PB balanced
+    ledger('PC','BET_GRADED_WIN','credit',150),  // PC mismatch: ticket=200, ledger=150
+  ];
+  var r = runLedgerXCheck(tickets, rows);
+  assertEq(r.status, 'mismatch', 'one diverging player = mismatch');
+  assertEq(r.mismatches.length, 1, 'only 1 mismatch');
+  assertEq(r.mismatches[0].playerId, 'PC', 'mismatch for PC');
+  assertApprox(r.mismatches[0].delta, 50, 'delta=50 (200-150)');
+});
+
+test('Bug #11: within 0.02 tolerance is not flagged as mismatch', function() {
+  // 0.01 rounding difference should not trigger alert
+  var tickets = [ ticket('PD','won',80,100.01) ];
+  var rows    = [ ledger('PD','BET_GRADED_WIN','credit',100.00) ];
+  var r = runLedgerXCheck(tickets, rows);
+  assertEq(r.status, 'balanced', '0.01 delta within tolerance → balanced');
+});
+
+test('Bug #11: old code would show balanced even with mismatch (regression proof)', function() {
+  // OLD CODE: compared ticketTotals.profit vs previewTotals.net
+  // Both were derived from the SAME tickets array → always matched.
+  // This test proves the old approach was blind to ledger divergence.
+  var tickets = [ ticket('PE','won',80,200) ];
+  // Old code: ticketTotals.profit = +200, previewTotals.net = +200 → "balanced"
+  // Even though ledger has wrong amount:
+  var rows = [ ledger('PE','BET_GRADED_WIN','credit',50) ]; // WRONG: should be 200
+  var r = runLedgerXCheck(tickets, rows);
+  // New code catches this
+  assertEq(r.status, 'mismatch', 'new code detects ledger divergence');
+  assertApprox(r.mismatches[0].delta, 150, 'delta=150 (200-50)');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('\n' + '─'.repeat(54));
 console.log('Reconciliation tests: ' + _pass + ' passed, ' + _fail + ' failed');

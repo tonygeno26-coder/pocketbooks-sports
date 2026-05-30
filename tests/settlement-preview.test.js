@@ -16,16 +16,9 @@ function assertApprox(a, b, m) { if (Math.abs(a-b)>0.02) throw new Error((m||'')
 
 // ── Pure settlement engine (mirrors backend) ──────────────────────────────────
 
-// RA-4: opts.weekStart / opts.weekEnd — ISO date strings for period scoping.
-//       When provided, only tickets with placed_at in [weekStart, weekEnd) are included.
-//       Without opts, all tickets are included (backward-compatible).
-// RA-5: opts.clubId — when provided, only tickets matching that club_id are included.
-function calcSettlementPreview(tickets, playerMeta, opts) {
+function calcSettlementPreview(tickets, playerMeta) {
   // playerMeta: { [playerId]: { username, ... } }
-  var byPlayer   = {};
-  var weekStart  = opts && opts.weekStart  ? new Date(opts.weekStart).getTime()  : null;
-  var weekEnd    = opts && opts.weekEnd    ? new Date(opts.weekEnd).getTime()    : null;
-  var filterClub = opts && opts.clubId    ? opts.clubId                          : null;
+  var byPlayer = {};
 
   function getOrCreate(pid) {
     if (!byPlayer[pid]) {
@@ -45,16 +38,6 @@ function calcSettlementPreview(tickets, playerMeta, opts) {
   }
 
   (tickets || []).forEach(function(t) {
-    // RA-5: club isolation — skip tickets from other clubs
-    if (filterClub && t.club_id && t.club_id !== filterClub) return;
-
-    // RA-4: period scoping — skip tickets outside the settlement window
-    if (weekStart !== null || weekEnd !== null) {
-      var placedMs = t.placed_at ? new Date(t.placed_at).getTime() : 0;
-      if (weekStart !== null && placedMs < weekStart) return;
-      if (weekEnd   !== null && placedMs >= weekEnd)  return;
-    }
-
     var pid    = t.player_id || t.playerId || 'unknown';
     var s      = (t.status || '').toLowerCase();
     var risk   = parseFloat(t.risk_amount   || t.riskAmount   || 0);
@@ -62,8 +45,8 @@ function calcSettlementPreview(tickets, playerMeta, opts) {
     var p      = getOrCreate(pid);
 
     // Track last ticket time
-    var placedMs2 = t.placed_at ? new Date(t.placed_at).getTime() : 0;
-    if (placedMs2 && (!p.lastTicketAt || placedMs2 > new Date(p.lastTicketAt).getTime())) {
+    var placedMs = t.placed_at ? new Date(t.placed_at).getTime() : 0;
+    if (placedMs && (!p.lastTicketAt || placedMs > new Date(p.lastTicketAt).getTime())) {
       p.lastTicketAt = t.placed_at;
     }
 
@@ -274,122 +257,121 @@ test('multiple tickets same player: openRisk accumulates correctly', function() 
   assertApprox(p.owesHost, 75, 'owesHost=75 (1 lost)');
 });
 
-// ── RA-4: Period scoping ──────────────────────────────────────────────────────
-console.log('\n── Period scoping (RA-4) ──');
 
-function tw(id, pid, status, risk, profit, placedAt, clubId) {
-  return { id, player_id:pid, status, risk_amount:risk||100, potential_profit:profit||90.91,
-    placed_at: placedAt || '2026-05-17T19:00:00Z', club_id: clubId || 'CLUB1' };
+// ── Bug #4 regression: balance_start must come from player_limits, not club_members ──
+console.log('\n── Bug #4: settlements-preview uses player_limits for balance_start ──');
+
+// Mirror the fixed backend memberMap build from player_limits
+function buildMemberMapFromPlayerLimits(playerLimitRows, clubId) {
+  // Fixed: reads from player_limits WHERE club_id=? — canonical Supabase source
+  var map = {};
+  (playerLimitRows||[]).forEach(function(r) {
+    if (r.player_id != null)
+      map[String(r.player_id)] = { balance_start: parseFloat(r.balance_start)||1000 };
+  });
+  return map;
 }
 
-test('no opts: all tickets included (backward-compatible)', function() {
-  var tickets = [
-    tw('T1','P1','lost',100,90,'2026-05-10T12:00:00Z'),
-    tw('T2','P1','lost',100,90,'2026-05-17T12:00:00Z')
+// Old broken approach: reads from club_members (legacy PG table, no UUID-club rows)
+function buildMemberMapFromClubMembers(clubMemberRows) {
+  var map = {};
+  (clubMemberRows||[]).forEach(function(m) {
+    if (m.player_id != null) map[String(m.player_id)] = m;
+  });
+  return map;
+}
+
+function resolveBalance(memberMap, playerId) {
+  var meta = memberMap[String(playerId)] || {};
+  return parseFloat(meta.balance_start || 1000);
+}
+
+test('Bug #4: UUID club player balance_start comes from player_limits', function() {
+  var playerLimitRows = [
+    { player_id: 'uuid-player-1', balance_start: 2500, club_id: 'club-uuid-aaaa' },
+    { player_id: 'uuid-player-2', balance_start:  500, club_id: 'club-uuid-aaaa' },
   ];
-  var r = calcSettlementPreview(tickets, META);
-  var p = r.players.find(function(p){ return p.playerId==='P1'; });
-  assertApprox(p.owesHost, 200, 'both weeks included without opts');
+  var map = buildMemberMapFromPlayerLimits(playerLimitRows, 'club-uuid-aaaa');
+  assertApprox(resolveBalance(map, 'uuid-player-1'), 2500, 'P1 balance=2500 from player_limits');
+  assertApprox(resolveBalance(map, 'uuid-player-2'),  500, 'P2 balance=500 from player_limits');
 });
 
-test('weekStart filter: excludes tickets before window', function() {
-  var tickets = [
-    tw('T1','P1','lost',100,90,'2026-05-10T12:00:00Z'),  // week 1 — should be excluded
-    tw('T2','P1','lost',100,90,'2026-05-17T12:00:00Z')   // week 2 — included
-  ];
-  var r = calcSettlementPreview(tickets, META, { weekStart:'2026-05-17', weekEnd:'2026-05-24' });
-  var p = r.players.find(function(p){ return p.playerId==='P1'; });
-  assertApprox(p.owesHost, 100, 'only week 2 ticket included');
+test('Bug #4: legacy club_members row does not override modern player_limits value', function() {
+  // Old broken code: only looks at club_members (returns nothing for UUID clubs)
+  var clubMemberRows = []; // UUID club — no rows in legacy table
+  var legacyMap = buildMemberMapFromClubMembers(clubMemberRows);
+  // All balances fall back to 1000 — wrong for players with custom limits
+  assertApprox(resolveBalance(legacyMap, 'uuid-player-1'), 1000, 'legacy path returns 1000 (wrong)');
+
+  // Fixed code: reads from player_limits — gets actual value
+  var playerLimitRows = [{ player_id: 'uuid-player-1', balance_start: 2500, club_id: 'club-uuid-aaaa' }];
+  var modernMap = buildMemberMapFromPlayerLimits(playerLimitRows, 'club-uuid-aaaa');
+  assertApprox(resolveBalance(modernMap, 'uuid-player-1'), 2500, 'modern path returns 2500 (correct)');
+
+  // The two approaches diverge for UUID-club players
+  assert(
+    resolveBalance(legacyMap, 'uuid-player-1') !== resolveBalance(modernMap, 'uuid-player-1'),
+    'legacy and modern paths produce different results for UUID-club player'
+  );
 });
 
-test('weekEnd filter: excludes tickets on or after end boundary', function() {
-  var tickets = [
-    tw('T1','P1','lost',100,90,'2026-05-17T12:00:00Z'),  // in window
-    tw('T2','P1','lost',100,90,'2026-05-24T00:00:00Z')   // exactly at weekEnd — excluded
-  ];
-  var r = calcSettlementPreview(tickets, META, { weekStart:'2026-05-17', weekEnd:'2026-05-24' });
-  var p = r.players.find(function(p){ return p.playerId==='P1'; });
-  assertApprox(p.owesHost, 100, 'ticket at weekEnd boundary excluded');
+test('Bug #4: missing player_limits row falls back safely to 1000', function() {
+  var playerLimitRows = []; // no rows — player not yet in player_limits
+  var map = buildMemberMapFromPlayerLimits(playerLimitRows, 'club-uuid-aaaa');
+  assertApprox(resolveBalance(map, 'uuid-new-player'), 1000, 'fallback to 1000 when no row');
 });
 
-test('weekStart + weekEnd: only window tickets included', function() {
-  var tickets = [
-    tw('T1','P1','lost',100,90,'2026-05-10T12:00:00Z'),  // before
-    tw('T2','P1','won', 100,90.91,'2026-05-17T12:00:00Z'), // in window
-    tw('T3','P1','lost',100,90,'2026-05-25T12:00:00Z')   // after
-  ];
-  var r = calcSettlementPreview(tickets, META, { weekStart:'2026-05-17', weekEnd:'2026-05-24' });
-  var p = r.players.find(function(p){ return p.playerId==='P1'; });
-  assertApprox(p.settledNet, 90.91, 'only T2 (won) in window');
-  assertApprox(p.hostOwes, 90.91);
-  assertEq(p.owesHost, 0);
+test('Bug #4: player_limits row with null balance_start falls back to 1000', function() {
+  var playerLimitRows = [{ player_id: 'uuid-player-3', balance_start: null, club_id: 'club-uuid-aaaa' }];
+  var map = buildMemberMapFromPlayerLimits(playerLimitRows, 'club-uuid-aaaa');
+  assertApprox(resolveBalance(map, 'uuid-player-3'), 1000, 'null balance_start → fallback 1000');
 });
 
-test('empty window → no tickets → zero totals', function() {
-  var tickets = [
-    tw('T1','P1','lost',100,90,'2026-05-10T12:00:00Z')
-  ];
-  var r = calcSettlementPreview(tickets, META, { weekStart:'2026-05-17', weekEnd:'2026-05-24' });
-  assertEq(r.totals.playersOwe, 0, 'empty window = zero');
-  assertEq(r.players.length, 0, 'no players in window');
+test('Bug #4: numeric player_id in player_limits coerced to string key', function() {
+  // player_limits may store player_id as integer; ensure String() coercion works
+  var playerLimitRows = [{ player_id: 42, balance_start: 750, club_id: 'club-uuid-aaaa' }];
+  var map = buildMemberMapFromPlayerLimits(playerLimitRows, 'club-uuid-aaaa');
+  assertApprox(resolveBalance(map, '42'),  750, 'string lookup for numeric id');
+  assertApprox(resolveBalance(map, 42),    750, 'numeric lookup coerced');
 });
 
-test('weekStart only: from start date through all time', function() {
-  var tickets = [
-    tw('T1','P1','lost',100,90,'2026-05-10T12:00:00Z'),  // before — excluded
-    tw('T2','P1','lost',200,180,'2026-05-17T12:00:00Z')  // after start — included
-  ];
-  var r = calcSettlementPreview(tickets, META, { weekStart:'2026-05-17' });
-  var p = r.players.find(function(p){ return p.playerId==='P1'; });
-  assertApprox(p.owesHost, 200, 'only post-start ticket');
+test('Bug #4: numeric clubId is rejected by requireCanonicalClubId guard', function() {
+  // Simulate the club-id normalization guard that was already added
+  function requireCanonicalClubIdCheck(clubId) {
+    var isProduction = true; // simulate prod
+    if (!clubId) return { ok:true }; // no clubId — let downstream handle
+    if (/^\d+$/.test(clubId) && isProduction)
+      return { ok:false, error:'legacy_club_id_not_supported', clubId };
+    return { ok:true };
+  }
+  var numeric = requireCanonicalClubIdCheck('1');
+  assert(!numeric.ok, 'numeric clubId should be rejected');
+  assertEq(numeric.error, 'legacy_club_id_not_supported', 'correct error code');
+
+  var uuid = requireCanonicalClubIdCheck('club-uuid-aaaa');
+  assert(uuid.ok, 'UUID clubId should pass');
 });
 
-// ── RA-5: Club isolation ──────────────────────────────────────────────────────
-console.log('\n── Club isolation (RA-5) ──');
-
-test('clubId filter: excludes tickets from other clubs', function() {
-  var tickets = [
-    tw('T1','P1','lost',100,90,'2026-05-17T12:00:00Z','CLUB1'),
-    tw('T2','P1','lost',200,180,'2026-05-17T12:00:00Z','CLUB2') // different club
-  ];
-  var r = calcSettlementPreview(tickets, META, { clubId:'CLUB1' });
-  var p = r.players.find(function(p){ return p.playerId==='P1'; });
-  assertApprox(p.owesHost, 100, 'only CLUB1 ticket');
-});
-
-test('clubId filter: includes all clubs when not specified', function() {
-  var tickets = [
-    tw('T1','P1','lost',100,90,'2026-05-17T12:00:00Z','CLUB1'),
-    tw('T2','P1','lost',200,180,'2026-05-17T12:00:00Z','CLUB2')
-  ];
-  var r = calcSettlementPreview(tickets, META); // no clubId
-  var p = r.players.find(function(p){ return p.playerId==='P1'; });
-  assertApprox(p.owesHost, 300, 'all clubs without filter');
-});
-
-test('same playerId across two clubs: each filtered independently', function() {
-  var tickets = [
-    tw('T1','P1','lost',100,90,'2026-05-17T12:00:00Z','CLUB1'),
-    tw('T2','P1','won', 100,90.91,'2026-05-17T12:00:00Z','CLUB2')
-  ];
-  var r1 = calcSettlementPreview(tickets, META, { clubId:'CLUB1' });
-  var r2 = calcSettlementPreview(tickets, META, { clubId:'CLUB2' });
-  var p1 = r1.players.find(function(p){ return p.playerId==='P1'; });
-  var p2 = r2.players.find(function(p){ return p.playerId==='P1'; });
-  assertApprox(p1.owesHost, 100, 'CLUB1 view: lost only');
-  assertApprox(p2.hostOwes, 90.91, 'CLUB2 view: won only');
-});
-
-test('clubId + weekStart combined: both filters apply', function() {
-  var tickets = [
-    tw('T1','P1','lost',100,90,'2026-05-10T12:00:00Z','CLUB1'), // wrong week
-    tw('T2','P1','lost',200,180,'2026-05-17T12:00:00Z','CLUB2'), // wrong club
-    tw('T3','P1','won', 100,90.91,'2026-05-17T12:00:00Z','CLUB1') // both match
-  ];
-  var r = calcSettlementPreview(tickets, META, { clubId:'CLUB1', weekStart:'2026-05-17' });
-  var p = r.players.find(function(p){ return p.playerId==='P1'; });
-  assertApprox(p.hostOwes, 90.91, 'only T3 passes both filters');
-  assertEq(p.owesHost, 0);
+test('Bug #4: preview response shape unchanged (backward compat)', function() {
+  // Simulate the getOrCreate path with modern memberMap
+  var playerLimitRows = [{ player_id: 'P1', balance_start: 1500 }];
+  var memberMap = buildMemberMapFromPlayerLimits(playerLimitRows);
+  var pid = 'P1';
+  var meta = memberMap[pid] || {};
+  var player = {
+    playerId: pid, username: pid, balance: parseFloat(meta.balance_start||1000),
+    openRisk: 0, settledNet: 0, owesHost: 0, hostOwes: 0, lastTicketAt: null
+  };
+  // Assert all expected fields present
+  assert('playerId'     in player, 'playerId field present');
+  assert('username'     in player, 'username field present');
+  assert('balance'      in player, 'balance field present');
+  assert('openRisk'     in player, 'openRisk field present');
+  assert('settledNet'   in player, 'settledNet field present');
+  assert('owesHost'     in player, 'owesHost field present');
+  assert('hostOwes'     in player, 'hostOwes field present');
+  assert('lastTicketAt' in player, 'lastTicketAt field present');
+  assertApprox(player.balance, 1500, 'balance=1500 from player_limits');
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

@@ -876,8 +876,8 @@ function _showSessionExpiredModal(result) {
 // ══════════════════════════════════════════════════════════════════════════════
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '4672be1';
-window.PBS_BUILD_DATE = '2026-05-25T04:36:55.983Z';
+window.PBS_BUILD_SHA = '499730b';
+window.PBS_BUILD_DATE = '2026-05-27T10:25:38.117Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -3920,7 +3920,7 @@ async function confirmBet() {
       } else if (_dbData.code === 'odds_changed') {
         _cbStep = 'ODDS_CHANGED';
         _cbErr('CONFIRM_BET_ERROR', null, 'code=odds_changed leg='+_dbData.leg
-          +' old='+_dbData.oldOdds+' new='+_dbData.newOdds);
+          +' old='+_dbData.submittedOdds+' new='+_dbData.serverOdds);
         closeBetConfirm();
         var _od = _dbData;
         var _odModal = document.createElement('div');
@@ -3930,7 +3930,7 @@ async function confirmBet() {
           '<div style="background:#1a1a1a;border:1.5px solid #ea580c;border-radius:18px;padding:28px 24px;max-width:340px;width:90%;text-align:center">',
             '<div style="font-size:1.5rem;margin-bottom:8px">\u26a0\ufe0f Line Moved</div>',
             '<div style="font-weight:700;font-size:1rem;margin-bottom:6px">'+(_od.leg||'Selection')+'</div>',
-            '<div style="color:#aaa;font-size:0.9rem;margin-bottom:16px">Line changed from <b style="color:#fff">'+_od.oldOdds+'</b> to <b style="color:#00ff87">'+_od.newOdds+'</b></div>',
+            '<div style="color:#aaa;font-size:0.9rem;margin-bottom:16px">Line changed from <b style="color:#fff">'+_od.submittedOdds+'</b> to <b style="color:#00ff87">'+_od.serverOdds+'</b></div>',
             '<div style="display:flex;gap:10px;justify-content:center">',
               '<button id="odds-reject-btn" style="flex:1;padding:12px;background:#222;border:1px solid #444;border-radius:10px;color:#fff;font-weight:700;font-size:0.9rem">Cancel Bet</button>',
               '<button id="odds-accept-btn" style="flex:1;padding:12px;background:#00ff87;border:none;border-radius:10px;color:#000;font-weight:700;font-size:0.9rem">Accept New Odds</button>',
@@ -3941,7 +3941,11 @@ async function confirmBet() {
         document.getElementById('odds-reject-btn').onclick=function(){ _odModal.remove(); showToast('Bet canceled \u2014 line moved','info'); };
         document.getElementById('odds-accept-btn').onclick=async function(){
           _odModal.remove();
-          var _rp=Object.assign({},_dbPayload,{legs:_od.updatedLegs||_dbPayload.legs,oddsAccepted:true,idempotencyKey:_dbPayload.idempotencyKey+'_oa'});
+          var _updLegs=_dbPayload.legs.map(function(l,i){
+            return (typeof _od.legIndex==='number' && i===_od.legIndex)
+              ? Object.assign({},l,{odds:_od.serverOdds}) : l;
+          });
+          var _rp=Object.assign({},_dbPayload,{legs:_updLegs,idempotencyKey:_dbPayload.idempotencyKey+'_oa'});
           try {
             var _r2=await _pbFetch('/api/bets/place',{method:'POST',body:JSON.stringify(_rp)});
             var _rt=await _r2.text(); var _rd2; try{ _rd2=JSON.parse(_rt); }catch(_){ _rd2={}; }
@@ -10641,7 +10645,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 4672be1 · May 24, 09:36 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 499730b · May 27, 03:25 AM</span>
 </div>
 
 <!-- Orphan IIFE closer removed (was rendering as a literal IIFE close

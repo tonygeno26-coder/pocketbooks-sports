@@ -299,6 +299,217 @@ test('different idempotencyKeys → separate rows', function() {
   assertEq(Object.keys(seen).length, 2, '2 separate rows');
 });
 
+
+// ── Bug #1 regression: balance gate must be club-scoped ──────────────────────
+// Proves: .eq('club_id', clubId) added to the tickets query in bets/place
+// prevents cross-club balance contamination (Bug #1).
+console.log('\n── Bug #1 regression: cross-club balance isolation ──');
+
+function deriveAvailableClubScoped(allTickets, clubId, startingBalance) {
+  var clubTickets = allTickets.filter(function(t) { return t.club_id === clubId; });
+  var openRisk = 0, settledGains = 0, settledLosses = 0;
+  clubTickets.forEach(function(t) {
+    var s = (t.status||'').toLowerCase();
+    var r = parseFloat(t.risk_amount) || 0;
+    var p = parseFloat(t.potential_profit) || 0;
+    if (s === 'canceled' || s === 'voided' || s === 'push' || s === 'pushed') return;
+    if (s === 'active' || s === 'open') openRisk += r;
+    else if (s === 'won')  settledGains  += p;
+    else if (s === 'lost') settledLosses += r;
+  });
+  return Math.round((startingBalance - openRisk - settledLosses + settledGains) * 100) / 100;
+}
+function deriveAvailableUnscoped(allTickets, startingBalance) {
+  var openRisk = 0, settledGains = 0, settledLosses = 0;
+  allTickets.forEach(function(t) {
+    var s = (t.status||'').toLowerCase();
+    var r = parseFloat(t.risk_amount) || 0;
+    var p = parseFloat(t.potential_profit) || 0;
+    if (s === 'canceled' || s === 'voided' || s === 'push' || s === 'pushed') return;
+    if (s === 'active' || s === 'open') openRisk += r;
+    else if (s === 'won')  settledGains  += p;
+    else if (s === 'lost') settledLosses += r;
+  });
+  return Math.round((startingBalance - openRisk - settledLosses + settledGains) * 100) / 100;
+}
+var CLUB_A = 'club-uuid-aaaa';
+var CLUB_B = 'club-uuid-bbbb';
+
+test('club B loss/open-risk does not reduce club A balance (Bug #1 fix)', function() {
+  var tix = [
+    { club_id: CLUB_A, player_id: 'P1', status: 'active', risk_amount: 50,  potential_profit: 90 },
+    { club_id: CLUB_A, player_id: 'P1', status: 'won',    risk_amount: 30,  potential_profit: 30 },
+    { club_id: CLUB_B, player_id: 'P1', status: 'lost',   risk_amount: 400, potential_profit: 0  },
+    { club_id: CLUB_B, player_id: 'P1', status: 'active', risk_amount: 200, potential_profit: 0  },
+  ];
+  // fixed: 1000 - 50 (openA) + 30 (wonA) = 980
+  var fixed   = deriveAvailableClubScoped(tix, CLUB_A, 1000);
+  // broken: 1000 - 250 (openA+B) - 400 (lossB) + 30 (wonA) = 380
+  var broken  = deriveAvailableUnscoped(tix, 1000);
+  assertApprox(fixed,  980, 'club A available = 980');
+  assertApprox(broken, 380, 'broken cross-club = 380');
+  assert(fixed > broken, 'fix restores correct balance');
+});
+
+test('player with zero club A tickets: full starting balance (not reduced by club B)', function() {
+  var tix = [
+    { club_id: CLUB_B, player_id: 'P1', status: 'active', risk_amount: 500, potential_profit: 0 },
+  ];
+  assertApprox(deriveAvailableClubScoped(tix, CLUB_A, 1000), 1000, 'club A: no tickets = full balance');
+  assertApprox(deriveAvailableUnscoped(tix, 1000), 500, 'unscoped wrongly deducts club B open risk');
+});
+
+test('club B losses do not bleed into club A (isolated loss)', function() {
+  var tix = [{ club_id: CLUB_B, player_id: 'P1', status: 'lost', risk_amount: 300, potential_profit: 0 }];
+  assertApprox(deriveAvailableClubScoped(tix, CLUB_A, 1000), 1000, 'club A unaffected by club B loss');
+});
+
+test('canceled ticket in club B does not affect club A availability', function() {
+  var tix = [
+    { club_id: CLUB_B, player_id: 'P1', status: 'canceled', risk_amount: 200, potential_profit: 0 },
+    { club_id: CLUB_A, player_id: 'P1', status: 'active',   risk_amount: 50,  potential_profit: 90 },
+  ];
+  assertApprox(deriveAvailableClubScoped(tix, CLUB_A, 1000), 950, 'only club A $50 open risk subtracted');
+});
+
+test('multi-club player: each club sees only its own settled net', function() {
+  var tix = [
+    { club_id: CLUB_A, player_id: 'P1', status: 'lost', risk_amount: 100, potential_profit: 0   },
+    { club_id: CLUB_B, player_id: 'P1', status: 'won',  risk_amount: 100, potential_profit: 200 },
+  ];
+  var availA = deriveAvailableClubScoped(tix, CLUB_A, 1000); // 1000 - 100 = 900
+  var availB = deriveAvailableClubScoped(tix, CLUB_B, 1000); // 1000 + 200 = 1200
+  assertApprox(availA, 900,  'club A: start 1000 - $100 loss = 900');
+  assertApprox(availB, 1200, 'club B: start 1000 + $200 win = 1200');
+  var brokenBoth = deriveAvailableUnscoped(tix, 1000); // net = -100+200 = +100 -> 1100
+  assertApprox(brokenBoth, 1100, 'unscoped cross-club net = 1100 (wrong for both)');
+  assert(availA !== brokenBoth, 'club A differs from broken result');
+  assert(availB !== brokenBoth, 'club B differs from broken result');
+});
+
+
+// ── club_members cleanup: bets/place startBal uses player_limits ─────────────
+console.log('\n── club_members cleanup: bets/place uses player_limits (club-scoped) ──');
+
+// Mirror the fixed backend startBal resolution:
+// player_limits WHERE club_id=? AND player_id=? — with club_id filter
+function resolveStartBalFromPlayerLimits(playerLimitRows, clubId, playerId) {
+  var row = (playerLimitRows||[]).find(function(r) {
+    return String(r.club_id) === String(clubId) && String(r.player_id) === String(playerId);
+  });
+  return row ? parseFloat(row.balance_start)||1000 : 1000;
+}
+
+var CLUB_A_ID = 'club-uuid-cccc';
+var CLUB_B_ID = 'club-uuid-dddd';
+
+test('bets/place: uses balance_start=2500 from player_limits for club A (not fallback 1000)', function() {
+  var limits = [
+    { club_id: CLUB_A_ID, player_id: 'P1', balance_start: 2500 },
+    { club_id: CLUB_B_ID, player_id: 'P1', balance_start: 500  }, // club B row must be ignored
+  ];
+  var bal = resolveStartBalFromPlayerLimits(limits, CLUB_A_ID, 'P1');
+  assertApprox(bal, 2500, 'startBal = 2500 from club A player_limits');
+  assert(bal !== 1000, 'must not fall back to 1000 when row exists');
+});
+
+test('bets/place: does not use club B player_limits row for club A bet', function() {
+  var limits = [
+    // No club A row for P2
+    { club_id: CLUB_B_ID, player_id: 'P2', balance_start: 9999 },
+  ];
+  var bal = resolveStartBalFromPlayerLimits(limits, CLUB_A_ID, 'P2');
+  assertApprox(bal, 1000, 'club B row must not pollute club A startBal');
+  assert(bal !== 9999, 'club B balance 9999 must not appear in club A');
+});
+
+test('bets/place: fallback remains 1000 when no player_limits row exists', function() {
+  var limits = []; // no rows at all
+  var bal = resolveStartBalFromPlayerLimits(limits, CLUB_A_ID, 'P3');
+  assertApprox(bal, 1000, 'fallback to 1000 when no row');
+});
+
+test('bets/place: balance gate uses club-scoped startBal correctly', function() {
+  // Player has $2500 start, $200 open risk, $100 losses, $50 gains
+  // available = 2500 - 200 - 100 + 50 = 2250
+  var startBal = 2500;
+  var openRisk = 200, settledLosses = 100, settledGains = 50;
+  var available = Math.round((startBal - openRisk - settledLosses + settledGains)*100)/100;
+  assertApprox(available, 2250, 'available = 2250 with startBal=2500');
+  // Old code with fallback 1000: available = 1000 - 200 - 100 + 50 = 750 (wrong — would block valid bet)
+  var oldAvailable = Math.round((1000 - openRisk - settledLosses + settledGains)*100)/100;
+  assertApprox(oldAvailable, 750, 'old fallback gives wrong 750');
+  assert(available > oldAvailable, 'fixed path gives correct higher available balance');
+});
+
+
+// ── PL-6: fail-closed risk check behavior ────────────────────────────────────
+console.log('\n── PL-6: fail-closed _checkRiskLimitsJs ──');
+
+// Simulate the bets/place risk check wrapper behavior
+async function runRiskCheckWrapper(riskCheckFn) {
+  // Mirrors the exact try/catch in bets/place after the PL-6 fix
+  try {
+    const riskCheck = await riskCheckFn();
+    if (!riskCheck.ok) {
+      return { httpStatus: 422, body: { ok:false, code: riskCheck.code } };
+    }
+    return { httpStatus: 200, body: { ok:true } };
+  } catch(riskErr) {
+    // PL-6: fail-CLOSED
+    return {
+      httpStatus: 503,
+      body: { ok:false, error:'risk_check_unavailable',
+              message:'Risk checks temporarily unavailable. Please retry.' }
+    };
+  }
+}
+
+test('PL-6: risk check exception returns 503 risk_check_unavailable (fail-closed)', async function() {
+  var result = await runRiskCheckWrapper(async function() {
+    throw new Error('Supabase connection refused');
+  });
+  assertEq(result.httpStatus, 503, 'HTTP 503 on exception');
+  assertEq(result.body.ok, false, 'ok=false');
+  assertEq(result.body.error, 'risk_check_unavailable', 'error code');
+  assert(result.body.message.includes('temporarily unavailable'), 'safe message present');
+});
+
+test('PL-6: normal risk rejection still returns 422 (not changed)', async function() {
+  var result = await runRiskCheckWrapper(async function() {
+    return { ok:false, code:'stake_above_max', max:500, stake:501 };
+  });
+  assertEq(result.httpStatus, 422, 'HTTP 422 for normal rejection');
+  assertEq(result.body.ok, false, 'ok=false');
+  assertEq(result.body.code, 'stake_above_max', 'rejection code preserved');
+});
+
+test('PL-6: passing risk check allows placement to continue', async function() {
+  var result = await runRiskCheckWrapper(async function() {
+    return { ok:true };
+  });
+  assertEq(result.httpStatus, 200, 'HTTP 200 when checks pass');
+  assertEq(result.body.ok, true, 'ok=true');
+});
+
+test('PL-6: network timeout on risk check returns 503, not silent pass', async function() {
+  var result = await runRiskCheckWrapper(async function() {
+    throw new Error('socket hang up');
+  });
+  assertEq(result.httpStatus, 503, 'timeout → 503, not silent pass');
+  assertEq(result.body.error, 'risk_check_unavailable', 'correct error code');
+  // Critically: it must NOT be ok:true (the old fail-open behavior)
+  assert(!result.body.ok, 'must not be ok on exception');
+});
+
+test('PL-6: suspended player still rejected normally (not exception path)', async function() {
+  var result = await runRiskCheckWrapper(async function() {
+    return { ok:false, code:'player_suspended', suspendedUntil:'2026-12-31T00:00:00Z' };
+  });
+  assertEq(result.httpStatus, 422, 'suspended player = 422');
+  assertEq(result.body.code, 'player_suspended', 'suspended code correct');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('\n' + '─'.repeat(54));
 console.log('Bet placement tests: ' + _pass + ' passed, ' + _fail + ' failed');
