@@ -2096,6 +2096,42 @@ function _installDevSession() {
   try { dbgBanner('DEV SESSION BYPASS clubId='+_devCid+' playerId='+_devPid, '#240'); } catch(_){}
 }
 if (_pDev) { _installDevSession(); }
+// ── TEST ACCOUNT QUICK-LAUNCH ─────────────────────────────────────────────────
+// When testUser=1/2/3 is in the URL, seed localStorage with that test player's
+// credentials so the session gate passes without a real sign-in flow.
+(function() {
+  var _tId = _pp.get('testUser');
+  if (!_tId) return;
+  var _TEST_ACCOUNTS = {
+    '1': { id:'test-player-1', username:'TestPlayer1', email:'test1@pocketbooks.local' },
+    '2': { id:'test-player-2', username:'TestRR',      email:'test2@pocketbooks.local' },
+    '3': { id:'test-player-3', username:'TestEdge',    email:'test3@pocketbooks.local' },
+  };
+  var _acct = _TEST_ACCOUNTS[_tId];
+  if (!_acct) return;
+  var _devCid  = 'dev-club';
+  var _devRole = 'owner';
+  var _b64u = function(s){ return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); };
+  var _payload = { sub:_acct.id, actorId:_acct.id, role:_devRole,
+    clubId:_devCid, exp: Math.floor(Date.now()/1000) + 86400*7, iat: Math.floor(Date.now()/1000) };
+  var _token = _b64u('{"alg":"HS256","typ":"JWT"}')
+    + '.' + _b64u(JSON.stringify(_payload))
+    + '.dev-bypass-sig';
+  localStorage.setItem('pb-sports-token', _token);
+  TOKEN = _token;
+  localStorage.setItem('pb-player', JSON.stringify({
+    id: _acct.id, username: _acct.username, name: _acct.username,
+    role: _devRole, email: _acct.email
+  }));
+  localStorage.setItem('pb-club', JSON.stringify({
+    id: _devCid, clubId: _devCid, name: 'Dev Club', role: _devRole, balance: 1000
+  }));
+  localStorage.setItem('pb-active-club', JSON.stringify({ id:_devCid, clubId:_devCid, name:'Dev Club', role:_devRole }));
+  localStorage.setItem('pb-balance-start', '1000');
+  try { localStorage.removeItem('pb-session-token'); } catch(_){}
+  console.log('TEST_ACCOUNT_BYPASS_ACTIVE user='+_acct.username+' email='+_acct.email);
+  try { dbgBanner('TEST SESSION: '+_acct.username, '#420'); } catch(_){}
+})();
 // ─────────────────────────────────────────────────────────────────────────────
 
 if (_pPreview) {
