@@ -883,8 +883,8 @@ function _showSessionExpiredModal(result) {
 // ══════════════════════════════════════════════════════════════════════════════
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'eb15737';
-window.PBS_BUILD_DATE = '2026-05-29T09:38:26.123Z';
+window.PBS_BUILD_SHA = '927ae68';
+window.PBS_BUILD_DATE = '2026-05-31T06:46:30.712Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -2188,40 +2188,91 @@ const _pTheme = _pp.get('theme') || 'dark';
 const _pAnim = _pp.get('anim') !== 'off';
 const _pDevice = _pp.get('device') || 'iphone';
 // ── DEV SESSION BYPASS ───────────────────────────────────────────────────────
-// Seeds localStorage with a valid-looking mock session so the session gate
-// passes and the backend dev-bypass path handles bets without a real JWT.
-function _installDevSession() {
-  var _devPid   = 'dev-player';
-  var _devCid   = 'dev-club';
+// When ?testUser=N is present (from dev.html tiles), fetches a real session
+// token from /api/auth/token using the Supabase actor_id for each beta test
+// account. Falls back to a mock JWT if the fetch fails (non-production only).
+//
+//   testUser=1 → TestPlayer1  (actor: 2a3e6819-...)
+//   testUser=2 → TestRR       (actor: 12bb68f1-...)
+//   testUser=3 → TestEdge     (actor: bc767309-...)
+var REAL_CLUB_ID = 'd616dc2a-95a6-473a-97b1-7da330878479';
+var _TEST_USER_CONFIGS = {
+  '1': { pid:'2a3e6819-be2f-4df3-8112-54ce19d0929e', name:'TestPlayer1', email:'testplayer1@pocketbooks.local' },
+  '2': { pid:'12bb68f1-bcca-4e63-8ae4-7065dbb19172', name:'TestRR',      email:'testplayer2@pocketbooks.local' },
+  '3': { pid:'bc767309-6fc7-4585-9077-3de7b898df13', name:'TestEdge',    email:'testplayer3@pocketbooks.local' }
+};
+async function _installDevSession() {
+  var _tu     = _pp.get('testUser');
+  var _tc     = _TEST_USER_CONFIGS[_tu] || {};
+  var _devCid = REAL_CLUB_ID;
+
+  // Real test accounts: UUID pid = Supabase actor_id → fetch a proper session token
+  if (_tc.pid && _tc.pid.indexOf('-') !== -1) {
+    try {
+      var _BASE = (typeof window !== 'undefined' && window._PBS_BACKEND)
+        || 'https://pocketbooks-sports-backend-production.up.railway.app';
+      var _resp = await fetch(_BASE + '/api/auth/token', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ actorId: _tc.pid, clubId: _devCid })
+      });
+      var _data = await _resp.json();
+      if (_data.ok && _data.token) {
+        var _role = _data.role || 'player';
+        TOKEN = _data.token;
+        // Store as both pb-session-token (for _getActorHeaders Bearer) and
+        // pb-sports-token (for _getClubScope token decode)
+        localStorage.setItem('pb-session-token', _data.token);
+        localStorage.setItem('pb-sports-token',  _data.token);
+        localStorage.setItem('pb-actor-role', _role);
+        localStorage.setItem('pb-player', JSON.stringify({
+          id: _tc.pid, username: _tc.pid, name: _tc.name, role: _role, email: _tc.email
+        }));
+        localStorage.setItem('pb-club', JSON.stringify({
+          id: _devCid, clubId: _devCid, name: 'Dev Club', role: _role, balance: 1000
+        }));
+        localStorage.setItem('pb-active-club', JSON.stringify({
+          id: _devCid, clubId: _devCid, name: 'Dev Club', role: _role
+        }));
+        localStorage.setItem('pb-balance-start', '1000');
+        localStorage.setItem('pb-balance-start:' + _tc.pid, '1000');
+        console.log('LOGIN_OK actorId=' + _tc.pid + ' role=' + _role + ' clubId=' + _devCid);
+        try { dbgBanner('TEST SESSION: ' + _tc.name + ' @ Dev Club', '#024'); } catch(_) {}
+        return;
+      }
+      console.warn('[devSession] token rejected:', JSON.stringify(_data));
+    } catch (_err) {
+      console.warn('[devSession] token fetch failed:', _err.message, '— falling back to mock');
+    }
+  }
+
+  // Fallback: mock token (works only when backend dev-bypass is active, i.e. non-production)
+  var _devPid   = _tc.pid   || 'dev-player';
+  var _devName  = _tc.name  || 'Dev Player';
+  var _devEmail = _tc.email || 'dev@pocketbooks.local';
   var _devRole  = 'owner';
-  // Build a mock JWT payload (backend won't verify sig in dev/bypass mode)
   var _mockPayload = { sub:_devPid, actorId:_devPid, role:_devRole,
     clubId:_devCid, exp: Math.floor(Date.now()/1000) + 86400*7, iat: Math.floor(Date.now()/1000) };
   var _b64u = function(s){ return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); };
   var _mockToken = _b64u('{"alg":"HS256","typ":"JWT"}')
     + '.' + _b64u(JSON.stringify(_mockPayload))
     + '.dev-bypass-sig';
-  // Write all required session state
   localStorage.setItem('pb-sports-token', _mockToken);
   TOKEN = _mockToken;
   localStorage.setItem('pb-player', JSON.stringify({
-    id: _devPid, username: _devPid, name: 'Dev Player',
-    role: _devRole, email: 'dev@pocketbooks.local'
+    id: _devPid, username: _devPid, name: _devName, role: _devRole, email: _devEmail
   }));
   localStorage.setItem('pb-club', JSON.stringify({
-    id: _devCid, clubId: _devCid, name: 'Dev Club',
-    role: _devRole, balance: 1000
+    id: _devCid, clubId: _devCid, name: 'Dev Club', role: _devRole, balance: 1000
   }));
   localStorage.setItem('pb-active-club', JSON.stringify({ id:_devCid, clubId:_devCid, name:'Dev Club', role:_devRole }));
   localStorage.setItem('pb-balance-start', '1000');
-  // Clear pb-session-token so _getActorHeaders sends no Authorization header
-  // — backend dev bypass handles the request without token verification
+  localStorage.setItem('pb-balance-start:'+_devPid, '1000');
   try { localStorage.removeItem('pb-session-token'); } catch(_){}
-  console.log('DEV_SESSION_BYPASS_ACTIVE clubId='+_devCid+' playerId='+_devPid+' role='+_devRole+' balance=1000');
-  console.log('DEV_SESSION_SCOPE_READY tokenClubId='+_devCid+' localClubId='+_devCid+' activeClubId='+_devCid+' playerId='+_devPid);
-  try { dbgBanner('DEV SESSION BYPASS clubId='+_devCid+' playerId='+_devPid, '#240'); } catch(_){}
+  console.log('DEV_SESSION_BYPASS_ACTIVE clubId='+_devCid+' playerId='+_devPid+' name='+_devName+' balance=1000');
+  try { dbgBanner('DEV SESSION: '+_devName+' ('+_devPid+') @ '+_devCid, '#240'); } catch(_){}
 }
-if (_pDev) { _installDevSession(); }
+if (_pDev) { _installDevSession().catch(console.error); }
 // ─────────────────────────────────────────────────────────────────────────────
 
 if (_pPreview) {
@@ -3876,8 +3927,9 @@ async function confirmBet() {
     // playerId must match token actorId for backend self-check to pass
     var _pid  = _safeId(_tokenActorId || (_lspl.id != null ? _lspl.id : _lspl.username));
     var _cid  = _safeId(_tokenClubId  || (_lscl.id != null ? _lscl.id : _lscl.clubId));
-    // Dev bypass: force authoritative dev ids regardless of decoded token
-    if (_pDev) {
+    // Dev bypass: force authoritative dev ids — but skip when testUser is set
+    // so the real token actorId/clubId from _installDevSession is used instead.
+    if (_pDev && !_pp.get('testUser')) {
       _pid = 'dev-player';
       _cid = 'dev-club';
       console.log('DEV_SESSION_SCOPE_READY tokenClubId=dev-club localClubId=dev-club activeClubId=dev-club playerId=dev-player');
@@ -10881,7 +10933,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · eb15737 · May 29, 02:38 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 927ae68 · May 30, 11:46 PM</span>
 </div>
 
 <!-- Orphan IIFE closer removed (was rendering as a literal IIFE close
