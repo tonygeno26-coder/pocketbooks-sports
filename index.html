@@ -943,6 +943,8 @@ function refreshHostDashboardStats(trigger) {
   // Settlement position from weekly net across players
   var playersOwe = 0, hostOwes = 0;
   try {
+    var _club2 = {}; try { _club2 = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e2) {}
+    var _cid2  = _club2.id || _club2.clubId || null;
     var players = loadClubPlayers ? loadClubPlayers() : [];
     var now2 = new Date();
     var ws = _sundayMidnight ? _sundayMidnight(now2) : new Date(now2.setDate(now2.getDate()-now2.getDay()));
@@ -952,7 +954,7 @@ function refreshHostDashboardStats(trigger) {
       if (!pid) return;
       var net = 0;
       try {
-        var wr = _calcWeekForPlayer ? _calcWeekForPlayer(pid, ws, we) : null;
+        var wr = _calcWeekForPlayer ? _calcWeekForPlayer(pid, ws, we, _cid2) : null;
         if (wr) net = (wr.lost || 0) - (wr.won || 0);
       } catch(_e) {}
       if (net > 0)  playersOwe += net;  // player lost net → owes host
@@ -3702,11 +3704,12 @@ function _sundayMidnight(d) {
   x.setDate(x.getDate() - x.getDay()); // back to Sunday
   return x;
 }
-function _calcWeekForPlayer(playerId, weekStart, weekEnd) {
+function _calcWeekForPlayer(playerId, weekStart, weekEnd, clubId) {
   var bets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
   var won = 0, lost = 0;
   bets.forEach(function(t){
     if (t.playerId !== playerId) return;
+    if (clubId && t.clubId && t.clubId !== clubId) return;  // RA-5: cross-club isolation
     var ts = new Date(t.placedAt).getTime();
     if (isNaN(ts) || ts < weekStart.getTime() || ts >= weekEnd.getTime()) return;
     if (t.status === 'won')  won  += parseFloat(t.potentialProfit)||0;
@@ -3729,6 +3732,8 @@ function runWeeklySettlement(now) {
   if (lastClose && new Date(lastClose).getTime() >= thisSunday.getTime()) return null; // already closed
   var weekEnd   = thisSunday;
   var weekStart = new Date(weekEnd); weekStart.setDate(weekStart.getDate()-7);
+  var _clubRWS  = {}; try { _clubRWS = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e) {}
+  var _cidRWS   = _clubRWS.id || _clubRWS.clubId || null;
   var players   = loadClubPlayers();
   var payments  = _loadSettlePayments();
   var carryIn   = _loadCarryover();
@@ -3736,7 +3741,7 @@ function runWeeklySettlement(now) {
     var pid = p.playerId || p.id;
     var lim = getHostPlayerLimits(pid) || {};
     var startingLimit = parseFloat(lim.creditLimit)||0;
-    var w = _calcWeekForPlayer(pid, weekStart, weekEnd);
+    var w = _calcWeekForPlayer(pid, weekStart, weekEnd, _cidRWS);
     // Sign convention for accounting (player-owes-host POV):
     //   weeklyNet positive  = player owes host (player lost net)
     //   weeklyNet negative  = host owes player (player won net)
@@ -3901,9 +3906,11 @@ function seedMockSettlementPlayers(force) {
     var now = new Date();
     var ws = _sundayMidnight(now);
     var we = new Date(ws); we.setDate(we.getDate()+7);
+    var _clubHRA = {}; try { _clubHRA = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e) {}
+    var _cidHRA  = _clubHRA.id || _clubHRA.clubId || null;
     return existing.some(function(p) {
       var pid = p.playerId || p.id;
-      var w = _calcWeekForPlayer(pid, ws, we);
+      var w = _calcWeekForPlayer(pid, ws, we, _cidHRA);
       return (w.won + w.lost) > 0;
     });
   }
@@ -4078,6 +4085,8 @@ function _currentWeekPreview(weekOffset) {
   var weekStart = _sundayMidnight(now);
   weekStart.setDate(weekStart.getDate() + weekOffset*7);
   var weekEnd   = new Date(weekStart); weekEnd.setDate(weekEnd.getDate()+7);
+  var _clubCWP = {}; try { _clubCWP = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e) {}
+  var _cidCWP  = _clubCWP.id || _clubCWP.clubId || null;
   var players   = loadClubPlayers();
   var payments  = _loadSettlePayments();
   var carryIn   = _loadCarryover();
@@ -4085,7 +4094,7 @@ function _currentWeekPreview(weekOffset) {
     var pid = p.playerId || p.id;
     var lim = getHostPlayerLimits(pid) || {};
     var startingLimit = parseFloat(lim.creditLimit)||0;
-    var w = _calcWeekForPlayer(pid, weekStart, weekEnd);
+    var w = _calcWeekForPlayer(pid, weekStart, weekEnd, _cidCWP);
     var weeklyNet         = Math.round((w.lost - w.won)*100)/100; // host-POV
     var netPlayerPov      = Math.round((w.won - w.lost)*100)/100; // chart sign
     var priorCarryover    = Math.round(((parseFloat(carryIn[pid])||0))*100)/100;
@@ -5136,7 +5145,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 927ae68 · May 30, 11:46 PM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · ae21739 · May 31, 02:56 AM</span>
 </div>
 
 <script>

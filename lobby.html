@@ -468,12 +468,19 @@ try {
       <!-- SIGNUP FIELDS -->
       <div id="signup-fields">
         <input id="a-name" class="auth-inp" placeholder="Display name" autocomplete="name">
-        <input id="a-signal" class="auth-inp" placeholder="Signal username or phone (optional)" autocomplete="tel">
-        <div id="signup-contact-hint" style="font-size:0.62rem;color:#666;margin:-6px 0 10px;padding:0 4px">Provide Signal, email, or both — at least one is required.</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <select id="a-contact-method" class="auth-inp" style="flex:0 0 auto;width:auto;padding-right:10px;cursor:pointer" onchange="(function(){var m=document.getElementById('a-contact-method').value,i=document.getElementById('a-contact-value'),p={telegram:'@username',signal:'Phone number or username',email:'Email address'};i.placeholder=p[m];i.type=m==='email'?'email':'text';})()">
+            <option value="telegram">Telegram</option>
+            <option value="signal">Signal</option>
+            <option value="email">Email</option>
+          </select>
+          <input id="a-contact-value" class="auth-inp" placeholder="@username" type="text" style="flex:1;margin-bottom:0">
+        </div>
+        <div id="signup-contact-hint" style="font-size:0.62rem;color:#666;margin:-6px 0 10px;padding:0 4px">Select how we can reach you — required for account recovery.</div>
       </div>
 
       <!-- SHARED FIELDS -->
-      <input id="a-email" class="auth-inp" placeholder="Email address" type="email" autocomplete="email">
+      <input id="a-email" class="auth-inp" placeholder="Email address" type="email" autocomplete="email" style="display:none">
       <input id="a-pass" class="auth-inp" placeholder="Password" type="password" autocomplete="current-password">
       <div id="confirm-pass-wrap" style="display:none">
         <input id="a-pass2" class="auth-inp" placeholder="Confirm password" type="password">
@@ -819,19 +826,25 @@ function openRecovery(kind){
 
 async function submitAuth() {
   const btn = document.getElementById('auth-submit-btn');
-  const email = document.getElementById('a-email').value.trim();
+  const loginEmail = document.getElementById('a-email').value.trim();
   const pass = document.getElementById('a-pass').value;
-  const signalEl = document.getElementById('a-signal');
-  const signalContact = signalEl ? signalEl.value.trim() : '';
+  // Signup contact method dropdown
+  const contactMethodEl = document.getElementById('a-contact-method');
+  const contactValueEl  = document.getElementById('a-contact-value');
+  const contactMethod   = contactMethodEl ? contactMethodEl.value : '';
+  const contactValue    = contactValueEl  ? contactValueEl.value.trim() : '';
+  const email        = contactMethod === 'email'    ? contactValue : (loginEmail || (''));
+  const signalContact = contactMethod === 'signal'  ? contactValue : '';
+  const telegramContact = contactMethod === 'telegram' ? contactValue : '';
   document.getElementById('auth-error').style.display = 'none';
 
   // Login still requires email (existing dev login). Signup requires password
-  // plus at least one contact (signal OR email).
+  // plus the contact value.
   if (authMode === 'login') {
-    if (!email || !pass) { showAuthError('Please enter email and password'); return; }
+    if (!loginEmail || !pass) { showAuthError('Please enter email and password'); return; }
   } else {
     if (!pass) { showAuthError('Please enter a password'); return; }
-    if (!email && !signalContact) { showAuthError('Provide Signal username/phone or email — at least one is required'); return; }
+    if (!contactValue) { showAuthError('Select a contact method and enter your details — required for account recovery'); return; }
   }
 
   btn.disabled = true;
@@ -848,12 +861,13 @@ async function submitAuth() {
       if (pass !== pass2) { showAuthError('Passwords do not match'); btn.disabled=false; btn.textContent='Create My Account →'; return; }
       if (!ageCheck) { showAuthError('You must confirm you are 21+'); btn.disabled=false; btn.textContent='Create My Account →'; return; }
       if (!termsCheck) { showAuthError('You must accept the Terms of Service'); btn.disabled=false; btn.textContent='Create My Account →'; return; }
-      // Backend signup still keyed off email; pass a synthetic placeholder if
-      // user only gave Signal so the existing /api/auth/signup contract holds.
-      // signalContact is persisted locally in pb-player-settings (existing
-      // Signal profile field) so the host receipts pipeline picks it up.
-      var signupEmail = email || ('signal+'+signalContact.replace(/[^a-zA-Z0-9]/g,'').toLowerCase()+'@pocketbooks.local');
-      data = await apiCall('POST', '/api/auth/signup', { name, email: signupEmail, password: pass, role: 'user', signalContact: signalContact || null });
+      // Backend signup keyed off email; synthesise a placeholder when the user
+      // chose Telegram or Signal so the /api/auth/signup contract still holds.
+      var signupEmail = email
+        || (signalContact   ? 'signal+'   + signalContact.replace(/[^a-zA-Z0-9]/g,'').toLowerCase()   + '@pocketbooks.local' : '')
+        || (telegramContact ? 'telegram+' + telegramContact.replace(/[^a-zA-Z0-9]/g,'').toLowerCase() + '@pocketbooks.local' : '');
+      data = await apiCall('POST', '/api/auth/signup', { name, email: signupEmail, password: pass, role: 'user',
+        signalContact: signalContact || null, telegramContact: telegramContact || null });
     } else {
       data = await apiCall('POST', '/api/auth/login', { email, password: pass });
     }
@@ -865,12 +879,14 @@ async function submitAuth() {
     if (email) localStorage.setItem('pb-dev-email', email);
     // NOTE: pb-dev-pass kept for dev only; do not rely on it for prod auth.
     localStorage.setItem('pb-dev-pass', pass);
-    // Persist Signal contact into the existing player-settings field so the
-    // profile modal + host receipts pipeline see it (signup path only).
-    if (authMode==='signup' && signalContact) {
+    // Persist contact details into player-settings so the profile modal +
+    // host receipts pipeline see them (signup path only).
+    if (authMode==='signup') {
       try {
         var _ps = JSON.parse(localStorage.getItem('pb-player-settings')||'{}');
-        _ps.signalContact = signalContact;
+        _ps.contactMethod   = contactMethod;
+        _ps.contactValue    = contactValue;
+        _ps.signalContact   = signalContact;
         localStorage.setItem('pb-player-settings', JSON.stringify(_ps));
       } catch(_e){}
     }
