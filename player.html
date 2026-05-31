@@ -883,8 +883,8 @@ function _showSessionExpiredModal(result) {
 // ══════════════════════════════════════════════════════════════════════════════
 console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'ae21739';
-window.PBS_BUILD_DATE = '2026-05-31T09:56:43.013Z';
+window.PBS_BUILD_SHA = 'efa973b';
+window.PBS_BUILD_DATE = '2026-05-31T13:40:00.791Z';
 console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
@@ -3648,16 +3648,18 @@ function _makeSelection(b) {
   }
   if (!awayTeam && cachedGame)  awayTeam  = cachedGame.away || cachedGame.away_team  || '';
   if (!homeTeam && cachedGame)  homeTeam  = cachedGame.home || cachedGame.home_team  || '';
-  // canonicalGameKey: stable string for exact-game matching independent of provider
-  // Format: SPORT|AWAY|HOME|YYYY-MM-DD
+  // canonicalGameKey: must match Owls normalizer format stored in odds_snapshots.
+  // Owls stores: sport_key (lowercase) + raw team names (no hyphens) + YYYY-MM-DD
+  // e.g. "baseball_mlb|Toronto Blue Jays|Baltimore Orioles|2026-05-31"
   var gameDate = '';
   if (commenceTime) {
     try { gameDate = new Date(commenceTime).toISOString().slice(0,10); } catch(_e){}
   }
-  var canonicalGameKey = [
-    (b.sport||'mlb').toUpperCase(),
-    awayTeam.toLowerCase().replace(/\s+/g,'-'),
-    homeTeam.toLowerCase().replace(/\s+/g,'-'),
+  // Prefer canonicalGameKey already set on the slip entry (built at click time with correct format)
+  var canonicalGameKey = b.canonicalGameKey || [
+    (b.sport||'mlb').toLowerCase(),
+    awayTeam,
+    homeTeam,
     gameDate
   ].join('|');
   var legId = 'LEG-' + (oddsApiGameId||'?') + '-' + (b.market||'mkt').replace(/\s+/g,'').slice(0,8) + '-' + now.getTime();
@@ -8587,10 +8589,9 @@ document.addEventListener('click', function(e) {
     var _rawTime = (_cachedG && (_cachedG.time || _cachedG.commence_time)) || null;
     var _gameDate = '';
     if (_rawTime) { try { _gameDate = new Date(_rawTime).toISOString().slice(0,10); } catch(_e){} }
-    var _cKey = [(sp||'mlb').toUpperCase(),
-      _away.toLowerCase().replace(/\s+/g,'-'),
-      _home.toLowerCase().replace(/\s+/g,'-'),
-      _gameDate].join('|');
+    // Key format must match the Owls normalizer: sport lowercase, teams raw (no hyphens).
+    // Owls stores: "baseball_mlb|Toronto Blue Jays|Baltimore Orioles|2026-05-31"
+    var _cKey = [(sp||'mlb').toLowerCase(), _away, _home, _gameDate].join('|');
     // Also grab raw ISO time for placement gate / ticket leg
     var _isoTime = _rawTime || null;
 
@@ -10933,7 +10934,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · ae21739 · May 31, 02:56 AM</span>
+  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · efa973b · May 31, 06:40 AM</span>
 </div>
 
 <!-- Orphan IIFE closer removed (was rendering as a literal IIFE close
