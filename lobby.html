@@ -875,6 +875,7 @@ async function submitAuth() {
     if (data.error) { showAuthError(data.error); btn.disabled=false; btn.textContent=authMode==='login'?'Sign In →':'Create My Account →'; return; }
 
     TOKEN = data.token;
+    localStorage.setItem('pb-session-token', TOKEN);
     localStorage.setItem('pb-sports-token', TOKEN);
     if (email) localStorage.setItem('pb-dev-email', email);
     // NOTE: pb-dev-pass kept for dev only; do not rely on it for prod auth.
@@ -1168,7 +1169,7 @@ function _maybeAutoRoute() {
 // ══ SIGN OUT ══ Clears token + dev creds + per-user session keys, returns to auth.
 function signOut() {
   try {
-    ['pb-sports-token','pb-dev-email','pb-dev-pass','pb-player','pb-host',
+    ['pb-session-token','pb-sports-token','pb-dev-email','pb-dev-pass','pb-player','pb-host',
      'pb-active-club','pb-clubs','pb-club','pb-user-clubs']
       .forEach(function(k){ localStorage.removeItem(k); });
   } catch(_e){}
@@ -1379,6 +1380,7 @@ async function _acquireClubToken(playerId, clubId) {
     var data = await resp.json();
     if (data.ok && data.token) {
       TOKEN = data.token;
+      localStorage.setItem('pb-session-token', TOKEN);
       localStorage.setItem('pb-sports-token', TOKEN);
       // Decode token and sync pb-player.id to token's actorId so backend self-check passes
       try {
