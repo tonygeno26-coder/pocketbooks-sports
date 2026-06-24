@@ -248,18 +248,23 @@ try {
 
   <!-- TOOLS — dev/admin grading helpers -->
   <div class="section" id="sec-tools">
-    <div class="sec-title">Bet Grading (Test)</div>
+    <div class="sec-title">Bet Grading</div>
     <div style="font-size:0.72rem;color:var(--gray);line-height:1.55;margin-bottom:12px">
-      Pulls real MLB scores from SportsDataIO and grades any open
-      <strong style="color:#fff">single moneyline</strong> ticket whose game is
-      <strong style="color:#fff">Final</strong>. Parlays / teasers / spreads / totals
-      are skipped. Tickets are tagged with <code style="color:var(--cyan)">gradedAt</code>
-      so re-running the tool can't double-grade.
+      <strong style="color:#fff">Grade via Server</strong> loads open tickets from
+      <code style="color:var(--cyan)">GET /api/host/dashboard</code>, derives won/lost/push
+      from SportsDataIO MLB finals (single moneyline only), and posts each result to
+      <code style="color:var(--cyan)">POST /api/grade/manual</code>.
+      <strong style="color:#fff">Grade Local</strong> is the legacy
+      <code style="color:var(--cyan)">pb-tickets</code> localStorage path.
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <button id="grade-server-btn" onclick="gradeOpenTicketsViaServer()"
+        style="padding:11px 18px;background:var(--green);color:#050505;border:none;border-radius:10px;font-size:0.82rem;font-weight:900;cursor:pointer">
+        Grade via Server
+      </button>
       <button id="grade-test-btn" onclick="gradeOpenTickets()"
-        style="padding:11px 18px;background:var(--purple);color:#fff;border:none;border-radius:10px;font-size:0.82rem;font-weight:900;cursor:pointer">
-        Grade Test Bets
+        style="padding:11px 14px;background:var(--card2);color:var(--gray);border:1px solid var(--border);border-radius:10px;font-size:0.78rem;font-weight:700;cursor:pointer">
+        Grade Local (Test)
       </button>
       <button onclick="clearGradeLog()"
         style="padding:11px 14px;background:var(--card2);color:var(--gray);border:1px solid var(--border);border-radius:10px;font-size:0.78rem;font-weight:700;cursor:pointer">
@@ -443,6 +448,251 @@ function _isMoneylineTicket(t) {
 function _ticketStillOpen(t) {
   if (!t || t.gradedAt) return false;
   return t.status === 'active' || t.status === 'open';
+}
+function _ticketStillOpenDb(t) {
+  if (!t) return false;
+  var s = (t.status || '').toLowerCase();
+  return s === 'active' || s === 'open';
+}
+function _gradeAuthHeaders(clubId) {
+  var token = '';
+  try { token = localStorage.getItem('pb-session-token') || ''; } catch(_e){}
+  if (!token) token = ADMIN_TOKEN || '';
+  var headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  if (clubId) headers['x-club-id'] = String(clubId);
+  return headers;
+}
+async function _gradeApiFetch(path, opts, clubId) {
+  opts = opts || {};
+  var headers = Object.assign(_gradeAuthHeaders(clubId), opts.headers || {});
+  var r = await fetch(API + path, Object.assign({}, opts, { headers }));
+  var data = {};
+  try { data = await r.json(); } catch(_e){}
+  if (!r.ok) {
+    var err = new Error(data.error || data.reason || ('HTTP ' + r.status));
+    err.status = r.status;
+    err.data = data;
+    throw err;
+  }
+  return data;
+}
+async function _resolveGradeClubIds() {
+  var club = {};
+  try { club = JSON.parse(localStorage.getItem('pb-club') || '{}'); } catch(_e){}
+  var cid = club.id || club.clubId;
+  if (cid) return [String(cid)];
+  try {
+    var data = await fetch(API + '/api/mirror/tickets-with-legs?limit=500').then(function(r){ return r.json(); });
+    var ids = {};
+    (data.tickets || []).forEach(function(t) {
+      if (_ticketStillOpenDb(t) && t.club_id) ids[String(t.club_id)] = true;
+    });
+    return Object.keys(ids);
+  } catch(_e) { return []; }
+}
+function _isDbMoneylineTicket(ticket, legs) {
+  if (!ticket || !Array.isArray(legs) || legs.length !== 1) return false;
+  var type = (ticket.type || '').toLowerCase();
+  if (type !== 'single' && type !== 'straight') return false;
+  var leg = legs[0];
+  var sport = String(leg.sport || '').toUpperCase();
+  if (sport !== 'MLB' && sport !== 'BASEBALL_MLB') return false;
+  var m = (leg.market || '').toLowerCase();
+  return m === 'moneyline' || m === 'ml' || m === 'to win' || m.indexOf('moneyline') >= 0;
+}
+function _pickSideFromLeg(leg) {
+  var pick = _normTeam(leg.pick);
+  var home = _normTeam(leg.home_team);
+  var away = _normTeam(leg.away_team);
+  if (pick && home && (pick === home || home.endsWith(pick) || pick.endsWith(home.split(' ').pop()))) return 'home';
+  if (pick && away && (pick === away || away.endsWith(pick) || pick.endsWith(away.split(' ').pop()))) return 'away';
+  return 'away';
+}
+function _legToSel(leg) {
+  return {
+    awayTeam: leg.away_team,
+    homeTeam: leg.home_team,
+    placedDate: (leg.scheduled_start || '').slice(0, 10),
+    matchup: (leg.away_team || '?') + ' @ ' + (leg.home_team || '?'),
+    side: _pickSideFromLeg(leg),
+    sport: 'MLB',
+    market: leg.market
+  };
+}
+async function _postManualGrade(ticketId, result, reason, clubId) {
+  return _gradeApiFetch('/api/grade/manual', {
+    method: 'POST',
+    body: JSON.stringify({
+      ticketId: ticketId,
+      result: result,
+      reason: reason,
+      overrideCode: 'SDIO_AUTO',
+      clubId: clubId || undefined
+    })
+  }, clubId);
+}
+async function _fetchDashboardActiveTickets(clubId) {
+  var qs = clubId ? ('?clubId=' + encodeURIComponent(clubId)) : '';
+  var data = await _gradeApiFetch('/api/host/dashboard' + qs, { method: 'GET' }, clubId);
+  return data.activeTickets || [];
+}
+async function _fetchMirrorLegsByClub(clubId) {
+  var qs = clubId ? ('?clubId=' + encodeURIComponent(clubId) + '&limit=500') : '?limit=500';
+  var data = await fetch(API + '/api/mirror/tickets-with-legs' + qs).then(function(r){ return r.json(); });
+  var legsByTicket = {};
+  (data.legs || []).forEach(function(leg) {
+    if (!leg.ticket_id) return;
+    (legsByTicket[leg.ticket_id] = legsByTicket[leg.ticket_id] || []).push(leg);
+  });
+  Object.keys(legsByTicket).forEach(function(tid) {
+    legsByTicket[tid].sort(function(a, b) { return (a.leg_index || 0) - (b.leg_index || 0); });
+  });
+  var clubByTicket = {};
+  (data.tickets || []).forEach(function(t) { if (t.id) clubByTicket[t.id] = t.club_id; });
+  return { legsByTicket: legsByTicket, clubByTicket: clubByTicket };
+}
+async function gradeOpenTicketsViaServer() {
+  if (_GRADE_RUNNING) { gLog('grading already in progress'); return; }
+  _GRADE_RUNNING = true;
+  var btn = document.getElementById('grade-server-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Grading...'; }
+  var summary = { scanned: 0, eligible: 0, skippedType: 0, notFound: 0, notFinal: 0,
+    ties: 0, posted: 0, postedWon: 0, postedLost: 0, postedPush: 0, apiErrors: 0, errors: 0 };
+  try {
+    var token = '';
+    try { token = localStorage.getItem('pb-session-token') || ''; } catch(_e){}
+    if (!token && !ADMIN_TOKEN) {
+      gLog('FATAL: no auth token — log in to admin or host session (pb-session-token / pb-admin-token)');
+      return;
+    }
+    gLog('server grade: auth=' + (token ? 'pb-session-token' : 'pb-admin-token'));
+    var clubIds = await _resolveGradeClubIds();
+    if (!clubIds.length) {
+      gLog('FATAL: no clubId — set pb-club in localStorage or ensure active DB tickets exist');
+      return;
+    }
+    gLog('clubs to scan: ' + clubIds.length + ' [' + clubIds.join(', ') + ']');
+    var tickets = [];
+    for (var ci = 0; ci < clubIds.length; ci++) {
+      var clubId = clubIds[ci];
+      try {
+        var active = await _fetchDashboardActiveTickets(clubId);
+        gLog('dashboard club=' + clubId + ' activeTickets=' + active.length);
+        active.forEach(function(t) { tickets.push(Object.assign({}, t, { club_id: clubId })); });
+      } catch(e) {
+        gLog('  ! dashboard club=' + clubId + ' failed: ' + (e.message || e) + (e.status ? ' (HTTP ' + e.status + ')' : ''));
+        summary.errors++;
+      }
+    }
+    summary.scanned = tickets.length;
+    if (!tickets.length) {
+      gLog('no active tickets from server dashboard');
+      return;
+    }
+    var legsCache = {};
+    var clubCache = {};
+    for (var mi = 0; mi < clubIds.length; mi++) {
+      var mirror = await _fetchMirrorLegsByClub(clubIds[mi]);
+      Object.assign(legsCache, mirror.legsByTicket);
+      Object.assign(clubCache, mirror.clubByTicket);
+    }
+    var byDate = {};
+    tickets.forEach(function(t) {
+      if (!_ticketStillOpenDb(t)) return;
+      var legs = legsCache[t.id] || [];
+      if (!_isDbMoneylineTicket(t, legs)) { summary.skippedType++; return; }
+      var sel = _legToSel(legs[0]);
+      var date = sel.placedDate || (t.placed_at || '').slice(0, 10);
+      if (!date) { gLog('  ! ticket ' + t.id + ' has no placedDate, skipping'); summary.errors++; return; }
+      var clubId = t.club_id || clubCache[t.id] || clubIds[0];
+      (byDate[date] = byDate[date] || []).push({ ticket: t, legs: legs, sel: sel, clubId: clubId });
+      summary.eligible++;
+    });
+    var dates = Object.keys(byDate).sort();
+    if (!dates.length) {
+      gLog('no eligible server tickets (need: active, Single MLB Moneyline)');
+    }
+    for (var di = 0; di < dates.length; di++) {
+      var date = dates[di];
+      var batch = byDate[date];
+      gLog('--- ' + date + ' (' + batch.length + ' server ticket(s)) ---');
+      var games;
+      try { games = await _fetchMlbGamesForDate(date); }
+      catch(e) { gLog('  ! sportsdataio fetch failed: ' + e.message); summary.errors += batch.length; continue; }
+      for (var bi = 0; bi < batch.length; bi++) {
+        var row = batch[bi];
+        var t = row.ticket;
+        var sel = row.sel;
+        var clubId = row.clubId;
+        var g = _findGame(games, sel);
+        if (!g) {
+          gLog('  ? ticket ' + t.id + ' game not in feed (' + sel.matchup + ')');
+          summary.notFound++; continue;
+        }
+        if (!_gameIsFinal(g)) {
+          gLog('  . ticket ' + t.id + ' ' + sel.matchup + ' — status=' + (g.Status || '?') + ' (not Final, skip)');
+          summary.notFinal++; continue;
+        }
+        var winner = _gameWinnerSide(g);
+        var result, reason;
+        if (!winner) {
+          result = 'push';
+          reason = 'sportsdataio_auto: tie ' + (g.AwayTeamRuns || 0) + '-' + (g.HomeTeamRuns || 0);
+          summary.ties++;
+        } else {
+          var pickedSide = sel.side === 'home' ? 'home' : 'away';
+          var win = (pickedSide === winner);
+          result = win ? 'won' : 'lost';
+          reason = 'sportsdataio_auto: ' + (g.AwayTeamRuns || 0) + '-' + (g.HomeTeamRuns || 0) +
+            ' picked ' + pickedSide + ' winner ' + winner;
+        }
+        try {
+          await _postManualGrade(t.id, result, reason, clubId);
+          if (result === 'won') summary.postedWon++;
+          else if (result === 'lost') summary.postedLost++;
+          else summary.postedPush++;
+          summary.posted++;
+          var scoreStr = (g.AwayTeamRuns || 0) + '-' + (g.HomeTeamRuns || 0);
+          gLog('  ✓ POST ' + t.id + ' ' + sel.matchup + ' ' + scoreStr + ' → ' + result.toUpperCase());
+        } catch(e) {
+          summary.apiErrors++;
+          var errMsg = e.message || String(e);
+          if (e.status === 409) errMsg = 'already graded';
+          else if (e.status === 404) errMsg = 'ticket not found';
+          else if (e.status === 503) errMsg = 'grading disabled on server';
+          else if (e.status === 403) errMsg = 'auth/permission denied (need full_admin + clubId)';
+          gLog('  ✕ POST ' + t.id + ' FAILED: ' + errMsg);
+        }
+      }
+    }
+    var sum = document.getElementById('grade-summary');
+    if (sum) {
+      sum.style.display = 'block';
+      sum.innerHTML =
+        '<div style="font-weight:900;margin-bottom:8px;color:#fff">Server grade summary</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:0.72rem">' +
+          '<div>scanned: <strong style="color:#fff">'+summary.scanned+'</strong></div>' +
+          '<div>eligible: <strong style="color:var(--cyan)">'+summary.eligible+'</strong></div>' +
+          '<div>posted: <strong style="color:var(--green)">'+summary.posted+'</strong></div>' +
+          '<div>won/lost/push: <strong>'+summary.postedWon+'/'+summary.postedLost+'/'+summary.postedPush+'</strong></div>' +
+          '<div>not final: <strong>'+summary.notFinal+'</strong></div>' +
+          '<div>not in feed: <strong>'+summary.notFound+'</strong></div>' +
+          '<div>ties→push: <strong>'+summary.ties+'</strong></div>' +
+          '<div>skipped type: <strong>'+summary.skippedType+'</strong></div>' +
+          '<div>api errors: <strong style="color:var(--red)">'+summary.apiErrors+'</strong></div>' +
+          '<div>errors: <strong style="color:var(--red)">'+summary.errors+'</strong></div>' +
+        '</div>';
+    }
+    gLog('server done. posted=' + summary.posted + ' apiErrors=' + summary.apiErrors +
+         ' notFinal=' + summary.notFinal + ' notFound=' + summary.notFound);
+  } catch(e) {
+    gLog('FATAL: ' + (e && e.message || e));
+    console.error('[grade/server] fatal', e);
+  } finally {
+    _GRADE_RUNNING = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Grade via Server'; }
+  }
 }
 function gLog(msg, color) {
   var pre = document.getElementById('grade-log');
@@ -655,7 +905,7 @@ async function gradeOpenTickets() {
     console.error('[grade] fatal', e);
   } finally {
     _GRADE_RUNNING = false;
-    if (btn) { btn.disabled = false; btn.textContent = 'Grade Test Bets'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Grade Local (Test)'; }
   }
 }
 
