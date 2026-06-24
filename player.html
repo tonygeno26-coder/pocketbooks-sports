@@ -1148,16 +1148,20 @@ function calcAvailableBalance() {
     available:     available
   };
 }
+function _applyBalanceToUI(availableBalance) {
+  var bal = parseFloat(availableBalance);
+  if (isNaN(bal)) bal = 0;
+  window.playerBalance = bal;
+  var balText = '$' + bal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  ['player-balance-display','header-balance','pb-balance-header'].forEach(function(id){
+    var el = document.getElementById(id); if (el) el.textContent = balText;
+  });
+  return bal;
+}
 function syncBalanceDisplays() {
   var s = calcAvailableBalance();
-  var playerBalance = s.available;
-  // Update legacy var so old references work
-  window.playerBalance = playerBalance;
-  var bal = '$' + playerBalance.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  ['player-balance-display','header-balance','pb-balance-header'].forEach(function(id){
-    var el = document.getElementById(id); if (el) el.textContent = bal;
-  });
-  dbgBanner('BALANCE RECALCULATED\nStarting: $'+s.starting.toFixed(2)+'\nOpen Risk: $'+s.openRisk.toFixed(2)+'\nAvailable: $'+playerBalance.toFixed(2), '#005');
+  _applyBalanceToUI(s.available);
+  dbgBanner('BALANCE RECALCULATED\nStarting: $'+s.starting.toFixed(2)+'\nOpen Risk: $'+s.openRisk.toFixed(2)+'\nAvailable: $'+s.available.toFixed(2), '#005');
   console.log('[balance]', s);
   return s;
 }
@@ -6445,13 +6449,14 @@ async function loadPlayerDashboardFromDb() {
       // Exception: if DB returns 0 tickets, keep local cache (propagation lag).
       try { localStorage.setItem('pb-tickets', JSON.stringify(allTix)); betTickets = allTix; } catch(_e){}
     }
-    syncBalanceDisplays();
+    _applyBalanceToUI(b.availableBalance);
     _updatePlayerSourceBadge('db');
     console.log('[player dashboard db] playerId='+pid+' available=$'+b.availableBalance+' openRisk=$'+b.openRisk+' active='+data.tickets.active.length);
     return data;
   } catch(e) {
     console.warn('[player dashboard db] fallback to localStorage:', e.message);
     _updatePlayerSourceBadge('localStorage');
+    try { syncBalanceDisplays(); } catch(_e) {}
     return { ok:false, fallbackReason:e.message };
   }
 }
