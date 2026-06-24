@@ -1973,10 +1973,6 @@ function loadHostActiveBets(){
     var exposure = parseFloat(t.potentialProfit||0);
     return s+exposure;
   },0);
-  active.forEach(function(t){
-    console.log('active ticket:', t.id, 'playerRisk:', t.riskAmount, 'hostExposure:', t.potentialProfit);
-  });
-  showToastHost('HOST EXPOSURE: '+active.length+' active bets = $'+totalRisk.toFixed(2)+' owed to players if all win');
   var el=document.getElementById('stat-active-bets');
   var el2=document.getElementById('stat-active-risk');
   var cnt=document.getElementById('host-bets-count');
@@ -2307,15 +2303,6 @@ window.renderHostBets = renderHostBets;
 
 const SECTIONS=['home-content','bets-section','players-section','settlements-section','crypto-section'];
 function returnToLobby() {
-  console.log('[host returnToLobby] clicked');
-  console.log('[host returnToLobby] state before nav', {
-    host:        localStorage.getItem('pb-host'),
-    activeClub:  localStorage.getItem('pb-active-club'),
-    clubs:       localStorage.getItem('pb-clubs'),
-    club:        localStorage.getItem('pb-club'),
-    clubPlayers: localStorage.getItem('pb-club-players'),
-    tickets:     localStorage.getItem('pb-tickets')
-  });
   sessionStorage.setItem('pb-force-lobby-home', '1');
   window.location.href = 'lobby.html';
 }
@@ -2381,7 +2368,6 @@ function setBN(el,tab){
       betLimits:{straight:{min:1,max:100},parlay:{min:1,max:100},teaser:{min:1,max:100},roundRobin:{min:1,max:100}}
     };
     localStorage.setItem('pb-player-limits', JSON.stringify(allLimits));
-    showToastHost('MOCK PLAYER LOADED');
   }
 })();
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2451,8 +2437,6 @@ function openPlayerSettings(pid, _p){
   var existing=document.getElementById('ps-overlay');
   if(existing)existing.remove();
   var p=_p||(loadClubPlayers().find(function(x){return x.playerId===pid;})||{});
-  var _pActiveBets=JSON.parse(localStorage.getItem('hostActiveBets')||'[]').filter(function(b){return b.playerId===pid&&(b.status==='active'||b.status==='open');});
-  showToastHost('PLAYER ACTIVE BETS: '+_pActiveBets.length+'\nID: '+pid+'\nrealName: '+(p.realName||''));
   var lim=getHostPlayerLimits(pid);
   var sa=lim.sportsAccess||{};
   var bl=lim.betLimits||{};
@@ -2552,8 +2536,6 @@ function renderPlayersTab(){
   if (!el) return;
   var requests = loadJoinRequests();
   var players  = loadClubPlayers();
-  var savedPlayers=JSON.parse(localStorage.getItem('pb-club-players')||'[]');
-  showToastHost('LIST RENDERED\nplayers: '+savedPlayers.length+'\nrealNames: '+savedPlayers.map(function(p){return p.realName||'none';}).join(','));
 
   function getActiveBetsCount(pid){
     return JSON.parse(localStorage.getItem('hostActiveBets')||'[]').filter(function(b){ return b.playerId===pid && (b.status==='active'||b.status==='open'); }).length;
@@ -2753,8 +2735,6 @@ function _wireClubStaffPanel(scope) {
 
 
 function savePlayerProfile(pid){
-  showToastHost('SAVE CLICKED: '+pid);
-  console.log('savePlayerProfile', pid);
   // Read current input values
   var realNameInp = document.getElementById('ps-realname');
   var notesInp    = document.getElementById('ps-notes');
@@ -2764,11 +2744,9 @@ function savePlayerProfile(pid){
   var notes    = notesInp    ? notesInp.value    : '';
   var credit   = creditInp   ? parseFloat(creditInp.value)||0 : 0;
   var signal   = signalInp   ? signalInp.value.trim() : '';
-  console.log('values:', {realName:realName, notes:notes, credit:credit});
   // Load players from localStorage (do not use stale in-memory ref)
   var players = JSON.parse(localStorage.getItem('pb-club-players')||'[]');
   var idx = players.findIndex(function(p){ return p.playerId===pid; });
-  console.log('clubPlayers before save:', JSON.stringify(players));
   if (idx === -1) {
     showToastHost('SAVE ERROR: PLAYER NOT FOUND\nID: '+pid);
     console.warn('Player not found:', pid, 'players:', players);
@@ -2776,12 +2754,10 @@ function savePlayerProfile(pid){
   }
   players[idx] = Object.assign({}, players[idx], { realName:realName, notes:notes, signalContact:signal });
   localStorage.setItem('pb-club-players', JSON.stringify(players));
-  showToastHost('LOCALSTORAGE SAVED\nrealName: '+realName);
   // Save limits
   var lim = getHostPlayerLimits(pid);
   lim.creditLimit = credit;
   saveHostPlayerLimits(pid, lim);
-  console.log('clubPlayers after save:', JSON.stringify(players));
   showToastHost('PLAYER SAVED\n'+(realName||players[idx].playerName));
   var ov = document.getElementById('ps-overlay');
   if (ov) ov.remove();
