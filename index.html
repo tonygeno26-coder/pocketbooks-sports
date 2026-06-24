@@ -1015,15 +1015,53 @@ function _validateHostStats(s) {
   return { safe: w.length===0, warnings: w };
 }
 
+function _getHostClubId() {
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+  return club.id || club.clubId || null;
+}
+
+async function fetchHostDashboardData() {
+  var cid = _getHostClubId();
+  var qs  = cid ? '?clubId='+encodeURIComponent(cid) : '';
+  var resp = await fetch('/api/host/dashboard'+qs);
+  var data = await resp.json();
+  if (!data.ok || !data.stats) throw new Error(data.error || 'missing stats');
+  return data;
+}
+
+function mapDbTicketsToHostBets(activeTickets) {
+  var players = loadClubPlayers();
+  var byId = {};
+  players.forEach(function(p) {
+    var id = p.playerId || p.id || p.player_id;
+    if (id) byId[id] = p;
+  });
+  return (activeTickets || []).map(function(t) {
+    var p = byId[t.player_id] || {};
+    var shortId = t.player_id ? String(t.player_id).slice(0, 8) : '';
+    return {
+      id:                t.id,
+      playerId:          t.player_id,
+      playerUsername:    p.playerName || p.username || p.name || shortId || 'Player',
+      playerName:        p.playerName || p.username || p.name || shortId || 'Player',
+      playerRealName:    p.realName || p.real_name || '',
+      riskAmount:        parseFloat(t.risk_amount) || 0,
+      potentialProfit:   parseFloat(t.potential_profit) || 0,
+      estimatedPayout:   parseFloat(t.estimated_payout) || 0,
+      type:              t.type || 'Single',
+      status:            t.status || 'active',
+      placedAt:          t.placed_at || '',
+      selections:        t.selections || [],
+      deleteRequestStatus: t.delete_request_status || t.deleteRequestStatus || null
+    };
+  });
+}
+
 async function loadHostDashboardFromDb(trigger) {
   trigger = trigger || 'manual';
-  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
-  var cid  = club.id || club.clubId || null;
+  var cid = _getHostClubId();
   try {
-    var qs  = cid ? '?clubId='+encodeURIComponent(cid) : '';
-    var resp = await fetch('/api/host/dashboard'+qs);
-    var data = await resp.json();
-    if (!data.ok || !data.stats) throw new Error(data.error || 'missing stats');
+    var data = await fetchHostDashboardData();
     var valid = _validateHostStats(data.stats);
     if (!valid.safe) throw new Error('invalid_stats:'+valid.warnings.join(','));
     // Render stats from DB
@@ -1040,15 +1078,21 @@ async function loadHostDashboardFromDb(trigger) {
     if (profitEl) profitEl.style.color = s.profit>=0 ? 'var(--green,#00ff88)' : 'var(--red,#ff3d57)';
     _updateHostSourceBadge('db', data.warnings||[]);
     _setHostDbPrimary(true);  // Lock DOM authority to DB
+    var activeBets = mapDbTicketsToHostBets(data.activeTickets);
+    if (document.getElementById('host-bets-list')) _renderHostBetsList(activeBets);
     console.log('[host db read] trigger='+trigger+' source=db clubId='+(cid||'?')+
-      ' handle=$'+s.handle+' active='+s.activeBetCount+' profit=$'+s.profit);
-    return { source:'db', stats:s, warnings:data.warnings||[] };
+      ' handle=$'+s.handle+' active='+s.activeBetCount+' profit=$'+s.profit+
+      ' activeTickets='+activeBets.length);
+    return { source:'db', stats:s, warnings:data.warnings||[], activeTickets:activeBets };
   } catch(e) {
     // Fallback to localStorage calculation
     console.warn('[host db read] fallback to localStorage: '+e.message);
     _setHostDbPrimary(false); // Release DOM authority back to localStorage
     _updateHostSourceBadge('localStorage', [e.message]);
     refreshHostDashboardStats('db_fallback:'+trigger);
+    if (document.getElementById('host-bets-list')) {
+      try { _renderHostBetsList(loadHostActiveBets()); } catch(_e){}
+    }
     return { source:'localStorage', fallbackReason:e.message };
   }
 }
@@ -2090,9 +2134,7 @@ function hostDenyDelete(ticketId) {
 }
 // ══════════════════════════════════════════════════════════════════════════════
 
-function renderHostBets(){
-  var active=loadHostActiveBets();
-  showToastHost('HOST BETS RENDERED WITH PLAYER NAMES\n'+active.length+' bets · players: '+[...new Set(active.map(function(t){return t.playerUsername||t.playerName||'?';}))]  .join(', '));
+function _renderHostBetsList(active) {
   var el=document.getElementById('host-bets-list');
   if(!el) return;
   // Update delete request badge
@@ -2246,6 +2288,22 @@ function renderHostBets(){
     });
   });
 }
+
+async function renderHostBets() {
+  try {
+    var data = await fetchHostDashboardData();
+    var active = mapDbTicketsToHostBets(data.activeTickets);
+    _renderHostBetsList(active);
+    console.log('[host bets] source=db active='+active.length);
+    return active;
+  } catch(e) {
+    console.warn('[host bets] DB fetch failed, using localStorage:', e.message);
+    var active = loadHostActiveBets();
+    _renderHostBetsList(active);
+    return active;
+  }
+}
+window.renderHostBets = renderHostBets;
 
 const SECTIONS=['home-content','bets-section','players-section','settlements-section','crypto-section'];
 function returnToLobby() {
