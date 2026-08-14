@@ -483,7 +483,7 @@ async function loadBrowseWeekGames(){
   }
 }
 async function shiftBrowseWeek(delta){
-  var next = Math.max(1, Math.min(18, browseWeek + delta));
+  var next = Math.max(1, Math.min(22, browseWeek + delta));
   if (next === browseWeek || !currentDetail) return;
   browseWeek = next;
   var body = document.getElementById('pick-body');
@@ -491,19 +491,46 @@ async function shiftBrowseWeek(delta){
   await loadBrowseWeekGames();
   paintMatchups(currentDetail);
 }
+function survivorPhase(week){
+  return (parseInt(week,10)||0) <= 18 ? 'regular' : 'playoffs';
+}
+function weekTitle(w){
+  if (w === 19) return 'Wild Card';
+  if (w === 20) return 'Divisional';
+  if (w === 21) return 'Championship';
+  if (w === 22) return 'Super Bowl';
+  return 'Week '+w;
+}
+function usedMapForWeek(detail, week){
+  var phase = survivorPhase(week);
+  var used = {};
+  (detail.myPicks||[]).forEach(function(p){
+    if (survivorPhase(p.week) === phase) used[canonicalTeam(p.team)] = true;
+  });
+  var pickThisWeek = (detail.myPicks||[]).find(function(p){ return p.week === week; });
+  if (pickThisWeek) used[canonicalTeam(pickThisWeek.team)] = false;
+  if (savedPickTeam && detail.pool && week === detail.pool.currentWeek) used[savedPickTeam] = false;
+  return used;
+}
 function weekNavHtml(){
   return '<div class="week-nav">'
     + '<button class="week-arrow" onclick="shiftBrowseWeek(-1)" '+(browseWeek<=1?'disabled':'')+'>‹</button>'
-    + '<div class="week-label">Week '+browseWeek+'</div>'
-    + '<button class="week-arrow" onclick="shiftBrowseWeek(1)" '+(browseWeek>=18?'disabled':'')+'>›</button>'
+    + '<div class="week-label">'+esc(weekTitle(browseWeek))+'</div>'
+    + '<button class="week-arrow" onclick="shiftBrowseWeek(1)" '+(browseWeek>=22?'disabled':'')+'>›</button>'
     + '</div>';
 }
 function pickBannerHtml(){
-  if (!scheduleLocked && picksOpen){
-    return '<div class="pick-banner">Week '+browseWeek+' — Pick deadline: Sunday 1:00 PM ET</div>';
+  var html = '';
+  if (browseWeek > 18){
+    html += '<div class="pick-banner">🏆 Playoffs — All teams available again</div>';
   }
-  var when = week1OpenLabel || 'Sep 10';
-  return '<div class="pick-banner">🏈 Week '+browseWeek+' Preview — Picks open '+esc(when)+'</div>';
+  if (!scheduleLocked && picksOpen){
+    html += '<div class="pick-banner">'+esc(weekTitle(browseWeek))+' — Pick deadline: Sunday 1:00 PM ET</div>';
+  } else {
+    var when = week1OpenLabel || 'Sep 10';
+    html += '<div class="pick-banner">🏈 '+esc(weekTitle(browseWeek))+' Preview — Picks open '+esc(when)+'</div>';
+  }
+  return html;
 }
 
 async function renderPick(detail){
@@ -559,9 +586,7 @@ async function renderPick(detail){
 function paintMatchups(detail){
   var body = document.getElementById('pick-body');
   if (!body || !detail) return;
-  var used = {};
-  (detail.usedTeams||[]).forEach(function(t){ used[canonicalTeam(t)] = true; });
-  if (savedPickTeam) used[savedPickTeam] = false;
+  var used = usedMapForWeek(detail, browseWeek);
   var locked = scheduleLocked;
 
   var html = weekNavHtml() + pickBannerHtml();
@@ -573,7 +598,9 @@ function paintMatchups(detail){
       + '<div class="your-pick-ok">✓</div></div>';
   }
   if (!locked){
-    html += '<div class="used-note">Tap a team, then confirm. Used teams cannot be picked again.</div>';
+    html += browseWeek > 18
+      ? '<div class="used-note">Playoff picks reset — you can reuse regular-season teams. Teams already picked this postseason stay marked used.</div>'
+      : '<div class="used-note">Tap a team, then confirm. Used teams cannot be picked again until the playoffs.</div>';
   }
 
   if (!nflGames.length){
@@ -630,9 +657,7 @@ function selectMatchupTeam(gi, side){
   if (!g) return;
   var team = canonicalTeam(side === 'home' ? (g.home || g.home_team) : (g.away || g.away_team));
   if (!team || !currentDetail) return;
-  var used = {};
-  (currentDetail.usedTeams||[]).forEach(function(t){ used[canonicalTeam(t)] = true; });
-  if (savedPickTeam) used[savedPickTeam] = false;
+  var used = usedMapForWeek(currentDetail, currentDetail.pool.currentWeek);
   if (used[team] || teamLost(g, team)) return;
   pendingPick = {
     team: team,
