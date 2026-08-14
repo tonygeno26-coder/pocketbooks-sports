@@ -54,6 +54,26 @@ select.inp option:disabled{color:#444}
 .used-note{font-size:0.68rem;color:#555;margin:-4px 0 10px}
 .code-chip{font-family:monospace;font-size:0.78rem;color:var(--cyan);background:rgba(0,194,255,0.08);border:1px solid rgba(0,194,255,0.25);padding:4px 8px;border-radius:8px}
 .toast{position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#1c1c1c;border:1px solid #333;color:#fff;padding:12px 20px;border-radius:12px;font-size:0.85rem;font-weight:600;z-index:999;white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,0.5)}
+.mu-card{background:#111;border:1px solid #222;border-radius:16px;padding:14px;margin-bottom:10px}
+.mu-row{display:flex;align-items:stretch;gap:8px}
+.mu-team{flex:1;background:#0c0c0c;border:1.5px solid #222;border-radius:12px;padding:14px 8px 12px;text-align:center;cursor:pointer;position:relative;transition:border-color .15s,background .15s,box-shadow .15s;min-width:0}
+.mu-team.sel{border-color:#00ff88;background:rgba(0,255,136,0.08);box-shadow:0 0 18px rgba(0,255,136,0.2)}
+.mu-team.used{opacity:0.4;border-color:#333;cursor:not-allowed}
+.mu-team.lost{cursor:not-allowed}
+.mu-logo{width:52px;height:52px;object-fit:contain;margin:0 auto 8px;display:block}
+.mu-name{font-size:0.78rem;font-weight:800;line-height:1.2}
+.mu-rec{font-size:0.58rem;color:#666;margin-top:3px}
+.mu-ml{font-size:0.8rem;font-weight:800;color:#ccc;margin-top:6px}
+.mu-at{width:22px;display:flex;align-items:center;justify-content:center;font-size:0.62rem;color:#555;font-weight:900}
+.mu-time{text-align:center;font-size:0.68rem;color:#666;margin-top:10px}
+.used-badge{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:900;letter-spacing:0.5px;text-transform:uppercase;color:#bbb;background:rgba(10,10,10,0.55);border-radius:12px}
+.lost-x{position:absolute;top:6px;right:8px;color:#ff3d57;font-size:1.15rem;font-weight:900;line-height:1}
+.your-pick{display:flex;align-items:center;gap:10px;background:rgba(0,255,136,0.08);border:1px solid rgba(0,255,136,0.35);border-radius:12px;padding:12px;margin-bottom:12px}
+.your-pick img{width:36px;height:36px;object-fit:contain}
+.your-pick-name{font-size:0.92rem;font-weight:800;color:var(--green)}
+.your-pick-ok{margin-left:auto;color:var(--green);font-size:1.1rem;font-weight:900}
+.confirm-wrap{margin-top:4px}
+.offseason{text-align:center;padding:28px 16px;color:#888;font-size:0.84rem;line-height:1.55}
 </style>
 </head>
 <body>
@@ -135,20 +155,27 @@ select.inp option:disabled{color:#444}
 <script>
 const API = 'https://pocketbooks-sports-backend-production.up.railway.app';
 let TOKEN = localStorage.getItem('pb-sports-token') || '';
-const NFL_TEAMS = [
-  'Arizona Cardinals','Atlanta Falcons','Baltimore Ravens','Buffalo Bills',
-  'Carolina Panthers','Chicago Bears','Cincinnati Bengals','Cleveland Browns',
-  'Dallas Cowboys','Denver Broncos','Detroit Lions','Green Bay Packers',
-  'Houston Texans','Indianapolis Colts','Jacksonville Jaguars','Kansas City Chiefs',
-  'Las Vegas Raiders','Los Angeles Chargers','Los Angeles Rams','Miami Dolphins',
-  'Minnesota Vikings','New England Patriots','New Orleans Saints','New York Giants',
-  'New York Jets','Philadelphia Eagles','Pittsburgh Steelers','San Francisco 49ers',
-  'Seattle Seahawks','Tampa Bay Buccaneers','Tennessee Titans','Washington Commanders'
-];
+var NFL_TEAM_LOGOS = {
+  'Arizona Cardinals': 'ari', 'Atlanta Falcons': 'atl', 'Baltimore Ravens': 'bal',
+  'Buffalo Bills': 'buf', 'Carolina Panthers': 'car', 'Chicago Bears': 'chi',
+  'Cincinnati Bengals': 'cin', 'Cleveland Browns': 'cle', 'Dallas Cowboys': 'dal',
+  'Denver Broncos': 'den', 'Detroit Lions': 'det', 'Green Bay Packers': 'gb',
+  'Houston Texans': 'hou', 'Indianapolis Colts': 'ind', 'Jacksonville Jaguars': 'jax',
+  'Kansas City Chiefs': 'kc', 'Las Vegas Raiders': 'lv', 'Los Angeles Chargers': 'lac',
+  'Los Angeles Rams': 'lar', 'Miami Dolphins': 'mia', 'Minnesota Vikings': 'min',
+  'New England Patriots': 'ne', 'New Orleans Saints': 'no', 'New York Giants': 'nyg',
+  'New York Jets': 'nyj', 'Philadelphia Eagles': 'phi', 'Pittsburgh Steelers': 'pit',
+  'San Francisco 49ers': 'sf', 'Seattle Seahawks': 'sea', 'Tampa Bay Buccaneers': 'tb',
+  'Tennessee Titans': 'ten', 'Washington Commanders': 'wsh'
+};
 
 let currentPoolId = null;
 let currentDetail = null;
 let createdJoinCode = '';
+let nflGames = [];
+let pendingPick = null;
+let pickLoadId = 0;
+let savedPickTeam = null;
 
 function showErr(msg){
   var el = document.getElementById('err');
@@ -196,9 +223,72 @@ function displayName(row){
   return row.playerUsername || row.player_username || row.playerId || row.player_id || 'Player';
 }
 
+function teamMatches(a, b){
+  var na = String(a||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  var nb = String(b||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  if (!na || !nb) return false;
+  return na === nb || na.indexOf(nb) >= 0 || nb.indexOf(na) >= 0;
+}
+function canonicalTeam(name){
+  if (NFL_TEAM_LOGOS[name]) return name;
+  var keys = Object.keys(NFL_TEAM_LOGOS);
+  for (var i=0;i<keys.length;i++){ if (teamMatches(keys[i], name)) return keys[i]; }
+  return name || '';
+}
+function teamLogoUrl(name){
+  var key = canonicalTeam(name);
+  var ab = NFL_TEAM_LOGOS[key];
+  return ab ? 'https://a.espncdn.com/i/teamlogos/nfl/500/'+ab+'.png' : '';
+}
+function shortTeam(name){
+  var n = canonicalTeam(name);
+  var parts = String(n).split(' ');
+  return parts[parts.length-1] || n;
+}
+function fmtOdds(n){
+  if (n == null || n === '') return '';
+  var x = Number(n);
+  if (isNaN(x)) return '';
+  return (x > 0 ? '+' : '') + x;
+}
+function fmtGameTime(iso){
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleString('en-US', {
+      timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric',
+      hour: 'numeric', minute: '2-digit'
+    }) + ' ET';
+  } catch(_e){ return ''; }
+}
+function mlFor(game, team){
+  var list = game && Array.isArray(game.moneyline) ? game.moneyline : [];
+  var hit = list.find(function(m){ return teamMatches(m.team, team); });
+  return hit ? hit.odds : null;
+}
+function recFor(game, side, team){
+  var rec = (game && (game[side+'Record'] || game[side+'_record'] || game[side+'record'])) || '';
+  if (!rec && game && game.records) rec = game.records[team] || game.records[side] || '';
+  return rec || '';
+}
+function teamLost(game, team){
+  if (!game) return false;
+  var final = game.isFinal || game.status === 'final' || game.completed;
+  var hs = game.homeScore != null ? game.homeScore : game.home_score;
+  var as = game.awayScore != null ? game.awayScore : game.away_score;
+  if (!final || hs == null || as == null) return false;
+  var home = game.home || game.home_team;
+  var away = game.away || game.away_team;
+  if (teamMatches(team, home)) return Number(hs) < Number(as);
+  if (teamMatches(team, away)) return Number(as) < Number(hs);
+  return false;
+}
+
 function showHome(){
   currentPoolId = null;
   currentDetail = null;
+  pendingPick = null;
+  savedPickTeam = null;
+  nflGames = [];
   document.getElementById('view-detail').classList.add('hidden');
   document.getElementById('view-home').classList.remove('hidden');
   document.getElementById('hdr-sub').textContent = 'Pick one NFL team each week. Lose and you’re out.';
@@ -296,7 +386,7 @@ function copyCode(code){
   toast('Copied '+code);
 }
 
-function renderPick(detail){
+async function renderPick(detail){
   var body = document.getElementById('pick-body');
   var entry = detail.myEntry;
   var pool = detail.pool || {};
@@ -312,19 +402,113 @@ function renderPick(detail){
     body.innerHTML = '<div class="empty">This pool is '+esc(pool.status)+'.</div>';
     return;
   }
-  var used = {};
-  (detail.usedTeams||[]).forEach(function(t){ used[t]=true; });
   var myWeek = (detail.myPicks||[]).find(function(p){ return p.week === pool.currentWeek; });
-  var teams = detail.teams && detail.teams.length ? detail.teams : NFL_TEAMS;
-  var opts = teams.map(function(t){
-    var isUsed = !!used[t] && !(myWeek && myWeek.team === t);
-    return '<option value="'+esc(t)+'"'+(isUsed?' disabled':'')+(myWeek&&myWeek.team===t?' selected':'')+'>'
-      +esc(t)+(isUsed?' (used)':'')+'</option>';
-  }).join('');
-  body.innerHTML =
-    (myWeek ? '<div class="used-note">Current pick: <b style="color:var(--green)">'+esc(myWeek.team)+'</b> — you can change it until lock.</div>' : '<div class="used-note">One team per week. You cannot reuse a team.</div>')
-    + '<select class="inp" id="pick-team"><option value="">Select a team…</option>'+opts+'</select>'
-    + '<button class="btn btn-green" id="submit-pick" onclick="submitPick()">Save pick</button>';
+  savedPickTeam = myWeek ? canonicalTeam(myWeek.team) : null;
+  pendingPick = savedPickTeam ? { team: savedPickTeam, gameId: myWeek && myWeek.game_id, saved: true } : null;
+  body.innerHTML = '<div class="empty">Loading matchups…</div>';
+  var reqId = ++pickLoadId;
+  var oddsP = api('GET', '/api/odds/nfl');
+  var scoresP = api('GET', '/api/scores/nfl');
+  var odds = await oddsP;
+  var scores = await scoresP;
+  if (reqId !== pickLoadId) return;
+  var games = Array.isArray(odds) ? odds : (odds && Array.isArray(odds.games) ? odds.games : []);
+  var scoreList = Array.isArray(scores) ? scores : [];
+  nflGames = games.map(function(g){
+    var s = scoreList.find(function(x){
+      return (g.id && x.id === g.id)
+        || (teamMatches(x.home, g.home || g.home_team) && teamMatches(x.away, g.away || g.away_team));
+    });
+    if (!s) return g;
+    return Object.assign({}, g, {
+      completed: s.completed,
+      isFinal: !!(s.completed || g.isFinal),
+      home_score: s.home_score, away_score: s.away_score,
+      homeScore: s.home_score, awayScore: s.away_score
+    });
+  });
+  paintMatchups(detail);
+}
+
+function paintMatchups(detail){
+  var body = document.getElementById('pick-body');
+  if (!body || !detail) return;
+  var used = {};
+  (detail.usedTeams||[]).forEach(function(t){ used[canonicalTeam(t)] = true; });
+  if (savedPickTeam) used[savedPickTeam] = false;
+
+  var html = '';
+  if (savedPickTeam && pendingPick && pendingPick.saved){
+    var logo = teamLogoUrl(savedPickTeam);
+    html += '<div class="your-pick">'
+      + (logo ? '<img src="'+esc(logo)+'" alt="">' : '')
+      + '<div>Your pick: <span class="your-pick-name">'+esc(savedPickTeam)+'</span></div>'
+      + '<div class="your-pick-ok">✓</div></div>';
+  }
+  html += '<div class="used-note">Tap a team, then confirm. Used teams cannot be picked again.</div>';
+
+  if (!nflGames.length){
+    html += '<div class="offseason">NFL picks open when the season starts — Week 1 begins September 4, 2026.</div>';
+    body.innerHTML = html;
+    return;
+  }
+
+  nflGames.forEach(function(g, gi){
+    var away = canonicalTeam(g.away || g.away_team);
+    var home = canonicalTeam(g.home || g.home_team);
+    var gameId = g.id || g.providerGameId || '';
+    html += '<div class="mu-card">'
+      + '<div class="mu-row">'
+      + teamCellHtml(g, away, 'away', used, gameId, gi)
+      + '<div class="mu-at">@</div>'
+      + teamCellHtml(g, home, 'home', used, gameId, gi)
+      + '</div>'
+      + '<div class="mu-time">'+esc(fmtGameTime(g.time || g.scheduledStart || g.commence_time))+'</div>'
+      + '</div>';
+  });
+
+  var showConfirm = pendingPick && pendingPick.team && !pendingPick.saved;
+  if (showConfirm){
+    html += '<div class="confirm-wrap"><button class="btn btn-green" id="submit-pick" onclick="submitPick()">Confirm '+esc(shortTeam(pendingPick.team))+'</button></div>';
+  }
+  body.innerHTML = html;
+}
+
+function teamCellHtml(game, team, side, used, gameId, gi){
+  var isUsed = !!used[team];
+  var lost = teamLost(game, team);
+  var selected = pendingPick && teamMatches(pendingPick.team, team);
+  var cls = 'mu-team' + (selected?' sel':'') + (isUsed?' used':'') + (lost?' lost':'');
+  var rec = recFor(game, side, team);
+  var ml = fmtOdds(mlFor(game, team));
+  var logo = teamLogoUrl(team);
+  var overlay = isUsed ? '<div class="used-badge">Already Used</div>' : '';
+  var x = lost && !isUsed ? '<div class="lost-x">✕</div>' : '';
+  var click = (isUsed || lost) ? '' : 'onclick="selectMatchupTeam('+gi+',\''+side+'\')"';
+  return '<div class="'+cls+'" '+click+'>'
+    + x + overlay
+    + (logo ? '<img class="mu-logo" src="'+esc(logo)+'" alt="'+esc(team)+'">' : '')
+    + '<div class="mu-name">'+esc(shortTeam(team))+'</div>'
+    + (rec ? '<div class="mu-rec">'+esc(rec)+'</div>' : '')
+    + (ml ? '<div class="mu-ml">'+esc(ml)+'</div>' : '')
+    + '</div>';
+}
+
+function selectMatchupTeam(gi, side){
+  var g = nflGames[gi];
+  if (!g) return;
+  var team = canonicalTeam(side === 'home' ? (g.home || g.home_team) : (g.away || g.away_team));
+  if (!team || !currentDetail) return;
+  var used = {};
+  (currentDetail.usedTeams||[]).forEach(function(t){ used[canonicalTeam(t)] = true; });
+  if (savedPickTeam) used[savedPickTeam] = false;
+  if (used[team] || teamLost(g, team)) return;
+  pendingPick = {
+    team: team,
+    gameId: g.id || g.providerGameId || null,
+    saved: !!(savedPickTeam && teamMatches(savedPickTeam, team))
+  };
+  paintMatchups(currentDetail);
 }
 
 function renderStandings(standings){
@@ -368,10 +552,15 @@ function renderWeekPicks(standings, detail){
 
 async function submitPick(){
   if (!currentPoolId || !currentDetail) return;
-  var team = (document.getElementById('pick-team')||{}).value;
+  var team = pendingPick && pendingPick.team;
   if (!team) { toast('Select a team'); return; }
   var week = currentDetail.pool.currentWeek;
-  var data = await api('POST', '/api/survivor/'+encodeURIComponent(currentPoolId)+'/pick', { week: week, team: team });
+  var btn = document.getElementById('submit-pick');
+  if (btn) btn.disabled = true;
+  var data = await api('POST', '/api/survivor/'+encodeURIComponent(currentPoolId)+'/pick', {
+    week: week, team: team, gameId: pendingPick.gameId || undefined
+  });
+  if (btn) btn.disabled = false;
   if (!data.ok) { toast(data.error || 'Pick failed'); return; }
   toast('Pick saved: '+team);
   openPool(currentPoolId);
