@@ -81,6 +81,23 @@ select.inp option:disabled{color:#444}
 .pick-banner{background:#111;border:1px solid #222;border-radius:12px;padding:10px 12px;font-size:0.78rem;font-weight:700;margin-bottom:12px;text-align:center;line-height:1.45;color:#ccc}
 .mu-card.locked .mu-team{cursor:default}
 .mu-lock{position:absolute;top:8px;right:10px;font-size:0.8rem;opacity:0.45;z-index:2}
+.detail-tabs{display:flex;gap:6px;margin:0 0 12px}
+.detail-tab{flex:1;padding:10px 8px;border-radius:10px;background:#111;border:1px solid #222;color:#888;font-size:0.72rem;font-weight:800;cursor:pointer;font-family:inherit;text-transform:uppercase;letter-spacing:0.4px}
+.detail-tab.active{background:rgba(0,255,136,0.12);border-color:rgba(0,255,136,0.4);color:var(--green)}
+.badge{display:inline-block;min-width:16px;padding:1px 6px;margin-left:4px;border-radius:8px;background:var(--gold);color:#000;font-size:0.58rem;font-weight:900}
+.entry-tabs{display:flex;gap:6px;margin-bottom:12px}
+.entry-tab{flex:1;padding:10px 6px;border-radius:10px;background:#0c0c0c;border:1.5px solid #222;color:#888;font-size:0.72rem;font-weight:800;cursor:pointer;font-family:inherit}
+.entry-tab.active{border-color:var(--green);background:rgba(0,255,136,0.1);color:var(--green);box-shadow:0 0 14px rgba(0,255,136,0.18)}
+.entry-tab.elim{opacity:0.7;border-color:#442222;color:#ff8a96}
+.pending-box{text-align:center;padding:28px 14px;color:#ccc;font-size:0.88rem;line-height:1.5}
+.req-row{background:#0c0c0c;border:1px solid #222;border-radius:12px;padding:12px;margin-bottom:8px}
+.req-name{font-size:0.9rem;font-weight:800}
+.req-meta{font-size:0.68rem;color:#666;margin-top:3px}
+.req-actions{display:flex;gap:6px;margin-top:10px}
+.entry-choice{display:flex;gap:8px;margin:12px 0 16px}
+.entry-choice button{flex:1;padding:14px;border-radius:12px;background:#1c1c1c;border:1.5px solid #333;color:#fff;font-size:1rem;font-weight:900;cursor:pointer;font-family:inherit}
+.entry-choice button.sel{border-color:var(--green);background:rgba(0,255,136,0.12);color:var(--green)}
+.pill-pending{background:rgba(245,200,66,0.12);color:var(--gold);border:1px solid rgba(245,200,66,0.3)}
 </style>
 </head>
 <body>
@@ -99,7 +116,7 @@ select.inp option:disabled{color:#444}
   <div id="view-home">
     <div class="row-btns">
       <button class="btn btn-green" onclick="openModal('modal-create')">Create Pool</button>
-      <button class="btn btn-cyan" onclick="openModal('modal-join')">Join Pool</button>
+      <button class="btn btn-cyan" onclick="openModal('modal-join')">Request to Join</button>
     </div>
     <div class="sec-lbl">My Pools</div>
     <div id="my-pools"><div class="empty">Loading…</div></div>
@@ -109,20 +126,32 @@ select.inp option:disabled{color:#444}
     <button class="btn btn-ghost" style="margin-bottom:12px" onclick="showHome()">← All pools</button>
     <div class="card" id="detail-head"></div>
     <div class="stat-row" id="detail-stats"></div>
+    <div class="detail-tabs" id="detail-tabs"></div>
 
-    <div class="card" id="pick-card">
-      <div class="sec-lbl">Make Your Pick</div>
-      <div id="pick-body"></div>
+    <div id="tab-picks">
+      <div class="card" id="pick-card">
+        <div class="sec-lbl">Make Your Pick</div>
+        <div id="entry-tabs"></div>
+        <div id="pick-body"></div>
+      </div>
     </div>
 
-    <div class="card">
-      <div class="sec-lbl">Standings</div>
-      <div id="standings-body"></div>
+    <div id="tab-standings" class="hidden">
+      <div class="card">
+        <div class="sec-lbl">Standings</div>
+        <div id="standings-body"></div>
+      </div>
+      <div class="card">
+        <div class="sec-lbl">This Week’s Picks</div>
+        <div id="week-picks-body"></div>
+      </div>
     </div>
 
-    <div class="card">
-      <div class="sec-lbl">This Week’s Picks</div>
-      <div id="week-picks-body"></div>
+    <div id="tab-requests" class="hidden">
+      <div class="card">
+        <div class="sec-lbl">Join Requests</div>
+        <div id="requests-body"></div>
+      </div>
     </div>
 
     <div id="host-actions" class="hidden">
@@ -151,10 +180,24 @@ select.inp option:disabled{color:#444}
 
 <div class="modal-bg" id="modal-join" onclick="if(event.target===this)closeModals()">
   <div class="modal">
-    <div class="modal-title">Join Pool</div>
-    <div class="modal-sub">Enter the 6-character join code.</div>
+    <div class="modal-title">Request to Join</div>
+    <div class="modal-sub">Enter the 6-character join code. The pool runner will approve you and set how many entries you get.</div>
     <input class="inp" id="join-code" placeholder="ABC123" maxlength="8" style="text-transform:uppercase;letter-spacing:2px">
-    <button class="btn btn-green" onclick="joinPool()">Join</button>
+    <button class="btn btn-green" onclick="joinPool()">Send Request</button>
+    <button class="btn btn-ghost" onclick="closeModals()">Cancel</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-approve" onclick="if(event.target===this)closeModals()">
+  <div class="modal">
+    <div class="modal-title">Approve Player</div>
+    <div class="modal-sub" id="approve-sub">How many entries should they get?</div>
+    <div class="entry-choice">
+      <button type="button" id="grant-1" onclick="selectGrant(1)">1</button>
+      <button type="button" id="grant-2" onclick="selectGrant(2)">2</button>
+      <button type="button" id="grant-3" onclick="selectGrant(3)">3</button>
+    </div>
+    <button class="btn btn-green" onclick="confirmApprove()">Approve</button>
     <button class="btn btn-ghost" onclick="closeModals()">Cancel</button>
   </div>
 </div>
@@ -189,6 +232,12 @@ let scheduleLocked = true;
 let oddsGames = [];
 let espnCache = {};
 let week1OpenLabel = '';
+let currentEntryNumber = 1;
+let detailTab = 'picks';
+let pendingRequests = [];
+let approvePlayerId = '';
+let approvePlayerName = '';
+let grantCount = 1;
 
 function showErr(msg){
   var el = document.getElementById('err');
@@ -233,7 +282,7 @@ async function api(method, path, body){
 }
 
 function displayName(row){
-  return row.playerUsername || row.player_username || row.playerId || row.player_id || 'Player';
+  return row.entryLabel || row.entry_label || row.playerUsername || row.player_username || row.playerId || row.player_id || 'Player';
 }
 
 function teamMatches(a, b){
@@ -306,6 +355,9 @@ function showHome(){
   picksOpen = false;
   scheduleLocked = true;
   oddsGames = [];
+  currentEntryNumber = 1;
+  detailTab = 'picks';
+  pendingRequests = [];
   document.getElementById('view-detail').classList.add('hidden');
   document.getElementById('view-home').classList.remove('hidden');
   document.getElementById('hdr-sub').textContent = 'Pick one NFL team each week. Lose and you’re out.';
@@ -319,16 +371,34 @@ async function loadMyPools(){
   showErr('');
   var pools = data.pools || [];
   if (!pools.length){
-    el.innerHTML = '<div class="empty">You’re not in any pools yet. Create one or join with a code.</div>';
+    el.innerHTML = '<div class="empty">You’re not in any pools yet. Create one or request to join with a code.</div>';
     return;
   }
   el.innerHTML = pools.map(function(p){
-    var st = p.myStatus === 'eliminated' ? '<span class="pill pill-elim">Eliminated W'+(p.eliminatedWeek||'')+'</span>' : '<span class="pill pill-alive">Alive</span>';
-    var host = p.isHost ? '<span class="pill pill-host">Host</span>' : '';
+    var host = p.isHost ? '<span class="pill pill-host">Runner</span>' : '';
+    var meta;
+    if (p.pendingRequest && !(p.entries||[]).length) {
+      meta = '<span class="pill pill-pending">Request pending</span>';
+    } else {
+      var entries = p.entries || [];
+      if (!entries.length) {
+        var st = p.myStatus === 'eliminated' ? '<span class="pill pill-elim">Eliminated W'+(p.eliminatedWeek||'')+'</span>' : '<span class="pill pill-alive">Alive</span>';
+        meta = 'Season '+esc(p.season)+' · Week '+esc(p.currentWeek)+' '+st;
+      } else {
+        var bits = entries.map(function(e){
+          if (e.status === 'eliminated') return 'Entry #'+e.entryNumber+' ❌ out Week '+(e.eliminatedWeek||'?');
+          return 'Entry #'+e.entryNumber+' ✅ alive';
+        });
+        meta = entries.length+' entr'+(entries.length===1?'y':'ies')+' ('+bits.join(', ')+')';
+      }
+    }
+    if (p.isHost && p.pendingRequestCount) {
+      meta += ' · '+p.pendingRequestCount+' request'+(p.pendingRequestCount===1?'':'s');
+    }
     return '<div class="pool-row" onclick="openPool(\''+esc(p.poolId)+'\')">'
       + '<div class="pool-ico">🛡️</div>'
       + '<div><div class="pool-name">'+esc(p.name)+host+'</div>'
-      + '<div class="pool-meta">Season '+esc(p.season)+' · Week '+esc(p.currentWeek)+' '+st+'</div></div></div>';
+      + '<div class="pool-meta">'+meta+'</div></div></div>';
   }).join('');
 }
 
@@ -353,12 +423,20 @@ function copyCreatedCode(){
 async function joinPool(){
   var code = (document.getElementById('join-code').value||'').trim().toUpperCase();
   if (!code) { toast('Enter a join code'); return; }
-  var data = await api('POST', '/api/survivor/join', { joinCode: code });
-  if (!data.ok && data.error !== 'already_joined') { toast(data.error || 'Join failed'); return; }
+  var data = await api('POST', '/api/survivor/request-join', { joinCode: code });
+  if (!data.ok && data.error !== 'already_requested' && data.error !== 'already_member' && data.error !== 'already_joined') {
+    toast(data.error || 'Request failed'); return;
+  }
   closeModals();
-  toast(data.poolName ? ('Joined '+data.poolName) : 'Joined pool');
+  if (data.error === 'already_member' || data.error === 'already_joined') {
+    toast(data.poolName ? ('Already in '+data.poolName) : 'Already a member');
+    if (data.poolId) openPool(data.poolId);
+    else loadMyPools();
+    return;
+  }
+  toast(data.message || '⏳ Request pending — waiting for pool runner approval');
+  loadMyPools();
   if (data.poolId) openPool(data.poolId);
-  else loadMyPools();
 }
 
 async function openPool(poolId){
@@ -369,14 +447,23 @@ async function openPool(poolId){
   var detail = await api('GET', '/api/survivor/'+encodeURIComponent(poolId));
   if (!detail.ok) { showErr(detail.error||'Could not load pool'); showHome(); return; }
   currentDetail = detail;
+  var myEntries = detail.myEntries || (detail.myEntry ? [detail.myEntry] : []);
+  if (!myEntries.some(function(e){ return e.entryNumber === currentEntryNumber; })) {
+    currentEntryNumber = myEntries.length ? myEntries[0].entryNumber : 1;
+  }
   var standings = await api('GET', '/api/survivor/'+encodeURIComponent(poolId)+'/standings');
+  pendingRequests = [];
+  if (detail.isHost) {
+    var reqs = await api('GET', '/api/survivor/'+encodeURIComponent(poolId)+'/requests');
+    pendingRequests = reqs.requests || [];
+  }
   renderDetail(detail, standings);
 }
 
 function renderDetail(detail, standings){
   var pool = detail.pool || {};
   document.getElementById('hdr-sub').textContent = (pool.name||'Pool')+' · Week '+(pool.currentWeek||1);
-  var host = detail.isHost ? '<span class="pill pill-host">Host</span>' : '';
+  var host = detail.isHost ? '<span class="pill pill-host">Runner</span>' : '';
   document.getElementById('detail-head').innerHTML =
     '<div class="pool-name">'+esc(pool.name)+host+'</div>'
     + '<div class="pool-meta" style="margin-top:6px">Season '+esc(pool.season)
@@ -392,10 +479,66 @@ function renderDetail(detail, standings){
     + '<div class="stat"><div class="stat-n" style="color:#888">'+elim+'</div><div class="stat-l">Eliminated</div></div>'
     + '<div class="stat"><div class="stat-n" style="color:var(--cyan)">W'+esc(pool.currentWeek)+'</div><div class="stat-l">Current week</div></div>';
 
+  renderDetailTabs(detail);
+  setDetailTab(detailTab);
+  renderEntryTabs(detail);
   renderPick(detail);
   renderStandings(standings);
   renderWeekPicks(standings, detail);
+  renderRequests(detail);
   document.getElementById('host-actions').classList.toggle('hidden', !detail.isHost || pool.status!=='active');
+}
+
+function renderDetailTabs(detail){
+  var n = pendingRequests.length || detail.pendingRequestCount || 0;
+  var html = '<button class="detail-tab'+(detailTab==='picks'?' active':'')+'" onclick="setDetailTab(\'picks\')">Picks</button>'
+    + '<button class="detail-tab'+(detailTab==='standings'?' active':'')+'" onclick="setDetailTab(\'standings\')">Standings</button>';
+  if (detail.isHost) {
+    html += '<button class="detail-tab'+(detailTab==='requests'?' active':'')+'" onclick="setDetailTab(\'requests\')">Requests'
+      + (n ? '<span class="badge">'+n+'</span>' : '') + '</button>';
+  }
+  document.getElementById('detail-tabs').innerHTML = html;
+}
+
+function setDetailTab(tab){
+  if (tab === 'requests' && !(currentDetail && currentDetail.isHost)) tab = 'picks';
+  detailTab = tab;
+  document.getElementById('tab-picks').classList.toggle('hidden', tab!=='picks');
+  document.getElementById('tab-standings').classList.toggle('hidden', tab!=='standings');
+  document.getElementById('tab-requests').classList.toggle('hidden', tab!=='requests');
+  document.querySelectorAll('.detail-tab').forEach(function(b){ b.classList.remove('active'); });
+  var labels = { picks:0, standings:1, requests:2 };
+  var tabs = document.querySelectorAll('.detail-tab');
+  if (tabs[labels[tab]]) tabs[labels[tab]].classList.add('active');
+}
+
+function myEntriesOf(detail){
+  return (detail && (detail.myEntries || (detail.myEntry ? [detail.myEntry] : []))) || [];
+}
+
+function currentEntryOf(detail){
+  var list = myEntriesOf(detail);
+  return list.find(function(e){ return e.entryNumber === currentEntryNumber; }) || list[0] || null;
+}
+
+function renderEntryTabs(detail){
+  var el = document.getElementById('entry-tabs');
+  var list = myEntriesOf(detail);
+  if (list.length < 2) { el.innerHTML = ''; return; }
+  el.innerHTML = list.map(function(e){
+    var elim = e.status === 'eliminated';
+    return '<button class="entry-tab'+(e.entryNumber===currentEntryNumber?' active':'')+(elim?' elim':'')+'" onclick="selectEntry('+e.entryNumber+')">'
+      + (elim ? '❌ ' : '') + 'Entry #'+e.entryNumber+'</button>';
+  }).join('');
+}
+
+function selectEntry(n){
+  currentEntryNumber = n;
+  pendingPick = null;
+  savedPickTeam = null;
+  if (!currentDetail) return;
+  renderEntryTabs(currentDetail);
+  renderPick(currentDetail);
 }
 
 function copyCode(code){
@@ -504,10 +647,15 @@ function weekTitle(w){
 function usedMapForWeek(detail, week){
   var phase = survivorPhase(week);
   var used = {};
+  var n = currentEntryNumber || 1;
   (detail.myPicks||[]).forEach(function(p){
+    var pn = p.entryNumber || p.entry_number || 1;
+    if (pn !== n) return;
     if (survivorPhase(p.week) === phase) used[canonicalTeam(p.team)] = true;
   });
-  var pickThisWeek = (detail.myPicks||[]).find(function(p){ return p.week === week; });
+  var pickThisWeek = (detail.myPicks||[]).find(function(p){
+    return p.week === week && (p.entryNumber || p.entry_number || 1) === n;
+  });
   if (pickThisWeek) used[canonicalTeam(pickThisWeek.team)] = false;
   if (savedPickTeam && detail.pool && week === detail.pool.currentWeek) used[savedPickTeam] = false;
   return used;
@@ -535,23 +683,35 @@ function pickBannerHtml(){
 
 async function renderPick(detail){
   var body = document.getElementById('pick-body');
-  var entry = detail.myEntry;
   var pool = detail.pool || {};
+  var entry = currentEntryOf(detail);
+  var req = detail.myJoinRequest;
   if (!entry){
-    body.innerHTML = '<div class="empty">You’re not in this pool.</div>';
+    if (req && req.status === 'pending') {
+      body.innerHTML = '<div class="pending-box">⏳ Request pending — waiting for pool runner approval</div>';
+      return;
+    }
+    if (req && req.status === 'denied') {
+      body.innerHTML = '<div class="empty">Your request was denied.</div>';
+      return;
+    }
+    body.innerHTML = '<div class="empty">You’re not in this pool yet. Request to join from the home screen.</div>';
     return;
   }
   if (entry.status !== 'alive'){
-    body.innerHTML = '<div class="empty">Eliminated in week '+(entry.eliminated_week||entry.eliminatedWeek||'?')+'.</div>';
+    body.innerHTML = weekNavHtml() + '<div class="empty">Entry #'+entry.entryNumber+' eliminated in week '
+      +(entry.eliminatedWeek||entry.eliminated_week||'?')+'. You can still view this entry.</div>';
     return;
   }
   if (pool.status !== 'active'){
     body.innerHTML = '<div class="empty">This pool is '+esc(pool.status)+'.</div>';
     return;
   }
-  var myWeek = (detail.myPicks||[]).find(function(p){ return p.week === pool.currentWeek; });
+  var myWeek = (detail.myPicks||[]).find(function(p){
+    return p.week === pool.currentWeek && (p.entryNumber || p.entry_number || 1) === currentEntryNumber;
+  });
   savedPickTeam = myWeek ? canonicalTeam(myWeek.team) : null;
-  pendingPick = savedPickTeam ? { team: savedPickTeam, gameId: myWeek && myWeek.game_id, saved: true } : null;
+  pendingPick = savedPickTeam ? { team: savedPickTeam, gameId: myWeek && (myWeek.gameId || myWeek.game_id), saved: true } : null;
   body.innerHTML = '<div class="empty">Loading matchups…</div>';
   var reqId = ++pickLoadId;
   var oddsP = api('GET', '/api/odds/nfl');
@@ -594,13 +754,13 @@ function paintMatchups(detail){
     var logo = teamLogoUrl(savedPickTeam);
     html += '<div class="your-pick">'
       + (logo ? '<img src="'+esc(logo)+'" alt="">' : '')
-      + '<div>Your pick: <span class="your-pick-name">'+esc(savedPickTeam)+'</span></div>'
+      + '<div>Entry #'+(currentEntryNumber||1)+' pick: <span class="your-pick-name">'+esc(savedPickTeam)+'</span></div>'
       + '<div class="your-pick-ok">✓</div></div>';
   }
   if (!locked){
     html += browseWeek > 18
       ? '<div class="used-note">Playoff picks reset — you can reuse regular-season teams. Teams already picked this postseason stay marked used.</div>'
-      : '<div class="used-note">Tap a team, then confirm. Used teams cannot be picked again until the playoffs.</div>';
+      : '<div class="used-note">Tap a team, then confirm. Used teams are per entry — Entry #'+(currentEntryNumber||1)+' cannot reuse a team until the playoffs.</div>';
   }
 
   if (!nflGames.length){
@@ -683,6 +843,62 @@ function renderStandings(standings){
   document.getElementById('standings-body').innerHTML = html;
 }
 
+function renderRequests(detail){
+  var el = document.getElementById('requests-body');
+  if (!detail.isHost) { el.innerHTML = ''; return; }
+  if (!pendingRequests.length) {
+    el.innerHTML = '<div class="empty">No pending requests.</div>';
+    return;
+  }
+  el.innerHTML = pendingRequests.map(function(r){
+    var when = r.requestedAt ? new Date(r.requestedAt).toLocaleString() : '';
+    var pid = String(r.playerId||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    var pname = String(r.playerUsername||'Player').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return '<div class="req-row">'
+      + '<div class="req-name">'+esc(r.playerUsername||'Player')+'</div>'
+      + '<div class="req-meta">Requested '+esc(when)+'</div>'
+      + '<div class="req-actions">'
+      + '<button class="btn btn-green" style="padding:10px" onclick="openApprove(\''+pid+'\',\''+pname+'\')">Approve</button>'
+      + '<button class="btn btn-ghost" style="padding:10px;color:#ff3d57;border-color:#ff3d57" onclick="denyRequest(\''+pid+'\')">Deny</button>'
+      + '</div></div>';
+  }).join('');
+}
+
+function selectGrant(n){
+  grantCount = n;
+  [1,2,3].forEach(function(i){
+    document.getElementById('grant-'+i).classList.toggle('sel', i===n);
+  });
+}
+
+function openApprove(playerId, name){
+  approvePlayerId = playerId;
+  approvePlayerName = name || 'Player';
+  grantCount = 1;
+  document.getElementById('approve-sub').textContent = 'How many entries should '+approvePlayerName+' get?';
+  selectGrant(1);
+  openModal('modal-approve');
+}
+
+async function confirmApprove(){
+  if (!currentPoolId || !approvePlayerId) return;
+  var data = await api('POST', '/api/survivor/'+encodeURIComponent(currentPoolId)+'/approve', {
+    playerId: approvePlayerId, entriesGranted: grantCount
+  });
+  if (!data.ok) { toast(data.error || 'Approve failed'); return; }
+  closeModals();
+  toast('Approved — '+data.entriesCreated+' entr'+(data.entriesCreated===1?'y':'ies')+' created');
+  openPool(currentPoolId);
+}
+
+async function denyRequest(playerId){
+  if (!currentPoolId || !playerId) return;
+  var data = await api('POST', '/api/survivor/'+encodeURIComponent(currentPoolId)+'/deny', { playerId: playerId });
+  if (!data.ok) { toast(data.error || 'Deny failed'); return; }
+  toast('Request denied');
+  openPool(currentPoolId);
+}
+
 function renderWeekPicks(standings, detail){
   var el = document.getElementById('week-picks-body');
   var revealed = !!(standings && standings.picksRevealed);
@@ -715,7 +931,7 @@ async function submitPick(){
   var btn = document.getElementById('submit-pick');
   if (btn) btn.disabled = true;
   var data = await api('POST', '/api/survivor/'+encodeURIComponent(currentPoolId)+'/pick', {
-    week: week, team: team, gameId: pendingPick.gameId || undefined
+    week: week, team: team, gameId: pendingPick.gameId || undefined, entryNumber: currentEntryNumber || 1
   });
   if (btn) btn.disabled = false;
   if (!data.ok) { toast(data.error || 'Pick failed'); return; }
