@@ -54,7 +54,7 @@ select.inp option:disabled{color:#444}
 .used-note{font-size:0.68rem;color:#555;margin:-4px 0 10px}
 .code-chip{font-family:monospace;font-size:0.78rem;color:var(--cyan);background:rgba(0,194,255,0.08);border:1px solid rgba(0,194,255,0.25);padding:4px 8px;border-radius:8px}
 .toast{position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#1c1c1c;border:1px solid #333;color:#fff;padding:12px 20px;border-radius:12px;font-size:0.85rem;font-weight:600;z-index:999;white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,0.5)}
-.mu-card{background:#111;border:1px solid #222;border-radius:16px;padding:14px;margin-bottom:10px}
+.mu-card{background:#111;border:1px solid #222;border-radius:16px;padding:14px;margin-bottom:10px;position:relative}
 .mu-row{display:flex;align-items:stretch;gap:8px}
 .mu-team{flex:1;background:#0c0c0c;border:1.5px solid #222;border-radius:12px;padding:14px 8px 12px;text-align:center;cursor:pointer;position:relative;transition:border-color .15s,background .15s,box-shadow .15s;min-width:0}
 .mu-team.sel{border-color:#00ff88;background:rgba(0,255,136,0.08);box-shadow:0 0 18px rgba(0,255,136,0.2)}
@@ -74,6 +74,13 @@ select.inp option:disabled{color:#444}
 .your-pick-ok{margin-left:auto;color:var(--green);font-size:1.1rem;font-weight:900}
 .confirm-wrap{margin-top:4px}
 .offseason{text-align:center;padding:28px 16px;color:#888;font-size:0.84rem;line-height:1.55}
+.week-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.week-arrow{width:36px;height:36px;border-radius:10px;background:#111;border:1px solid #222;color:#fff;font-size:1.15rem;font-weight:900;cursor:pointer;font-family:inherit}
+.week-arrow:disabled{opacity:0.3;cursor:not-allowed}
+.week-label{font-size:0.88rem;font-weight:900;letter-spacing:0.2px}
+.pick-banner{background:#111;border:1px solid #222;border-radius:12px;padding:10px 12px;font-size:0.78rem;font-weight:700;margin-bottom:12px;text-align:center;line-height:1.45;color:#ccc}
+.mu-card.locked .mu-team{cursor:default}
+.mu-lock{position:absolute;top:8px;right:10px;font-size:0.8rem;opacity:0.45;z-index:2}
 </style>
 </head>
 <body>
@@ -176,6 +183,12 @@ let nflGames = [];
 let pendingPick = null;
 let pickLoadId = 0;
 let savedPickTeam = null;
+let browseWeek = 1;
+let picksOpen = false;
+let scheduleLocked = true;
+let oddsGames = [];
+let espnCache = {};
+let week1OpenLabel = '';
 
 function showErr(msg){
   var el = document.getElementById('err');
@@ -289,6 +302,10 @@ function showHome(){
   pendingPick = null;
   savedPickTeam = null;
   nflGames = [];
+  browseWeek = 1;
+  picksOpen = false;
+  scheduleLocked = true;
+  oddsGames = [];
   document.getElementById('view-detail').classList.add('hidden');
   document.getElementById('view-home').classList.remove('hidden');
   document.getElementById('hdr-sub').textContent = 'Pick one NFL team each week. Lose and you’re out.';
@@ -386,6 +403,109 @@ function copyCode(code){
   toast('Copied '+code);
 }
 
+function parseEspnDate(s){
+  if (!s) return '';
+  if (/T\d{2}:\d{2}Z$/.test(s)) return s.replace(/Z$/, ':00Z');
+  return s;
+}
+function parseEspnScoreboard(data){
+  var events = (data && data.events) || [];
+  return events.map(function(e){
+    var c = (e.competitions || [])[0] || {};
+    var home='', away='', homeRec='', awayRec='';
+    var homeScore=null, awayScore=null;
+    var st = (c.status && c.status.type) || {};
+    var completed = !!(st.completed || st.name === 'STATUS_FINAL');
+    (c.competitors || []).forEach(function(x){
+      var t = (x.team && (x.team.displayName || x.team.name)) || '';
+      var rec = ((x.records || [])[0] || {}).summary || '';
+      var score = (x.score !== '' && x.score != null) ? parseInt(x.score, 10) : null;
+      if (x.homeAway === 'home'){ home=t; homeRec=rec; homeScore=score; }
+      else { away=t; awayRec=rec; awayScore=score; }
+    });
+    return {
+      id: e.id, home: home, away: away,
+      time: parseEspnDate(c.date || e.date),
+      homeRecord: homeRec, awayRecord: awayRec,
+      homeScore: homeScore, awayScore: awayScore,
+      isFinal: completed, moneyline: []
+    };
+  }).sort(function(a,b){ return new Date(a.time) - new Date(b.time); });
+}
+async function fetchEspnWeek(week){
+  var w = Math.max(1, Math.min(18, parseInt(week,10)||1));
+  if (espnCache[w] && espnCache[w].games) return espnCache[w];
+  var url = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&week='+w;
+  var r = await fetch(url);
+  if (!r.ok) throw new Error('espn_'+r.status);
+  var data = await r.json();
+  var parsed = { week: (data.week && data.week.number) || w, games: parseEspnScoreboard(data) };
+  espnCache[w] = parsed;
+  return parsed;
+}
+async function ensureWeek1OpenLabel(){
+  if (week1OpenLabel) return week1OpenLabel;
+  try {
+    var w1 = await fetchEspnWeek(1);
+    var first = (w1.games || [])[0];
+    if (first && first.time){
+      week1OpenLabel = new Date(first.time).toLocaleString('en-US', {
+        timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric'
+      });
+    }
+  } catch(_e){}
+  if (!week1OpenLabel) week1OpenLabel = 'Sep 10';
+  return week1OpenLabel;
+}
+function mergeEspnRecords(oddsList, espnList){
+  return (oddsList || []).map(function(g){
+    var e = (espnList || []).find(function(x){
+      return teamMatches(x.home, g.home || g.home_team) && teamMatches(x.away, g.away || g.away_team);
+    });
+    if (!e) return g;
+    return Object.assign({}, g, {
+      homeRecord: g.homeRecord || e.homeRecord,
+      awayRecord: g.awayRecord || e.awayRecord,
+      time: g.time || g.scheduledStart || e.time
+    });
+  });
+}
+async function loadBrowseWeekGames(){
+  var poolWeek = currentDetail && currentDetail.pool && currentDetail.pool.currentWeek;
+  var espn = { games: [] };
+  try { espn = await fetchEspnWeek(browseWeek); } catch(_e){ espn = { games: [] }; }
+  if (picksOpen && browseWeek === poolWeek && oddsGames.length){
+    nflGames = mergeEspnRecords(oddsGames, espn.games);
+    scheduleLocked = false;
+  } else {
+    nflGames = espn.games || [];
+    scheduleLocked = true;
+  }
+}
+async function shiftBrowseWeek(delta){
+  var next = Math.max(1, Math.min(18, browseWeek + delta));
+  if (next === browseWeek || !currentDetail) return;
+  browseWeek = next;
+  var body = document.getElementById('pick-body');
+  if (body) body.innerHTML = weekNavHtml() + '<div class="empty">Loading week '+browseWeek+'…</div>';
+  await loadBrowseWeekGames();
+  paintMatchups(currentDetail);
+}
+function weekNavHtml(){
+  return '<div class="week-nav">'
+    + '<button class="week-arrow" onclick="shiftBrowseWeek(-1)" '+(browseWeek<=1?'disabled':'')+'>‹</button>'
+    + '<div class="week-label">Week '+browseWeek+'</div>'
+    + '<button class="week-arrow" onclick="shiftBrowseWeek(1)" '+(browseWeek>=18?'disabled':'')+'>›</button>'
+    + '</div>';
+}
+function pickBannerHtml(){
+  if (!scheduleLocked && picksOpen){
+    return '<div class="pick-banner">Week '+browseWeek+' — Pick deadline: Sunday 1:00 PM ET</div>';
+  }
+  var when = week1OpenLabel || 'Sep 10';
+  return '<div class="pick-banner">🏈 Week '+browseWeek+' Preview — Picks open '+esc(when)+'</div>';
+}
+
 async function renderPick(detail){
   var body = document.getElementById('pick-body');
   var entry = detail.myEntry;
@@ -414,7 +534,7 @@ async function renderPick(detail){
   if (reqId !== pickLoadId) return;
   var games = Array.isArray(odds) ? odds : (odds && Array.isArray(odds.games) ? odds.games : []);
   var scoreList = Array.isArray(scores) ? scores : [];
-  nflGames = games.map(function(g){
+  oddsGames = games.map(function(g){
     var s = scoreList.find(function(x){
       return (g.id && x.id === g.id)
         || (teamMatches(x.home, g.home || g.home_team) && teamMatches(x.away, g.away || g.away_team));
@@ -427,6 +547,12 @@ async function renderPick(detail){
       homeScore: s.home_score, awayScore: s.away_score
     });
   });
+  picksOpen = oddsGames.length > 0;
+  browseWeek = picksOpen ? (pool.currentWeek || 1) : 1;
+  await ensureWeek1OpenLabel();
+  if (reqId !== pickLoadId) return;
+  await loadBrowseWeekGames();
+  if (reqId !== pickLoadId) return;
   paintMatchups(detail);
 }
 
@@ -436,19 +562,22 @@ function paintMatchups(detail){
   var used = {};
   (detail.usedTeams||[]).forEach(function(t){ used[canonicalTeam(t)] = true; });
   if (savedPickTeam) used[savedPickTeam] = false;
+  var locked = scheduleLocked;
 
-  var html = '';
-  if (savedPickTeam && pendingPick && pendingPick.saved){
+  var html = weekNavHtml() + pickBannerHtml();
+  if (savedPickTeam && pendingPick && pendingPick.saved && !locked){
     var logo = teamLogoUrl(savedPickTeam);
     html += '<div class="your-pick">'
       + (logo ? '<img src="'+esc(logo)+'" alt="">' : '')
       + '<div>Your pick: <span class="your-pick-name">'+esc(savedPickTeam)+'</span></div>'
       + '<div class="your-pick-ok">✓</div></div>';
   }
-  html += '<div class="used-note">Tap a team, then confirm. Used teams cannot be picked again.</div>';
+  if (!locked){
+    html += '<div class="used-note">Tap a team, then confirm. Used teams cannot be picked again.</div>';
+  }
 
   if (!nflGames.length){
-    html += '<div class="offseason">NFL picks open when the season starts — Week 1 begins September 4, 2026.</div>';
+    html += '<div class="offseason">Schedule unavailable for this week. Try another week.</div>';
     body.innerHTML = html;
     return;
   }
@@ -457,34 +586,35 @@ function paintMatchups(detail){
     var away = canonicalTeam(g.away || g.away_team);
     var home = canonicalTeam(g.home || g.home_team);
     var gameId = g.id || g.providerGameId || '';
-    html += '<div class="mu-card">'
+    html += '<div class="mu-card'+(locked?' locked':'')+'">'
+      + (locked ? '<div class="mu-lock">🔒</div>' : '')
       + '<div class="mu-row">'
-      + teamCellHtml(g, away, 'away', used, gameId, gi)
+      + teamCellHtml(g, away, 'away', used, gameId, gi, locked)
       + '<div class="mu-at">@</div>'
-      + teamCellHtml(g, home, 'home', used, gameId, gi)
+      + teamCellHtml(g, home, 'home', used, gameId, gi, locked)
       + '</div>'
       + '<div class="mu-time">'+esc(fmtGameTime(g.time || g.scheduledStart || g.commence_time))+'</div>'
       + '</div>';
   });
 
-  var showConfirm = pendingPick && pendingPick.team && !pendingPick.saved;
+  var showConfirm = !locked && pendingPick && pendingPick.team && !pendingPick.saved;
   if (showConfirm){
     html += '<div class="confirm-wrap"><button class="btn btn-green" id="submit-pick" onclick="submitPick()">Confirm '+esc(shortTeam(pendingPick.team))+'</button></div>';
   }
   body.innerHTML = html;
 }
 
-function teamCellHtml(game, team, side, used, gameId, gi){
-  var isUsed = !!used[team];
-  var lost = teamLost(game, team);
-  var selected = pendingPick && teamMatches(pendingPick.team, team);
+function teamCellHtml(game, team, side, used, gameId, gi, locked){
+  var isUsed = !locked && !!used[team];
+  var lost = !locked && teamLost(game, team);
+  var selected = !locked && pendingPick && teamMatches(pendingPick.team, team);
   var cls = 'mu-team' + (selected?' sel':'') + (isUsed?' used':'') + (lost?' lost':'');
   var rec = recFor(game, side, team);
-  var ml = fmtOdds(mlFor(game, team));
+  var ml = locked ? '' : fmtOdds(mlFor(game, team));
   var logo = teamLogoUrl(team);
   var overlay = isUsed ? '<div class="used-badge">Already Used</div>' : '';
   var x = lost && !isUsed ? '<div class="lost-x">✕</div>' : '';
-  var click = (isUsed || lost) ? '' : 'onclick="selectMatchupTeam('+gi+',\''+side+'\')"';
+  var click = (locked || isUsed || lost) ? '' : 'onclick="selectMatchupTeam('+gi+',\''+side+'\')"';
   return '<div class="'+cls+'" '+click+'>'
     + x + overlay
     + (logo ? '<img class="mu-logo" src="'+esc(logo)+'" alt="'+esc(team)+'">' : '')
@@ -495,6 +625,7 @@ function teamCellHtml(game, team, side, used, gameId, gi){
 }
 
 function selectMatchupTeam(gi, side){
+  if (scheduleLocked) return;
   var g = nflGames[gi];
   if (!g) return;
   var team = canonicalTeam(side === 'home' ? (g.home || g.home_team) : (g.away || g.away_team));
@@ -551,6 +682,7 @@ function renderWeekPicks(standings, detail){
 }
 
 async function submitPick(){
+  if (scheduleLocked) return;
   if (!currentPoolId || !currentDetail) return;
   var team = pendingPick && pendingPick.team;
   if (!team) { toast('Select a team'); return; }
