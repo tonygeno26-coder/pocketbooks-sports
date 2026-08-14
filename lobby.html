@@ -117,6 +117,8 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:#0a0
 .ac-bg-create{background:linear-gradient(160deg,#1a1400,#2e2400,#1c1800);border:1px solid rgba(245,200,66,0.25);box-shadow:0 0 30px rgba(245,200,66,0.08) inset}
 .ac-bg-clubs{background:linear-gradient(160deg,#04081a,#0a1432,#060e20)}
 .ac-bg-survivor{background:linear-gradient(160deg,#1a0a14,#3a1028,#12080c);border:1px solid rgba(0,255,136,0.22);box-shadow:0 0 30px rgba(0,255,136,0.08) inset}
+.action-card.locked{opacity:0.38}
+.action-card.locked .ac-icon{filter:grayscale(1);animation:none}
 .ac-icon{font-size:3rem;filter:drop-shadow(0 0 16px currentColor);animation:iconPulse 3s ease-in-out infinite}
 @keyframes iconPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
 .ac-gradient{position:absolute;bottom:0;left:0;right:0;height:50%;background:linear-gradient(transparent,rgba(0,0,0,0.8))}
@@ -349,19 +351,18 @@ try {
   </div>
 
   <!-- ACTIVE CLUB CARD -->
-  <div class="active-club-wrap" id="active-club-wrap" onclick="enterActiveClub()">
+  <div class="active-club-wrap" id="active-club-wrap" onclick="goSurvivor()">
     <div class="active-club-card">
       <div class="ac-top">
-        <span class="ac-id" id="ac-id-display">No club selected — tap to join</span>
-        <span style="font-size:0.65rem;color:#999">TAP TO ENTER ›</span>
+        <span class="ac-id" id="ac-id-display">Survivor Pool</span>
+        <span style="font-size:0.65rem;color:#999">TAP TO PLAY ›</span>
       </div>
       <div class="ac-body" id="ac-body-el">
         <div id="ac-empty-state" style="text-align:center;padding:6px 10px">
-          <div style="font-size:2.5rem;margin-bottom:10px;opacity:0.6">🃏</div>
-          <div style="font-size:0.82rem;font-weight:700;color:#333;margin-bottom:14px">Join or create a club<br>to start betting</div>
+          <div style="font-size:2.5rem;margin-bottom:10px;opacity:0.85">🛡️</div>
+          <div style="font-size:0.82rem;font-weight:700;color:#333;margin-bottom:14px">Pick one NFL team each week.<br>Clubs are paused for this test.</div>
           <div style="display:flex;gap:8px;justify-content:center">
-            <button onclick="event.stopPropagation();openModal('modal-join')" style="padding:8px 16px;background:#00c2ff;color:#000;border:none;border-radius:20px;font-size:0.75rem;font-weight:900;cursor:pointer">Join Club</button>
-            <button onclick="event.stopPropagation();openModal('modal-create')" style="padding:8px 16px;background:#00ff88;color:#000;border:none;border-radius:20px;font-size:0.75rem;font-weight:900;cursor:pointer">Create Club</button>
+            <button onclick="event.stopPropagation();goSurvivor()" style="padding:8px 16px;background:#00ff88;color:#000;border:none;border-radius:20px;font-size:0.75rem;font-weight:900;cursor:pointer">Play Survivor</button>
           </div>
         </div>
         <img src="./logo.jpg" class="ac-logo" id="ac-logo" alt="Club" style="display:none">
@@ -370,7 +371,7 @@ try {
         <div class="ac-owner-avatar" id="ac-owner-av">PB</div>
         <div>
           <div class="ac-owner-name" id="ac-club-name">Pocket Books Sports</div>
-          <div class="ac-owner-sub" id="ac-role-display">Select a club to get started</div>
+          <div class="ac-owner-sub" id="ac-role-display">Survivor test group</div>
         </div>
         <div class="ac-stats">
           <span>💎</span>
@@ -382,20 +383,20 @@ try {
 
   <!-- ACTION GRID -->
   <div class="action-grid">
-    <div class="action-card" onclick="openModal('modal-join')">
-      <div class="ac-bg ac-bg-join"><div class="ac-icon">🔍</div></div>
+    <div class="action-card locked" onclick="clubsLockedGuard()">
+      <div class="ac-bg ac-bg-join"><div class="ac-icon">🔒</div></div>
       <div class="ac-gradient"></div>
-      <div class="ac-label">Join Club<br><span class="ac-sublabel">Enter code</span></div>
+      <div class="ac-label">Join Club<br><span class="ac-sublabel">Coming soon</span></div>
     </div>
-    <div class="action-card" onclick="openModal('modal-create')">
-      <div class="ac-bg ac-bg-create"><div class="ac-icon">🏆</div></div>
+    <div class="action-card locked" onclick="clubsLockedGuard()">
+      <div class="ac-bg ac-bg-create"><div class="ac-icon">🔒</div></div>
       <div class="ac-gradient"></div>
-      <div class="ac-label">Create Club<br><span class="ac-sublabel">Be the host</span></div>
+      <div class="ac-label">Create Club<br><span class="ac-sublabel">Coming soon</span></div>
     </div>
-    <div class="action-card" onclick="setBN(document.querySelectorAll('.bn')[1],'clubs');showMyClubsSection()" id="my-clubs-tile">
-      <div class="ac-bg ac-bg-clubs"><div class="ac-icon">🃏</div></div>
+    <div class="action-card locked" onclick="clubsLockedGuard()" id="my-clubs-tile">
+      <div class="ac-bg ac-bg-clubs"><div class="ac-icon">🔒</div></div>
       <div class="ac-gradient"></div>
-      <div class="ac-label" id="clubs-tile-content">My Clubs<br><span class="ac-sublabel" id="club-count-lbl">0 clubs</span></div>
+      <div class="ac-label" id="clubs-tile-content">My Clubs<br><span class="ac-sublabel" id="club-count-lbl">Paused</span></div>
     </div>
     <a class="action-card" href="survivor.html" style="text-decoration:none;color:inherit">
       <div class="ac-bg ac-bg-survivor"><div class="ac-icon">🛡️</div></div>
@@ -472,7 +473,7 @@ try {
       <div id="auth-error" class="auth-error"></div>
 
       <!-- SIGNUP FIELDS -->
-      <div id="signup-fields">
+      <div id="signup-fields" style="display:none">
         <input id="a-name" class="auth-inp" placeholder="Display name" autocomplete="name">
         <div style="display:flex;gap:8px;margin-bottom:10px">
           <select id="a-contact-method" class="auth-inp" style="flex:0 0 auto;width:auto;padding-right:10px;cursor:pointer" onchange="(function(){var m=document.getElementById('a-contact-method').value,i=document.getElementById('a-contact-value'),p={telegram:'@username',signal:'Phone number or username',email:'Email address'};i.placeholder=p[m];i.type=m==='email'?'email':'text';})()">
@@ -486,7 +487,7 @@ try {
       </div>
 
       <!-- SHARED FIELDS -->
-      <input id="a-email" class="auth-inp" placeholder="Email address" type="email" autocomplete="email" style="display:none">
+      <input id="a-email" class="auth-inp" placeholder="Email, @username, or display name" type="text" autocomplete="username">
       <input id="a-pass" class="auth-inp" placeholder="Password" type="password" autocomplete="current-password">
       <div id="confirm-pass-wrap" style="display:none">
         <input id="a-pass2" class="auth-inp" placeholder="Confirm password" type="password">
@@ -624,6 +625,11 @@ function setAuthTab(mode) {
   document.getElementById('signup-fields').style.display = mode==='signup' ? 'block' : 'none';
   document.getElementById('confirm-pass-wrap').style.display = mode==='signup' ? 'block' : 'none';
   document.getElementById('signup-checks').style.display = mode==='signup' ? 'block' : 'none';
+  var emailEl = document.getElementById('a-email');
+  if (emailEl) {
+    emailEl.style.display = mode==='login' ? 'block' : 'none';
+    emailEl.placeholder = 'Email, @username, or display name';
+  }
   document.getElementById('auth-submit-btn').textContent = mode==='signup' ? 'Create My Account →' : 'Sign In →';
   document.getElementById('auth-footer-text').innerHTML = mode==='login'
     ? "Don't have an account? <span style='color:var(--cyan);cursor:pointer' onclick=\"setAuthTab('signup')\">Create one free</span>"
@@ -844,10 +850,10 @@ async function submitAuth() {
   const telegramContact = contactMethod === 'telegram' ? contactValue : '';
   document.getElementById('auth-error').style.display = 'none';
 
-  // Login still requires email (existing dev login). Signup requires password
-  // plus the contact value.
+  // Login accepts email, Telegram/Signal handle, or display name.
+  // Signup requires password plus the contact value.
   if (authMode === 'login') {
-    if (!loginEmail || !pass) { showAuthError('Please enter email and password'); return; }
+    if (!loginEmail || !pass) { showAuthError('Please enter your email, username, or display name and password'); return; }
   } else {
     if (!pass) { showAuthError('Please enter a password'); return; }
     if (!contactValue) { showAuthError('Select a contact method and enter your details — required for account recovery'); return; }
@@ -858,6 +864,7 @@ async function submitAuth() {
 
   try {
     let data;
+    var signupEmail = '';
     if (authMode === 'signup') {
       const name = document.getElementById('a-name').value.trim();
       const pass2 = document.getElementById('a-pass2').value;
@@ -869,22 +876,24 @@ async function submitAuth() {
       if (!termsCheck) { showAuthError('You must accept the Terms of Service'); btn.disabled=false; btn.textContent='Create My Account →'; return; }
       // Backend signup keyed off email; synthesise a placeholder when the user
       // chose Telegram or Signal so the /api/auth/signup contract still holds.
-      var signupEmail = email
+      signupEmail = email
         || (signalContact   ? 'signal+'   + signalContact.replace(/[^a-zA-Z0-9]/g,'').toLowerCase()   + '@pocketbooks.local' : '')
         || (telegramContact ? 'telegram+' + telegramContact.replace(/[^a-zA-Z0-9]/g,'').toLowerCase() + '@pocketbooks.local' : '');
       data = await apiCall('POST', '/api/auth/signup', { name, email: signupEmail, password: pass, role: 'user',
         signalContact: signalContact || null, telegramContact: telegramContact || null });
     } else {
-      data = await apiCall('POST', '/api/auth/login', { email, password: pass });
+      data = await apiCall('POST', '/api/auth/login', { email: loginEmail, password: pass });
     }
 
     if (data.error) { showAuthError(data.error); btn.disabled=false; btn.textContent=authMode==='login'?'Sign In →':'Create My Account →'; return; }
 
     TOKEN = data.token;
     localStorage.setItem('pb-sports-token', TOKEN);
-    if (email) localStorage.setItem('pb-dev-email', email);
+    var storedEmail = signupEmail || email || loginEmail || (data.user && data.user.email) || '';
+    if (storedEmail) localStorage.setItem('pb-dev-email', storedEmail);
     // NOTE: pb-dev-pass kept for dev only; do not rely on it for prod auth.
     localStorage.setItem('pb-dev-pass', pass);
+    try { sessionStorage.setItem('pb-force-lobby-home', '1'); } catch(_e){}
     // Persist contact details into player-settings so the profile modal +
     // host receipts pipeline see them (signup path only).
     if (authMode==='signup') {
@@ -902,11 +911,11 @@ async function submitAuth() {
       var _role = (data.role || (data.user && data.user.role) || 'player');
       var _uname = (authMode==='signup'
         ? document.getElementById('a-name').value.trim()
-        : (email ? email.split('@')[0] : 'user'));
+        : ((data.user && data.user.name) || (storedEmail ? storedEmail.split('@')[0] : 'user')));
       var _rec  = {
         id:            data.userId || data.id || (data.user && data.user.id) || null,
         username:      _uname,
-        email:         email || '',
+        email:         storedEmail || '',
         signalContact: (authMode==='signup' ? signalContact : '') || '',
         role:          _role,
       };
@@ -1082,6 +1091,8 @@ if (_preview) {
 
 const API = 'https://pocketbooks-sports-backend-production.up.railway.app';
 let TOKEN = localStorage.getItem('pb-sports-token') || '';
+const CLUBS_LOCKED = true;
+const CLUBS_LOCKED_MSG = 'Clubs are paused for this test — sign in and play Survivor Pool.';
 let userClubs = JSON.parse(localStorage.getItem('pb-clubs') || '[]');
 let activeClub = (function(){
   try {
@@ -1153,6 +1164,7 @@ async function loadUser() {
 //
 // Suppressed by ?from=player|host|lobby (back-button) and ?stay=1.
 function _maybeAutoRoute() {
+  if (CLUBS_LOCKED) return;
   var params = new URLSearchParams(window.location.search);
   var fromParam = params.get('from');
   if (fromParam === 'player' || fromParam === 'host' || fromParam === 'lobby') return;
@@ -1330,6 +1342,7 @@ function renderClubsList() {
 }
 
 function showMyClubsSection(forceShow) {
+  if (clubsLockedGuard()) return;
   const sec = document.getElementById('section-my-clubs');
   if (forceShow) { sec.style.display = 'block'; return; }
   const isVisible = sec.style.display !== 'none';
@@ -1337,6 +1350,7 @@ function showMyClubsSection(forceShow) {
 }
 
 function updateClubsTilePreview() {
+  if (CLUBS_LOCKED) return;
   const el = document.getElementById('clubs-tile-content');
   if (!el) return;
   if (!userClubs.length) {
@@ -1349,6 +1363,7 @@ function updateClubsTilePreview() {
 }
 
 function setActiveClub(club) {
+  if (CLUBS_LOCKED) return;
   activeClub = club;
   try {
     syncSelectedClubStorage(club);
@@ -1413,6 +1428,7 @@ async function _acquireClubToken(playerId, clubId) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function enterActiveClub(action) {
+  if (CLUBS_LOCKED) { goSurvivor(); return; }
   // Fallback: restore activeClub from pb-club or pb-club-players if returning from player/host
   if (!activeClub) {
     var _pbClub = JSON.parse(localStorage.getItem('pb-club') || 'null');
@@ -1483,6 +1499,7 @@ function enterActiveClub(action) {
 
 // Search & Join
 async function searchClub() {
+  if (clubsLockedGuard()) return;
   const code = document.getElementById('join-code').value.trim();
   if (!code) return;
   const el = document.getElementById('join-result');
@@ -1510,6 +1527,7 @@ async function searchClub() {
 }
 
 async function requestJoin(clubId, code, name) {
+  if (clubsLockedGuard()) return;
   if (!TOKEN) { showToast('Sign in to join clubs'); return; }
   try {
     const r = await apiCall('POST', '/api/clubs/request', {code});
@@ -1561,6 +1579,7 @@ function updateLogoInitials(name) {
 }
 
 async function createClub() {
+  if (clubsLockedGuard()) return;
   const name = document.getElementById('cc-name').value.trim();
   if (!name) { showToast('Enter a club name'); return; }
   try {
@@ -1590,7 +1609,22 @@ async function createClub() {
 
 // Helpers
 function showSection(s) { showToast(s + ' coming soon!'); }
-function openModal(id) { document.getElementById(id).classList.add('open'); }
+function clubsLockedGuard() {
+  if (!CLUBS_LOCKED) return false;
+  showToast(CLUBS_LOCKED_MSG);
+  return true;
+}
+function goSurvivor() {
+  if (!TOKEN) { showToast('Sign in to play Survivor'); return; }
+  window.location.href = 'survivor.html';
+}
+function openModal(id) {
+  if (CLUBS_LOCKED && (id === 'modal-create' || id === 'modal-join')) {
+    clubsLockedGuard();
+    return;
+  }
+  document.getElementById(id).classList.add('open');
+}
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 function closeAllModals() { document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remove('open')); }
 document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')}));
@@ -1761,6 +1795,9 @@ if (isPreview && !_isAuthScreen) {
   setTimeout(function(){ if (typeof setAuthTab === 'function') setAuthTab(_screen === 'signup' ? 'signup' : 'login'); }, 100);
 } else {
   checkAuthGate();
+  if (!TOKEN) {
+    setAuthTab(window.__pbForceAuth === 'signup' ? 'signup' : 'login');
+  }
   loadUser();
 }
 if (userClubs.length) {
@@ -1776,8 +1813,9 @@ if (userClubs.length) {
 }
 if (activeClub) setActiveClub(activeClub);
 
-// ── MOCK CLUBS SEED ───────────────────────────────────────────────────────────
+// ── MOCK CLUBS SEED (preview only) ───────────────────────────────────────────
 (function(){
+  if (!isPreview) return;
   var stored = JSON.parse(localStorage.getItem('pb-user-clubs')||'null');
   if (stored && stored.length) { /* already have clubs */ }
   else {
