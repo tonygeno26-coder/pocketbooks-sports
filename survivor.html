@@ -66,7 +66,7 @@ select.inp option:disabled{color:#444}
 .mu-ml{font-size:0.8rem;font-weight:800;color:#ccc;margin-top:6px}
 .mu-at{width:22px;display:flex;align-items:center;justify-content:center;font-size:0.62rem;color:#555;font-weight:900}
 .mu-time{text-align:center;font-size:0.68rem;color:#666;margin-top:10px}
-.used-badge{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:900;letter-spacing:0.5px;text-transform:uppercase;color:#bbb;background:rgba(10,10,10,0.55);border-radius:12px}
+.used-badge{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:900;letter-spacing:0.4px;text-transform:uppercase;color:#bbb;background:rgba(10,10,10,0.55);border-radius:12px;text-align:center;padding:6px;line-height:1.25}
 .lost-x{position:absolute;top:6px;right:8px;color:#ff3d57;font-size:1.15rem;font-weight:900;line-height:1}
 .your-pick{display:flex;align-items:center;gap:10px;background:rgba(0,255,136,0.08);border:1px solid rgba(0,255,136,0.35);border-radius:12px;padding:12px;margin-bottom:12px}
 .your-pick img{width:36px;height:36px;object-fit:contain}
@@ -80,6 +80,7 @@ select.inp option:disabled{color:#444}
 .pick-confirm-vs{font-size:0.9rem;color:#888;font-weight:700;margin-bottom:4px}
 .pick-confirm-time{font-size:0.72rem;color:#666;margin-bottom:14px}
 .pick-confirm-warn{font-size:0.75rem;font-weight:800;color:var(--gold);margin-bottom:16px}
+.pick-confirm-used{font-size:0.75rem;font-weight:800;color:var(--red);margin-bottom:16px}
 .modal-pick .btn-green{margin-bottom:8px}
 .offseason{text-align:center;padding:28px 16px;color:#888;font-size:0.84rem;line-height:1.55}
 .week-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
@@ -218,6 +219,7 @@ select.inp option:disabled{color:#444}
     <div class="pick-confirm-vs" id="pick-confirm-vs"></div>
     <div class="pick-confirm-time" id="pick-confirm-time"></div>
     <div class="pick-confirm-warn hidden" id="pick-confirm-warn">⚠️ Preseason test mode</div>
+    <div class="pick-confirm-used hidden" id="pick-confirm-used"></div>
     <button class="btn btn-green" id="submit-pick" onclick="submitPick()">Lock In Pick</button>
     <button class="btn btn-ghost" onclick="cancelPickConfirm()">Cancel</button>
   </div>
@@ -790,21 +792,52 @@ function weekTitle(w){
   if (w === 22) return 'Super Bowl';
   return 'Week '+w;
 }
+function usedListForEntry(detail, entryNumber){
+  var n = entryNumber || currentEntryNumber || 1;
+  var byEntry = (detail && detail.usedTeamsByEntry) || {};
+  var list = null;
+  if (Object.prototype.hasOwnProperty.call(byEntry, n) || Object.prototype.hasOwnProperty.call(byEntry, String(n))) {
+    list = byEntry[n] || byEntry[String(n)] || [];
+  } else if (n === 1 && Array.isArray(detail && detail.usedTeams)) {
+    list = detail.usedTeams;
+  } else {
+    list = [];
+    var phase = survivorPhase((detail && detail.pool && detail.pool.currentWeek) || browseWeek || 1);
+    (detail && detail.myPicks || []).forEach(function(p){
+      var pn = p.entryNumber || p.entry_number || 1;
+      if (pn !== n) return;
+      if (survivorPhase(p.week) !== phase) return;
+      list.push({ team: p.team, week: p.week });
+    });
+  }
+  return (list || []).map(function(item){
+    if (item && typeof item === 'object') {
+      return { team: canonicalTeam(item.team), week: parseInt(item.week, 10) || 0 };
+    }
+    return { team: canonicalTeam(item), week: 0 };
+  }).filter(function(x){ return x.team; });
+}
 function usedMapForWeek(detail, week){
-  var phase = survivorPhase(week);
   var used = {};
   var n = currentEntryNumber || 1;
-  (detail.myPicks||[]).forEach(function(p){
-    var pn = p.entryNumber || p.entry_number || 1;
-    if (pn !== n) return;
-    if (survivorPhase(p.week) === phase) used[canonicalTeam(p.team)] = true;
-  });
-  var pickThisWeek = (detail.myPicks||[]).find(function(p){
-    return p.week === week && (p.entryNumber || p.entry_number || 1) === n;
-  });
-  if (pickThisWeek) used[canonicalTeam(pickThisWeek.team)] = false;
+  var phase = survivorPhase(week);
+  var fromApi = usedListForEntry(detail, n);
+  if (fromApi.length) {
+    fromApi.forEach(function(u){
+      if (u.week && survivorPhase(u.week) === phase && u.week !== week) used[u.team] = u.week;
+    });
+  } else {
+    (detail.myPicks||[]).forEach(function(p){
+      var pn = p.entryNumber || p.entry_number || 1;
+      if (pn !== n) return;
+      if (survivorPhase(p.week) === phase && p.week !== week) used[canonicalTeam(p.team)] = p.week;
+    });
+  }
   if (savedPickTeam && detail.pool && week === detail.pool.currentWeek) used[savedPickTeam] = false;
   return used;
+}
+function usedMessage(team, week){
+  return 'You already picked the '+shortTeam(team)+' in Week '+week;
 }
 function weekNavHtml(){
   return '<div class="week-nav">'
@@ -936,16 +969,17 @@ function paintMatchups(detail){
 }
 
 function teamCellHtml(game, team, side, used, gameId, gi, locked){
-  var isUsed = !locked && !!used[team];
+  var usedWeek = !locked && used[team];
+  var isUsed = !!usedWeek;
   var lost = !locked && teamLost(game, team);
   var selected = !locked && pendingPick && teamMatches(pendingPick.team, team);
   var cls = 'mu-team' + (selected?' sel':'') + (isUsed?' used':'') + (lost?' lost':'');
   var rec = recFor(game, side, team);
   var ml = locked ? '' : fmtOdds(mlFor(game, team));
   var logo = teamLogoUrl(team);
-  var overlay = isUsed ? '<div class="used-badge">Already Used</div>' : '';
+  var overlay = isUsed ? '<div class="used-badge">Used Wk '+esc(String(usedWeek))+'</div>' : '';
   var x = lost && !isUsed ? '<div class="lost-x">✕</div>' : '';
-  var click = (locked || isUsed || lost) ? '' : 'onclick="selectMatchupTeam('+gi+',\''+side+'\')"';
+  var click = locked ? '' : 'onclick="selectMatchupTeam('+gi+',\''+side+'\')"';
   return '<div class="'+cls+'" '+click+'>'
     + x + overlay
     + (logo ? '<img class="mu-logo" src="'+esc(logo)+'" alt="'+esc(team)+'">' : '')
@@ -962,7 +996,11 @@ function selectMatchupTeam(gi, side){
   var team = canonicalTeam(side === 'home' ? (g.home || g.home_team) : (g.away || g.away_team));
   if (!team || !currentDetail) return;
   var used = usedMapForWeek(currentDetail, currentDetail.pool.currentWeek);
-  if (used[team] || teamLost(g, team)) return;
+  if (used[team]) {
+    toast(usedMessage(team, used[team]));
+    return;
+  }
+  if (teamLost(g, team)) return;
   if (savedPickTeam && teamMatches(savedPickTeam, team)) {
     pendingPick = {
       team: team,
@@ -999,8 +1037,21 @@ function openPickConfirm(game, team, side){
   document.getElementById('pick-confirm-vs').textContent = opponent ? ('vs ' + opponent) : '';
   document.getElementById('pick-confirm-time').textContent = fmtGameTime(game.time || game.scheduledStart || game.commence_time) || '';
   document.getElementById('pick-confirm-warn').classList.toggle('hidden', !isPreseasonTestMode());
+  var used = currentDetail ? usedMapForWeek(currentDetail, currentDetail.pool.currentWeek) : {};
+  var usedWeek = used[canonicalTeam(team)];
+  var usedEl = document.getElementById('pick-confirm-used');
+  if (usedWeek) {
+    usedEl.textContent = usedMessage(team, usedWeek);
+    usedEl.classList.remove('hidden');
+  } else {
+    usedEl.textContent = '';
+    usedEl.classList.add('hidden');
+  }
   var btn = document.getElementById('submit-pick');
-  if (btn) { btn.disabled = false; btn.textContent = 'Lock In Pick'; }
+  if (btn) {
+    btn.disabled = !!usedWeek;
+    btn.textContent = 'Lock In Pick';
+  }
   openModal('modal-pick');
 }
 
@@ -1122,6 +1173,11 @@ async function submitPick(){
   if (!currentPoolId || !currentDetail) return;
   var team = pendingPick && pendingPick.team;
   if (!team) { toast('Select a team'); return; }
+  var used = usedMapForWeek(currentDetail, currentDetail.pool.currentWeek);
+  if (used[canonicalTeam(team)]) {
+    toast(usedMessage(team, used[canonicalTeam(team)]));
+    return;
+  }
   var week = currentDetail.pool.currentWeek;
   var btn = document.getElementById('submit-pick');
   if (btn) { btn.disabled = true; btn.textContent = 'Locking in…'; }
