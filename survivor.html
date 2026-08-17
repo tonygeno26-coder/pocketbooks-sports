@@ -79,6 +79,7 @@ select.inp option:disabled{color:#444}
 .week-arrow:disabled{opacity:0.3;cursor:not-allowed}
 .week-label{font-size:0.88rem;font-weight:900;letter-spacing:0.2px}
 .pick-banner{background:#111;border:1px solid #222;border-radius:12px;padding:10px 12px;font-size:0.78rem;font-weight:700;margin-bottom:12px;text-align:center;line-height:1.45;color:#ccc}
+.pick-banner.warn{border-color:rgba(245,200,66,0.45);background:rgba(245,200,66,0.08);color:var(--gold)}
 .mu-card.locked .mu-team{cursor:default}
 .mu-lock{position:absolute;top:8px;right:10px;font-size:0.8rem;opacity:0.45;z-index:2}
 .detail-tabs{display:flex;gap:6px;margin:0 0 12px}
@@ -730,12 +731,20 @@ function mergeEspnRecords(oddsList, espnList){
     });
   });
 }
+function isPreseasonTestMode(){
+  return !oddsGames.length;
+}
 async function loadBrowseWeekGames(){
   var poolWeek = currentDetail && currentDetail.pool && currentDetail.pool.currentWeek;
   var espn = { games: [] };
   try { espn = await fetchEspnWeek(browseWeek); } catch(_e){ espn = { games: [] }; }
-  if (picksOpen && browseWeek === poolWeek && oddsGames.length){
+  var onPoolWeek = browseWeek === poolWeek;
+  if (onPoolWeek && picksOpen && oddsGames.length){
     nflGames = mergeEspnRecords(oddsGames, espn.games);
+    scheduleLocked = false;
+  } else if (onPoolWeek) {
+    // Preseason / offseason: ESPN regular-season slate is pickable for testing.
+    nflGames = espn.games || [];
     scheduleLocked = false;
   } else {
     nflGames = espn.games || [];
@@ -789,8 +798,10 @@ function pickBannerHtml(){
   if (browseWeek > 18){
     html += '<div class="pick-banner">🏆 Playoffs — All teams available again</div>';
   }
-  if (!scheduleLocked && picksOpen){
+  if (!scheduleLocked && picksOpen && !isPreseasonTestMode()){
     html += '<div class="pick-banner">'+esc(weekTitle(browseWeek))+' — Pick deadline: Sunday 1:00 PM ET</div>';
+  } else if (!scheduleLocked && isPreseasonTestMode()){
+    html += '<div class="pick-banner warn">⚠️ Preseason test mode — picks are for testing only</div>';
   } else {
     var when = week1OpenLabel || 'Sep 10';
     html += '<div class="pick-banner">🏈 '+esc(weekTitle(browseWeek))+' Preview — Picks open '+esc(when)+'</div>';
@@ -852,7 +863,7 @@ async function renderPick(detail){
     });
   });
   picksOpen = oddsGames.length > 0;
-  browseWeek = picksOpen ? (pool.currentWeek || 1) : 1;
+  browseWeek = pool.currentWeek || 1;
   await ensureWeek1OpenLabel();
   if (reqId !== pickLoadId) return;
   await loadBrowseWeekGames();
