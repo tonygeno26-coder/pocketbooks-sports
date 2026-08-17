@@ -772,7 +772,7 @@ function _validatePlayerSession() {
   if (tokenExpired) {
     _sessionValid = false;
     console.warn('[session-gate] INVALID reason=token_expired');
-    return { ok:false, missing:[], reason:'token_expired' };
+    return { ok:false, missing:[], reason:'token_expired', canRecover: !!(pid && cid) };
   }
 
   // Auto-repair club mismatch at load time (same logic as confirmBet)
@@ -830,7 +830,10 @@ function _showSessionExpiredModal(result) {
   console.log('BOOT_STAGE=session_gate_result ok='+_sgResult.ok+' reason='+(_sgResult.reason||(_sgResult.missing||[]).join(',')||'none'));
   if (!_sgResult.ok) {
     // ── Token recovery: if player+club state exists but token is missing, try to reissue ──
-    if (_sgResult.canRecover && _sgResult.missing && _sgResult.missing.indexOf('token') !== -1) {
+    if (_sgResult.canRecover && (
+      (_sgResult.missing && _sgResult.missing.indexOf('token') !== -1) ||
+      _sgResult.reason === 'token_expired'
+    )) {
       console.log('TOKEN_RECOVERY_ATTEMPT — player+club state present, trying /api/auth/token');
       var _rPl   = null; try { _rPl   = JSON.parse(localStorage.getItem('pb-player')||'null'); } catch(_){}
       var _rClub = null; try { _rClub = JSON.parse(localStorage.getItem('pb-club')||'null');   } catch(_){}
@@ -848,6 +851,9 @@ function _showSessionExpiredModal(result) {
         if (data.token) {
           TOKEN = data.token;
           localStorage.setItem('pb-sports-token', data.token);
+          localStorage.setItem('pb-session-token', data.token);
+          var _expIn = data.expiresIn || 86400;
+          localStorage.setItem('pb-token-expires', String(Date.now() + (_expIn * 1000)));
           console.log('TOKEN_RECOVERY_SUCCESS — token reissued, re-validating session');
           var _recheck = _validatePlayerSession();
           if (_recheck.ok) {
@@ -919,6 +925,112 @@ function dbgBanner(msg, color) {
   } catch(e){ console.error('balance init error', e); }
 })();
 let TOKEN=localStorage.getItem('pb-sports-token')||'';
+var _TOKEN_SKEW_MS = 5 * 60 * 1000;
+var _tokenRefreshInFlight = null;
+function _decodeJwtPayload(token) {
+  try {
+    var parts = String(token || '').split('.');
+    if (parts.length !== 3) return null;
+    return JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+  } catch (_e) { return null; }
+}
+function _tokenExpMs(token) {
+  var p = _decodeJwtPayload(token);
+  return (p && p.exp) ? (p.exp * 1000) : 0;
+}
+function _isClubSessionToken(token) {
+  var p = _decodeJwtPayload(token);
+  return !!(p && (p.jti || p.actorId || p.sub));
+}
+function _storeAuthToken(token, expiresInSec) {
+  if (!token) return;
+  TOKEN = token;
+  try {
+    localStorage.setItem('pb-sports-token', token);
+    localStorage.setItem('pb-session-token', token);
+    var expMs = expiresInSec ? (Date.now() + Number(expiresInSec) * 1000) : _tokenExpMs(token);
+    if (!expMs) expMs = Date.now() + 86400 * 1000;
+    localStorage.setItem('pb-token-expires', String(expMs));
+  } catch (_e) {}
+}
+function _redirectToSignIn() {
+  window.location.href = 'lobby.html?screen=signin&msg=' + encodeURIComponent('Your session expired — please sign in again');
+}
+function _storedActorClub() {
+  var pl = null, club = null;
+  try { pl = JSON.parse(localStorage.getItem('pb-player') || 'null'); } catch (_e) {}
+  try { club = JSON.parse(localStorage.getItem('pb-club') || 'null') || JSON.parse(localStorage.getItem('pb-active-club') || 'null'); } catch (_e) {}
+  var actorId = pl && (pl.id != null ? String(pl.id) : (pl.username || ''));
+  var clubId = club && (club.id != null ? String(club.id) : (club.clubId || ''));
+  if (actorId && clubId) return { actorId: actorId, clubId: clubId };
+  return null;
+}
+function _pathFromUrl(url) {
+  try {
+    if (String(url).indexOf('http') === 0) return new URL(url).pathname;
+  } catch (_e) {}
+  return String(url || '').split('?')[0];
+}
+function _isAuthApiPath(path) {
+  return /^\/api\/auth\/(token|refresh|login|signup|logout|verify)\b/.test(path || '');
+}
+function _isExpiredAuth(status, data) {
+  if (status === 401) return true;
+  var err = String((data && (data.error || data.message)) || '');
+  return status === 403 && (err === 'expired_token' || /expired token/i.test(err));
+}
+async function _doRefreshAuthToken() {
+  var tu = '';
+  try { tu = new URLSearchParams(window.location.search).get('testUser') || localStorage.getItem('pb-test-user') || ''; } catch (_e) {}
+  var ids = _storedActorClub();
+  if (tu && typeof _TEST_USER_CONFIGS !== 'undefined' && _TEST_USER_CONFIGS[tu]) {
+    var tc = _TEST_USER_CONFIGS[tu];
+    ids = { actorId: tc.pid, clubId: (typeof REAL_CLUB_ID !== 'undefined' ? REAL_CLUB_ID : (ids && ids.clubId) || '') };
+  }
+  if (ids && ids.actorId && ids.clubId) {
+    try {
+      var base = (typeof API !== 'undefined' && API) || (window._PBS_BACKEND) || 'https://pocketbooks-sports-backend-production.up.railway.app';
+      var r = await fetch(base + '/api/auth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actorId: ids.actorId, clubId: ids.clubId })
+      });
+      var data = await r.json();
+      if (data && data.token) { _storeAuthToken(data.token, data.expiresIn); return true; }
+    } catch (_e) {}
+  }
+  var current = TOKEN || localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token') || '';
+  if (current && _isClubSessionToken(current) && _tokenExpMs(current) > Date.now()) {
+    try {
+      var base2 = (typeof API !== 'undefined' && API) || (window._PBS_BACKEND) || 'https://pocketbooks-sports-backend-production.up.railway.app';
+      var r2 = await fetch(base2 + '/api/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + current }
+      });
+      var data2 = await r2.json();
+      if (data2 && data2.token) { _storeAuthToken(data2.token, data2.expiresIn); return true; }
+    } catch (_e) {}
+  }
+  return false;
+}
+function _refreshAuthToken() {
+  if (_tokenRefreshInFlight) return _tokenRefreshInFlight;
+  var p = _doRefreshAuthToken();
+  _tokenRefreshInFlight = p;
+  p.then(function () {}, function () {}).then(function () {
+    if (_tokenRefreshInFlight === p) _tokenRefreshInFlight = null;
+  });
+  return p;
+}
+async function _ensureFreshToken() {
+  var token = TOKEN || localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token') || '';
+  if (!token) return;
+  var exp = parseInt(localStorage.getItem('pb-token-expires') || '0', 10) || _tokenExpMs(token);
+  if (exp) { try { localStorage.setItem('pb-token-expires', String(exp)); } catch (_e) {} }
+  if (!exp || Date.now() < (exp - _TOKEN_SKEW_MS)) return;
+  if (!_isClubSessionToken(token) && !_storedActorClub()) return;
+  await _refreshAuthToken();
+}
 // ── DB primary flag — safe declaration; true by default (server-authoritative architecture) ──
 // Conditionally set to false in dev/offline mode at line ~10285. Never a bare reference.
 var _DB_PRIMARY_READS_ENABLED = (function(){
@@ -1302,9 +1414,21 @@ function applyBalanceChange(type, amount, ticketId, meta) {
 // ═════════════════════════════════════════════════════════════════════════════
 let slip=[],sType='straight',tPts=6,rrSz=2;
 
-async function api(method,path,body){
-  const r=await fetch(API+path,{method,headers:{'Content-Type':'application/json',...(TOKEN?{'Authorization':'Bearer '+TOKEN}:{})},body:body?JSON.stringify(body):undefined});
-  return r.json();
+async function api(method,path,body,_retried){
+  if (!_isAuthApiPath(path)) {
+    try { await _ensureFreshToken(); } catch (_e) {}
+  }
+  var token = TOKEN || localStorage.getItem('pb-sports-token') || localStorage.getItem('pb-session-token') || '';
+  const r=await fetch(API+path,{method,headers:{'Content-Type':'application/json',...(token?{'Authorization':'Bearer '+token}:{})},body:body?JSON.stringify(body):undefined});
+  var data = {};
+  try { data = await r.json(); } catch (_e) { data = {}; }
+  if (_isExpiredAuth(r.status, data) && !_retried && !_isAuthApiPath(path)) {
+    var ok = await _refreshAuthToken();
+    if (ok) return api(method, path, body, true);
+    _redirectToSignIn();
+    data.error = data.error || 'expired_token';
+  }
+  return data;
 }
 
 // TEAM LOGO MAP - ESPN CDN
@@ -2220,10 +2344,11 @@ async function _installDevSession() {
       if (_data.ok && _data.token) {
         var _role = _data.role || 'player';
         TOKEN = _data.token;
-        // Store as both pb-session-token (for _getActorHeaders Bearer) and
-        // pb-sports-token (for _getClubScope token decode)
-        localStorage.setItem('pb-session-token', _data.token);
-        localStorage.setItem('pb-sports-token',  _data.token);
+        _storeAuthToken(_data.token, _data.expiresIn);
+        try { localStorage.setItem('pb-test-user', _tu); } catch (_e) {}
+        if (_tc.email) {
+          try { localStorage.setItem('pb-player-email', _tc.email); } catch (_e) {}
+        }
         localStorage.setItem('pb-actor-role', _role);
         localStorage.setItem('pb-player', JSON.stringify({
           id: _tc.pid, username: _tc.pid, name: _tc.name, role: _role, email: _tc.email
@@ -6993,7 +7118,7 @@ function _getActorHeaders() {
   try { if (localStorage.getItem('pb-actor-role')) role = localStorage.getItem('pb-actor-role'); } catch(_e){}
   // Phase C: include signed session token if available (server will trust token over raw headers)
   var token = null;
-  try { token = localStorage.getItem('pb-session-token'); } catch(_e){}
+  try { token = localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token') || TOKEN; } catch(_e){}
   var headers = {
     'Content-Type': 'application/json',
     'X-Actor-Id':   pid || 'anonymous',
@@ -7026,6 +7151,11 @@ function _generateIdemKey(prefix) {
 // _pbFetch: wraps fetch() with auth headers + idempotency key for money actions
 async function _pbFetch(url, opts) {
   opts = opts || {};
+  var path = _pathFromUrl(url);
+  var retried = !!opts._retried;
+  if (!retried && !_isAuthApiPath(path)) {
+    try { await _ensureFreshToken(); } catch (_e) {}
+  }
   var headers = Object.assign(_getActorHeaders(), opts.headers || {});
   // Auto-inject Idempotency-Key for money POST endpoints
   if (opts.method === 'POST' && _MONEY_ENDPOINTS.has(url.replace(/\?.*$/,''))) {
@@ -7039,10 +7169,24 @@ async function _pbFetch(url, opts) {
       headers['Idempotency-Key'] = existingKey;
     }
   }
-  var resp = fetch(url, Object.assign({}, opts, { headers }));
-  // Clear pending key after request completes
-  resp.then(function() { delete _pendingIdemKeys[url]; })
-      .catch(function() { delete _pendingIdemKeys[url]; });
+  var fetchOpts = Object.assign({}, opts, { headers: headers });
+  delete fetchOpts._retried;
+  var resp = await fetch(url, fetchOpts);
+  if (!retried && !_isAuthApiPath(path)) {
+    var expired = resp.status === 401;
+    if (!expired && resp.status === 403) {
+      try {
+        var peek = await resp.clone().json();
+        expired = peek && (peek.error === 'expired_token' || /expired token/i.test(String(peek.error || peek.message || '')));
+      } catch (_e) {}
+    }
+    if (expired) {
+      var refreshed = await _refreshAuthToken();
+      if (refreshed) return _pbFetch(url, Object.assign({}, opts, { _retried: true }));
+      _redirectToSignIn();
+    }
+  }
+  delete _pendingIdemKeys[url];
   return resp;
 }
 
@@ -7060,7 +7204,7 @@ async function _acquireSessionToken(actorId, clubId, roleHintDevOnly) {
     });
     var data = await resp.json();
     if (data.ok && data.token) {
-      localStorage.setItem('pb-session-token', data.token);
+      _storeAuthToken(data.token, data.expiresIn);
       localStorage.setItem('pb-actor-role', data.role);
       console.log('[auth] session token acquired actor='+actorId+' role='+data.role+' jti='+data.jti);
       return data;
@@ -7135,13 +7279,13 @@ window._pollEvents       = _pollEvents;
 
 // _verifyOrRefreshSession: called on boot + before sensitive actions
 // - If token present: verify via /api/auth/verify
-// - If near expiry (<30min): rotate via /api/auth/refresh
-// - If revoked/invalid: clear token, force dev flow
-var _SESSION_REFRESH_THRESHOLD_SEC = 30 * 60; // refresh if <30min left
+// - If near expiry (<5min): rotate via /api/auth/refresh or reissue via /api/auth/token
+// - If revoked/invalid: clear token
+var _SESSION_REFRESH_THRESHOLD_SEC = 5 * 60; // refresh if <5min left
 
 async function _verifyOrRefreshSession() {
   var token = null;
-  try { token = localStorage.getItem('pb-session-token'); } catch(_e){}
+  try { token = localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token'); } catch(_e){}
   if (!token) return { ok:false, reason:'no_token' };
 
   try {
@@ -7182,19 +7326,13 @@ async function _verifyOrRefreshSession() {
 }
 
 async function _refreshSession() {
-  try {
-    var resp = await _pbFetch('/api/auth/refresh', { method:'POST' });
-    var data = await resp.json();
-    if (data.ok && data.token) {
-      localStorage.setItem('pb-session-token', data.token);
-      console.log('[session] refreshed newJti='+data.jti);
-      return { ok:true, refreshed:true, jti:data.jti };
-    }
-    console.warn('[session] refresh failed:', data.error);
-    return { ok:false, reason:data.error };
-  } catch(_e) {
-    return { ok:false, reason:'network_error' };
+  var ok = await _refreshAuthToken();
+  if (ok) {
+    console.log('[session] refreshed via token rotate/reissue');
+    return { ok:true, refreshed:true };
   }
+  console.warn('[session] refresh failed');
+  return { ok:false, reason:'refresh_failed' };
 }
 
 async function _logout() {
@@ -7202,6 +7340,10 @@ async function _logout() {
     await _pbFetch('/api/auth/logout', { method:'POST' });
   } catch(_e){}
   try { localStorage.removeItem('pb-session-token'); } catch(_e){}
+  try { localStorage.removeItem('pb-sports-token'); } catch(_e){}
+  try { localStorage.removeItem('pb-token-expires'); } catch(_e){}
+  try { localStorage.removeItem('pb-player-email'); } catch(_e){}
+  try { localStorage.removeItem('pb-test-user'); } catch(_e){}
   try { localStorage.removeItem('pb-actor-role'); } catch(_e){}
   console.log('[session] logged out — token cleared');
   return { ok:true };
@@ -11284,7 +11426,7 @@ document.addEventListener('DOMContentLoaded', function() {
   console.log('[grading authority] init mode:', _GRADING_MODE);
   // Verify session if token stored
   try {
-    if (localStorage.getItem('pb-session-token')) {
+    if (localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token')) {
       _verifyOrRefreshSession().then(function(r) {
         if (r.cleared) console.warn('[session] token was revoked/invalid — re-auth required');
         else if (r.refreshed) console.log('[session] token auto-refreshed on boot');

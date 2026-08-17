@@ -888,11 +888,13 @@ async function submitAuth() {
     if (data.error) { showAuthError(data.error); btn.disabled=false; btn.textContent=authMode==='login'?'Sign In →':'Create My Account →'; return; }
 
     TOKEN = data.token;
-    localStorage.setItem('pb-sports-token', TOKEN);
+    _storeAuthToken(data.token, data.expiresIn);
     var storedEmail = signupEmail || email || loginEmail || (data.user && data.user.email) || '';
-    if (storedEmail) localStorage.setItem('pb-dev-email', storedEmail);
-    // NOTE: pb-dev-pass kept for dev only; do not rely on it for prod auth.
-    localStorage.setItem('pb-dev-pass', pass);
+    if (storedEmail) {
+      localStorage.setItem('pb-player-email', storedEmail);
+      localStorage.setItem('pb-dev-email', storedEmail);
+    }
+    try { localStorage.removeItem('pb-dev-pass'); } catch(_e){}
     try { sessionStorage.setItem('pb-force-lobby-home', '1'); } catch(_e){}
     // Persist contact details into player-settings so the profile modal +
     // host receipts pipeline see them (signup path only).
@@ -994,6 +996,10 @@ function checkAuthGate() {
     var ae = document.getElementById('auth-screen');
     if (ae) ae.style.display = 'flex';
     if (typeof setAuthTab === 'function') setAuthTab(window.__pbForceAuth === 'signup' ? 'signup' : 'login');
+    try {
+      var _expiredMsg = new URLSearchParams(location.search).get('msg');
+      if (_expiredMsg && typeof showAuthError === 'function') showAuthError(_expiredMsg);
+    } catch(_e){}
     return;
   }
   // Bypass auth if coming from player/host dashboard via ?from= param
@@ -1091,6 +1097,88 @@ if (_preview) {
 
 const API = 'https://pocketbooks-sports-backend-production.up.railway.app';
 let TOKEN = localStorage.getItem('pb-sports-token') || '';
+var _TOKEN_SKEW_MS = 5 * 60 * 1000;
+var _tokenRefreshInFlight = null;
+function _decodeJwtPayload(token) {
+  try {
+    var parts = String(token || '').split('.');
+    if (parts.length !== 3) return null;
+    return JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+  } catch (_e) { return null; }
+}
+function _tokenExpMs(token) {
+  var p = _decodeJwtPayload(token);
+  return (p && p.exp) ? (p.exp * 1000) : 0;
+}
+function _isClubSessionToken(token) {
+  var p = _decodeJwtPayload(token);
+  return !!(p && (p.jti || p.actorId || p.sub));
+}
+function _storeAuthToken(token, expiresInSec) {
+  if (!token) return;
+  TOKEN = token;
+  try {
+    localStorage.setItem('pb-sports-token', token);
+    var expMs = expiresInSec ? (Date.now() + Number(expiresInSec) * 1000) : _tokenExpMs(token);
+    if (!expMs) expMs = Date.now() + 86400 * 1000;
+    localStorage.setItem('pb-token-expires', String(expMs));
+  } catch (_e) {}
+}
+function _storedActorClub() {
+  var pl = null, club = null;
+  try { pl = JSON.parse(localStorage.getItem('pb-player') || 'null'); } catch (_e) {}
+  try { club = JSON.parse(localStorage.getItem('pb-club') || 'null') || JSON.parse(localStorage.getItem('pb-active-club') || 'null'); } catch (_e) {}
+  var actorId = pl && (pl.id != null ? String(pl.id) : (pl.username || ''));
+  var clubId = club && (club.id != null ? String(club.id) : (club.clubId || ''));
+  if (actorId && clubId) return { actorId: actorId, clubId: clubId };
+  return null;
+}
+function _isAuthApiPath(path) {
+  return /^\/api\/auth\/(token|refresh|login|signup|logout|verify)\b/.test(path || '');
+}
+async function _doRefreshAuthToken() {
+  var ids = _storedActorClub();
+  if (ids) {
+    try {
+      var r = await fetch(API + '/api/auth/token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actorId: ids.actorId, clubId: ids.clubId })
+      });
+      var data = await r.json();
+      if (data && data.token) { _storeAuthToken(data.token, data.expiresIn); return true; }
+    } catch (_e) {}
+  }
+  var current = TOKEN || localStorage.getItem('pb-sports-token') || '';
+  if (current && _isClubSessionToken(current) && _tokenExpMs(current) > Date.now()) {
+    try {
+      var r2 = await fetch(API + '/api/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + current }
+      });
+      var data2 = await r2.json();
+      if (data2 && data2.token) { _storeAuthToken(data2.token, data2.expiresIn); return true; }
+    } catch (_e) {}
+  }
+  return false;
+}
+function _refreshAuthToken() {
+  if (_tokenRefreshInFlight) return _tokenRefreshInFlight;
+  var p = _doRefreshAuthToken();
+  _tokenRefreshInFlight = p;
+  p.then(function () {}, function () {}).then(function () {
+    if (_tokenRefreshInFlight === p) _tokenRefreshInFlight = null;
+  });
+  return p;
+}
+async function _ensureFreshToken() {
+  var token = TOKEN || localStorage.getItem('pb-sports-token') || '';
+  if (!token) return;
+  var exp = parseInt(localStorage.getItem('pb-token-expires') || '0', 10) || _tokenExpMs(token);
+  if (exp) { try { localStorage.setItem('pb-token-expires', String(exp)); } catch (_e) {} }
+  if (!exp || Date.now() < (exp - _TOKEN_SKEW_MS)) return;
+  if (!_isClubSessionToken(token) && !_storedActorClub()) return;
+  await _refreshAuthToken();
+}
 const CLUBS_LOCKED = true;
 const CLUBS_LOCKED_MSG = 'Clubs are paused for this test — sign in and play Survivor Pool.';
 let userClubs = JSON.parse(localStorage.getItem('pb-clubs') || '[]');
@@ -1186,7 +1274,8 @@ function _maybeAutoRoute() {
 // ══ SIGN OUT ══ Clears token + dev creds + per-user session keys, returns to auth.
 function signOut() {
   try {
-    ['pb-sports-token','pb-dev-email','pb-dev-pass','pb-player','pb-host',
+    ['pb-sports-token','pb-token-expires','pb-player-email','pb-session-token','pb-test-user',
+     'pb-dev-email','pb-dev-pass','pb-player','pb-host',
      'pb-active-club','pb-clubs','pb-club','pb-user-clubs']
       .forEach(function(k){ localStorage.removeItem(k); });
   } catch(_e){}
@@ -1399,8 +1488,7 @@ async function _acquireClubToken(playerId, clubId) {
     });
     var data = await resp.json();
     if (data.ok && data.token) {
-      TOKEN = data.token;
-      localStorage.setItem('pb-sports-token', TOKEN);
+      _storeAuthToken(data.token, data.expiresIn);
       // Decode token and sync pb-player.id to token's actorId so backend self-check passes
       try {
         var _tp = JSON.parse(atob(data.token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
@@ -1727,9 +1815,21 @@ function showPlayerSettings() {
   });
 }
 
-async function apiCall(method, path, body) {
-  const r = await fetch(API+path, {method, headers:{'Content-Type':'application/json',...(TOKEN?{'Authorization':'Bearer '+TOKEN}:{})}, body:body?JSON.stringify(body):undefined});
-  return r.json();
+async function apiCall(method, path, body, _retried) {
+  if (!_retried && !_isAuthApiPath(path)) {
+    try { await _ensureFreshToken(); } catch (_e) {}
+  }
+  var token = TOKEN || localStorage.getItem('pb-sports-token') || '';
+  const r = await fetch(API+path, {method, headers:{'Content-Type':'application/json',...(token?{'Authorization':'Bearer '+token}:{})}, body:body?JSON.stringify(body):undefined});
+  var data = {};
+  try { data = await r.json(); } catch (_e) { data = {}; }
+  var expired = r.status === 401 || (data && (data.error === 'expired_token' || /expired token/i.test(String(data.error || ''))));
+  if (expired && !_retried && !_isAuthApiPath(path)) {
+    var ok = await _refreshAuthToken();
+    if (ok) return apiCall(method, path, body, true);
+    window.location.href = 'lobby.html?screen=signin&msg=' + encodeURIComponent('Your session expired — please sign in again');
+  }
+  return data;
 }
 
 function showToast(msg){
