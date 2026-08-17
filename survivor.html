@@ -73,6 +73,14 @@ select.inp option:disabled{color:#444}
 .your-pick-name{font-size:0.92rem;font-weight:800;color:var(--green)}
 .your-pick-ok{margin-left:auto;color:var(--green);font-size:1.1rem;font-weight:900}
 .confirm-wrap{margin-top:4px}
+.modal-bg.center{align-items:center;padding:24px}
+.modal-pick{background:#111;border:1px solid #222;border-radius:20px;width:100%;max-width:340px;padding:28px 22px 20px;text-align:center;box-shadow:0 16px 48px rgba(0,0,0,0.55)}
+.pick-confirm-logo{width:80px;height:80px;object-fit:contain;margin:0 auto 14px;display:block}
+.pick-confirm-name{font-size:1.28rem;font-weight:900;letter-spacing:-0.3px;margin-bottom:6px}
+.pick-confirm-vs{font-size:0.9rem;color:#888;font-weight:700;margin-bottom:4px}
+.pick-confirm-time{font-size:0.72rem;color:#666;margin-bottom:14px}
+.pick-confirm-warn{font-size:0.75rem;font-weight:800;color:var(--gold);margin-bottom:16px}
+.modal-pick .btn-green{margin-bottom:8px}
 .offseason{text-align:center;padding:28px 16px;color:#888;font-size:0.84rem;line-height:1.55}
 .week-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
 .week-arrow{width:36px;height:36px;border-radius:10px;background:#111;border:1px solid #222;color:#fff;font-size:1.15rem;font-weight:900;cursor:pointer;font-family:inherit}
@@ -200,6 +208,18 @@ select.inp option:disabled{color:#444}
     </div>
     <button class="btn btn-green" onclick="confirmApprove()">Approve</button>
     <button class="btn btn-ghost" onclick="closeModals()">Cancel</button>
+  </div>
+</div>
+
+<div class="modal-bg center" id="modal-pick" onclick="if(event.target===this)cancelPickConfirm()">
+  <div class="modal-pick">
+    <img class="pick-confirm-logo" id="pick-confirm-logo" alt="">
+    <div class="pick-confirm-name" id="pick-confirm-name"></div>
+    <div class="pick-confirm-vs" id="pick-confirm-vs"></div>
+    <div class="pick-confirm-time" id="pick-confirm-time"></div>
+    <div class="pick-confirm-warn hidden" id="pick-confirm-warn">⚠️ Preseason test mode</div>
+    <button class="btn btn-green" id="submit-pick" onclick="submitPick()">Lock In Pick</button>
+    <button class="btn btn-ghost" onclick="cancelPickConfirm()">Cancel</button>
   </div>
 </div>
 
@@ -888,7 +908,7 @@ function paintMatchups(detail){
   if (!locked){
     html += browseWeek > 18
       ? '<div class="used-note">Playoff picks reset — you can reuse regular-season teams. Teams already picked this postseason stay marked used.</div>'
-      : '<div class="used-note">Tap a team, then confirm. Used teams are per entry — Entry #'+(currentEntryNumber||1)+' cannot reuse a team until the playoffs.</div>';
+      : '<div class="used-note">Tap a team to lock in your pick. Used teams are per entry — Entry #'+(currentEntryNumber||1)+' cannot reuse a team until the playoffs.</div>';
   }
 
   if (!nflGames.length){
@@ -912,10 +932,6 @@ function paintMatchups(detail){
       + '</div>';
   });
 
-  var showConfirm = !locked && pendingPick && pendingPick.team && !pendingPick.saved;
-  if (showConfirm){
-    html += '<div class="confirm-wrap"><button class="btn btn-green" id="submit-pick" onclick="submitPick()">Confirm '+esc(shortTeam(pendingPick.team))+'</button></div>';
-  }
   body.innerHTML = html;
 }
 
@@ -947,12 +963,63 @@ function selectMatchupTeam(gi, side){
   if (!team || !currentDetail) return;
   var used = usedMapForWeek(currentDetail, currentDetail.pool.currentWeek);
   if (used[team] || teamLost(g, team)) return;
+  if (savedPickTeam && teamMatches(savedPickTeam, team)) {
+    pendingPick = {
+      team: team,
+      gameId: g.id || g.providerGameId || null,
+      saved: true
+    };
+    paintMatchups(currentDetail);
+    return;
+  }
   pendingPick = {
     team: team,
     gameId: g.id || g.providerGameId || null,
-    saved: !!(savedPickTeam && teamMatches(savedPickTeam, team))
+    saved: false
   };
   paintMatchups(currentDetail);
+  openPickConfirm(g, team, side);
+}
+
+function openPickConfirm(game, team, side){
+  var opponent = canonicalTeam(side === 'home'
+    ? (game.away || game.away_team)
+    : (game.home || game.home_team));
+  var logo = teamLogoUrl(team);
+  var logoEl = document.getElementById('pick-confirm-logo');
+  if (logo) {
+    logoEl.src = logo;
+    logoEl.alt = team;
+    logoEl.style.display = 'block';
+  } else {
+    logoEl.removeAttribute('src');
+    logoEl.style.display = 'none';
+  }
+  document.getElementById('pick-confirm-name').textContent = team;
+  document.getElementById('pick-confirm-vs').textContent = opponent ? ('vs ' + opponent) : '';
+  document.getElementById('pick-confirm-time').textContent = fmtGameTime(game.time || game.scheduledStart || game.commence_time) || '';
+  document.getElementById('pick-confirm-warn').classList.toggle('hidden', !isPreseasonTestMode());
+  var btn = document.getElementById('submit-pick');
+  if (btn) { btn.disabled = false; btn.textContent = 'Lock In Pick'; }
+  openModal('modal-pick');
+}
+
+function cancelPickConfirm(){
+  closeModals();
+  if (savedPickTeam) {
+    var saved = ((currentDetail && currentDetail.myPicks) || []).find(function(p){
+      return p.week === currentDetail.pool.currentWeek
+        && (p.entryNumber || p.entry_number || 1) === (currentEntryNumber || 1);
+    });
+    pendingPick = {
+      team: savedPickTeam,
+      gameId: saved && (saved.gameId || saved.game_id) || null,
+      saved: true
+    };
+  } else {
+    pendingPick = null;
+  }
+  if (currentDetail) paintMatchups(currentDetail);
 }
 
 function renderStandings(standings){
@@ -1057,12 +1124,16 @@ async function submitPick(){
   if (!team) { toast('Select a team'); return; }
   var week = currentDetail.pool.currentWeek;
   var btn = document.getElementById('submit-pick');
-  if (btn) btn.disabled = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Locking in…'; }
   var data = await api('POST', '/api/survivor/'+encodeURIComponent(currentPoolId)+'/pick', {
     week: week, team: team, gameId: pendingPick.gameId || undefined, entryNumber: currentEntryNumber || 1
   });
-  if (btn) btn.disabled = false;
-  if (!data.ok) { toast(data.error || 'Pick failed'); return; }
+  if (!data.ok) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Lock In Pick'; }
+    toast(data.error || 'Pick failed');
+    return;
+  }
+  closeModals();
   toast('Pick saved: '+team);
   openPool(currentPoolId);
 }
