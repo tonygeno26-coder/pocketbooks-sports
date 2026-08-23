@@ -35,7 +35,7 @@ test('club token acquisition returns canonical role, status, club id, and token'
 test('routing derives destination from backend role after token success', function() {
   assert(html.indexOf('var canonicalRole = result.role ||') !== -1,
     'missing canonical role route decision');
-  assert(html.indexOf("var dest = isHostRole(canonicalRole) ? 'index.html' : 'player.html'") !== -1,
+  assert(html.indexOf("var dest = isHostRole(canonicalRole) ? 'index.html' : 'survivor.html'") !== -1,
     'destination must be derived from canonical backend role');
   assert(html.indexOf('window.location.href = dest +') !== -1,
     'navigation should use canonical destination');

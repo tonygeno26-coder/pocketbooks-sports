@@ -150,6 +150,13 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:#0a0
 .cr-balance{font-size:0.95rem;font-weight:900}
 .cr-dir{font-size:0.62rem;color:#555;margin-top:1px}
 
+/* Players never sit on sportsbook lobby chrome */
+body.pb-player-only .action-grid,
+body.pb-player-only .secondary-row,
+body.pb-player-only .bnav,
+body.pb-player-only .wallet-bar,
+body.pb-player-only .bottom-nav{display:none!important}
+
 /* BOTTOM NAV */
 .bnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:rgba(5,8,20,0.97);border-top:1px solid rgba(255,255,255,0.08);display:flex;padding:10px 0 22px;z-index:100;backdrop-filter:blur(16px)}
 .bn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:4px 0}
@@ -269,6 +276,55 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
       document.write('<style id="pb-force-auth">.content,.bnav,.bottom-nav{display:none!important}#auth-screen{display:flex!important;visibility:visible!important;opacity:1!important;z-index:9999!important;pointer-events:auto!important}#auth-screen *{pointer-events:auto!important}.auth-tab{cursor:pointer!important;pointer-events:auto!important}</style>');
       window.__pbForceAuth = _screen;
       return;
+    }
+  } catch(_e){}
+  // Authed players skip the sportsbook lobby entirely. Hosts go to the dashboard
+  // unless they explicitly asked to stay (?from=host or ?stay=1).
+  try {
+    var _routeQs = new URLSearchParams(location.search);
+    if (_routeQs.get('preview') !== '1' && _routeQs.get('screen') !== 'signin' && _routeQs.get('screen') !== 'signup') {
+      var _tok = localStorage.getItem('pb-sports-token');
+      if (_tok) {
+        function _nr(r){ return String(r||'').toLowerCase().trim(); }
+        function _isHost(r){
+          var n = _nr(r);
+          return n==='host'||n==='admin'||n==='master_admin'||n==='owner'||n==='creator'||n==='full_admin'
+            || n==='cohost'||n==='staff'||n==='settlement_manager'
+            || n.indexOf('cohost_')===0||n.indexOf('staff_')===0;
+        }
+        var _role = '';
+        try { var _p = JSON.parse(localStorage.getItem('pb-player')||'null'); if (_p && _p.role) _role = _p.role; } catch(_e){}
+        try { var _h = JSON.parse(localStorage.getItem('pb-host')||'null'); if (_h && _isHost(_h.role)) _role = _h.role; } catch(_e){}
+        try { var _ar = localStorage.getItem('pb-actor-role'); if (_ar && _isHost(_ar)) _role = _ar; } catch(_e){}
+        try {
+          if (!_isHost(_role)) {
+            var _parts = _tok.split('.');
+            if (_parts.length === 3) {
+              var _pl = JSON.parse(atob(_parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+              if (_pl && _pl.role) _role = _pl.role;
+            }
+          }
+        } catch(_e){}
+        var _hostRec = false;
+        try { var _hr = JSON.parse(localStorage.getItem('pb-host')||'null'); if (_hr && (_hr.id || _hr.username || _hr.hostId || _hr.role)) _hostRec = true; } catch(_e){}
+        try {
+          var _clubs = JSON.parse(localStorage.getItem('pb-clubs')||'[]');
+          if (Array.isArray(_clubs) && _clubs.some(function(c){ return _isHost(c.role); })) _hostRec = true;
+        } catch(_e){}
+        try {
+          var _ac = JSON.parse(localStorage.getItem('pb-active-club')||localStorage.getItem('pb-club')||'null');
+          if (_ac && _isHost(_ac.role)) _hostRec = true;
+        } catch(_e){}
+        var _stay = _routeQs.get('stay') === '1' || _routeQs.get('from') === 'host';
+        if (!_isHost(_role) && !_hostRec) {
+          location.replace('survivor.html');
+          return;
+        }
+        if ((_isHost(_role) || _hostRec) && !_stay) {
+          location.replace('index.html?from=lobby');
+          return;
+        }
+      }
     }
   } catch(_e){}
   var forceHome = sessionStorage.getItem('pb-force-lobby-home') === '1';
@@ -895,7 +951,7 @@ async function submitAuth() {
       localStorage.setItem('pb-dev-email', storedEmail);
     }
     try { localStorage.removeItem('pb-dev-pass'); } catch(_e){}
-    try { sessionStorage.setItem('pb-force-lobby-home', '1'); } catch(_e){}
+    try { sessionStorage.removeItem('pb-force-lobby-home'); } catch(_e){}
     // Persist contact details into player-settings so the profile modal +
     // host receipts pipeline see them (signup path only).
     if (authMode==='signup') {
@@ -909,8 +965,9 @@ async function submitAuth() {
     }
     // Seed a minimal canonical record for whichever role applies, so role/
     // profile survives refresh even if /api/auth/me hasn't returned yet.
+    var _loginRole = 'player';
     try {
-      var _role = (data.role || (data.user && data.user.role) || 'player');
+      _loginRole = (data.role || (data.user && data.user.role) || 'player');
       var _uname = (authMode==='signup'
         ? document.getElementById('a-name').value.trim()
         : ((data.user && data.user.name) || (storedEmail ? storedEmail.split('@')[0] : 'user')));
@@ -919,17 +976,26 @@ async function submitAuth() {
         username:      _uname,
         email:         storedEmail || '',
         signalContact: (authMode==='signup' ? signalContact : '') || '',
-        role:          _role,
+        role:          _loginRole,
       };
       localStorage.setItem('pb-player', JSON.stringify(_rec));
-      if (_role === 'host' || _role === 'owner') {
+      if (typeof isAppHostRole === 'function' ? isAppHostRole(_loginRole) : (_loginRole === 'host' || _loginRole === 'owner' || _loginRole === 'admin' || _loginRole === 'master_admin' || _loginRole === 'creator')) {
         localStorage.setItem('pb-host', JSON.stringify(_rec));
+      } else {
+        try { localStorage.removeItem('pb-host'); } catch(_he){}
       }
     } catch(_e){}
 
-    // Hide auth, show lobby
-    document.getElementById('auth-screen').style.display = 'none';
-    loadUser();
+    // Players go to Survivor; hosts/admins go to the dashboard. Never leave a
+    // regular user sitting on the sportsbook lobby after login.
+    if (typeof routeAuthedUser === 'function') {
+      routeAuthedUser(_loginRole);
+    } else if (['host','admin','master_admin','owner','creator','full_admin'].indexOf(String(_loginRole||'').toLowerCase()) !== -1) {
+      window.location.href = 'index.html?from=lobby';
+    } else {
+      window.location.href = 'survivor.html';
+    }
+    return;
 
   } catch(e) {
     showAuthError('Connection error — try again');
@@ -953,12 +1019,12 @@ function returnToLobby() {
     document.getElementById('auth-screen').style.display = 'flex';
     return;
   }
-  // Determine role
+  // Determine role — players never re-enter the sportsbook.
   var _role = (_player && _player.role) || (_club && _club.role) || 'player';
-  if (typeof isHostRole === 'function' ? isHostRole(_role) : (_role === 'host' || _role === 'owner')) {
+  if (typeof isHostSession === 'function' ? isHostSession() : (typeof isAppHostRole === 'function' ? isAppHostRole(_role) : (_role === 'host' || _role === 'owner' || _role === 'admin' || _role === 'master_admin'))) {
     window.location.href = 'index.html?from=lobby';
   } else {
-    window.location.href = 'player.html?from=lobby';
+    window.location.href = 'survivor.html';
   }
 }
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1002,9 +1068,16 @@ function checkAuthGate() {
     } catch(_e){}
     return;
   }
-  // Bypass auth if coming from player/host dashboard via ?from= param
+  // Bypass auth if coming from host dashboard via ?from=host. Players who
+  // somehow land here (including ?from=player) go to Survivor, not sportsbook.
   var fromParam = new URLSearchParams(window.location.search).get('from');
-  if (fromParam === 'player' || fromParam === 'host') {
+  if (fromParam === 'player') {
+    if (typeof isHostSession === 'function' ? !isHostSession() : true) {
+      window.location.replace('survivor.html');
+      return;
+    }
+  }
+  if (fromParam === 'host') {
     document.getElementById('auth-screen').style.display = 'none';
     // Ensure lobby home content is visible
     var contentEl = document.querySelector('.content');
@@ -1040,7 +1113,16 @@ function checkAuthGate() {
   var _authEl = document.getElementById('auth-screen');
   if (!isAuthed) { console.trace('[AUTH SCREEN SHOWN HERE] checkAuthGate, isAuthed=false'); }
   if (_authEl) _authEl.style.display = isAuthed ? 'none' : 'flex';
-  if (isAuthed) console.log('[AUTH] checkAuthGate: hiding auth, showing lobby');
+  if (isAuthed) {
+    console.log('[AUTH] checkAuthGate: hiding auth, showing lobby');
+    if (typeof hideSportsbookChromeForPlayers === 'function') hideSportsbookChromeForPlayers();
+    var _stay = fromParam === 'host' || new URLSearchParams(window.location.search).get('stay') === '1';
+    if (typeof isHostSession === 'function' && isHostSession()) {
+      if (!_stay) window.location.replace('index.html?from=lobby');
+    } else {
+      window.location.replace('survivor.html');
+    }
+  }
 }
 
 // PREVIEW MODE — must run before auth gate
@@ -1244,31 +1326,22 @@ async function loadUser() {
   } catch(e) {}
 }
 
-// Auto-route after sign-in: approved player with one player-role club → player.html.
-// We do NOT auto-route owners/cohosts — they need to pick Host vs Sportsbook per
-// club from the dual-button card. Without this gate, an owner with one club
-// gets bounced to index.html on every lobby visit and can never reach
-// player.html for their own club to test the betting flow.
-//
-// Suppressed by ?from=player|host|lobby (back-button) and ?stay=1.
+// Auto-route after sign-in / returning session:
+//   host/admin/master_admin/owner/creator → host dashboard
+//   player/user (and any other non-host role) → Survivor Pool
+// Hosts may stay on the lobby with ?from=host or ?stay=1.
 function _maybeAutoRoute() {
-  if (CLUBS_LOCKED) return;
   var params = new URLSearchParams(window.location.search);
-  var fromParam = params.get('from');
-  if (fromParam === 'player' || fromParam === 'host' || fromParam === 'lobby') return;
+  if (params.get('preview') === '1') return;
+  if (window.__pbForceAuth) return;
   if (params.get('stay') === '1') return;
-  var clubs = userClubs || [];
-  if (!clubs.length) return;
-  // Only auto-route players with exactly one approved player-role club.
-  // Owners/cohosts always see the lobby so they can choose mode per club.
-  var approvedPlayerClubs = clubs.filter(function(c){ return !isHostRole(c.role) && c.status==='approved'; });
-  if (approvedPlayerClubs.length === 1) {
-    try {
-      syncSelectedClubStorage(approvedPlayerClubs[0]);
-    } catch(_e){}
-    activeClub = approvedPlayerClubs[0];
-    enterActiveClub('player');
+  var fromParam = params.get('from');
+  if (fromParam === 'host') return;
+  if (typeof isHostSession === 'function' ? isHostSession() : (typeof isAppHostRole === 'function' && isAppHostRole(readSessionRole()))) {
+    window.location.href = 'index.html?from=lobby';
+    return;
   }
+  window.location.href = 'survivor.html';
 }
 
 // ══ SIGN OUT ══ Clears token + dev creds + per-user session keys, returns to auth.
@@ -1287,13 +1360,68 @@ window.signOut = signOut;
 
 // ── Role helpers (shared by render + routing) ───────────────────────────────
 function normRole(r) { return String(r||'').toLowerCase().trim(); }
-function isOwnerRole(r) { return ['owner','host','creator'].includes(normRole(r)); }
+function isOwnerRole(r) { return ['owner','host','creator','admin','master_admin'].includes(normRole(r)); }
 function isCohostRole(r) {
   var n = normRole(r);
   return n === 'cohost' || n.startsWith('cohost_') || n === 'staff' || n.startsWith('staff_') ||
          n === 'full_admin' || n === 'settlement_manager' || n === 'risk_viewer' || n === 'view_only';
 }
 function isHostRole(r) { return isOwnerRole(r) || isCohostRole(r); }
+function isAppHostRole(r) { return isHostRole(r); }
+function readSessionRole() {
+  try {
+    var h = JSON.parse(localStorage.getItem('pb-host')||'null');
+    if (h && h.role && isAppHostRole(h.role)) return h.role;
+  } catch(_e){}
+  try {
+    var p = JSON.parse(localStorage.getItem('pb-player')||'null');
+    if (p && p.role) return p.role;
+  } catch(_e){}
+  try {
+    var ar = localStorage.getItem('pb-actor-role');
+    if (ar) return ar;
+  } catch(_e){}
+  try {
+    var tok = TOKEN || localStorage.getItem('pb-sports-token') || '';
+    var parts = String(tok).split('.');
+    if (parts.length === 3) {
+      var payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+      if (payload && payload.role) return payload.role;
+    }
+  } catch(_e){}
+  return '';
+}
+function hasHostSessionSignals() {
+  try {
+    var h = JSON.parse(localStorage.getItem('pb-host')||'null');
+    if (h && (h.id || h.username || h.hostId || h.role)) return true;
+  } catch(_e){}
+  try {
+    var clubs = JSON.parse(localStorage.getItem('pb-clubs')||'[]');
+    if (Array.isArray(clubs) && clubs.some(function(c){ return isAppHostRole(c.role); })) return true;
+  } catch(_e){}
+  try {
+    var ac = JSON.parse(localStorage.getItem('pb-active-club')||localStorage.getItem('pb-club')||'null');
+    if (ac && isAppHostRole(ac.role)) return true;
+  } catch(_e){}
+  if (typeof userClubs !== 'undefined' && Array.isArray(userClubs) && userClubs.some(function(c){ return isAppHostRole(c.role); })) return true;
+  return false;
+}
+function isHostSession() {
+  return isAppHostRole(readSessionRole()) || hasHostSessionSignals();
+}
+function routeAuthedUser(role) {
+  if (isAppHostRole(role)) {
+    window.location.href = 'index.html?from=lobby';
+  } else {
+    window.location.href = 'survivor.html';
+  }
+}
+function hideSportsbookChromeForPlayers() {
+  if (isHostSession()) return;
+  if (!localStorage.getItem('pb-sports-token')) return;
+  if (document.body) document.body.classList.add('pb-player-only');
+}
 function canonicalStatus(s) { return String(s||'').toLowerCase().trim(); }
 function syncSelectedClubStorage(club) {
   if (!club) return;
@@ -1527,7 +1655,7 @@ function enterActiveClub(action) {
       var _pbPlayer = JSON.parse(localStorage.getItem('pb-player') || 'null');
       var _pid = _pbPlayer && _pbPlayer.id;
       var _me = _pid && _pbPlayers.find(function(p){ return p.playerId === _pid; });
-      window.location.href = (_me && isHostRole(_me.role)) ? 'index.html' : 'player.html';
+      window.location.href = (_me && isHostRole(_me.role)) ? 'index.html' : 'survivor.html';
       return;
     }
   }
@@ -1568,7 +1696,7 @@ function enterActiveClub(action) {
         return;
       }
       var canonicalRole = result.role || 'player';
-      var dest = isHostRole(canonicalRole) ? 'index.html' : 'player.html';
+      var dest = isHostRole(canonicalRole) ? 'index.html' : 'survivor.html';
       var syncedClub = Object.assign({}, activeClub, {
         id: result.club_id || result.clubId || activeClub.id,
         clubId: result.club_id || result.clubId || activeClub.clubId || activeClub.id,
@@ -1895,6 +2023,7 @@ if (isPreview && !_isAuthScreen) {
   setTimeout(function(){ if (typeof setAuthTab === 'function') setAuthTab(_screen === 'signup' ? 'signup' : 'login'); }, 100);
 } else {
   checkAuthGate();
+  if (typeof hideSportsbookChromeForPlayers === 'function') hideSportsbookChromeForPlayers();
   if (!TOKEN) {
     setAuthTab(window.__pbForceAuth === 'signup' ? 'signup' : 'login');
   }

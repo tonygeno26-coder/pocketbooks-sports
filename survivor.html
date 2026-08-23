@@ -8,10 +8,18 @@
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{--green:#00ff88;--red:#ff3d57;--cyan:#00c2ff;--gold:#f5c842;--card:#111;--bg:#0a0a0a}
 body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(--bg);color:#fff;max-width:430px;margin:0 auto;min-height:100vh;padding-bottom:40px}
-.hdr{display:flex;align-items:center;gap:12px;padding:16px;position:sticky;top:0;z-index:20;background:rgba(10,10,10,0.94);backdrop-filter:blur(12px);border-bottom:1px solid #1a1a1a}
-.back{width:36px;height:36px;border-radius:10px;background:#111;border:1px solid #222;color:#fff;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:1.1rem}
-.hdr h1{font-size:1.05rem;font-weight:900;letter-spacing:-0.3px}
-.hdr-sub{font-size:0.68rem;color:#555;margin-top:2px}
+.topnav{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;position:sticky;top:0;z-index:20;background:rgba(10,10,10,0.94);backdrop-filter:blur(12px);border-bottom:1px solid #1a1a1a}
+.topnav-brand{display:flex;align-items:center;gap:8px;text-decoration:none;color:#fff;min-width:0}
+.topnav-logo{width:32px;height:32px;border-radius:50%;overflow:hidden;border:1.5px solid rgba(0,255,136,0.3);flex-shrink:0;background:#111}
+.topnav-logo img{width:100%;height:100%;object-fit:cover}
+.topnav-name{font-size:0.7rem;font-weight:800;line-height:1.2;letter-spacing:-0.2px}
+.topnav-name span{color:var(--cyan)}
+.topnav-links{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.topnav-link{font-size:0.65rem;font-weight:800;color:#888;text-decoration:none;padding:6px 8px;border-radius:8px;white-space:nowrap}
+.topnav-link.active{color:var(--green);background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.3)}
+.topnav-prof{width:32px;height:32px;border-radius:50%;background:#1c1c1c;border:1px solid #252525;color:#fff;font-size:0.62rem;font-weight:900;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:inherit}
+.topnav-out{background:transparent;color:#888;border:1px solid #252525;border-radius:8px;padding:6px 8px;font-size:0.62rem;font-weight:800;cursor:pointer;font-family:inherit}
+.hdr-sub{font-size:0.68rem;color:#555;margin:0 0 12px}
 .wrap{padding:16px}
 .card{background:var(--card);border:1px solid #1c1c1c;border-radius:16px;padding:16px;margin-bottom:12px}
 .row-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
@@ -112,15 +120,21 @@ select.inp option:disabled{color:#444}
 </head>
 <body>
 
-<div class="hdr">
-  <a class="back" href="lobby.html" aria-label="Back to lobby">‹</a>
-  <div>
-    <h1>Survivor Pool</h1>
-    <div class="hdr-sub" id="hdr-sub">Pick one NFL team each week. Lose and you’re out.</div>
+<div class="topnav">
+  <a class="topnav-brand" href="survivor.html" aria-label="PocketBooks Sports">
+    <div class="topnav-logo"><img src="./logo.jpg" alt="" onerror="this.style.display='none'"></div>
+    <div class="topnav-name">PocketBooks<br><span>Sports</span></div>
+  </a>
+  <div class="topnav-links">
+    <a class="topnav-link active" href="survivor.html">Survivor Pool</a>
+    <a class="topnav-link" id="nav-dashboard" href="index.html" style="display:none">Dashboard</a>
+    <button type="button" class="topnav-prof" id="nav-profile" onclick="openProfileModal()" title="Profile" aria-label="Profile">P</button>
+    <button type="button" class="topnav-out" onclick="signOut()">Sign out</button>
   </div>
 </div>
 
 <div class="wrap">
+  <div class="hdr-sub" id="hdr-sub">Pick one NFL team each week. Lose and you’re out.</div>
   <div class="err" id="err"></div>
 
   <div id="view-home">
@@ -167,6 +181,23 @@ select.inp option:disabled{color:#444}
     <div id="host-actions" class="hidden">
       <button class="btn btn-cyan" id="grade-btn" onclick="gradeWeek()">Grade this week</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-profile" onclick="if(event.target===this)closeModals()">
+  <div class="modal">
+    <div class="modal-title">Profile</div>
+    <div class="modal-sub" id="profile-username">Signed in</div>
+    <div style="background:#111;border:1px solid #222;border-radius:12px;padding:14px;margin-bottom:12px">
+      <div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">Username</div>
+      <div id="profile-name" style="font-size:0.95rem;font-weight:800">—</div>
+    </div>
+    <div style="background:#111;border:1px solid #222;border-radius:12px;padding:14px;margin-bottom:16px">
+      <div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">Email</div>
+      <div id="profile-email" style="font-size:0.88rem;font-weight:700;color:#aaa">—</div>
+    </div>
+    <button class="btn btn-ghost" onclick="closeModals()">Close</button>
+    <button class="btn btn-ghost" style="color:#ff3d57;border-color:#ff3d57;margin-top:8px" onclick="signOut()">Sign out</button>
   </div>
 </div>
 
@@ -1207,8 +1238,85 @@ async function gradeWeek(){
   openPool(currentPoolId);
 }
 
+function _sessionPlayer() {
+  try { return JSON.parse(localStorage.getItem('pb-player') || 'null') || {}; } catch (_e) { return {}; }
+}
+function _isSurvivorHostRole(r) {
+  var n = String(r || '').toLowerCase().trim();
+  return n === 'host' || n === 'admin' || n === 'master_admin' || n === 'owner' || n === 'creator' || n === 'full_admin'
+    || n === 'cohost' || n === 'staff' || n === 'settlement_manager'
+    || n.indexOf('cohost_') === 0 || n.indexOf('staff_') === 0;
+}
+function _survivorHostSession() {
+  var p = _sessionPlayer();
+  if (_isSurvivorHostRole(p.role)) return true;
+  try {
+    var h = JSON.parse(localStorage.getItem('pb-host') || 'null');
+    if (h && (h.id || h.username || h.hostId || _isSurvivorHostRole(h.role))) return true;
+  } catch (_e) {}
+  try {
+    var ar = localStorage.getItem('pb-actor-role');
+    if (_isSurvivorHostRole(ar)) return true;
+  } catch (_e) {}
+  try {
+    var tok = TOKEN || localStorage.getItem('pb-sports-token') || '';
+    var parts = String(tok).split('.');
+    if (parts.length === 3) {
+      var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (payload && _isSurvivorHostRole(payload.role)) return true;
+    }
+  } catch (_e) {}
+  try {
+    var clubs = JSON.parse(localStorage.getItem('pb-clubs') || '[]');
+    if (Array.isArray(clubs) && clubs.some(function (c) { return _isSurvivorHostRole(c.role); })) return true;
+  } catch (_e) {}
+  return false;
+}
+function _profileInitials() {
+  var p = _sessionPlayer();
+  var name = p.username || p.name || (p.email ? String(p.email).split('@')[0] : '') || 'P';
+  var parts = String(name).replace(/[^A-Za-z0-9 ]/g, ' ').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return 'P';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+function setupSurvivorNav() {
+  var btn = document.getElementById('nav-profile');
+  if (btn) {
+    btn.textContent = _profileInitials();
+    var p = _sessionPlayer();
+    btn.title = p.username || p.name || p.email || 'Profile';
+  }
+  var dash = document.getElementById('nav-dashboard');
+  if (dash && _survivorHostSession()) dash.style.display = '';
+}
+function openProfileModal() {
+  var p = _sessionPlayer();
+  var name = p.username || p.name || 'Player';
+  var email = p.email || localStorage.getItem('pb-player-email') || localStorage.getItem('pb-dev-email') || '';
+  var nameEl = document.getElementById('profile-name');
+  var emailEl = document.getElementById('profile-email');
+  var subEl = document.getElementById('profile-username');
+  if (nameEl) nameEl.textContent = name;
+  if (emailEl) emailEl.textContent = email || 'No email on file';
+  if (subEl) subEl.textContent = name;
+  openModal('modal-profile');
+}
+function signOut() {
+  try {
+    ['pb-sports-token','pb-token-expires','pb-player-email','pb-session-token','pb-test-user',
+     'pb-dev-email','pb-dev-pass','pb-player','pb-host',
+     'pb-active-club','pb-clubs','pb-club','pb-user-clubs']
+      .forEach(function(k){ localStorage.removeItem(k); });
+  } catch (_e) {}
+  TOKEN = '';
+  window.location.href = 'lobby.html';
+}
+window.signOut = signOut;
+
 (function init(){
   if (!TOKEN) { window.location.href = 'lobby.html'; return; }
+  setupSurvivorNav();
   try { JSON.parse(localStorage.getItem('pb-club') || 'null'); } catch(_e){}
   var q = new URLSearchParams(window.location.search).get('pool');
   loadMyPools().then(function(){

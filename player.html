@@ -480,6 +480,28 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
 
 <script>
 (function(){
+  try {
+    if (new URLSearchParams(location.search).get('preview') === '1') return;
+    if (!localStorage.getItem('pb-sports-token')) {
+      location.replace('lobby.html');
+      return;
+    }
+    function _nr(r){ return String(r||'').toLowerCase().trim(); }
+    function _isHost(r){
+      var n = _nr(r);
+      return n==='host'||n==='admin'||n==='master_admin'||n==='owner'||n==='creator'||n==='full_admin'
+        || n==='cohost'||n==='staff'||n==='settlement_manager'
+        || n.indexOf('cohost_')===0||n.indexOf('staff_')===0;
+    }
+    var role = '';
+    try { var p = JSON.parse(localStorage.getItem('pb-player')||'null'); if (p && p.role) role = p.role; } catch(_e){}
+    try { var h = JSON.parse(localStorage.getItem('pb-host')||'null'); if (h && _isHost(h.role)) role = h.role; } catch(_e){}
+    if (!_isHost(role)) {
+      location.replace('survivor.html');
+    }
+  } catch(_e){}
+})();
+(function(){
   // GLOBAL LIGHT APPLY
 try {
     var s=JSON.parse(localStorage.getItem('pb-player-settings')||'{}');
