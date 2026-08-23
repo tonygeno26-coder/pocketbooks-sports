@@ -542,8 +542,9 @@ try {
         <div id="signup-contact-hint" style="font-size:0.62rem;color:#666;margin:-6px 0 10px;padding:0 4px">Select how we can reach you — required for account recovery.</div>
       </div>
 
-      <!-- SHARED FIELDS -->
-      <input id="a-email" class="auth-inp" placeholder="Email, @username, or display name" type="text" autocomplete="username">
+      <!-- SHARED FIELDS (a-email is login-only; hidden on signup) -->
+      <div id="login-hint" style="font-size:0.62rem;color:#666;margin:0 0 8px;padding:0 4px">Sign in with your display name or email</div>
+      <input id="a-email" class="auth-inp" placeholder="Display name, email, or @telegram" type="text" autocomplete="username">
       <input id="a-pass" class="auth-inp" placeholder="Password" type="password" autocomplete="current-password">
       <div id="confirm-pass-wrap" style="display:none">
         <input id="a-pass2" class="auth-inp" placeholder="Confirm password" type="password">
@@ -684,8 +685,10 @@ function setAuthTab(mode) {
   var emailEl = document.getElementById('a-email');
   if (emailEl) {
     emailEl.style.display = mode==='login' ? 'block' : 'none';
-    emailEl.placeholder = 'Email, @username, or display name';
+    emailEl.placeholder = 'Display name, email, or @telegram';
   }
+  var hintEl = document.getElementById('login-hint');
+  if (hintEl) hintEl.style.display = mode==='login' ? 'block' : 'none';
   document.getElementById('auth-submit-btn').textContent = mode==='signup' ? 'Create My Account →' : 'Sign In →';
   document.getElementById('auth-footer-text').innerHTML = mode==='login'
     ? "Don't have an account? <span style='color:var(--cyan);cursor:pointer' onclick=\"setAuthTab('signup')\">Create one free</span>"
@@ -909,7 +912,7 @@ async function submitAuth() {
   // Login accepts email, Telegram/Signal handle, or display name.
   // Signup requires password plus the contact value.
   if (authMode === 'login') {
-    if (!loginEmail || !pass) { showAuthError('Please enter your email, username, or display name and password'); return; }
+    if (!loginEmail || !pass) { showAuthError('Please enter your display name, email, or @telegram and password'); return; }
   } else {
     if (!pass) { showAuthError('Please enter a password'); return; }
     if (!contactValue) { showAuthError('Select a contact method and enter your details — required for account recovery'); return; }
