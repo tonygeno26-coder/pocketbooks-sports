@@ -3872,9 +3872,12 @@ function _makeSelection(b) {
   if (commenceTime) {
     try { gameDate = new Date(commenceTime).toISOString().slice(0,10); } catch(_e){}
   }
-  // Prefer canonicalGameKey already set on the slip entry (built at click time with correct format)
+  // Prefer canonicalGameKey already set on the slip entry (built at click time).
+  // Fallback must use Owls sport keys (baseball_mlb), not short "mlb".
+  var _SPORT_FULL = { mlb:'baseball_mlb', nba:'basketball_nba', nfl:'americanfootball_nfl', nhl:'icehockey_nhl', wnba:'basketball_wnba' };
+  var _spShort = String(b.sport||'mlb').toLowerCase();
   var canonicalGameKey = b.canonicalGameKey || [
-    (b.sport||'mlb').toLowerCase(),
+    _SPORT_FULL[_spShort] || _spShort,
     awayTeam,
     homeTeam,
     gameDate
@@ -8957,9 +8960,12 @@ document.addEventListener('click', function(e) {
     var _rawTime = (_cachedG && (_cachedG.time || _cachedG.commence_time)) || null;
     var _gameDate = '';
     if (_rawTime) { try { _gameDate = new Date(_rawTime).toISOString().slice(0,10); } catch(_e){} }
-    // Key format must match the Owls normalizer: sport lowercase, teams raw (no hyphens).
-    // Owls stores: "baseball_mlb|Toronto Blue Jays|Baltimore Orioles|2026-05-31"
-    var _cKey = [(sp||'mlb').toLowerCase(), _away, _home, _gameDate].join('|');
+    // Prefer the game's Owls canonicalGameKey from the odds payload. Rebuilding
+    // as "mlb|Away|Home|date" misses odds_snapshots rows stored as
+    // "baseball_mlb|Away|Home|date".
+    var _SPORT_FULL = { mlb:'baseball_mlb', nba:'basketball_nba', nfl:'americanfootball_nfl', nhl:'icehockey_nhl', wnba:'basketball_wnba' };
+    var _cKey = (_cachedG && _cachedG.canonicalGameKey) ? _cachedG.canonicalGameKey
+      : [(_SPORT_FULL[(sp||'mlb').toLowerCase()] || (sp||'mlb').toLowerCase()), _away, _home, _gameDate].join('|');
     // Also grab raw ISO time for placement gate / ticket leg
     var _isoTime = _rawTime || null;
 
@@ -9221,7 +9227,7 @@ function bsToggle(cellId, game, time, market, pick, odds) {
     var ctRaw = time || cachedGame.time || cachedGame.commence_time || null;
     var gameDate = '';
     if (ctRaw) { try { gameDate = new Date(ctRaw).toISOString().slice(0,10); } catch(_e){} }
-    sel.canonicalGameKey = [(_currentSport||'mlb').toUpperCase(),
+    sel.canonicalGameKey = cachedGame.canonicalGameKey || [(_currentSport||'mlb').toUpperCase(),
       (awayT||cachedGame.away||'').toLowerCase().replace(/\s+/g,'-'),
       (homeT||cachedGame.home||'').toLowerCase().replace(/\s+/g,'-'),
       gameDate].join('|');
