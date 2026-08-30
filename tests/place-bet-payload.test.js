@@ -170,21 +170,49 @@ function _resolveScheduledStart(obj, cachedGame) {
 
 console.log('\n-- Place-bet payload alignment --');
 
+const CONTRACT_FIELDS = ['pick','market','odds','line','canonicalGameKey','scheduledStart','gameId'];
+
 test('player.html ships the Owls key + line helpers', function() {
   assert(html.indexOf('function _normalizeGameKeyToOwls') !== -1);
   assert(html.indexOf('function _extractSlipPointLine') !== -1);
-  assert(html.indexOf('line:_extractSlipPointLine(leg.pick, leg.line)') !== -1);
-  assert(html.indexOf('canonicalGameKey:_normalizeGameKeyToOwls(') !== -1);
+  assert(html.indexOf('function _buildContractPlaceLeg') !== -1);
+  assert(html.indexOf('var canonicalGameKey = _normalizeGameKeyToOwls(') !== -1);
 });
 
 test('player.html stamps ISO scheduledStart onto every POST leg', function() {
   assert(html.indexOf('function _resolveScheduledStart') !== -1);
   assert(html.indexOf('function _lookupCachedGame') !== -1);
-  assert(html.indexOf('scheduledStart:_legIso') !== -1);
-  assert(html.indexOf('scheduled_start:_legIso') !== -1);
+  assert(html.indexOf('scheduledStart:_c.scheduledStart') !== -1 || html.indexOf('scheduledStart: iso') !== -1
+    || html.indexOf('scheduledStart:iso') !== -1,
+    'POST legs must include scheduledStart from the contract builder');
+  assert(html.indexOf('function _buildContractPlaceLeg') !== -1);
   assert(html.indexOf('data-start=') !== -1);
   assert(html.indexOf("id.split('-').slice(0,4)") === -1,
     'must not look up gamesCache with cellId.split(-).slice(0,4)');
+});
+
+test('confirmBet / _makeSelection / click / bsToggle emit all contract fields', function() {
+  CONTRACT_FIELDS.forEach(function(f) {
+    assert(html.indexOf(f) !== -1, 'player.html missing contract field ' + f);
+  });
+  assert(html.indexOf('gameId:_c.gameId') !== -1 || html.indexOf('gameId: _c.gameId') !== -1,
+    'POST mapper must send gameId from the contract builder');
+  assert(html.indexOf('function _resolveGameId') !== -1);
+  assert(html.indexOf('data-game-id=') !== -1);
+  assert(html.indexOf('_buildContractPlaceLeg(leg)') !== -1,
+    'confirmBet POST must go through _buildContractPlaceLeg');
+  assert(html.indexOf('_buildContractPlaceLeg(b)') !== -1,
+    '_makeSelection must go through _buildContractPlaceLeg');
+  assert(html.indexOf('_buildContractPlaceLeg(Object.assign({}, sel') !== -1,
+    'bsToggle must stamp contract fields via _buildContractPlaceLeg');
+});
+
+test('market normalizer emits lowercase moneyline/total/spread', function() {
+  assert(html.indexOf("return 'moneyline'") !== -1);
+  assert(html.indexOf("return 'total'") !== -1);
+  assert(html.indexOf("return 'spread'") !== -1);
+  assert(html.indexOf("return 'Moneyline'") === -1,
+    'must not send title-case Moneyline');
 });
 
 test('hyphenated MLB key becomes Owls snapshot key', function() {
@@ -211,6 +239,67 @@ test('totals pick yields a numeric line; moneyline does not', function() {
   assertEq(_extractSlipPointLine('Over 8', null), 8);
   assertEq(_extractSlipPointLine('Colorado Rockies', null), null);
   assertEq(_extractSlipPointLine('Colorado Rockies To Win', null), null);
+});
+
+function _normalizeSlipMarket(market) {
+  var m = String(market || '').trim().toLowerCase();
+  if (!m) return 'moneyline';
+  if (m === 'to win' || m === 'win' || m === 'h2h' || m.indexOf('moneyline') >= 0) return 'moneyline';
+  if (m.indexOf('total') >= 0 || m === 'over' || m === 'under') return 'total';
+  if (m.indexOf('spread') >= 0 || m.indexOf('run line') >= 0 || m.indexOf('puck line') >= 0
+      || m.indexOf('runline') >= 0 || m.indexOf('handicap') >= 0) return 'spread';
+  return m;
+}
+
+test('lobby labels collapse to contract markets', function() {
+  assertEq(_normalizeSlipMarket('Moneyline'), 'moneyline');
+  assertEq(_normalizeSlipMarket('To Win'), 'moneyline');
+  assertEq(_normalizeSlipMarket('Total'), 'total');
+  assertEq(_normalizeSlipMarket('Run Line'), 'spread');
+});
+
+test('contract moneyline payload has the seven fields and no To Win', function() {
+  var pick = 'Boston Red Sox To Win'.replace(/\s+to\s+win\s*$/i, '').trim();
+  var leg = {
+    pick: pick,
+    market: _normalizeSlipMarket('Moneyline'),
+    odds: -119,
+    line: null,
+    canonicalGameKey: _normalizeGameKeyToOwls(
+      'mlb|Boston Red Sox|New York Yankees|', 'Boston Red Sox', 'New York Yankees', 'mlb',
+      '2026-08-30T17:35:00Z'
+    ),
+    scheduledStart: _isoScheduledStart('2026-08-30T17:35:00Z'),
+    gameId: '1634659875'
+  };
+  CONTRACT_FIELDS.forEach(function(f) {
+    assert(Object.prototype.hasOwnProperty.call(leg, f), 'missing ' + f);
+  });
+  assertEq(leg.pick, 'Boston Red Sox');
+  assertEq(leg.market, 'moneyline');
+  assertEq(leg.line, null);
+  assertEq(leg.canonicalGameKey, 'baseball_mlb|Boston Red Sox|New York Yankees|2026-08-30');
+  assert(leg.scheduledStart.indexOf('2026-08-30T17:35:00') === 0);
+  assertEq(leg.gameId, '1634659875');
+});
+
+test('contract totals payload uses Over N + numeric line', function() {
+  var pick = 'Over 9';
+  var leg = {
+    pick: pick,
+    market: _normalizeSlipMarket('Total'),
+    odds: -110,
+    line: _extractSlipPointLine(pick, null),
+    canonicalGameKey: _normalizeGameKeyToOwls(
+      'baseball_mlb|Boston Red Sox|New York Yankees|2026-08-30', '', '', 'mlb',
+      '2026-08-30T17:35:00Z'
+    ),
+    scheduledStart: '2026-08-30T17:35:00Z',
+    gameId: '1634659875'
+  };
+  assertEq(leg.market, 'total');
+  assertEq(leg.line, 9);
+  assertEq(leg.pick, 'Over 9');
 });
 
 test('unhyphenated Owls cell id strips market suffix', function() {

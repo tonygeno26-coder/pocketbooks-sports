@@ -1877,7 +1877,8 @@ async function loadGames(sport, opts){
         const safeGame=(aw+' vs '+hw).replace(/"/g,'').replace(/'/g,'');
         const safeTime=g.time||'';
         const isoStart=String(g.scheduledStart||g.time||g.commence_time||'').replace(/"/g,'');
-        const safeMkt=(marketType||'Market').replace(/"/g,'').replace(/'/g,'');
+        const safeMkt=_normalizeSlipMarket(marketType||'moneyline').replace(/"/g,'').replace(/'/g,'');
+        const safeGameId=String(g.id||g.providerGameId||'').replace(/"/g,'');
         // Build clean pick label: always include full team name
         var pickLabel = teamPick || top || f;
         // Never allow bare line like "-1.5" without team
@@ -1885,6 +1886,7 @@ async function loadGames(sport, opts){
         const safePick=(pickLabel||'Unknown Selection').replace(/"/g,'').replace(/'/g,'');
         return`<div class="odds-box odds-cell" id="c-${id}"
           data-id="${id}"
+          data-game-id="${safeGameId}"
           data-game="${safeGame}"
           data-time="${safeTime}"
           data-start="${isoStart}"
@@ -4013,69 +4015,107 @@ function _normalizeGameKeyToOwls(existingKey, away, home, sport, isoTime) {
   return [sportPart, awayPart, homePart, datePart].join('|');
 }
 function _normalizeSlipMarket(market) {
-  var m = String(market || '').trim();
-  if (/^to\s+win$/i.test(m) || /^win$/i.test(m)) return 'Moneyline';
-  return m || 'Market';
+  var m = String(market || '').trim().toLowerCase();
+  if (!m) return 'moneyline';
+  if (m === 'to win' || m === 'win' || m === 'h2h' || m.indexOf('moneyline') >= 0) return 'moneyline';
+  if (m.indexOf('total') >= 0 || m === 'over' || m === 'under') return 'total';
+  if (m.indexOf('spread') >= 0 || m.indexOf('run line') >= 0 || m.indexOf('puck line') >= 0
+      || m.indexOf('runline') >= 0 || m.indexOf('handicap') >= 0) return 'spread';
+  return m;
+}
+function _resolveGameId(obj, cachedGame) {
+  obj = obj || {};
+  cachedGame = cachedGame || {};
+  var id = obj.gameId || obj.providerGameId || obj.provider_game_id
+    || cachedGame.id || cachedGame.providerGameId || cachedGame.gameId
+    || _stripCellGameId(obj.cellId || '');
+  return id ? String(id) : null;
+}
+function _buildContractPlaceLeg(leg) {
+  leg = leg || {};
+  var teams2 = String(leg.game || leg.matchup || '').split(' vs ');
+  var awayTeam = String(leg.awayTeam || teams2[0] || '').trim();
+  var homeTeam = String(leg.homeTeam || teams2[1] || '').trim();
+  var cachedGame = _lookupCachedGame(
+    leg.cellId || leg.gameId || leg.providerGameId,
+    leg.canonicalGameKey || leg.canonical_game_key,
+    awayTeam, homeTeam
+  );
+  if (!awayTeam && cachedGame) awayTeam = cachedGame.away || cachedGame.away_team || '';
+  if (!homeTeam && cachedGame) homeTeam = cachedGame.home || cachedGame.home_team || '';
+  var iso = _resolveScheduledStart(leg, cachedGame);
+  var pick = _stripMoneylinePickSuffix(leg.pick || '');
+  var market = _normalizeSlipMarket(leg.market);
+  var line = _extractSlipPointLine(pick, leg.line);
+  if (market === 'moneyline') line = null;
+  else if (line != null && Number.isFinite(Number(line))) line = Number(line);
+  else line = null;
+  var gameId = _resolveGameId(leg, cachedGame);
+  var canonicalGameKey = _normalizeGameKeyToOwls(
+    leg.canonicalGameKey || leg.canonical_game_key || '',
+    awayTeam, homeTeam,
+    leg.sport || _currentSport || 'mlb',
+    iso
+  );
+  var oddsNum = typeof leg.odds === 'number' ? leg.odds : parseInt(String(leg.odds || '').replace('+', ''), 10);
+  return {
+    pick: pick,
+    market: market,
+    odds: Number.isFinite(oddsNum) ? oddsNum : leg.odds,
+    line: line,
+    canonicalGameKey: canonicalGameKey,
+    scheduledStart: iso,
+    gameId: gameId
+  };
 }
 
 function _makeSelection(b) {
-  // Parse 'Away Team vs Home Team' into structured pieces.
+  var contract = _buildContractPlaceLeg(b);
   var teams2 = (b.game||'').split(' vs ');
-  var awayTeam = (teams2[0] || '').trim();
-  var homeTeam = (teams2[1] || '').trim();
-  var pck = _stripMoneylinePickSuffix(b.pick||'').toLowerCase();
+  var awayTeam = (b.awayTeam || teams2[0] || '').trim();
+  var homeTeam = (b.homeTeam || teams2[1] || '').trim();
+  var pck = String(contract.pick || '').toLowerCase();
   var homeLower = homeTeam.toLowerCase();
   var side = pck.includes('over') ? 'over' : pck.includes('under') ? 'under' :
     (homeLower && pck.includes(homeLower.split(' ').pop())) ? 'home' : 'away';
   var now = new Date();
   var placedDate = now.toISOString().slice(0,10);
-  // scheduledStart: Owls ISO from slip/cache. Do not send lobby display
-  // strings ("Sun 7:10 PM") — convert them only when a YYYY-MM-DD hint exists.
-  var cachedGame = _lookupCachedGame(b.cellId, b.canonicalGameKey, awayTeam, homeTeam);
-  var commenceTime = _resolveScheduledStart(b, cachedGame);
-  var oddsApiGameId = (cachedGame && (cachedGame.id || cachedGame.providerGameId))
-    || _stripCellGameId(b.cellId) || null;
+  var cachedGame = _lookupCachedGame(b.cellId, contract.canonicalGameKey, awayTeam, homeTeam);
   if (!awayTeam && cachedGame)  awayTeam  = cachedGame.away || cachedGame.away_team  || '';
   if (!homeTeam && cachedGame)  homeTeam  = cachedGame.home || cachedGame.home_team  || '';
-  // canonicalGameKey: must match Owls normalizer format stored in odds_snapshots.
-  // Owls stores: sport_key (lowercase) + raw team names (no hyphens) + YYYY-MM-DD
-  // e.g. "baseball_mlb|Toronto Blue Jays|Baltimore Orioles|2026-05-31"
-  var canonicalGameKey = _normalizeGameKeyToOwls(
-    b.canonicalGameKey, awayTeam, homeTeam, b.sport || _currentSport || 'mlb', commenceTime
-  );
-  var pointLine = _extractSlipPointLine(b.pick, b.line);
-  var legId = 'LEG-' + (oddsApiGameId||'?') + '-' + (b.market||'mkt').replace(/\s+/g,'').slice(0,8) + '-' + now.getTime();
+  var legId = 'LEG-' + (contract.gameId||'?') + '-' + (contract.market||'mkt').replace(/\s+/g,'').slice(0,8) + '-' + now.getTime();
   console.log('[game identity audit]',
     '\n  legId:            ', legId,
     '\n  providerName:     ', 'odds-api',
-    '\n  providerGameId:   ', oddsApiGameId || '?',
-    '\n  canonicalGameKey: ', canonicalGameKey,
-    '\n  ticketCommenceTime:', commenceTime || '(not set)',
+    '\n  gameId:           ', contract.gameId || '?',
+    '\n  providerGameId:   ', contract.gameId || '?',
+    '\n  canonicalGameKey: ', contract.canonicalGameKey,
+    '\n  ticketCommenceTime:', contract.scheduledStart || '(not set)',
     '\n  ticketTeams:      ', awayTeam + ' @ ' + homeTeam,
     '\n  sport:            ', b.sport || '?',
-    '\n  market:           ', b.market || '?',
-    '\n  pick:             ', b.pick || '?',
-    '\n  odds:             ', b.odds
+    '\n  market:           ', contract.market || '?',
+    '\n  pick:             ', contract.pick || '?',
+    '\n  odds:             ', contract.odds,
+    '\n  line:             ', contract.line
   );
   return {
-    // ── GAME IDENTITY (permanent, used for grading match) ──
+    // Snapshot contract (every place-bet leg, singles and parlays)
+    pick:              contract.pick,
+    market:            contract.market,
+    odds:              contract.odds,
+    line:              contract.line,
+    canonicalGameKey:  contract.canonicalGameKey,
+    scheduledStart:    contract.scheduledStart,
+    gameId:            contract.gameId,
+    // Extra identity / grading aliases (not required by the contract)
     legId:             legId,
     providerName:      'odds-api',
-    providerGameId:    oddsApiGameId,
-    canonicalGameKey:  canonicalGameKey,
-    scheduledStart:    commenceTime,   // canonical field name for grading
-    commenceTime:      commenceTime,   // keep for backward compat
+    providerGameId:    contract.gameId,
+    commenceTime:      contract.scheduledStart,
     sport:             b.sport || '',
     homeTeam:          homeTeam,
     awayTeam:          awayTeam,
-    // ── MARKET IDENTITY ──
-    market:            _normalizeSlipMarket(b.market),
-    pick:              _stripMoneylinePickSuffix(b.pick || ''),
-    odds:              b.odds,
-    line:              pointLine,
     side:              side,
-    // ── LEGACY COMPAT ──
-    gameId:            oddsApiGameId,
     cellId:            b.cellId || null,
     matchup:           b.game || '',
     placedDate:        placedDate
@@ -4372,26 +4412,17 @@ async function confirmBet() {
       // undefined for Single/Parlay/Teaser so it is omitted from the JSON body.
       rrStakes: snap.type === 'rr' ? snap.rrStakes : undefined,
       legs:(_t0.selections||snap.legs||[]).map(function(leg){
-        var _legCached = _lookupCachedGame(
-          leg.cellId || leg.providerGameId || leg.gameId,
-          leg.canonicalGameKey || leg.canonical_game_key,
-          leg.awayTeam, leg.homeTeam
-        );
-        var _legIso = _resolveScheduledStart(leg, _legCached);
-        return { legId:leg.legId, pick:_stripMoneylinePickSuffix(leg.pick), market:_normalizeSlipMarket(leg.market), odds:leg.odds,
-          line:_extractSlipPointLine(leg.pick, leg.line), side:leg.side||null,
-          canonicalGameKey:_normalizeGameKeyToOwls(
-            leg.canonicalGameKey||leg.canonical_game_key||'',
-            leg.awayTeam||'', leg.homeTeam||'',
-            leg.sport||_currentSport||'mlb',
-            _legIso
-          ),
+        var _c = _buildContractPlaceLeg(leg);
+        return {
+          pick:_c.pick, market:_c.market, odds:_c.odds, line:_c.line,
+          canonicalGameKey:_c.canonicalGameKey, scheduledStart:_c.scheduledStart, gameId:_c.gameId,
+          // aliases kept as fallbacks; contract fields above are canonical
+          scheduled_start:_c.scheduledStart, commenceTime:_c.scheduledStart,
+          providerGameId:_c.gameId, providerName:leg.providerName||'odds-api',
+          legId:leg.legId, side:leg.side||null,
           sport:leg.sport||_currentSport||'mlb',
-          homeTeam:leg.homeTeam||'', awayTeam:leg.awayTeam||'',
-          scheduledStart:_legIso,
-          scheduled_start:_legIso,
-          commenceTime:_legIso,
-          providerGameId:leg.providerGameId||null, providerName:leg.providerName||'odds-api' };
+          homeTeam:leg.homeTeam||'', awayTeam:leg.awayTeam||''
+        };
       })
     };
 
@@ -9164,12 +9195,18 @@ document.addEventListener('click', function(e) {
       return;
     }
 
-    // Add new valid selection
+    var _gameId = _resolveGameId({
+      cellId: id,
+      gameId: cell.getAttribute('data-game-id') || (cell.dataset && cell.dataset.gameId) || ''
+    }, _cachedG);
+    var _line = market === 'moneyline' ? null : _extractSlipPointLine(pick, null);
+
+    // Add new valid selection — contract fields always present
     betSlip.push({
       cellId: id, game: game, time: time, market: market,
       pick: pick, odds: odds, sport: sp, gameKey: gameKey,
-      canonicalGameKey: _cKey, scheduledStart: _isoTime,  // ISO, not display string
-      line: _extractSlipPointLine(pick, null),
+      canonicalGameKey: _cKey, scheduledStart: _isoTime,
+      line: _line, gameId: _gameId, providerGameId: _gameId,
       homeTeam: _home, awayTeam: _away, gameStatus: gameStatus
     });
     console.log('[highlight] adding selected to:', id, 'classList before:', cell.className);
@@ -9425,6 +9462,18 @@ function bsToggle(cellId, game, time, market, pick, odds) {
     sel.homeTeam = homeT;
     sel.awayTeam = awayT;
   }
+  var _cellGameId = cellEl0
+    ? (cellEl0.getAttribute('data-game-id') || (cellEl0.dataset && cellEl0.dataset.gameId) || '')
+    : '';
+  var _c = _buildContractPlaceLeg(Object.assign({}, sel, { gameId: _cellGameId || sel.gameId }));
+  sel.pick = _c.pick;
+  sel.market = _c.market;
+  sel.odds = _c.odds;
+  sel.line = _c.line;
+  sel.canonicalGameKey = _c.canonicalGameKey;
+  sel.scheduledStart = _c.scheduledStart;
+  sel.gameId = _c.gameId;
+  sel.providerGameId = _c.gameId;
 
   console.log('selected bet:', sel);
 
