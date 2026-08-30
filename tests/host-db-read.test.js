@@ -298,7 +298,19 @@ test('Players tab is DB-first via _hostPlayersFromDbOrLocal', function() {
 
 test('Your Players list is filled from the same rows as the Players tab', function() {
   assert(hostHtml.indexOf("getElementById('player-list')") !== -1, 'renderPlayersTab writes #player-list');
+  assert(hostHtml.indexOf('id="players-tab-list"') !== -1, 'Players tab has dedicated #players-tab-list');
   assert(hostHtml.indexOf('Your Players') !== -1, 'Your Players heading present');
+});
+
+test('Players tab does not show empty state before dashboard fetch completes', function() {
+  assert(hostHtml.indexOf('_hostPlayersFetchDone') !== -1, 'fetch-done flag present');
+  assert(hostHtml.indexOf('Loading players') !== -1, 'loading state present');
+  assert(hostHtml.indexOf('Array.isArray(data.players)') !== -1, 'applies players only when array is present');
+});
+
+test('clicking a player expands their active bets', function() {
+  assert(hostHtml.indexOf('function togglePlayerExpand') !== -1, 'togglePlayerExpand defined');
+  assert(hostHtml.indexOf('function playerBetsHtml') !== -1, 'playerBetsHtml defined');
 });
 
 test('applyHostDashboardPlayers caches club roster', function() {
