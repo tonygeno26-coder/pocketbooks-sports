@@ -3868,6 +3868,42 @@ function _fillEmptyGameKeyDate(cKey, dateStr) {
   parts[parts.length - 1] = dateStr;
   return parts.join('|');
 }
+function _owlsSportKey(sport) {
+  var s = String(sport || 'mlb').toLowerCase();
+  var map = { mlb:'baseball_mlb', nba:'basketball_nba', nfl:'americanfootball_nfl', nhl:'icehockey_nhl', wnba:'basketball_wnba' };
+  if (map[s]) return map[s];
+  if (s.indexOf('baseball') === 0) return 'baseball_mlb';
+  return s;
+}
+function _titleCaseTeamName(name) {
+  return String(name || '').replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
+    .replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+}
+function _extractSlipPointLine(pick, line) {
+  if (line != null && line !== '') {
+    var n = Number(line);
+    if (Number.isFinite(n)) return n;
+  }
+  var m = String(pick || '').match(/(?:^|\s)([+-]?\d+(?:\.\d+)?)(?:\s|$)/);
+  return m ? Number(m[1]) : null;
+}
+function _isoScheduledStart(v) {
+  if (v == null || v === '') return null;
+  var ms = new Date(v).getTime();
+  if (isNaN(ms)) return null;
+  return new Date(ms).toISOString();
+}
+// Always emit Owls snapshot format: baseball_mlb|Miami Marlins|Washington Nationals|YYYY-MM-DD
+function _normalizeGameKeyToOwls(existingKey, away, home, sport, isoTime) {
+  var dateStr = _isoDateFromValue(isoTime);
+  var parts = String(existingKey || '').split('|');
+  var sportPart = _owlsSportKey(parts[0] || sport);
+  var awayPart = _titleCaseTeamName(parts[1] || away);
+  var homePart = _titleCaseTeamName(parts[2] || home);
+  var last = parts[parts.length - 1] || '';
+  var datePart = /^\d{4}-\d{2}-\d{2}$/.test(last) ? last : dateStr;
+  return [sportPart, awayPart, homePart, datePart].join('|');
+}
 function _normalizeSlipMarket(market) {
   var m = String(market || '').trim();
   if (/^to\s+win$/i.test(m) || /^win$/i.test(m)) return 'Moneyline';
@@ -3905,20 +3941,10 @@ function _makeSelection(b) {
   // canonicalGameKey: must match Owls normalizer format stored in odds_snapshots.
   // Owls stores: sport_key (lowercase) + raw team names (no hyphens) + YYYY-MM-DD
   // e.g. "baseball_mlb|Toronto Blue Jays|Baltimore Orioles|2026-05-31"
-  var gameDate = '';
-  if (commenceTime) {
-    try { gameDate = new Date(commenceTime).toISOString().slice(0,10); } catch(_e){}
-  }
-  // Prefer canonicalGameKey already set on the slip entry (built at click time).
-  // Fallback must use Owls sport keys (baseball_mlb), not short "mlb".
-  var _SPORT_FULL = { mlb:'baseball_mlb', nba:'basketball_nba', nfl:'americanfootball_nfl', nhl:'icehockey_nhl', wnba:'basketball_wnba' };
-  var _spShort = String(b.sport||'mlb').toLowerCase();
-  var canonicalGameKey = _fillEmptyGameKeyDate(b.canonicalGameKey || [
-    _SPORT_FULL[_spShort] || _spShort,
-    awayTeam,
-    homeTeam,
-    gameDate
-  ].join('|'), gameDate);
+  var canonicalGameKey = _normalizeGameKeyToOwls(
+    b.canonicalGameKey, awayTeam, homeTeam, b.sport || _currentSport || 'mlb', commenceTime
+  );
+  var pointLine = _extractSlipPointLine(b.pick, b.line);
   var legId = 'LEG-' + (oddsApiGameId||'?') + '-' + (b.market||'mkt').replace(/\s+/g,'').slice(0,8) + '-' + now.getTime();
   console.log('[game identity audit]',
     '\n  legId:            ', legId,
@@ -3947,6 +3973,7 @@ function _makeSelection(b) {
     market:            _normalizeSlipMarket(b.market),
     pick:              _stripMoneylinePickSuffix(b.pick || ''),
     odds:              b.odds,
+    line:              pointLine,
     side:              side,
     // ── LEGACY COMPAT ──
     gameId:            oddsApiGameId,
@@ -4246,11 +4273,16 @@ async function confirmBet() {
       rrStakes: snap.type === 'rr' ? snap.rrStakes : undefined,
       legs:(_t0.selections||snap.legs||[]).map(function(leg){
         return { legId:leg.legId, pick:_stripMoneylinePickSuffix(leg.pick), market:_normalizeSlipMarket(leg.market), odds:leg.odds,
-          line:leg.line||null, side:leg.side||null,
-          canonicalGameKey:leg.canonicalGameKey||leg.canonical_game_key||'',
+          line:_extractSlipPointLine(leg.pick, leg.line), side:leg.side||null,
+          canonicalGameKey:_normalizeGameKeyToOwls(
+            leg.canonicalGameKey||leg.canonical_game_key||'',
+            leg.awayTeam||'', leg.homeTeam||'',
+            leg.sport||_currentSport||'mlb',
+            leg.scheduledStart||leg.commenceTime||null
+          ),
           sport:leg.sport||_currentSport||'mlb',
           homeTeam:leg.homeTeam||'', awayTeam:leg.awayTeam||'',
-          scheduledStart:leg.scheduledStart||leg.commenceTime||null,
+          scheduledStart:_isoScheduledStart(leg.scheduledStart||leg.commenceTime)||leg.scheduledStart||leg.commenceTime||null,
           providerGameId:leg.providerGameId||null, providerName:leg.providerName||'odds-api' };
       })
     };
@@ -8995,16 +9027,11 @@ document.addEventListener('click', function(e) {
     var _oddsGameId = id ? id.split('-').slice(0,4).join('-') : null;
     var _cachedG = (window.gamesCache && _oddsGameId) ? window.gamesCache[_oddsGameId] : null;
     var _rawTime = (_cachedG && (_cachedG.time || _cachedG.commence_time)) || null;
-    var _gameDate = '';
-    if (_rawTime) { try { _gameDate = new Date(_rawTime).toISOString().slice(0,10); } catch(_e){} }
-    // Prefer the game's Owls canonicalGameKey from the odds payload. Rebuilding
-    // as "mlb|Away|Home|date" misses odds_snapshots rows stored as
-    // "baseball_mlb|Away|Home|date".
-    var _SPORT_FULL = { mlb:'baseball_mlb', nba:'basketball_nba', nfl:'americanfootball_nfl', nhl:'icehockey_nhl', wnba:'basketball_wnba' };
-    var _cKey = _fillEmptyGameKeyDate(
-      (_cachedG && _cachedG.canonicalGameKey) ? _cachedG.canonicalGameKey
-        : [(_SPORT_FULL[(sp||'mlb').toLowerCase()] || (sp||'mlb').toLowerCase()), _away, _home, _gameDate].join('|'),
-      _gameDate
+    // Prefer the game's Owls canonicalGameKey from the odds payload. Rebuild
+    // as baseball_mlb|Away|Home|YYYY-MM-DD — never mlb| or hyphenated slugs.
+    var _cKey = _normalizeGameKeyToOwls(
+      (_cachedG && _cachedG.canonicalGameKey) || '',
+      _away, _home, sp || _currentSport || 'mlb', _rawTime
     );
     // Also grab raw ISO time for placement gate / ticket leg
     var _isoTime = _rawTime || null;
@@ -9034,6 +9061,7 @@ document.addEventListener('click', function(e) {
       cellId: id, game: game, time: time, market: market,
       pick: pick, odds: odds, sport: sp, gameKey: gameKey,
       canonicalGameKey: _cKey, scheduledStart: _isoTime,  // ISO, not display string
+      line: _extractSlipPointLine(pick, null),
       homeTeam: _home, awayTeam: _away, gameStatus: gameStatus
     });
     console.log('[highlight] adding selected to:', id, 'classList before:', cell.className);
@@ -9264,19 +9292,18 @@ function bsToggle(cellId, game, time, market, pick, odds) {
   if (cachedGame) {
     var teams2 = (game||'').split(' vs ');
     var awayT = (teams2[0]||'').trim(), homeT = (teams2[1]||'').trim();
-    var ctRaw = time || cachedGame.time || cachedGame.commence_time || null;
-    var gameDate = '';
-    if (ctRaw) { try { gameDate = new Date(ctRaw).toISOString().slice(0,10); } catch(_e){} }
-    sel.canonicalGameKey = _fillEmptyGameKeyDate(
-      cachedGame.canonicalGameKey || [(_currentSport||'mlb').toUpperCase(),
-      (awayT||cachedGame.away||'').toLowerCase().replace(/\s+/g,'-'),
-      (homeT||cachedGame.home||'').toLowerCase().replace(/\s+/g,'-'),
-      gameDate].join('|'),
-      gameDate
+    var ctRaw = cachedGame.time || cachedGame.commence_time || _isoScheduledStart(time) || null;
+    sel.canonicalGameKey = _normalizeGameKeyToOwls(
+      cachedGame.canonicalGameKey || '',
+      awayT || cachedGame.away || '',
+      homeT || cachedGame.home || '',
+      sel.sport || _currentSport || cachedGame.sport || 'mlb',
+      ctRaw
     );
     sel.homeTeam = homeT || cachedGame.home || '';
     sel.awayTeam = awayT || cachedGame.away || '';
-    sel.scheduledStart = ctRaw;
+    sel.scheduledStart = _isoScheduledStart(ctRaw) || (cachedGame.time || cachedGame.commence_time || null);
+    sel.line = _extractSlipPointLine(sel.pick, sel.line);
   }
 
   console.log('selected bet:', sel);
