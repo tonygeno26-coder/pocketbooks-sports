@@ -1088,6 +1088,9 @@ var _DB_PRIMARY_READS_ENABLED = (function(){
 })();
 // Balance + tickets
 var betTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
+// True after a successful /api/player/dashboard hydrate. renderMyBets must
+// not clobber that in-memory list with stale pb-tickets.
+var _playerTicketsFromDb = false;
 function saveTickets(){
   localStorage.setItem('pb-tickets', JSON.stringify(betTickets));
   // Bump shared version so other player tabs / host actions can detect changes
@@ -2298,6 +2301,11 @@ function setBNav(el,tab){
     // Also hide place-bet-wrap
     var pbw=document.getElementById('place-bet-wrap'); if(pbw) pbw.style.display='none';
     renderMyBets();
+    if (_DB_PRIMARY_READS_ENABLED) {
+      try {
+        loadPlayerDashboardFromDb().then(function(){ try { renderMyBets(); } catch(_){} }).catch(function(){});
+      } catch(_){}
+    }
     dbgBanner('MY BETS SCREEN RENDERED: '+betTickets.length+' tickets', '#004');
   } else {
     const sec=document.getElementById('sportsbook-section');
@@ -2599,6 +2607,8 @@ try { revertFutureGrades(); }   catch(e) { console.error('[revertFutureGrades] s
 try {
   _maybeAutoEnableDbPrimaryReads().then(function(){
     return loadPlayerDashboardFromDb();
+  }).then(function(){
+    try { renderMyBets(); } catch(_e){}
   }).catch(function(e){ console.warn('[db primary read] init error:', e.message); });
 } catch(e) { console.warn('[db primary read] sync error:', e.message); }
 
@@ -4305,7 +4315,9 @@ async function confirmBet() {
         try { closeBetSlip();   } catch(_) {}
         try { clearSlip();      } catch(_) {}
 
-        // Render My Bets immediately with the locally-saved ticket
+        // Keep the just-placed ticket in-memory so renderMyBets does not
+        // reload an empty/stale pb-tickets list before the DB refetch lands.
+        _playerTicketsFromDb = true;
         try { renderMyBets(); } catch(_) {}
         if (_isRrResp) {
           showToast('\u2705 Round Robin placed \xb7 ' + _dbData.comboCount + ' combo ticket' + (_dbData.comboCount !== 1 ? 's' : '') + '!', 'success');
@@ -4313,12 +4325,10 @@ async function confirmBet() {
           showToast('\u2705 Bet placed!', 'success');
         }
 
-        // Dashboard refresh is deferred 400ms — backend propagation lag means
-        // immediate /api/player/dashboard may not yet include the new ticket,
-        // and a count-based gate in loadPlayerDashboardFromDb would refuse to
-        // overwrite local storage, leaving the displayed balance stale.
+        // Refetch dashboard after a short delay (propagation lag). keepPending
+        // merges any in-memory ticket the response has not yet included.
         setTimeout(function(){
-          try { loadPlayerDashboardFromDb().then(function(){
+          try { loadPlayerDashboardFromDb({ keepPending: true }).then(function(){
             try { renderMyBets(); } catch(_) {}
             try { syncBalanceDisplays(); } catch(_) {}
           }).catch(function(){}); } catch(_) {}
@@ -4361,7 +4371,7 @@ async function confirmBet() {
           try {
             var _r2=await _pbFetch('/api/bets/place',{method:'POST',body:JSON.stringify(_rp)});
             var _rt=await _r2.text(); var _rd2; try{ _rd2=JSON.parse(_rt); }catch(_){ _rd2={}; }
-            if (_rd2.ok) { showToast('\u2705 Bet placed at new odds','success'); try{loadPlayerDashboardFromDb();}catch(_){} try{renderMyBets();}catch(_){} }
+            if (_rd2.ok) { showToast('\u2705 Bet placed at new odds','success'); try{ loadPlayerDashboardFromDb({ keepPending: true }).then(function(){ try{renderMyBets();}catch(_){} }); }catch(_){ try{renderMyBets();}catch(_){} } }
             else { showToast((_rd2.code||_rd2.error||'placement failed').replace(/_/g,' '),'error'); }
           } catch(_e2){ showToast('Network error \u2014 try again','error'); }
         };
@@ -4653,7 +4663,9 @@ document.addEventListener('click', function(e) {
 // visible. The poll is cheap: read one int from localStorage every 3s.
 var _lastTicketsVersion = parseInt(localStorage.getItem('pb-tickets-version') || '0', 10) || 0;
 function _refreshFromStorage(reason) {
-  try { betTickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]'); } catch(ex) {}
+  if (!_playerTicketsFromDb) {
+    try { betTickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]'); } catch(ex) {}
+  }
   syncBalanceDisplays();
   var sec = document.getElementById('mybets-section');
   if (sec && sec.style.display !== 'none') {
@@ -6622,7 +6634,73 @@ function revertFutureGrades() {
 window.revertFutureGrades = revertFutureGrades;
 
 // ── PLAYER DASHBOARD DB READ (Phase C) ──────────────────────────────────────────────────
-async function loadPlayerDashboardFromDb() {
+function _normalizeDbTicket(t) {
+  if (!t || typeof t !== 'object') return t;
+  var rawLegs = [];
+  if (Array.isArray(t.selections) && t.selections.length) rawLegs = t.selections;
+  else if (Array.isArray(t.legs) && t.legs.length) rawLegs = t.legs;
+  var selections = rawLegs.map(function(s) {
+    if (!s || typeof s !== 'object') return s;
+    var home = s.homeTeam || s.home_team || '';
+    var away = s.awayTeam || s.away_team || '';
+    return Object.assign({}, s, {
+      pick:      s.pick || s.label || s.name || '',
+      market:    s.market || '',
+      odds:      s.odds,
+      homeTeam:  home,
+      awayTeam:  away,
+      matchup:   s.matchup || s.game || (away && home ? away + ' @ ' + home : ''),
+      sport:     s.sport,
+      line:      s.line,
+      side:      s.side
+    });
+  });
+  return Object.assign({}, t, {
+    id:              t.id,
+    type:            t.type || 'Single',
+    status:          t.status || 'active',
+    riskAmount:      t.riskAmount != null ? Number(t.riskAmount) : Number(t.risk_amount),
+    potentialProfit: t.potentialProfit != null ? Number(t.potentialProfit) : Number(t.potential_profit),
+    estimatedPayout: t.estimatedPayout != null ? Number(t.estimatedPayout) : Number(t.estimated_payout),
+    placedAt:        t.placedAt || t.placed_at,
+    gradedAt:        t.gradedAt || t.graded_at,
+    rrGroupId:       t.rrGroupId || t.rr_group_id,
+    selections:      selections,
+    source:          t.source || 'db'
+  });
+}
+
+function _applyDashboardTickets(data, opts) {
+  opts = opts || {};
+  var tix = (data && data.tickets) || {};
+  var allTix = []
+    .concat(tix.active || [])
+    .concat(tix.settled || [])
+    .concat(tix.canceled || [])
+    .map(_normalizeDbTicket);
+  if (opts.keepPending) {
+    var seen = {};
+    var seenGroups = {};
+    allTix.forEach(function(t) {
+      if (t && t.id) seen[String(t.id)] = true;
+      var g = t && (t.rrGroupId || t.rr_group_id);
+      if (g) seenGroups[String(g)] = true;
+    });
+    (Array.isArray(betTickets) ? betTickets : []).forEach(function(t) {
+      if (!t || !t.id || t.source === 'db-grouped' || seen[String(t.id)]) return;
+      var g = t.rrGroupId || t.rr_group_id;
+      if (g && seenGroups[String(g)]) return;
+      seen[String(t.id)] = true;
+      allTix.unshift(t);
+    });
+  }
+  betTickets = allTix;
+  _playerTicketsFromDb = true;
+  try { localStorage.setItem('pb-tickets', JSON.stringify(allTix)); } catch(_e) {}
+}
+
+async function loadPlayerDashboardFromDb(opts) {
+  opts = opts || {};
   var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
   var pid  = _safeId(pl.id != null ? pl.id : pl.username);
@@ -6630,22 +6708,41 @@ async function loadPlayerDashboardFromDb() {
   if (!pid) return { ok:false, fallbackReason:'no_player_id' };
   try {
     var qs   = '?playerId='+encodeURIComponent(pid)+(cid?'&clubId='+encodeURIComponent(cid):'');
-    var resp = await fetch('/api/player/dashboard'+qs);
+    var resp = await (typeof _pbFetch === 'function' ? _pbFetch('/api/player/dashboard'+qs) : fetch('/api/player/dashboard'+qs));
     var data = await resp.json();
-    if (!data.ok || !data.balance) throw new Error(data.error||'missing balance');
+    if (!data.ok) throw new Error(data.error||'dashboard not ok');
+    if (data.tickets) {
+      try {
+        var _fetcher = typeof _pbFetch === 'function' ? _pbFetch : fetch;
+        var lr = await _fetcher('/api/mirror/tickets-with-legs'+qs);
+        var ld = await lr.json();
+        if (ld && Array.isArray(ld.legs) && ld.legs.length) {
+          var byId = {};
+          ld.legs.forEach(function(l) {
+            if (!l || !l.ticket_id) return;
+            if (!byId[l.ticket_id]) byId[l.ticket_id] = [];
+            byId[l.ticket_id].push(l);
+          });
+          ['active','settled','canceled'].forEach(function(k) {
+            (data.tickets[k] || []).forEach(function(t) {
+              if (t && t.id && byId[t.id] && !(t.selections && t.selections.length) && !(t.legs && t.legs.length)) {
+                t.legs = byId[t.id].slice().sort(function(a,b){ return (a.leg_index||0)-(b.leg_index||0); });
+              }
+            });
+          });
+        }
+      } catch(_le) {}
+      _applyDashboardTickets(data, opts);
+    }
     var b = data.balance;
-    if (isNaN(b.availableBalance)) throw new Error('NaN balance from DB');
-    if (b.openRisk < 0) throw new Error('negative openRisk from DB');
-    // Hydrate betTickets from DB-derived active tickets
-    var allTix = (data.tickets.active||[]).concat(data.tickets.settled||[]).concat(data.tickets.canceled||[]);
-    if (allTix.length > 0) {
-      // DB is authoritative — always overwrite local cache when DB has tickets.
-      // Exception: if DB returns 0 tickets, keep local cache (propagation lag).
-      try { localStorage.setItem('pb-tickets', JSON.stringify(allTix)); betTickets = allTix; } catch(_e){}
+    if (b) {
+      if (b.availableBalance != null && isNaN(b.availableBalance)) throw new Error('NaN balance from DB');
+      if (b.openRisk < 0) throw new Error('negative openRisk from DB');
     }
     syncBalanceDisplays();
     _updatePlayerSourceBadge('db');
-    console.log('[player dashboard db] playerId='+pid+' available=$'+b.availableBalance+' openRisk=$'+b.openRisk+' active='+data.tickets.active.length);
+    var _activeN = (data.tickets && data.tickets.active) ? data.tickets.active.length : 0;
+    console.log('[player dashboard db] playerId='+pid+' available=$'+(b&&b.availableBalance)+' openRisk=$'+(b&&b.openRisk)+' active='+_activeN);
     return data;
   } catch(e) {
     console.warn('[player dashboard db] fallback to localStorage:', e.message);
@@ -7298,10 +7395,10 @@ var _evPollTimer = null;
 var _evPolling   = false;
 
 var _EV_ACTIONS = {
-  ticket_graded:     function() { try{ loadPlayerDashboardFromDb(); }catch(_e){} try{ renderMyBets(); }catch(_e){} syncBalanceDisplays(); },
-  balance_changed:   function() { try{ loadPlayerDashboardFromDb(); }catch(_e){} syncBalanceDisplays(); },
-  ticket_placed:     function() { try{ renderMyBets(); }catch(_e){} syncBalanceDisplays(); },
-  ticket_canceled:   function() { try{ renderMyBets(); }catch(_e){} syncBalanceDisplays(); },
+  ticket_graded:     function() { try{ loadPlayerDashboardFromDb().then(function(){ try{ renderMyBets(); }catch(_e){} syncBalanceDisplays(); }); }catch(_e){ try{ renderMyBets(); }catch(_e2){} syncBalanceDisplays(); } },
+  balance_changed:   function() { try{ loadPlayerDashboardFromDb().then(function(){ syncBalanceDisplays(); }); }catch(_e){} },
+  ticket_placed:     function() { try{ loadPlayerDashboardFromDb({ keepPending: true }).then(function(){ try{ renderMyBets(); }catch(_e){} syncBalanceDisplays(); }); }catch(_e){ try{ renderMyBets(); }catch(_e2){} syncBalanceDisplays(); } },
+  ticket_canceled:   function() { try{ loadPlayerDashboardFromDb().then(function(){ try{ renderMyBets(); }catch(_e){} syncBalanceDisplays(); }); }catch(_e){ try{ renderMyBets(); }catch(_e2){} syncBalanceDisplays(); } },
   odds_refreshed:    function() { try{ _checkMarketStatus&&_checkMarketStatus(); }catch(_e){} },
   payment_confirmed: function() { /* settlement panel refresh handled by host */ },
   payment_voided:    function() { /* settlement panel refresh handled by host */ },
@@ -7491,13 +7588,16 @@ function renderMyBets() {
   try {
     var el = document.getElementById('mybets-section');
     if (!el) { console.warn('[renderMyBets] mybets-section element not found in DOM'); return; }
-    // Always reload from localStorage to get latest
-    var _rawTickets = localStorage.getItem('pb-tickets') || '[]';
-    var _parseErr = null;
-    try { betTickets = JSON.parse(_rawTickets); }
-    catch(e){ _parseErr = e; betTickets = Array.isArray(betTickets) ? betTickets : []; }
+    // DB hydrate is authoritative. Only fall back to pb-tickets if we have
+    // not successfully loaded from /api/player/dashboard this session.
+    if (!_playerTicketsFromDb) {
+      var _rawTickets = localStorage.getItem('pb-tickets') || '[]';
+      var _parseErr = null;
+      try { betTickets = JSON.parse(_rawTickets); }
+      catch(e){ _parseErr = e; betTickets = Array.isArray(betTickets) ? betTickets : []; }
+      if (_parseErr) console.error('[renderMyBets] pb-tickets JSON parse failed — falling back to []', _parseErr);
+    }
     if (!Array.isArray(betTickets)) betTickets = [];
-    if (_parseErr) console.error('[renderMyBets] pb-tickets JSON parse failed — falling back to []', _parseErr);
 
     // ── RR grouping: collapse per-combo Parlay tickets into a single slip card ─
     // After loadPlayerDashboardFromDb(), betTickets may contain N Parlay tickets
