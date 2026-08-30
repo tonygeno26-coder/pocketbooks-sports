@@ -3852,6 +3852,22 @@ function _stripMoneylinePickSuffix(pick) {
     .replace(/\s+ml\s*$/i, '')
     .trim();
 }
+function _isoDateFromValue(v) {
+  if (v == null || v === '') return '';
+  var s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  var ms = new Date(s).getTime();
+  if (!isNaN(ms)) return new Date(ms).toISOString().slice(0, 10);
+  return '';
+}
+function _fillEmptyGameKeyDate(cKey, dateStr) {
+  if (!cKey || !dateStr) return cKey;
+  var parts = String(cKey).split('|');
+  if (parts.length < 4) return String(cKey);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(parts[parts.length - 1] || '')) return String(cKey);
+  parts[parts.length - 1] = dateStr;
+  return parts.join('|');
+}
 function _normalizeSlipMarket(market) {
   var m = String(market || '').trim();
   if (/^to\s+win$/i.test(m) || /^win$/i.test(m)) return 'Moneyline';
@@ -3869,8 +3885,13 @@ function _makeSelection(b) {
     (homeLower && pck.includes(homeLower.split(' ').pop())) ? 'home' : 'away';
   var now = new Date();
   var placedDate = now.toISOString().slice(0,10);
-  // commenceTime: prefer raw ISO from betSlip entry (set at add-to-slip time)
-  var commenceTime = (b.time != null && b.time !== '') ? b.time : null;
+  // commenceTime: prefer ISO scheduledStart. Do NOT use the lobby display
+  // string ("Sun 7:10 PM") — Node cannot parse it, and it leaves the
+  // snapshot key date empty.
+  var commenceTime = b.scheduledStart || b.commenceTime || null;
+  if (!commenceTime || isNaN(new Date(commenceTime).getTime())) {
+    commenceTime = null;
+  }
   // Provider game ID: strip the market suffix from cellId (e.g. 'abc123-sp-aw' -> 'abc123')
   var oddsApiGameId = b.cellId ? b.cellId.split('-').slice(0,4).join('-') : null;
   // Pull full game object from render-time cache for richer identity
@@ -3892,12 +3913,12 @@ function _makeSelection(b) {
   // Fallback must use Owls sport keys (baseball_mlb), not short "mlb".
   var _SPORT_FULL = { mlb:'baseball_mlb', nba:'basketball_nba', nfl:'americanfootball_nfl', nhl:'icehockey_nhl', wnba:'basketball_wnba' };
   var _spShort = String(b.sport||'mlb').toLowerCase();
-  var canonicalGameKey = b.canonicalGameKey || [
+  var canonicalGameKey = _fillEmptyGameKeyDate(b.canonicalGameKey || [
     _SPORT_FULL[_spShort] || _spShort,
     awayTeam,
     homeTeam,
     gameDate
-  ].join('|');
+  ].join('|'), gameDate);
   var legId = 'LEG-' + (oddsApiGameId||'?') + '-' + (b.market||'mkt').replace(/\s+/g,'').slice(0,8) + '-' + now.getTime();
   console.log('[game identity audit]',
     '\n  legId:            ', legId,
@@ -8980,8 +9001,11 @@ document.addEventListener('click', function(e) {
     // as "mlb|Away|Home|date" misses odds_snapshots rows stored as
     // "baseball_mlb|Away|Home|date".
     var _SPORT_FULL = { mlb:'baseball_mlb', nba:'basketball_nba', nfl:'americanfootball_nfl', nhl:'icehockey_nhl', wnba:'basketball_wnba' };
-    var _cKey = (_cachedG && _cachedG.canonicalGameKey) ? _cachedG.canonicalGameKey
-      : [(_SPORT_FULL[(sp||'mlb').toLowerCase()] || (sp||'mlb').toLowerCase()), _away, _home, _gameDate].join('|');
+    var _cKey = _fillEmptyGameKeyDate(
+      (_cachedG && _cachedG.canonicalGameKey) ? _cachedG.canonicalGameKey
+        : [(_SPORT_FULL[(sp||'mlb').toLowerCase()] || (sp||'mlb').toLowerCase()), _away, _home, _gameDate].join('|'),
+      _gameDate
+    );
     // Also grab raw ISO time for placement gate / ticket leg
     var _isoTime = _rawTime || null;
 
@@ -9243,10 +9267,13 @@ function bsToggle(cellId, game, time, market, pick, odds) {
     var ctRaw = time || cachedGame.time || cachedGame.commence_time || null;
     var gameDate = '';
     if (ctRaw) { try { gameDate = new Date(ctRaw).toISOString().slice(0,10); } catch(_e){} }
-    sel.canonicalGameKey = cachedGame.canonicalGameKey || [(_currentSport||'mlb').toUpperCase(),
+    sel.canonicalGameKey = _fillEmptyGameKeyDate(
+      cachedGame.canonicalGameKey || [(_currentSport||'mlb').toUpperCase(),
       (awayT||cachedGame.away||'').toLowerCase().replace(/\s+/g,'-'),
       (homeT||cachedGame.home||'').toLowerCase().replace(/\s+/g,'-'),
-      gameDate].join('|');
+      gameDate].join('|'),
+      gameDate
+    );
     sel.homeTeam = homeT || cachedGame.home || '';
     sel.awayTeam = awayT || cachedGame.away || '';
     sel.scheduledStart = ctRaw;
