@@ -2053,10 +2053,15 @@ function _applyHostDashboardPlayers(players) {
   });
 }
 
+function _hostBetsFromDbOrLocal(){
+  // Successful /api/host/dashboard apply sets _hostDbActiveTickets to an array
+  // (possibly empty). null means the fetch never succeeded — only then fall
+  // back to localStorage. Never let empty hostActiveBets replace a DB payload.
+  if (Array.isArray(_hostDbActiveTickets)) return _hostDbActiveTickets;
+  try { return JSON.parse(localStorage.getItem('hostActiveBets')||'[]'); } catch(_e) { return []; }
+}
 function loadHostActiveBets(){
-  var raw = (_HOST_DB_PRIMARY && Array.isArray(_hostDbActiveTickets))
-    ? _hostDbActiveTickets
-    : JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
+  var raw = _hostBetsFromDbOrLocal();
   // Deduplicate by ticket id
   var seen={};
   var tickets=raw.filter(function(t){
@@ -2423,6 +2428,7 @@ function setBN(el,tab){
     var s=document.getElementById('bets-section');
     if(s)s.style.display='block';
     renderHostBets();
+    loadHostDashboardFromDb('bets_tab');
   } else if(tab==='players'){
     var s=document.getElementById('players-section');
     if(s)s.style.display='block';
@@ -5245,36 +5251,31 @@ function _setHostDbPrimary(active) {
 // Canonical host stats dispatch: uses DB when primary, localStorage otherwise.
 // All callers (init, poll, storage events) must go through this.
 async function _dispatchHostStatsRefresh(trigger) {
-  if (_HOST_DB_PRIMARY) {
-    // DB is authoritative — suppress local render, use DB
-    console.log('[host render authority]',
-      '\n  source=db',
-      '\n  localSuppressed=true',
-      '\n  trigger='+trigger
-    );
-    try {
-      var r = await loadHostDashboardFromDb('dispatch:'+trigger);
-      if (r && r.source === 'db') {
-        // Confirm DOM values after DB write
-        var domHandle  = (document.getElementById('stat-handle')||{}).textContent || '?';
-        var domProfit  = (document.getElementById('stat-profit')||{}).textContent || '?';
-        var domActive  = (document.getElementById('stat-active-bets')||{}).textContent || '?';
-        console.log('[host render authority]',
-          '\n  source=db',
-          '\n  domHandle='+domHandle,
-          '\n  domProfit='+domProfit,
-          '\n  domActiveBets='+domActive,
-          '\n  localSuppressed=true'
-        );
-        return;
-      }
-    } catch(_e) {
-      console.warn('[host render authority] DB dispatch failed, falling back:', _e.message);
+  // Always try DB first. _HOST_DB_PRIMARY starts false; waiting for it to
+  // be true before fetching meant page_load never called /api/host/dashboard.
+  console.log('[host render authority]',
+    '\n  source=db_attempt',
+    '\n  trigger='+trigger
+  );
+  try {
+    var r = await loadHostDashboardFromDb('dispatch:'+trigger);
+    if (r && r.source === 'db') {
+      var domHandle  = (document.getElementById('stat-handle')||{}).textContent || '?';
+      var domProfit  = (document.getElementById('stat-profit')||{}).textContent || '?';
+      var domActive  = (document.getElementById('stat-active-bets')||{}).textContent || '?';
+      console.log('[host render authority]',
+        '\n  source=db',
+        '\n  domHandle='+domHandle,
+        '\n  domProfit='+domProfit,
+        '\n  domActiveBets='+domActive,
+        '\n  localSuppressed=true'
+      );
+      return;
     }
-    // DB load failed — fall through to local, but clear the primary flag
-    _HOST_DB_PRIMARY = false;
+  } catch(_e) {
+    console.warn('[host render authority] DB dispatch failed, falling back:', _e.message);
   }
-  // Local path (default or fallback)
+  _HOST_DB_PRIMARY = false;
   refreshHostDashboardStats(trigger);
 }
 
