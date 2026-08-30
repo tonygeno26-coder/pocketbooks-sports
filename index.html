@@ -707,6 +707,7 @@ function renderAdminCrypto() {
   </div>
 </div>
 
+<div id="home-content">
 <!-- SETTLEMENT SUMMARY -->
 <div class="settlement">
   <div class="settle-card sc-red">
@@ -802,6 +803,7 @@ function renderAdminCrypto() {
        (e.g. approve/invite flow). UI removal only — no functional change. -->
 </div>
 <div class="player-list" id="player-list"></div>
+</div><!-- /home-content -->
 
 <!-- ADD PLAYER MODAL -->
 <div id="modal-add" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:200;align-items:flex-end;justify-content:center">
@@ -2051,6 +2053,50 @@ function _applyHostDashboardPlayers(players) {
     var pid = p.playerId || p.player_id;
     if (pid != null) _hostDbPlayersById[String(pid)] = p;
   });
+  // Cache roster so other host UI (profiles, limits) sees DB members even
+  // before the next render. Merge by playerId; never drop extra local rows.
+  try {
+    var existing = [];
+    try { existing = JSON.parse(localStorage.getItem('pb-club-players')||'[]'); } catch(_e) {}
+    var byId = {};
+    existing.forEach(function(p){ if (p && p.playerId) byId[String(p.playerId)] = p; });
+    _hostDbPlayers.forEach(function(dp) {
+      if (!dp) return;
+      var pid = String(dp.playerId || dp.player_id || '');
+      if (!pid || pid === 'unknown') return;
+      var prev = byId[pid] || {};
+      byId[pid] = Object.assign({}, prev, {
+        playerId: pid,
+        playerName: dp.username || dp.playerName || prev.playerName || pid,
+        status: prev.status || 'approved',
+        realName: prev.realName || ((dp.playerName && dp.playerName !== dp.username) ? dp.playerName : '')
+      });
+    });
+    localStorage.setItem('pb-club-players', JSON.stringify(Object.keys(byId).map(function(k){ return byId[k]; })));
+  } catch(_e) {}
+}
+
+function _hostPlayersFromDbOrLocal(){
+  // Successful /api/host/dashboard apply sets _hostDbPlayers to an array
+  // (possibly empty). null means the fetch never succeeded — only then fall
+  // back to localStorage pb-club-players. DB is the club roster source of truth.
+  if (Array.isArray(_hostDbPlayers)) {
+    return _hostDbPlayers.map(function(dp) {
+      if (!dp) return null;
+      var pid = dp.playerId || dp.player_id;
+      if (pid == null || pid === '' || pid === 'unknown') return null;
+      return {
+        playerId: String(pid),
+        playerName: dp.username || dp.playerName || String(pid),
+        status: dp.status || 'approved',
+        realName: (dp.playerName && dp.playerName !== dp.username) ? dp.playerName : '',
+        availableBalance: dp.availableBalance,
+        openRisk: dp.openRisk,
+        activeBetCount: dp.activeBetCount
+      };
+    }).filter(Boolean);
+  }
+  try { return JSON.parse(localStorage.getItem('pb-club-players')||'[]'); } catch(_e) { return []; }
 }
 
 function _hostBetsFromDbOrLocal(){
@@ -2288,10 +2334,13 @@ function renderHostBets(){
   var groups = {};
   active.forEach(function(t) {
     var pid = t.playerId || (t.playerUsername||t.playerName||'unknown');
+    var dbp = (_hostDbPlayersById && t.playerId && _hostDbPlayersById[String(t.playerId)]) || null;
+    var resolvedName = (dbp && (dbp.username || dbp.playerName)) || t.playerUsername || t.playerName || 'Player';
+    if (resolvedName === t.playerId) resolvedName = (dbp && dbp.username) || 'Player';
     if (!groups[pid]) {
       groups[pid] = {
         playerId:    t.playerId || '',
-        playerName:  t.playerUsername || t.playerName || 'Player',
+        playerName:  resolvedName,
         playerReal:  t.playerRealName || '',
         bets:        [],
         risk:        0,
@@ -2300,6 +2349,7 @@ function renderHostBets(){
       };
     }
     var g = groups[pid];
+    if (g.playerName === 'Player' && resolvedName !== 'Player') g.playerName = resolvedName;
     g.bets.push(t);
     g.risk     += parseFloat(t.riskAmount||0);
     g.exposure += parseFloat(t.potentialProfit||0);
@@ -2312,7 +2362,8 @@ function renderHostBets(){
 
   var groupsHtml = groupArr.map(function(g) {
     var key = g.playerId || g.playerName;
-    var open = !!window._hostBetsExpanded[key];
+    if (window._hostBetsExpanded[key] === undefined) window._hostBetsExpanded[key] = true;
+    var open = window._hostBetsExpanded[key] !== false;
     var initials = (g.playerName||'?').split(/\s+/).map(function(w){return (w[0]||'').toUpperCase();}).slice(0,2).join('') || '?';
     var betsHtml = '';
     if (open) {
@@ -2433,6 +2484,7 @@ function setBN(el,tab){
     var s=document.getElementById('players-section');
     if(s)s.style.display='block';
     renderPlayersTab();
+    loadHostDashboardFromDb('players_tab');
   } else if(tab==='crypto'){
     var s=document.getElementById('crypto-section');
     if(s)s.style.display='block';
@@ -2646,32 +2698,16 @@ function renderPlayersTab(){
   var el = document.getElementById('players-section');
   if (!el) return;
   var requests = loadJoinRequests();
-  var players  = loadClubPlayers();
-  if (Array.isArray(_hostDbPlayers) && _hostDbPlayers.length) {
-    var seenP = {};
-    players.forEach(function(p){ if (p && p.playerId) seenP[String(p.playerId)] = true; });
-    _hostDbPlayers.forEach(function(dp) {
-      var pid = dp && (dp.playerId || dp.player_id);
-      if (!pid || seenP[String(pid)]) return;
-      seenP[String(pid)] = true;
-      players.push({
-        playerId: String(pid),
-        playerName: dp.username || dp.playerName || String(pid),
-        status: 'approved',
-        realName: ''
-      });
-    });
-  }
-  var savedPlayers=JSON.parse(localStorage.getItem('pb-club-players')||'[]');
+  var players  = _hostPlayersFromDbOrLocal();
   if (!_hostRenderQuiet) {
-    showToastHost('LIST RENDERED\nplayers: '+savedPlayers.length+'\nrealNames: '+savedPlayers.map(function(p){return p.realName||'none';}).join(','));
+    showToastHost('LIST RENDERED\nplayers: '+players.length+'\nnames: '+players.map(function(p){return p.playerName||p.realName||'none';}).join(','));
   }
 
   function getActiveBetsCount(pid){
-    return JSON.parse(localStorage.getItem('hostActiveBets')||'[]').filter(function(b){ return b.playerId===pid && (b.status==='active'||b.status==='open'); }).length;
+    return _hostBetsFromDbOrLocal().filter(function(b){ return String(b.playerId)===String(pid) && (b.status==='active'||b.status==='open'); }).length;
   }
   function getOpenRiskAmt(pid){
-    return JSON.parse(localStorage.getItem('hostActiveBets')||'[]').filter(function(b){ return b.playerId===pid && (b.status==='active'||b.status==='open'); }).reduce(function(s,b){return s+(b.potentialProfit||0);},0); // host exposure = what host owes if player wins
+    return _hostBetsFromDbOrLocal().filter(function(b){ return String(b.playerId)===String(pid) && (b.status==='active'||b.status==='open'); }).reduce(function(s,b){return s+(b.potentialProfit||0);},0);
   }
   function avatarHtml(name, color){
     var abbr=(name||'?').slice(0,2).toUpperCase();
@@ -2724,7 +2760,9 @@ function renderPlayersTab(){
   // Filter by search + tab
   var q=(_playersSearch||'').toLowerCase();
   var filtered=players.filter(function(p){
-    if(q && !p.playerName.toLowerCase().includes(q)) return false;
+    var nm = String((p && p.playerName) || '');
+    var id = String((p && p.playerId) || '');
+    if(q && nm.toLowerCase().indexOf(q) === -1 && id.toLowerCase().indexOf(q) === -1) return false;
     if(_playersActiveTab==='applicants') return false;
     return true;
   });
@@ -2736,7 +2774,7 @@ function renderPlayersTab(){
   var html=
     // Header
     '<div style="padding:14px 16px 0;position:sticky;top:0;background:#0a0a0a;z-index:10">'
-      +'<div style="font-size:1.1rem;font-weight:900;margin-bottom:12px">Member Management</div>'
+      +'<div style="font-size:1.1rem;font-weight:900;margin-bottom:12px">Your Players</div>'
       // Search
       +'<div style="display:flex;align-items:center;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:10px 14px;margin-bottom:10px;gap:8px">'
         +'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>'
@@ -2787,6 +2825,16 @@ function renderPlayersTab(){
   el.style.minHeight='100vh';
   el.innerHTML=html;
   _wireClubStaffPanel(el);
+  var listEl = document.getElementById('player-list');
+  if (listEl) {
+    if (_playersActiveTab==='applicants') {
+      listEl.innerHTML = filteredReqs.length ? filteredReqs.map(requestRow).join('') : '';
+    } else if (!filtered.length) {
+      listEl.innerHTML = '<div style="text-align:center;padding:24px 12px;color:#555;font-size:0.82rem">No players yet</div>';
+    } else {
+      listEl.innerHTML = filtered.map(playerRow).join('');
+    }
+  }
 }
 
 function _renderClubStaffPanel() {
