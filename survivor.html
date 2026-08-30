@@ -101,6 +101,12 @@ select.inp option:disabled{color:#444}
 .week-label{font-size:0.88rem;font-weight:900;letter-spacing:0.2px}
 .pick-banner{background:#111;border:1px solid #222;border-radius:12px;padding:10px 12px;font-size:0.78rem;font-weight:700;margin-bottom:12px;text-align:center;line-height:1.45;color:#ccc}
 .pick-banner.warn{border-color:rgba(245,200,66,0.45);background:rgba(245,200,66,0.08);color:var(--gold)}
+.pick-banner.locked{border-color:rgba(255,61,87,0.4);background:rgba(255,61,87,0.08);color:#ff8a96}
+.pick-countdown{font-variant-numeric:tabular-nums;font-size:0.82rem;font-weight:900;color:var(--gold);text-align:center;margin:-4px 0 12px}
+.your-pick.locked{border-color:#444;background:rgba(255,255,255,0.04)}
+.your-pick.locked .your-pick-name{color:#ccc}
+.mu-card.picks-locked .mu-team{cursor:default;pointer-events:none}
+.picks-locked-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,10,10,0.62);font-size:0.78rem;font-weight:900;letter-spacing:0.5px;text-transform:uppercase;color:#fff;border-radius:16px;z-index:3;text-align:center;padding:8px}
 .mu-card.locked .mu-team{cursor:default}
 .mu-lock{position:absolute;top:8px;right:10px;font-size:0.8rem;opacity:0.45;z-index:2}
 .detail-tabs{display:flex;gap:6px;margin:0 0 12px}
@@ -120,6 +126,44 @@ select.inp option:disabled{color:#444}
 .entry-choice button{flex:1;padding:14px;border-radius:12px;background:#1c1c1c;border:1.5px solid #333;color:#fff;font-size:1rem;font-weight:900;cursor:pointer;font-family:inherit}
 .entry-choice button.sel{border-color:var(--green);background:rgba(0,255,136,0.12);color:var(--green)}
 .pill-pending{background:rgba(245,200,66,0.12);color:var(--gold);border:1px solid rgba(245,200,66,0.3)}
+
+/* ═══ MOBILE (≤480px / iPhone 375) — layout only, no redesign ═══ */
+@media (max-width:480px){
+  html,body{overflow-x:hidden;max-width:100%}
+  .topnav{flex-wrap:wrap;gap:6px;padding:10px 12px}
+  .topnav-brand,.topnav-links{min-width:0}
+  .topnav-links{flex-wrap:wrap;justify-content:flex-end}
+  .topnav-link,.topnav-out{
+    min-height:44px;display:inline-flex;align-items:center;padding:8px 10px
+  }
+  .topnav-prof{width:44px;height:44px;min-width:44px}
+  .wrap{padding:12px}
+  .btn,.detail-tab,.entry-tab,.entry-choice button{min-height:44px}
+  .week-arrow{width:44px;height:44px;min-width:44px}
+  .pool-row{min-width:0}
+  .pool-row > div{min-width:0;flex:1}
+  .pool-name,.pool-meta,.p-name{overflow-wrap:anywhere;word-break:break-word}
+  .mu-card{padding:10px;max-width:100%;overflow:hidden}
+  .mu-row{min-width:0}
+  .mu-team{min-width:0;padding:12px 6px 10px}
+  .mu-name{overflow:hidden;text-overflow:ellipsis}
+  .player{gap:8px;min-width:0}
+  .toast{max-width:calc(100vw - 24px);white-space:normal;text-align:center}
+  .modal-bg{align-items:flex-end}
+  .modal{
+    max-height:100dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom,0px))
+  }
+  .modal-bg.center{padding:12px;align-items:center}
+  .modal-pick{
+    max-width:100%;max-height:100dvh;overflow-y:auto;
+    padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom,0px))
+  }
+  .join-code{letter-spacing:2px;overflow-wrap:anywhere}
+  .stat-row{min-width:0}
+  .stat{min-width:0}
+  .req-actions .btn{min-height:44px}
+}
 </style>
 </head>
 <body>
@@ -431,6 +475,7 @@ let pendingRequests = [];
 let approvePlayerId = '';
 let approvePlayerName = '';
 let grantCount = 1;
+let deadlineCountdownId = 0;
 
 function showErr(msg){
   var el = document.getElementById('err');
@@ -610,6 +655,7 @@ function showHome(){
   currentEntryNumber = 1;
   detailTab = 'picks';
   pendingRequests = [];
+  stopDeadlineCountdown();
   document.getElementById('view-detail').classList.add('hidden');
   document.getElementById('view-home').classList.remove('hidden');
   document.getElementById('hdr-sub').textContent = 'Pick one NFL team each week. Lose and you’re out.';
@@ -964,13 +1010,92 @@ function weekNavHtml(){
     + '<button class="week-arrow" onclick="shiftBrowseWeek(1)" '+(browseWeek>=22?'disabled':'')+'>›</button>'
     + '</div>';
 }
+function pickDeadlineIso(detail){
+  var d = detail || currentDetail;
+  if (d && d.pickDeadline) return d.pickDeadline;
+  if (d && d.pool && d.pool.pickDeadline) return d.pool.pickDeadline;
+  return localSunday1pmEtIso();
+}
+function localSunday1pmEtIso(){
+  try {
+    var fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false
+    });
+    var parts = fmt.formatToParts(new Date());
+    var get = function(t){ return (parts.find(function(p){ return p.type===t; })||{}).value; };
+    var wd = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
+    var dow = wd[get('weekday')];
+    var y = parseInt(get('year'),10), mo = parseInt(get('month'),10), d = parseInt(get('day'),10);
+    var delta = dow >= 4 ? (7 - dow) : -dow;
+    var noon = Date.UTC(y, mo-1, d, 16, 0) + delta * 86400000;
+    var sun = fmt.formatToParts(new Date(noon));
+    var get2 = function(t){ return (sun.find(function(p){ return p.type===t; })||{}).value; };
+    var sy = parseInt(get2('year'),10), smo = parseInt(get2('month'),10), sd = parseInt(get2('day'),10);
+    var edt = Date.UTC(sy, smo-1, sd, 17, 0);
+    var edtParts = fmt.formatToParts(new Date(edt));
+    var get3 = function(t){ return (edtParts.find(function(p){ return p.type===t; })||{}).value; };
+    if (parseInt(get3('hour'),10) === 13 && parseInt(get3('day'),10) === sd) return new Date(edt).toISOString();
+    return new Date(Date.UTC(sy, smo-1, sd, 18, 0)).toISOString();
+  } catch(_e) { return null; }
+}
+function picksAreLocked(detail){
+  var d = detail || currentDetail;
+  if (!d) return false;
+  if (d.deadlinePassed) return true;
+  var iso = pickDeadlineIso(d);
+  if (iso && Date.now() >= new Date(iso).getTime()) return true;
+  return false;
+}
+function fmtCountdown(msLeft){
+  if (msLeft <= 0) return '0:00:00';
+  var s = Math.floor(msLeft/1000);
+  var days = Math.floor(s/86400); s -= days*86400;
+  var h = Math.floor(s/3600); s -= h*3600;
+  var m = Math.floor(s/60); s -= m*60;
+  var pad = function(n){ return (n<10?'0':'')+n; };
+  if (days > 0) return days+'d '+pad(h)+':'+pad(m)+':'+pad(s);
+  return pad(h)+':'+pad(m)+':'+pad(s);
+}
+function stopDeadlineCountdown(){
+  if (deadlineCountdownId) { clearInterval(deadlineCountdownId); deadlineCountdownId = 0; }
+}
+function startDeadlineCountdown(iso){
+  stopDeadlineCountdown();
+  if (!iso) return;
+  var end = new Date(iso).getTime();
+  function tick(){
+    var el = document.getElementById('pick-countdown');
+    var left = end - Date.now();
+    if (left <= 0) {
+      stopDeadlineCountdown();
+      if (currentDetail) {
+        currentDetail.deadlinePassed = true;
+        paintMatchups(currentDetail);
+      }
+      return;
+    }
+    if (el) el.textContent = 'Locks in '+fmtCountdown(left);
+  }
+  tick();
+  deadlineCountdownId = setInterval(tick, 1000);
+}
 function pickBannerHtml(){
   var html = '';
   if (browseWeek > 18){
     html += '<div class="pick-banner">🏆 Playoffs — All teams available again</div>';
   }
-  if (!scheduleLocked && picksOpen && !isPreseasonTestMode()){
+  var onPoolWeek = !!(currentDetail && currentDetail.pool && browseWeek === currentDetail.pool.currentWeek);
+  var deadlineLocked = onPoolWeek && picksAreLocked(currentDetail);
+  if (deadlineLocked){
+    html += '<div class="pick-banner locked">Picks are locked — waiting for games to finish</div>';
+  } else if (!scheduleLocked && onPoolWeek){
     html += '<div class="pick-banner">'+esc(weekTitle(browseWeek))+' — Pick deadline: Sunday 1:00 PM ET</div>';
+    html += '<div class="pick-countdown" id="pick-countdown">Locks in …</div>';
+    if (isPreseasonTestMode()){
+      html += '<div class="pick-banner warn">⚠️ Preseason test mode — picks are for testing only</div>';
+    }
   } else if (!scheduleLocked && isPreseasonTestMode()){
     html += '<div class="pick-banner warn">⚠️ Preseason test mode — picks are for testing only</div>';
   } else {
@@ -1046,14 +1171,16 @@ function paintMatchups(detail){
   var body = document.getElementById('pick-body');
   if (!body || !detail) return;
   var used = usedMapForWeek(detail, browseWeek);
-  var locked = scheduleLocked;
+  var onPoolWeek = browseWeek === ((detail.pool||{}).currentWeek);
+  var deadlineLocked = onPoolWeek && picksAreLocked(detail);
+  var locked = scheduleLocked || deadlineLocked;
 
   var html = weekNavHtml() + pickBannerHtml();
-  if (savedPickTeam && pendingPick && pendingPick.saved && !locked){
-    html += '<div class="your-pick">'
+  if (savedPickTeam && pendingPick && pendingPick.saved){
+    html += '<div class="your-pick'+(deadlineLocked?' locked':'')+'">'
       + teamLogoImg(savedPickTeam, '')
       + '<div>Entry #'+(currentEntryNumber||1)+' pick: <span class="your-pick-name">'+esc(savedPickTeam)+'</span></div>'
-      + '<div class="your-pick-ok">✓</div></div>';
+      + '<div class="your-pick-ok">'+(deadlineLocked?'🔒':'✓')+'</div></div>';
   }
   if (!locked){
     html += browseWeek > 18
@@ -1064,6 +1191,8 @@ function paintMatchups(detail){
   if (!nflGames.length){
     html += '<div class="offseason">Schedule unavailable for this week. Try another week.</div>';
     body.innerHTML = html;
+    if (onPoolWeek && !deadlineLocked) startDeadlineCountdown(pickDeadlineIso(detail));
+    else stopDeadlineCountdown();
     return;
   }
 
@@ -1071,8 +1200,8 @@ function paintMatchups(detail){
     var away = canonicalTeam(g.away || g.away_team);
     var home = canonicalTeam(g.home || g.home_team);
     var gameId = g.id || g.providerGameId || '';
-    html += '<div class="mu-card'+(locked?' locked':'')+'">'
-      + (locked ? '<div class="mu-lock">🔒</div>' : '')
+    html += '<div class="mu-card'+(locked?' locked':'')+(deadlineLocked?' picks-locked':'')+'">'
+      + (deadlineLocked ? '<div class="picks-locked-overlay">Picks Locked</div>' : (scheduleLocked ? '<div class="mu-lock">🔒</div>' : ''))
       + '<div class="mu-row">'
       + teamCellHtml(g, away, 'away', used, gameId, gi, locked)
       + '<div class="mu-at">@</div>'
@@ -1083,6 +1212,8 @@ function paintMatchups(detail){
   });
 
   body.innerHTML = html;
+  if (onPoolWeek && !deadlineLocked) startDeadlineCountdown(pickDeadlineIso(detail));
+  else stopDeadlineCountdown();
 }
 
 function teamCellHtml(game, team, side, used, gameId, gi, locked){
@@ -1106,7 +1237,7 @@ function teamCellHtml(game, team, side, used, gameId, gi, locked){
 }
 
 function selectMatchupTeam(gi, side){
-  if (scheduleLocked) return;
+  if (scheduleLocked || picksAreLocked(currentDetail)) return;
   var g = nflGames[gi];
   if (!g) return;
   var team = canonicalTeam(side === 'home' ? (g.home || g.home_team) : (g.away || g.away_team));
@@ -1295,7 +1426,10 @@ function renderWeekPicks(standings, detail){
 }
 
 async function submitPick(){
-  if (scheduleLocked) return;
+  if (scheduleLocked || picksAreLocked(currentDetail)) {
+    toast('Picks are locked — waiting for games to finish');
+    return;
+  }
   if (!currentPoolId || !currentDetail) return;
   var team = pendingPick && pendingPick.team;
   if (!team) { toast('Select a team'); return; }
@@ -1312,6 +1446,19 @@ async function submitPick(){
   });
   if (!data.ok) {
     if (btn) { btn.disabled = false; btn.textContent = 'Lock In Pick'; }
+    if (data.error === 'picks_locked') {
+      closeModals();
+      if (currentDetail) {
+        currentDetail.deadlinePassed = true;
+        if (data.deadline) {
+          currentDetail.pickDeadline = data.deadline;
+          if (currentDetail.pool) currentDetail.pool.pickDeadline = data.deadline;
+        }
+        paintMatchups(currentDetail);
+      }
+      toast('Picks are locked — waiting for games to finish');
+      return;
+    }
     toast(data.error || 'Pick failed');
     return;
   }
