@@ -41,7 +41,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:#0a0
 .bg-layer2{position:absolute;inset:0;background:radial-gradient(ellipse at 80% 60%,rgba(0,60,20,0.2) 0%,transparent 50%)}
 .moon{position:absolute;top:12%;left:50%;transform:translateX(-50%);width:130px;height:130px;background:radial-gradient(circle at 40% 40%,#f0e8d0,#c8c0a0);border-radius:50%;box-shadow:0 0 40px rgba(240,232,208,0.35),0 0 100px rgba(240,232,208,0.12),0 0 200px rgba(240,232,208,0.05);animation:moonFloat 8s ease-in-out infinite}
 @keyframes moonFloat{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-8px)}}
-.stars{position:absolute;inset:0}
+.stars{position:absolute;inset:0;pointer-events:none}
 .star{position:absolute;background:#fff;border-radius:50%;animation:twinkle 3s infinite}
 @keyframes twinkle{0%,100%{opacity:0.2;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}
 @keyframes floatUp{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
@@ -532,7 +532,7 @@ try {
     <div class="auth-card">
       <div id="auth-error" class="auth-error"></div>
 
-      <form id="login-form" method="post" action="#" autocomplete="on" onsubmit="event.preventDefault(); submitAuth(); return false;">
+      <form id="login-form" method="post" action="" autocomplete="on" onsubmit="event.preventDefault(); submitAuth(); return false;">
         <div id="login-hint" style="font-size:0.62rem;color:#666;margin:0 0 8px;padding:0 4px">Sign in with your display name or email</div>
         <input id="a-email" class="auth-inp" name="username" placeholder="Display name, email, or @telegram" type="text" autocomplete="username">
         <input id="a-pass" class="auth-inp" name="password" placeholder="Password" type="password" autocomplete="current-password">
@@ -544,30 +544,30 @@ try {
         </div>
       </form>
 
-      <form id="signup-form" method="post" action="#" autocomplete="on" style="display:none" onsubmit="event.preventDefault(); submitAuth(); return false;">
-        <input id="a-name" class="auth-inp" name="name" placeholder="Display name" autocomplete="name">
+      <form id="signup-form" method="post" action="" autocomplete="off" style="display:none" hidden inert onsubmit="event.preventDefault(); submitAuth(); return false;">
+        <input id="a-name" class="auth-inp" name="name" placeholder="Display name" autocomplete="name" disabled>
         <div style="display:flex;gap:8px;margin-bottom:10px">
-          <select id="a-contact-method" class="auth-inp" style="flex:0 0 auto;width:auto;padding-right:10px;cursor:pointer" onchange="updateSignupContactAttrs()">
+          <select id="a-contact-method" class="auth-inp" style="flex:0 0 auto;width:auto;padding-right:10px;cursor:pointer" onchange="updateSignupContactAttrs()" disabled>
             <option value="telegram">Telegram</option>
             <option value="signal">Signal</option>
             <option value="email">Email</option>
           </select>
-          <input id="a-contact-value" class="auth-inp" name="telegram" placeholder="@username" type="text" autocomplete="username" style="flex:1;margin-bottom:0">
+          <input id="a-contact-value" class="auth-inp" name="telegram" placeholder="@username" type="text" autocomplete="off" style="flex:1;margin-bottom:0" disabled>
         </div>
         <div id="signup-contact-hint" style="font-size:0.62rem;color:#666;margin:-6px 0 10px;padding:0 4px">Select how we can reach you — required for account recovery.</div>
-        <input id="a-pass-signup" class="auth-inp" name="password" placeholder="Password" type="password" autocomplete="new-password">
-        <input id="a-pass2" class="auth-inp" name="password_confirm" placeholder="Confirm password" type="password" autocomplete="new-password">
+        <input id="a-pass-signup" class="auth-inp" name="password" placeholder="Password" type="password" autocomplete="off" disabled>
+        <input id="a-pass2" class="auth-inp" name="password_confirm" placeholder="Confirm password" type="password" autocomplete="off" disabled>
         <div id="signup-checks">
           <label class="auth-check">
-            <input type="checkbox" id="check-age">
+            <input type="checkbox" id="check-age" disabled>
             <span class="auth-check-label">I confirm I am 21 years of age or older</span>
           </label>
           <label class="auth-check">
-            <input type="checkbox" id="check-terms">
+            <input type="checkbox" id="check-terms" disabled>
             <span class="auth-check-label">I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a></span>
           </label>
         </div>
-        <button type="submit" class="auth-submit" id="auth-signup-btn">Create My Account →</button>
+        <button type="submit" class="auth-submit" id="auth-signup-btn" disabled>Create My Account →</button>
       </form>
 
       <div class="auth-footer" id="auth-footer-text">Don't have an account? <span style="color:var(--cyan);cursor:pointer" onclick="setAuthTab('signup')">Create one free</span></div>
@@ -662,32 +662,6 @@ try {
 // AUTH
 let authMode = 'login';
 
-// Capture-phase delegate: catches Create Account / Sign In clicks even if a
-// parent overlay tries to swallow the event. Runs once at parse.
-(function(){
-  if (window.__pbAuthDelegateInstalled) return;
-  window.__pbAuthDelegateInstalled = true;
-  document.addEventListener('click', function(e) {
-    var tgt = e.target;
-    if (!tgt) return;
-    // Never intercept clicks on auth fields — preventDefault here steals focus.
-    if (tgt.closest && tgt.closest('#login-form,#signup-form,input,textarea,select,button,[contenteditable]')) return;
-    var t = tgt.closest && tgt.closest('.auth-tab,[data-auth-tab],#tab-login,#tab-signup');
-    if (!t) return;
-    console.log('[AUTH CLICK TARGET]', t, t.className, t.id);
-    var mode = (t.id === 'tab-signup' || t.dataset.authTab === 'signup') ? 'signup' : 'login';
-    e.preventDefault(); e.stopPropagation();
-    if (typeof setAuthTab === 'function') setAuthTab(mode);
-  }, true);
-  // Keep field clicks from hitting parent/overlay handlers that blur the input.
-  document.addEventListener('mousedown', function(e) {
-    var t = e.target;
-    if (t && t.closest && t.closest('#a-email,#a-pass,#a-name,#a-contact-value,#a-pass-signup,#a-pass2,.auth-inp')) {
-      e.stopPropagation();
-    }
-  }, true);
-})();
-
 function updateSignupContactAttrs() {
   var sel = document.getElementById('a-contact-method');
   var i = document.getElementById('a-contact-value');
@@ -712,6 +686,20 @@ function _authSubmitBtn() {
   return document.getElementById(authMode === 'signup' ? 'auth-signup-btn' : 'auth-submit-btn');
 }
 
+function _armAuthForm(form, on) {
+  if (!form) return;
+  form.inert = !on;
+  form.hidden = !on;
+  form.style.display = on ? 'block' : 'none';
+  form.setAttribute('autocomplete', on ? 'on' : 'off');
+  form.querySelectorAll('input,select,textarea,button').forEach(function(el) {
+    el.disabled = !on;
+    if (!on && (el.type === 'password' || el.getAttribute('autocomplete') === 'username')) {
+      el.setAttribute('autocomplete', 'off');
+    }
+  });
+}
+
 function setAuthTab(mode) {
   var loginForm = document.getElementById('login-form');
   var signupForm = document.getElementById('signup-form');
@@ -719,27 +707,25 @@ function setAuthTab(mode) {
     && loginForm && signupForm
     && ((mode==='login' && loginForm.style.display !== 'none' && signupForm.style.display === 'none')
       || (mode==='signup' && signupForm.style.display !== 'none' && loginForm.style.display === 'none'));
-  // Re-applying display/innerHTML while a field is focused unfocuses it.
   if (already) return;
-  var focused = document.activeElement;
-  var keepFocusId = focused && focused.classList && focused.classList.contains('auth-inp') ? focused.id : null;
   authMode = mode;
   document.getElementById('tab-login').classList.toggle('active', mode==='login');
   document.getElementById('tab-signup').classList.toggle('active', mode==='signup');
-  if (loginForm) loginForm.style.display = mode==='login' ? 'block' : 'none';
-  if (signupForm) signupForm.style.display = mode==='signup' ? 'block' : 'none';
+  _armAuthForm(loginForm, mode==='login');
+  _armAuthForm(signupForm, mode==='signup');
+  if (mode==='signup') {
+    var pass1 = document.getElementById('a-pass-signup');
+    var pass2 = document.getElementById('a-pass2');
+    if (pass1) pass1.setAttribute('autocomplete', 'new-password');
+    if (pass2) pass2.setAttribute('autocomplete', 'new-password');
+    updateSignupContactAttrs();
+  }
   var emailEl = document.getElementById('a-email');
   if (emailEl) emailEl.placeholder = 'Display name, email, or @telegram';
   document.getElementById('auth-footer-text').innerHTML = mode==='login'
     ? "Don't have an account? <span style='color:var(--cyan);cursor:pointer' onclick=\"setAuthTab('signup')\">Create one free</span>"
     : "Already have an account? <span style='color:var(--cyan);cursor:pointer' onclick=\"setAuthTab('login')\">Sign in</span>";
   document.getElementById('auth-error').style.display = 'none';
-  if (keepFocusId) {
-    var again = document.getElementById(keepFocusId);
-    if (again && again.offsetParent !== null) {
-      try { again.focus(); } catch (_e) {}
-    }
-  }
 }
 
 function showAuthError(msg) {
