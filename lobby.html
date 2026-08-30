@@ -23,7 +23,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:#0a0
 .auth-tab{flex:1;padding:10px;text-align:center;border-radius:10px;font-size:0.85rem;font-weight:700;cursor:pointer;color:#555;transition:all 0.2s;pointer-events:auto;user-select:none}
 .auth-tab.active{background:rgba(0,255,136,0.15);color:var(--green);border:1px solid rgba(0,255,136,0.25)}
 .auth-card{background:#141414;border:1px solid #222;border-radius:20px;padding:24px;width:100%;max-width:380px}
-.auth-inp{width:100%;padding:14px 16px;background:#1c1c1c;border:1.5px solid #252525;border-radius:12px;color:#fff;font-size:0.95rem;outline:none;margin-bottom:10px;transition:border-color 0.2s}
+.auth-inp{width:100%;padding:14px 16px;background:#1c1c1c;border:1.5px solid #252525;border-radius:12px;color:#fff;font-size:0.95rem;outline:none;margin-bottom:10px;transition:border-color 0.2s;pointer-events:auto;position:relative;z-index:2}
 .auth-inp:focus{border-color:var(--green)}
 .auth-inp::placeholder{color:#444}
 .auth-check{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;cursor:pointer}
@@ -274,7 +274,7 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
     if (_screen === 'signin' || _screen === 'signup') {
       sessionStorage.removeItem('pb-force-lobby-home');
       // Hide lobby content and force auth-screen visible.
-      document.write('<style id="pb-force-auth">.content,.bnav,.bottom-nav{display:none!important}#auth-screen{display:flex!important;visibility:visible!important;opacity:1!important;z-index:9999!important;pointer-events:auto!important}#auth-screen *{pointer-events:auto!important}.auth-tab{cursor:pointer!important;pointer-events:auto!important}</style>');
+      document.write('<style id="pb-force-auth">.content,.bnav,.bottom-nav{display:none!important}#auth-screen{display:flex!important;visibility:visible!important;opacity:1!important;z-index:9999!important;pointer-events:auto!important}#auth-screen .auth-content,#auth-screen .auth-content *{pointer-events:auto!important}#auth-screen .auth-bg-glow,#auth-screen .particles,#auth-screen .sports-icons{pointer-events:none!important}.auth-tab{cursor:pointer!important;pointer-events:auto!important}</style>');
       window.__pbForceAuth = _screen;
       return;
     }
@@ -668,12 +668,23 @@ let authMode = 'login';
   if (window.__pbAuthDelegateInstalled) return;
   window.__pbAuthDelegateInstalled = true;
   document.addEventListener('click', function(e) {
-    var t = e.target && e.target.closest && e.target.closest('.auth-tab,[data-auth-tab],#tab-login,#tab-signup');
+    var tgt = e.target;
+    if (!tgt) return;
+    // Never intercept clicks on auth fields — preventDefault here steals focus.
+    if (tgt.closest && tgt.closest('#login-form,#signup-form,input,textarea,select,button,[contenteditable]')) return;
+    var t = tgt.closest && tgt.closest('.auth-tab,[data-auth-tab],#tab-login,#tab-signup');
     if (!t) return;
     console.log('[AUTH CLICK TARGET]', t, t.className, t.id);
     var mode = (t.id === 'tab-signup' || t.dataset.authTab === 'signup') ? 'signup' : 'login';
     e.preventDefault(); e.stopPropagation();
     if (typeof setAuthTab === 'function') setAuthTab(mode);
+  }, true);
+  // Keep field clicks from hitting parent/overlay handlers that blur the input.
+  document.addEventListener('mousedown', function(e) {
+    var t = e.target;
+    if (t && t.closest && t.closest('#a-email,#a-pass,#a-name,#a-contact-value,#a-pass-signup,#a-pass2,.auth-inp')) {
+      e.stopPropagation();
+    }
   }, true);
 })();
 
@@ -702,11 +713,19 @@ function _authSubmitBtn() {
 }
 
 function setAuthTab(mode) {
+  var loginForm = document.getElementById('login-form');
+  var signupForm = document.getElementById('signup-form');
+  var already = authMode === mode
+    && loginForm && signupForm
+    && ((mode==='login' && loginForm.style.display !== 'none' && signupForm.style.display === 'none')
+      || (mode==='signup' && signupForm.style.display !== 'none' && loginForm.style.display === 'none'));
+  // Re-applying display/innerHTML while a field is focused unfocuses it.
+  if (already) return;
+  var focused = document.activeElement;
+  var keepFocusId = focused && focused.classList && focused.classList.contains('auth-inp') ? focused.id : null;
   authMode = mode;
   document.getElementById('tab-login').classList.toggle('active', mode==='login');
   document.getElementById('tab-signup').classList.toggle('active', mode==='signup');
-  var loginForm = document.getElementById('login-form');
-  var signupForm = document.getElementById('signup-form');
   if (loginForm) loginForm.style.display = mode==='login' ? 'block' : 'none';
   if (signupForm) signupForm.style.display = mode==='signup' ? 'block' : 'none';
   var emailEl = document.getElementById('a-email');
@@ -715,6 +734,12 @@ function setAuthTab(mode) {
     ? "Don't have an account? <span style='color:var(--cyan);cursor:pointer' onclick=\"setAuthTab('signup')\">Create one free</span>"
     : "Already have an account? <span style='color:var(--cyan);cursor:pointer' onclick=\"setAuthTab('login')\">Sign in</span>";
   document.getElementById('auth-error').style.display = 'none';
+  if (keepFocusId) {
+    var again = document.getElementById(keepFocusId);
+    if (again && again.offsetParent !== null) {
+      try { again.focus(); } catch (_e) {}
+    }
+  }
 }
 
 function showAuthError(msg) {
