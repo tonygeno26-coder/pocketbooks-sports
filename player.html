@@ -487,6 +487,50 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
 .bet-menu-wrap.open .bet-menu-dropdown{display:block}
 .bet-menu-item{display:block;width:100%;background:none;border:none;color:#e57373;font-size:0.78rem;font-weight:700;text-align:left;padding:10px 14px;cursor:pointer}
 .bet-menu-item:hover{background:#222}
+
+/* ═══ MOBILE (≤480px / iPhone 375) — layout only, no redesign ═══ */
+@media (max-width:480px){
+  html,body{overflow-x:hidden;max-width:100%}
+  .header{padding:10px 12px;gap:8px}
+  .h-left,.h-right{min-width:0;gap:8px}
+  .h-right{flex-shrink:1}
+  .buy-diamonds-nav-btn,.icon-btn{
+    min-width:44px;min-height:44px;
+    display:inline-flex;align-items:center;justify-content:center
+  }
+  .deposit-btn{min-height:44px;padding:10px 14px}
+  .top-tab{min-height:44px;display:inline-flex;align-items:center}
+  .sport-tab{min-height:44px;padding:10px 6px 10px}
+  .pill{min-height:44px;display:inline-flex;align-items:center}
+  .bn{min-height:44px}
+  .bnav{padding-bottom:env(safe-area-inset-bottom,0px)}
+  .bet-menu-btn{min-width:44px;min-height:44px;padding:10px}
+  .bet-menu-item{min-height:44px}
+  .dkslip,.dkslip.open{
+    width:100%;max-width:100%;
+    height:min(85vh,100dvh);max-height:100dvh;
+    overflow:hidden
+  }
+  .dkslip-scroll,.dkslip-confirm-scroll{
+    min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch
+  }
+  .dkslip-tab,.bs-tab,.stype{min-height:44px;display:flex;align-items:center;justify-content:center}
+  .dkslip-close,.bs-close{width:44px;height:44px;min-width:44px}
+  .dkslip-clear{min-height:44px;padding:10px 8px}
+  .dkslip-qa,.single-qa,.qa{min-height:44px;display:flex;align-items:center;justify-content:center}
+  .dkslip-place-btn,.place-btn{min-height:44px}
+  .qamts{grid-template-columns:repeat(3,1fr);gap:8px}
+  .dkslip-quick,.single-quick{flex-wrap:wrap}
+  .modal{max-height:100dvh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .bs-drawer{max-height:100dvh;overflow:hidden}
+  .bs-drawer.open{display:flex;flex-direction:column}
+  #mybets-section{overflow-x:hidden;max-width:100%}
+  #mybets-section .mc-team,#mybets-section .mc-name{
+    min-width:0;overflow:hidden;text-overflow:ellipsis
+  }
+  table{max-width:100%}
+  .table-scroll,[style*="overflow-x:auto"]{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+}
 </style>
 
 <script>
@@ -845,7 +889,7 @@ function _validatePlayerSession() {
   }
 
   _sessionValid = true;
-  console.log('[session-gate] VALID pid='+pid+' cid='+cid+' tokenClub='+(tokenClubId||'(not-in-token)'));
+  
   return { ok:true };
 }
 
@@ -880,7 +924,7 @@ function _showSessionExpiredModal(result) {
 
 // Run immediately at script boot
 (function _runSessionGate() {
-  console.log('BOOT_STAGE=session_gate_begin');
+  
   var _sgResult;
   try { _sgResult = _validatePlayerSession(); }
   catch(_sgErr) {
@@ -888,14 +932,14 @@ function _showSessionExpiredModal(result) {
     _sessionValid = true;
     return;
   }
-  console.log('BOOT_STAGE=session_gate_result ok='+_sgResult.ok+' reason='+(_sgResult.reason||(_sgResult.missing||[]).join(',')||'none'));
+  
   if (!_sgResult.ok) {
     // ── Token recovery: if player+club state exists but token is missing, try to reissue ──
     if (_sgResult.canRecover && (
       (_sgResult.missing && _sgResult.missing.indexOf('token') !== -1) ||
       _sgResult.reason === 'token_expired'
     )) {
-      console.log('TOKEN_RECOVERY_ATTEMPT — player+club state present, trying /api/auth/token');
+      
       var _rPl   = null; try { _rPl   = JSON.parse(localStorage.getItem('pb-player')||'null'); } catch(_){}
       var _rClub = null; try { _rClub = JSON.parse(localStorage.getItem('pb-club')||'null');   } catch(_){}
       var _rPid  = _rPl   && (_rPl.id   != null ? String(_rPl.id)    : _rPl.username) || null;
@@ -915,10 +959,10 @@ function _showSessionExpiredModal(result) {
           localStorage.setItem('pb-session-token', data.token);
           var _expIn = data.expiresIn || 86400;
           localStorage.setItem('pb-token-expires', String(Date.now() + (_expIn * 1000)));
-          console.log('TOKEN_RECOVERY_SUCCESS — token reissued, re-validating session');
+          
           var _recheck = _validatePlayerSession();
           if (_recheck.ok) {
-            console.log('BOOT_STAGE=session_gate_recovered — session now valid');
+            
             // Remove any already-shown modal
             var _m = document.getElementById('session-expired-modal');
             if (_m) _m.remove();
@@ -948,30 +992,12 @@ function _showSessionExpiredModal(result) {
   }
 })();
 // ══════════════════════════════════════════════════════════════════════════════
-console.log('[PBS init start]');
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
 window.PBS_BUILD_SHA = '9100d35';
 window.PBS_BUILD_DATE = '2026-06-02T09:54:15.131Z';
-console.log('[PBS build] sha='+window.PBS_BUILD_SHA+' date='+window.PBS_BUILD_DATE);
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
-function dbgBanner(msg, color) {
-  try {
-    var b = document.getElementById('_dbg_banner');
-    if (!b) {
-      b = document.createElement('div');
-      b.id = '_dbg_banner';
-      b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#000;color:#0f0;font-size:16px;font-weight:900;padding:16px 12px;text-align:center;font-family:monospace;white-space:pre-wrap;word-break:break-all;border-bottom:3px solid #0f0;pointer-events:none';
-      document.body.appendChild(b);
-    }
-    b.style.background = color || '#000';
-    b.style.color = '#fff';
-    b.textContent = msg;
-    b.style.display = 'block';
-    clearTimeout(b._t);
-    b._t = setTimeout(function(){ b.style.display='none'; }, 10000);
-  } catch(_dbgErr) { console.warn('[dbgBanner]', msg); }
-}
+function dbgBanner(msg, color) {}
 // Sync balance on page load immediately
 (function(){
   try {
@@ -982,7 +1008,7 @@ function dbgBanner(msg, color) {
     var _avail = Math.round((_start - _risk)*100)/100;
     var _el = document.getElementById('player-balance-display');
     if (_el) _el.textContent = '$'+_avail.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-    console.log('[PBS init start] balance STARTING:$'+_start+' RISK:$'+_risk+' AVAILABLE:$'+_avail+' tickets:'+_t.length+'('+_open.length+' active)');
+    
   } catch(e){ console.error('balance init error', e); }
 })();
 let TOKEN=localStorage.getItem('pb-sports-token')||'';
@@ -1199,7 +1225,7 @@ window._recoverTicketsFromHostMirror = _recoverTicketsFromHostMirror;
 // derivation — so the rest of player.html sees the canonical merged set.
 try {
   var _recoveryResult = _recoverTicketsFromHostMirror();
-  console.log('[ticket recovery] ' + JSON.stringify(_recoveryResult));
+  
 } catch(_e) {
   console.warn('[ticket recovery] failed:', _e && _e.message || _e);
 }
@@ -1291,30 +1317,11 @@ function calcAvailableBalance() {
     } else {
       reason = 'canceled-or-push-zero-impact';
     }
-    console.log('[balance derivation audit]',
-      '\n  ticketId:              ', t.id || '?',
-      '\n  rawStatus:             ', (t.status||'?'),
-      '\n  displayStatus:         ', es,
-      '\n  risk:                  $'+risk.toFixed(2),
-      '\n  toWin:                 $'+profit.toFixed(2),
-      '\n  payout:                $'+((parseFloat(t.estimatedPayout)||0).toFixed(2)),
-      '\n  includedAsOpenRisk:    ', inOpenRisk,
-      '\n  includedAsSettledGain: ', inGain,
-      '\n  includedAsSettledLoss: ', inLoss,
-      '\n  includedAsRefund:      ', false,
-      '\n  balanceContribution:   $'+contrib.toFixed(2),
-      '\n  reason:                ', reason
-    );
+    
   });
   var refunds = 0;
   var available = Math.round((starting - openRisk - settledLosses + settledGains) * 100) / 100;
-  console.log('[balance derivation audit]',
-    '\n  startingBalance:       $'+starting.toFixed(2),
-    '\n  openRisk:              $'+openRisk.toFixed(2),
-    '\n  settledGains:          $'+settledGains.toFixed(2),
-    '\n  settledLosses:         $'+settledLosses.toFixed(2),
-    '\n  finalAvailableBalance: $'+available.toFixed(2)
-  );
+  
   return {
     starting:      starting,
     openRisk:      openRisk,
@@ -1324,22 +1331,33 @@ function calcAvailableBalance() {
     available:     available
   };
 }
-function syncBalanceDisplays() {
-  var s = calcAvailableBalance();
-  var playerBalance = s.available;
-  // Update legacy var so old references work
-  window.playerBalance = playerBalance;
-  var bal = '$' + playerBalance.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+var _balanceFromServer = false;
+function applyDisplayedBalance(amount) {
+  var n = Number(amount);
+  if (isNaN(n)) return false;
+  playerBalance = n;
+  window.playerBalance = n;
+  var bal = '$' + n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   ['player-balance-display','header-balance','pb-balance-header'].forEach(function(id){
     var el = document.getElementById(id); if (el) el.textContent = bal;
   });
-  dbgBanner('BALANCE RECALCULATED\nStarting: $'+s.starting.toFixed(2)+'\nOpen Risk: $'+s.openRisk.toFixed(2)+'\nAvailable: $'+playerBalance.toFixed(2), '#005');
-  console.log('[balance]', s);
+  return true;
+}
+function syncBalanceDisplays() {
+  // Server value wins. localStorage (pb-balance-start) is fallback only.
+  if (_balanceFromServer && typeof playerBalance === 'number' && !isNaN(playerBalance)) {
+    applyDisplayedBalance(playerBalance);
+    return { available: playerBalance, starting: playerBalance, openRisk: 0, settledGains: 0, settledLosses: 0, refunds: 0 };
+  }
+  var s = calcAvailableBalance();
+  applyDisplayedBalance(s.available);
+  dbgBanner('BALANCE RECALCULATED\nStarting: $'+s.starting.toFixed(2)+'\nOpen Risk: $'+s.openRisk.toFixed(2)+'\nAvailable: $'+s.available.toFixed(2), '#005');
+  
   return s;
 }
 var playerBalance = calcAvailableBalance().available;
-// Sync display as soon as functions are defined
-document.addEventListener('DOMContentLoaded', function(){ syncBalanceDisplays(); });
+// Sync display as soon as functions are defined (localStorage until DB hydrates)
+document.addEventListener('DOMContentLoaded', function(){ if (!_balanceFromServer) syncBalanceDisplays(); });
 // ══ PLAYER SETTINGS (Signal / theme / display currency) ═════════════════════════════════════
 var CURRENCY_RATES = { USD:1, EUR:0.92, GBP:0.79, CAD:1.36, AUD:1.51, MXN:17.20 };
 var CURRENCY_SYMBOLS = { USD:'$', EUR:'€', GBP:'£', CAD:'CA$', AUD:'A$', MXN:'MX$' };
@@ -1373,10 +1391,15 @@ try {
   }
 } catch(_e) {}
 // ═══════════════════════════════════════════════════════════════════════════════
-function fmtBalance(){ return _fmtCurrency(calcAvailableBalance().available); }
+function fmtBalance(){
+  if (_balanceFromServer && typeof playerBalance === 'number' && !isNaN(playerBalance)) {
+    return _fmtCurrency(playerBalance);
+  }
+  return _fmtCurrency(calcAvailableBalance().available);
+}
 
 function showPlayerSettings() {
-  console.log('[PROFILE OPEN] showPlayerSettings invoked');
+  
   var existing = document.getElementById('ps-overlay'); if (existing) existing.remove();
   var s = loadPlayerSettings();
   var ov = document.createElement('div');
@@ -1425,7 +1448,7 @@ function showPlayerSettings() {
     '</div>' +
   '</div>';
   (document.documentElement || document.body).appendChild(ov);
-  console.log('[PROFILE OPEN] modal mounted; rect=', ov.getBoundingClientRect && ov.getBoundingClientRect());
+  
   ov.addEventListener('click', function(e){ if (e.target===ov) ov.remove(); });
   ov.querySelector('#ps-close').addEventListener('click', function(){ ov.remove(); });
   // chip wiring
@@ -1450,13 +1473,20 @@ function showPlayerSettings() {
       if (newEmail) localStorage.setItem('pb-dev-email', newEmail);
     } catch(_e){}
     applyPlayerTheme();
-    if (typeof syncBalanceDisplays === 'function') syncBalanceDisplays();
+    if (_balanceFromServer) applyDisplayedBalance(playerBalance);
+    else if (typeof syncBalanceDisplays === 'function') syncBalanceDisplays();
     showToast('Settings saved', 'success');
     ov.remove();
   });
 }
 function saveBalance(){ /* no-op: balance is derived, not stored directly */ }
-function loadBalance(){ var s = syncBalanceDisplays(); playerBalance = s.available; return playerBalance; }
+function loadBalance(){
+  if (_balanceFromServer && typeof playerBalance === 'number' && !isNaN(playerBalance)) {
+    applyDisplayedBalance(playerBalance);
+    return playerBalance;
+  }
+  var s = syncBalanceDisplays(); playerBalance = s.available; return playerBalance;
+}
 function addLedgerEntry(entry) {
   // 1. Write to localStorage (source of truth, Phase A)
   var ledger = JSON.parse(localStorage.getItem('pb-ledger')||'[]');
@@ -1747,9 +1777,9 @@ async function loadGames(sport, opts){
     const _sport  = _sportApi[_sportLc] || (_isMlb ? 'mlb' : _sportLc);
     const _url = API + '/api/odds/' + _sport;
     if (_isMlb && !_liveOnly) {
-      console.log('[sportsbook fetch] sport=baseball_mlb url='+_url);
+      
     }
-    console.log('[PBS fetch start] sport:', _sport, 'url:', _url, 'live:', _liveOnly);
+    
     let _res;
     try {
       _res = await fetch(_url);
@@ -1757,7 +1787,7 @@ async function loadGames(sport, opts){
       console.error('[sportsbook fetch failed] network error url=' + _url + ' err=' + fetchErr.message);
       throw new Error('Backend unreachable: '+fetchErr.message);
     }
-    console.log('[sportsbook fetch status]', _res.status);
+    
     if(!_res.ok) {
       let _errBody = {};
       try { _errBody = await _res.json(); } catch(e){}
@@ -1774,13 +1804,13 @@ async function loadGames(sport, opts){
     const _xCache = (_res.headers && _res.headers.get) ? (_res.headers.get('X-Cache') || '') : '';
     const _xCount = (_res.headers && _res.headers.get) ? (_res.headers.get('X-Games-Count') || '') : '';
     const _raw = await _res.text();
-    console.log('[odds] raw (first 200):', _raw.slice(0,200));
+    
     let games;
     try { games = JSON.parse(_raw); } catch(parseErr) { throw new Error('Bad JSON: '+parseErr.message); }
     if(!Array.isArray(games)) throw new Error('Expected array, got: '+typeof games);
     if (_sport === 'mlb' && !_liveOnly) {
       var _src = _xCache === 'HIT' ? 'cache' : (_xCache === 'STALE' ? 'stale' : 'live');
-      console.log('[odds cache] source=' + _src + ' games=' + games.length);
+      
       // Non-blocking "using cached lines" badge when payload is stale.
       try {
         var _badgeHost = document.getElementById('games-list');
@@ -1796,7 +1826,7 @@ async function loadGames(sport, opts){
         }
       } catch(_be){}
     }
-    console.log('[PBS fetch success] gamesLoaded:', games.length, _xCount ? ('(server X-Games-Count='+_xCount+')') : '');
+    
     // Safe debug signal for production troubleshooting. Reads response
     // headers populated by the new Owls-aware backend (X-Provider /
     // X-Source-Status / X-Games-Count); falls back to '-' when absent so
@@ -1811,16 +1841,15 @@ async function loadGames(sport, opts){
         _mktCnt += (Array.isArray(_g.spreads)   ? _g.spreads.length   : 0);
         _mktCnt += (Array.isArray(_g.totals)    ? _g.totals.length    : 0);
       }
-      console.log('FRONTEND_ODDS_RENDER games='+games.length+' markets='+_mktCnt
-        +' provider='+_provHdr+' sourceStatus='+_ssHdr+' sport='+_sport);
+      
       // Tagged diagnostics requested for the sport catalog rollout. Each tag
       // prints on its own line so grepping production console output is
       // trivial (e.g. "[games count] sport=nhl n=12").
-      console.log('[render sport] sport='+_sport+' provider='+_provHdr+' sourceStatus='+_ssHdr+' liveOnly='+!!_liveOnly);
-      console.log('[games count] sport='+_sport+' n='+games.length);
-      console.log('[markets count] sport='+_sport+' n='+_mktCnt);
+      
+      
+      
     } catch (_dbg) {}
-    console.log('[PBS render start]');
+    
     if(!games.length){
       if (_liveOnly) {
         el.innerHTML='<div class="empty" style="padding:60px 20px;text-align:center;color:#888">No live games right now.</div>';
@@ -1933,7 +1962,7 @@ async function loadGames(sport, opts){
         return '';
       }
     }).filter(function(s){ return s; }).join('');
-    console.log('games rendered');
+    
     _pbFlashLineMovements();
     _pbApplyLiveFreshnessState();
     // Re-sync highlights after DOM update
@@ -1942,7 +1971,7 @@ async function loadGames(sport, opts){
         var c=document.getElementById('c-'+b.cellId);
         if(c){
           c.classList.add('selected');
-          console.log('[highlight] re-synced:',b.cellId);
+          
         }
       });
     },50);
@@ -2100,8 +2129,6 @@ function setMarketFilter(el, filter) {
   });
 }
 
-console.log("[PBS tabs bind]");
-console.log("[PBS tabs bound]");
 // ════════════════════════════════════════════════════════════════════════════
 // PLAYER SPORT ACCESS ENGINE
 // Reads host-set limits from pb-player-limits and enforces them at:
@@ -2119,14 +2146,7 @@ function _checkPlayerSportAccess(sport) {
   var cid  = club.id || club.clubId || '?';
   var limits = (JSON.parse(localStorage.getItem('pb-player-limits')||'{}'))[pid] || null;
   var hasLimits = !!(limits && limits.sportsAccess);
-  console.log('[player sport access gate]',
-    '\n  playerId:     ', pid,
-    '\n  clubId:       ', cid,
-    '\n  sport:        ', (sport||'').toUpperCase(),
-    '\n  allowed:      ', allowed,
-    '\n  source:       ', hasLimits ? 'host_limits' : 'default_open',
-    '\n  blockedReason:', allowed ? null : 'host_disabled_sport'
-  );
+  
   return { allowed: allowed, sport: (sport||'').toUpperCase(), playerId: pid, clubId: cid,
            source: hasLimits ? 'host_limits' : 'default_open',
            blockedReason: allowed ? null : 'host_disabled_sport',
@@ -2211,8 +2231,7 @@ function _updateSportTabs() {
     if (!hasGames) _dim++; else _vis++;
   });
   // Always log so we can debug catalog drift in production.
-  console.log('[sport catalog] applied tabs visible='+_vis+' dim='+_dim+' hidden='+_hidden
-    +' catalogLoaded='+!!sportsByKey);
+  
 }
 
 // Fetch the backend's sport catalog so tab visibility can adapt to whatever
@@ -2228,11 +2247,7 @@ async function _loadSportsCatalog() {
       window._sportsCatalog = data;
       // Detailed catalog dump: tag + per-sport games count so a single
       // grep -F '[sports catalog]' surfaces full provider state.
-      console.log('[sports catalog] provider='+(data.provider||'?')
-        +' sourceStatus='+(data.sourceStatus||'?')
-        +' updatedAt='+(data.updatedAt||'?')
-        +' count='+data.sports.length
-        +' sports='+data.sports.map(function(s){ return s.key+':'+s.games; }).join(','));
+      
       try { _updateSportTabs(); } catch(e) { console.warn('[sports catalog] _updateSportTabs after refresh failed:', e && e.message || e); }
     }
   } catch (e) {
@@ -2265,7 +2280,7 @@ function setSport(el,sport){
 }
 // setFilter removed — replaced by setMarketFilter
 function setBNav(el,tab){
-  console.log('[nav] tab:', tab);
+  
   _pbActiveTab = (tab==='home'||tab==='sportsbook'||tab==='sports') ? 'sportsbook' : tab;
   document.querySelectorAll('.bn').forEach(function(n){ n.classList.remove('active'); });
   el.classList.add('active');
@@ -2308,7 +2323,7 @@ function setBNav(el,tab){
     if (typeof renderPlayerResults === 'function') renderPlayerResults();
   } else if(tab==='sportsbook_legacy'){
   } else if(tab==='mybets'||tab==='trades'){
-    console.log('MY BETS CLICKED');
+    
     dbgBanner('MY BETS CLICKED\nTickets: '+betTickets.length+' stored', '#004');
     const sec=document.getElementById('mybets-section');
     if(sec) sec.style.display='block';
@@ -2458,7 +2473,7 @@ async function _installDevSession() {
         }));
         localStorage.setItem('pb-balance-start', '1000');
         localStorage.setItem('pb-balance-start:' + _tc.pid, '1000');
-        console.log('LOGIN_OK actorId=' + _tc.pid + ' role=' + _role + ' clubId=' + _devCid);
+        
         try { dbgBanner('TEST SESSION: ' + _tc.name + ' @ Dev Club', '#024'); } catch(_) {}
         return;
       }
@@ -2491,7 +2506,7 @@ async function _installDevSession() {
   localStorage.setItem('pb-balance-start', '1000');
   localStorage.setItem('pb-balance-start:'+_devPid, '1000');
   try { localStorage.removeItem('pb-session-token'); } catch(_){}
-  console.log('DEV_SESSION_BYPASS_ACTIVE clubId='+_devCid+' playerId='+_devPid+' name='+_devName+' balance=1000');
+  
   try { dbgBanner('DEV SESSION: '+_devName+' ('+_devPid+') @ '+_devCid, '#240'); } catch(_){}
 }
 if (_pDev) { _installDevSession().catch(console.error); }
@@ -2511,7 +2526,7 @@ if (_pPreview) {
 
 // ═══ RETURN TO LOBBY ══════════════════════════════════════════════════════════
 function returnToLobby() {
-  console.log('[returnToLobby] clicked');
+  
   var state = {
     player:      localStorage.getItem('pb-player'),
     host:        localStorage.getItem('pb-host'),
@@ -2523,7 +2538,7 @@ function returnToLobby() {
     balance:     localStorage.getItem('pb-balance-start'),
     token:       localStorage.getItem('pb-sports-token')
   };
-  console.log('[returnToLobby] state before nav', state);
+  
   sessionStorage.setItem('pb-force-lobby-home', '1');
   window.location.href = 'lobby.html';
 }
@@ -2569,7 +2584,7 @@ function _checkSessionScope() {
 function _handleScopeFailure(scope, source) {
   // In dev/preview mode, scope failures are expected and non-fatal
   if (_pDev || _pPreview) {
-    console.log('[scope] DEV/PREVIEW mode — ignoring scope failure source='+source+' reason='+(scope&&scope.reason||'?'));
+    
     return;
   }
   var banner = 'SESSION_SCOPE_INVALID'
@@ -2597,10 +2612,8 @@ function _handleScopeFailure(scope, source) {
 
 // ══ BOOT SEQUENCE ─────────────────────────────────────────────────────────────────────────
 // Each step wrapped individually so one failure cannot stall the rest.
-console.log('BOOT_STAGE=init');
 
 // ── Session gate result (already ran above; _sessionValid is set) ─────────
-console.log('BOOT_STAGE=session_gate_end sessionValid='+_sessionValid);
 
 // ── If session is invalid: show modal + skip game loading ─────────────────
 if (!_sessionValid) {
@@ -2609,12 +2622,12 @@ if (!_sessionValid) {
   var _glEl = document.getElementById('games-list');
   if (_glEl) _glEl.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#666;font-size:0.85rem">Sign in to view games.</div>';
 } else {
-  console.log('BOOT_STAGE=load_games_begin');
+  
   try { _currentSport = 'mlb'; } catch(e) { console.error('[PBS init] set _currentSport failed:', e && e.message || e); }
   try { _updateTeaserTab(); }  catch(e) { console.error('[PBS init] _updateTeaserTab failed (continuing):', e && e.message || e); }
   try { _updateSportTabs(); }  catch(e) { console.error('[PBS init] _updateSportTabs failed (continuing):', e && e.message || e); }
   try { loadGames('mlb'); }    catch(e) { console.error('[PBS fetch failed]', e); }
-  console.log('BOOT_STAGE=load_games_end (async fetch in flight)');
+  
 }
 
 try { startAutoGradeDaemon(); } catch(e) { console.error('[auto grade daemon] failed to start:', e.message); }
@@ -2629,7 +2642,6 @@ try {
 } catch(e) { console.warn('[db primary read] sync error:', e.message); }
 
 try { renderMyBets(); } catch(e) { console.error('[PBS init] renderMyBets failed:', e.message); }
-console.log('BOOT_STAGE=render_complete');
 
 // ── 5s watchdog: surface stall if games never load ────────────────────────
 setTimeout(function(){
@@ -2891,7 +2903,7 @@ function fmtOdds(o){ var n=parseInt(String(o).replace('+','')); return isNaN(n)?
 function fmtDollar(n){ var v=parseFloat(n); if(isNaN(v)) return '--'; return _fmtCurrency(v); }
 
 function bsSetType(t) {
-  console.log("tab clicked", t);
+  
   if (t === 'rr' && betSlip.length < 3) { showToast('Need 3+ picks for Round Robin', 'warning'); return; }
   if (t === 'teaser' && getTeaserLegs().length < 2) { showToast('Need 2+ spread/total picks for Teaser', 'warning'); return; }
   bsType = t;
@@ -3320,7 +3332,7 @@ function bsRenderLegs() {
   } else legs = bsType === 'parlay' ?
     // Parlay: compute combined odds first, then render all legs
     (function(){
-      console.log('parlay selections', betSlip);
+      
       var validLegs = betSlip.filter(function(b){ return b.odds && !isNaN(b.odds); });
       // Detect same-game legs
       var gameCount = {};
@@ -3378,7 +3390,7 @@ function bsRenderLegs() {
           '<input type="text" inputmode="decimal" placeholder="0.00" id="stake-all-inp" ' +
             'style="width:80px;background:none;border:none;outline:none;font-size:0.92rem;font-weight:800;color:#111;pointer-events:auto;user-select:text;-webkit-user-select:text;position:relative;z-index:20" ' +
             'value="" ' +
-            'oninput="bsStakeAllInput(this)" onfocus="console.log(&quot;stake all focused&quot;)" ' +
+            'oninput="bsStakeAllInput(this)" ' +
             'onclick="event.stopPropagation()" onpointerdown="event.stopPropagation()" ontouchstart="event.stopPropagation()">' +
         '</div></div>';
       var cards = betSlip.map(function(b,i){
@@ -3416,7 +3428,7 @@ function bsRenderLegs() {
             '<div class="single-inp-row">' +
               '<span>$</span>' +
               '<input type="number" placeholder="0.00" inputmode="decimal" value="'+(st||'')+'" ' +
-                'data-cid="'+b.cellId+'" oninput="bsSingleInput(this)" onclick="event.stopPropagation()" onfocus="console.log(\'input focused\')" ' +
+                'data-cid="'+b.cellId+'" oninput="bsSingleInput(this)" onclick="event.stopPropagation()" ' +
                 'style="width:100%">' +
             '</div>' +
             '<div class="single-payout" data-payout-cid="'+b.cellId+'" style="color:#00875a;font-weight:700;font-size:0.7rem;min-height:1em">'+(payout?'Payout: '+payout:'')+'</div>' +
@@ -3479,15 +3491,15 @@ window.bsPlaceBet = function bsPlaceBet() {
   if (_fallback > 0 && Object.keys(bsStakes).length === 0 && bsType === 'straight') {
     betSlip.forEach(function(b){ bsStakes[b.cellId] = _fallback; });
     bsStake = _fallback;
-    console.log('[stake input change]','\n  source: bsPlaceBet fallback hydration','\n  value:',_fallback,'\n  bsStakes now:', JSON.stringify(bsStakes));
+    
   }
   // Recompute effective stake (Singles uses bsStakes map, others use bsStake)
   if (bsType === 'straight') {
     bsStake = Object.values(bsStakes).reduce(function(s,v){ return s+(parseFloat(v)||0); }, 0);
   }
-  console.log('[stake input change]','\n  source: bsPlaceBet final','\n  bsType:',bsType,'\n  bsStake:',bsStake,'\n  bsStakes:',JSON.stringify(bsStakes),'\n  activeSlipIds:',betSlip.map(function(b){return b.cellId;}).join(','));
+  
   dbgBanner('STEP 1: bsPlaceBet started\npicks:'+betSlip.length+' stake:'+bsStake+' type:'+bsType, '#020');
-  console.log('PLACE BET CLICKED', { betSlip: betSlip.length, bsStake: bsStake, bsType: bsType, bsStakes: bsStakes });
+  
   try {
     var err = document.getElementById('bs-err');
     if (!betSlip.length) {
@@ -3544,7 +3556,7 @@ window.bsPlaceBet = function bsPlaceBet() {
 }
 
 function openBetConfirm() {
-  console.log("confirm modal open");
+  
   try {
   // ── SPORTSBOOK MATH ──────────────────────────────────────────────────────
   // risk   = amount wagered (never double-counted)
@@ -3556,7 +3568,7 @@ function openBetConfirm() {
     risk   = betSlip.reduce(function(s,b){ return s+(bsStakes[b.cellId]||0); }, 0);
     payout = betSlip.reduce(function(s,b){ var st=bsStakes[b.cellId]||0; return s+st*amToDecimal(b.odds); }, 0);
     toWin  = payout - risk;
-    console.log('SINGLE CONFIRM: risk='+risk.toFixed(2)+' payout='+payout.toFixed(2)+' profit='+toWin.toFixed(2));
+    
     dbgBanner('SINGLE CONFIRM | Risk: $'+risk.toFixed(2)+' | To Win: $'+toWin.toFixed(2)+' | Payout: $'+payout.toFixed(2), '#004');
   } else if (bsType === 'teaser') {
     risk   = bsStake;
@@ -3580,14 +3592,7 @@ function openBetConfirm() {
     // Parlay math audit log
     var _decOdds = betSlip.map(function(b){ return amToDecimal(b.odds); });
     var _combined = _decOdds.reduce(function(p,d){ return p*d; }, 1);
-    console.log('[parlay math audit]',
-      '\n  stake:          $'+risk.toFixed(2),
-      '\n  legs:           '+betSlip.map(function(b){ return b.odds; }).join(', '),
-      '\n  decimalOdds:    '+_decOdds.map(function(d){ return d.toFixed(4); }).join(' × '),
-      '\n  combinedDecimal:'+_combined.toFixed(4),
-      '\n  toWin:          $'+toWin.toFixed(2),
-      '\n  totalPayout:    $'+payout.toFixed(2)
-    );
+    
   }
   // Sync bsStake to computed risk (prevents double-count)
   bsStake = risk;
@@ -3630,7 +3635,7 @@ function openBetConfirm() {
     profit:      toWin,
     capturedAt:  new Date().toISOString(),
   });
-  console.log('[snapshot] captured', _pendingSnapshot);
+  
   // ══════════════════════════════════════════════════════════════════════════════
 
   // Build DK-style light modal content
@@ -3720,11 +3725,7 @@ function openBetConfirm() {
   var _cancelBtns = sheet.querySelectorAll('[data-action="cancel"]');
   if (_confirmBtn) _confirmBtn.addEventListener('click', function(){
     // ── DIAGNOSTIC: trace every confirm click — catches "button does nothing" reports
-    console.log('CONFIRM_BET_CLICKED bsType='+bsType
-      +' _pendingRisk='+_pendingRisk
-      +' slipLegs='+(Array.isArray(betSlip)?betSlip.length:0)
-      +' snapshot='+(_pendingSnapshot ? 'set' : 'NULL')
-      +' disabled='+!!_confirmBtn.disabled);
+    
     try { dbgBanner('CONFIRM_BET_CLICKED', '#024'); } catch(_dbg){}
     try {
       confirmBet();
@@ -3737,7 +3738,7 @@ function openBetConfirm() {
   _cancelBtns.forEach(function(btn){
     btn.addEventListener('click', function(e){
       e.stopPropagation();
-      console.log('[cancel confirm bet clicked]');
+      
       closeBetConfirm();
     });
   });
@@ -3752,7 +3753,7 @@ function closeBetConfirm() {
   if (ov) ov.remove();
   // Invalidate snapshot so a stale confirm cannot fire after close.
   _pendingSnapshot = null;
-  console.log('[closeBetConfirm] modal closed');
+  
 }
 // Alias for user-facing requests
 var closeConfirmBet = closeBetConfirm;
@@ -3762,7 +3763,7 @@ document.addEventListener('click', function(e) {
   if (e.target.closest('[data-close-confirm-bet]') || e.target.closest('[data-action="cancel"]')) {
     // Only close if the confirm overlay is currently open
     if (document.getElementById('bc-modal-overlay')) {
-      console.log('[cancel confirm bet clicked] delegation caught');
+      
       closeBetConfirm();
     }
   }
@@ -4087,20 +4088,7 @@ function _makeSelection(b) {
   if (!awayTeam && cachedGame)  awayTeam  = cachedGame.away || cachedGame.away_team  || '';
   if (!homeTeam && cachedGame)  homeTeam  = cachedGame.home || cachedGame.home_team  || '';
   var legId = 'LEG-' + (contract.gameId||'?') + '-' + (contract.market||'mkt').replace(/\s+/g,'').slice(0,8) + '-' + now.getTime();
-  console.log('[game identity audit]',
-    '\n  legId:            ', legId,
-    '\n  providerName:     ', 'odds-api',
-    '\n  gameId:           ', contract.gameId || '?',
-    '\n  providerGameId:   ', contract.gameId || '?',
-    '\n  canonicalGameKey: ', contract.canonicalGameKey,
-    '\n  ticketCommenceTime:', contract.scheduledStart || '(not set)',
-    '\n  ticketTeams:      ', awayTeam + ' @ ' + homeTeam,
-    '\n  sport:            ', b.sport || '?',
-    '\n  market:           ', contract.market || '?',
-    '\n  pick:             ', contract.pick || '?',
-    '\n  odds:             ', contract.odds,
-    '\n  line:             ', contract.line
-  );
+  
   return {
     // Snapshot contract (every place-bet leg, singles and parlays)
     pick:              contract.pick,
@@ -4144,11 +4132,7 @@ async function confirmBet() {
   var _cbRespStatus = null;
   var _cbRespText   = null;  // raw response body for JSON-parse-fail diagnosis
 
-  function _cbLog(tag, extra) {
-    var msg = '[confirmBet] ' + tag + (extra ? ' ' + extra : '');
-    console.log(msg);
-    try { dbgBanner(tag, '#024'); } catch(_){}
-  }
+  function _cbLog(tag, extra) {}
   function _cbErr(tag, err, extra) {
     var stack = (err && err.stack) ? '\n  stack: ' + err.stack.split('\n').slice(0,4).join(' | ') : '';
     var msg = '[confirmBet] ' + tag
@@ -4157,15 +4141,7 @@ async function confirmBet() {
       + (extra ? ' ' + extra : '')
       + (err ? ' err=' + (err.message || String(err)) : '')
       + stack;
-    console.warn(msg);
-    // Show full detail in debug banner so it\'s visible on-screen
-    var _bannerDetail = tag
-      + ' | status=' + _cbRespStatus
-      + ' | step=' + _cbStep
-      + (extra ? ' | ' + extra.slice(0, 120) : '')
-      + (err ? ' | err=' + (err.message||String(err)).slice(0,80) : '')
-      + (_cbRespText ? ' | body=' + _cbRespText.slice(0,120).replace(/\n/g,' ') : '');
-    try { dbgBanner(_bannerDetail, '#800'); } catch(_){}
+    console.error(msg);
   }
   function _confirmBetHasLiveLeg(snapObj) {
     var legs = snapObj && Array.isArray(snapObj.legs) ? snapObj.legs : [];
@@ -4277,7 +4253,9 @@ async function confirmBet() {
 
   // ── Balance check ─────────────────────────────────────────────────────────
   _cbStep = 'BALANCE_CHECK';
-  var _avail = calcAvailableBalance().available;
+  var _avail = (_balanceFromServer && typeof playerBalance === 'number' && !isNaN(playerBalance))
+    ? playerBalance
+    : calcAvailableBalance().available;
   playerBalance = _avail;
   var riskAmount = snap.risk;
   bsStake = riskAmount;
@@ -4361,20 +4339,14 @@ async function confirmBet() {
     if (_pDev && !_pp.get('testUser')) {
       _pid = 'dev-player';
       _cid = 'dev-club';
-      console.log('DEV_SESSION_SCOPE_READY tokenClubId=dev-club localClubId=dev-club activeClubId=dev-club playerId=dev-player');
+      
     } else if (_tokenRole) {
-      console.log('TOKEN_SCOPE role='+_tokenRole+' clubId='+(_cid||'?')+' playerCapable=true actorId='+(_pid||'?'));
+      
     }
     var _activeClubRaw = localStorage.getItem('pb-active-club');
     var _activeClubId  = null;
     try { _activeClubId = _activeClubRaw ? JSON.parse(_activeClubRaw) : null; } catch(_) { _activeClubId = _activeClubRaw; }
-    console.log('FRONTEND_CLUB_SCOPE'
-      + ' activeClubId='   + (_activeClubId || '(none)')
-      + ' pb-club.id='     + (_cid           || '(none)')
-      + ' tokenClubId='    + (_tokenClubId   || '(none/no-token)')
-      + ' playerId='       + (_pid           || '(none)')
-      + ' hostId='         + (_lscl.hostId   || _lscl.ownerId || '(none)')
-      + ' mismatch_lscl_vs_token=' + (_tokenClubId && _cid && _tokenClubId !== _cid ? 'YES ⚠' : 'no'));
+    
 
     // ── Stale club recovery ───────────────────────────────────────────────
     // If tokenClubId is set and differs from pb-club, the stored club is stale.
@@ -4400,10 +4372,7 @@ async function confirmBet() {
       _cid = _tokenClubId;
     }
 
-    console.log('BET_POST_SCOPE'
-      + ' payload.clubId='   + (_cid  || '(empty ⚠)')
-      + ' payload.playerId=' + (_pid  || '(empty ⚠)')
-      + ' tokenClubId='      + (_tokenClubId || '(no-token)'));
+    
 
     var _iKey = 'BET_'+(_pid||'?')+'_'+now.replace(/[^0-9]/g,'').slice(0,14);
     var _dbPayload = {
@@ -4530,7 +4499,12 @@ async function confirmBet() {
 
         _cbStep = 'BALANCE_SYNC';
         _cbLog('CONFIRM_BET_BALANCE_SYNC');
-        try { syncBalanceDisplays(); } catch(_) {}
+        try {
+          if (_dbData.balanceAfter != null && !isNaN(Number(_dbData.balanceAfter))) {
+            applyDisplayedBalance(Number(_dbData.balanceAfter));
+            _balanceFromServer = true;
+          }
+        } catch(_) {}
 
         _cbStep = 'MODAL_CLOSE';
         _cbLog('CONFIRM_BET_MODAL_CLOSE');
@@ -4553,7 +4527,6 @@ async function confirmBet() {
         setTimeout(function(){
           try { loadPlayerDashboardFromDb({ keepPending: true }).then(function(){
             try { renderMyBets(); } catch(_) {}
-            try { syncBalanceDisplays(); } catch(_) {}
           }).catch(function(){}); } catch(_) {}
         }, 400);
 
@@ -4594,7 +4567,16 @@ async function confirmBet() {
           try {
             var _r2=await _pbFetch('/api/bets/place',{method:'POST',body:JSON.stringify(_rp)});
             var _rt=await _r2.text(); var _rd2; try{ _rd2=JSON.parse(_rt); }catch(_){ _rd2={}; }
-            if (_rd2.ok) { showToast('\u2705 Bet placed at new odds','success'); try{ loadPlayerDashboardFromDb({ keepPending: true }).then(function(){ try{renderMyBets();}catch(_){} }); }catch(_){ try{renderMyBets();}catch(_){} } }
+            if (_rd2.ok) {
+              showToast('\u2705 Bet placed at new odds','success');
+              try {
+                if (_rd2.balanceAfter != null && !isNaN(Number(_rd2.balanceAfter))) {
+                  applyDisplayedBalance(Number(_rd2.balanceAfter));
+                  _balanceFromServer = true;
+                }
+              } catch(_){}
+              try{ loadPlayerDashboardFromDb({ keepPending: true }).then(function(){ try{renderMyBets();}catch(_){} }); }catch(_){ try{renderMyBets();}catch(_){} }
+            }
             else { showToast((_rd2.code||_rd2.error||'placement failed').replace(/_/g,' '),'error'); }
           } catch(_e2){ showToast('Network error \u2014 try again','error'); }
         };
@@ -4761,8 +4743,7 @@ document.addEventListener('click', function(e) {
   var btn = e.target.closest('[data-action="place-bet"]');
   if (!btn) return;
   if (btn.dataset.disabled === 'true') return; // not ready
-  console.log('PLACE BET CLICKED via delegation');
-  showToast('PLACE BET CLICKED');
+  
   window.bsPlaceBet();
 }, true);
 
@@ -4822,9 +4803,14 @@ async function submitDeleteRequest(ticketId) {
       });
       var data = await resp.json();
       if (data.ok) {
-        console.log('[cancel bet] DB success ticketId='+ticketId+' refund=$'+data.refundAmount);
+        
         showToast('✅ Bet canceled — $'+((data.refundAmount||0).toFixed(2))+' refunded', 'success');
-        // Hydrate from DB
+        try {
+          if (data.balanceAfter != null && !isNaN(Number(data.balanceAfter))) {
+            applyDisplayedBalance(Number(data.balanceAfter));
+            _balanceFromServer = true;
+          }
+        } catch(_e){}
         try { await loadPlayerDashboardFromDb(); } catch(_e){}
         try { renderMyBets(); } catch(_e){}
         return; // DO NOT fall through to localStorage path
@@ -4920,14 +4906,14 @@ function _refreshFromStorage(reason) {
   if (sec && sec.style.display !== 'none') {
     renderMyBets();
   }
-  console.log('[tickets] refresh (' + reason + '): ' + betTickets.length + ' tickets, balance ' + playerBalance);
+  
 }
 window.addEventListener('storage', function(e) {
   if (e.key === 'pb-balance') {
     // Legacy key — still listen so any straggler writers don't desync displays.
     loadBalance();
     syncBalanceDisplays();
-    console.log('[balance] legacy pb-balance storage event:', playerBalance);
+    
   }
   if (e.key === 'pb-tickets' || e.key === 'pb-tickets-version') {
     var v = parseInt(localStorage.getItem('pb-tickets-version') || '0', 10) || 0;
@@ -5125,35 +5111,9 @@ function _gradeTicket(ticket, resultsMap, normalizedGames) {
       var nearest = _closestGameDiagnostic(sel, games);
       var selHomeTla2 = _tlaForName(sel.homeTeam);
       var selAwayTla2 = _tlaForName(sel.awayTeam);
-      console.log('[active ticket final check]\n' +
-        '  ticketId:     ' + (ticket.id || '?') + '\n' +
-        '  selection:    ' + (sel.pick || '-') + '\n' +
-        '  matchup:      ' + (sel.matchup || sel.game || '-') + '\n' +
-        '  gameId:       ' + (sel.gameId  || '-') + '\n' +
-        '  selHome:      ' + (sel.homeTeam || '-') + ' (TLA=' + (selHomeTla2 || '?') + ')\n' +
-        '  selAway:      ' + (sel.awayTeam || '-') + ' (TLA=' + (selAwayTla2 || '?') + ')\n' +
-        '  matchedGame:  ' + (nearest ? (nearest.away + ' @ ' + nearest.home) : 'none') + '\n' +
-        '  matched:      no\n' +
-        '  gameStatus:   ' + (nearest ? (nearest.status || '-') : '-') + '\n' +
-        '  homeScore:    ' + (nearest && nearest.home_score != null ? nearest.home_score : '-') + '\n' +
-        '  awayScore:    ' + (nearest && nearest.away_score != null ? nearest.away_score : '-') + '\n' +
-        '  skipReason:   ' + (
-          !games.length         ? 'no_completed_games_in_window' :
-          (!selHomeTla2 || !selAwayTla2) ? 'team_tla_unresolved (extend MLB_TEAM_ALIASES)' :
-          nearest               ? 'tla_pair_mismatch_with_nearest' :
-          'no_candidate_in_window'
-        ));
+      
       // Tony-spec mirror log so the skip path matches the requested shape.
-      console.log('[grade skipped]\n' +
-        '  reason:     ' + (
-          !games.length         ? 'no_completed_games_in_window' :
-          (!selHomeTla2 || !selAwayTla2) ? 'team_tla_unresolved' :
-          nearest               ? 'tla_pair_mismatch_with_nearest' :
-          'no_candidate_in_window'
-        ) + '\n' +
-        '  ticketId:   ' + (ticket.id || '?') + '\n' +
-        '  pick:       ' + (sel.pick || '-') + '\n' +
-        '  gameStatus: ' + (nearest ? (nearest.status || '-') : '-'));
+      
       return null;
     }
     // Normalize team aliases on BOTH sides before handing to the grading
@@ -5172,37 +5132,12 @@ function _gradeTicket(ticket, resultsMap, normalizedGames) {
              : __as > __hs ? prepared.game.away
              : 'push')
           : 'pending';
-      console.log('[grade candidate]\n' +
-        '  ticketId:       ' + (ticket.id || '?') + '\n' +
-        '  legIndex:       ' + i + '\n' +
-        '  pick:           ' + (sel.pick || '-') + '\n' +
-        '  normalizedPick: ' + (prepared.sel.pick || '-') + '\n' +
-        '  matchedGameId:  ' + (gameResult.id || '-') + '\n' +
-        '  homeTeam:       ' + (prepared.game.home || '-') + '\n' +
-        '  awayTeam:       ' + (prepared.game.away || '-') + '\n' +
-        '  status:         ' + (gameResult.status || '-') + '\n' +
-        '  winner:         ' + __winner);
+      
     } catch(_e){}
     var legResult = _gradeSingleLeg(prepared.sel, prepared.game);
     if (!legResult) {
-      console.log('[active ticket final check]\n' +
-        '  ticketId:     ' + (ticket.id || '?') + '\n' +
-        '  selection:    ' + (sel.pick || '-') + '\n' +
-        '  matchup:      ' + (sel.matchup || sel.game || '-') + '\n' +
-        '  gameId:       ' + (sel.gameId  || '-') + '\n' +
-        '  selHome:      ' + (sel.homeTeam || '-') + '\n' +
-        '  selAway:      ' + (sel.awayTeam || '-') + '\n' +
-        '  matchedGame:  ' + (gameResult.away || '?') + ' @ ' + (gameResult.home || '?') + '\n' +
-        '  matched:      yes\n' +
-        '  gameStatus:   ' + (gameResult.status || '-') + '\n' +
-        '  homeScore:    ' + (gameResult.home_score != null ? gameResult.home_score : '-') + '\n' +
-        '  awayScore:    ' + (gameResult.away_score != null ? gameResult.away_score : '-') + '\n' +
-        '  skipReason:   leg_unable_to_grade (market=' + (sel.market||'-') + ' pick="' + (sel.pick||'-') + '")');
-      console.log('[grade skipped]\n' +
-        '  reason:     leg_unable_to_grade\n' +
-        '  ticketId:   ' + (ticket.id || '?') + '\n' +
-        '  pick:       ' + (sel.pick || '-') + '\n' +
-        '  gameStatus: ' + (gameResult.status || '-'));
+      
+      
       return null;
     }
     legResults.push(legResult);
@@ -5490,7 +5425,7 @@ function _findGameForSelection(sel, normalizedGames, resultsMap) {
   // SAFETY GATE: future game never gradeable
   var selMs = _selCommenceMs(sel);
   if (selMs > 0 && selMs > Date.now()) {
-    console.log('[grade skipped]\n  reason:     future_game_not_gradeable\n  ticketId:   '+(sel._ticketId||'?')+'\n  commenceTime: '+new Date(selMs).toISOString());
+    
     return null;
   }
 
@@ -5553,19 +5488,10 @@ function _findGameForSelection(sel, normalizedGames, resultsMap) {
   }
 
   // ── Audit log ──────────────────────────────────────────────────────────
-  console.log('[grading match audit]',
-    '\n  ticketId:       ', ticketId,
-    '\n  legId:          ', legId,
-    '\n  providerGameId: ', provId || '(none)',
-    '\n  canonicalKey:   ', cKey || '(none)',
-    '\n  matchMethod:    ', method,
-    '\n  candidateCount: ', result ? 1 : (candidates.length || candidateCount),
-    '\n  matchedGame:    ', result ? (result.away+' @ '+result.home+' ['+result.id+']') : '(none)',
-    '\n  reason:         ', reason || (result ? 'matched' : 'no_match_found')
-  );
+  
 
   if (!result && reason) {
-    console.log('[grade skipped]\n  reason:     '+reason+'\n  ticketId:   '+ticketId+'\n  method:     '+method+'\n  candidates: '+candidateCount);
+    
   }
 
   return result || null;
@@ -5590,7 +5516,7 @@ function repairTicketGameIdentity(ticket) {
   });
   var repaired = repairedCount > 0;
   if (repaired) {
-    console.log('[repair ticket identity] ticketId:', ticket.id, 'selectionsRepaired:', repairedCount);
+    
     // Persist
     try {
       var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
@@ -5609,7 +5535,7 @@ function repairAllTicketIdentities() {
   var active = tickets.filter(function(t){ var s=(t.status||'').toLowerCase(); return s==='active'||s==='open'; });
   var total = 0;
   active.forEach(function(t){ var r = repairTicketGameIdentity(t); if(r.repaired) total += r.selectionsRepaired; });
-  console.log('[repair all tickets] repaired', total, 'leg identities across', active.length, 'active tickets');
+  
   return { ticketsChecked: active.length, legsRepaired: total };
 }
 window.repairAllTicketIdentities = repairAllTicketIdentities;
@@ -5627,7 +5553,7 @@ async function runServerGrade(opts) {
   var pid  = _safeId(pl.id != null ? pl.id : pl.username);
   var cid  = _safeId(club.id != null ? club.id : club.clubId);
 
-  console.log('[server grade] starting — playerId:', pid, 'clubId:', cid);
+  
   try {
     var body = { daysBack: opts.daysBack || 3 };
     if (pid) body.playerId = pid;
@@ -5647,20 +5573,13 @@ async function runServerGrade(opts) {
     if (data.devBypass || data.skipped) { return data; }
     _serverGradeLastResult = data;
 
-    console.log('[server grade] done:',
-      '\n  checked:', data.checked,
-      '\n  graded:',  data.graded,
-      '\n  skipped:', data.skipped,
-      '\n  errors:',  data.errors && data.errors.length || 0,
-      '\n  devBypass:', data.devBypass || false
-    );
+    
 
     if (data.graded > 0) {
       // Hydrate My Bets from DB after server grading
       var hydrateResult = await loadPlayerDashboardFromDb();
-      if (hydrateResult && hydrateResult.sourceUsed === 'db') {
-        console.log('[server grade] hydrated betTickets from DB after grading');
-        syncBalanceDisplays();
+      if (hydrateResult && (hydrateResult.sourceUsed === 'db' || hydrateResult.source === 'db' || hydrateResult.ok)) {
+        
         try { renderMyBets(); } catch(_e){}
         try { showToast('✅ Server graded ' + data.graded + ' ticket(s)', 'success'); } catch(_e){}
       }
@@ -5678,12 +5597,7 @@ async function runServerGrade(opts) {
 async function checkServerGradeStatus() {
   try {
     var r = await fetch('/api/grade/status').then(function(r){ return r.json(); });
-    console.log('[server grade status]',
-      '\n  enabled:', r.enabled,
-      '\n  activeTicketCount:', r.activeTicketCount,
-      '\n  lastGradedAt:', r.lastGradedAt || '(never)',
-      '\n  recentGrades:', (r.recentGrades||[]).length
-    );
+    
     return r;
   } catch(e) {
     console.warn('[server grade status] error:', e.message);
@@ -5802,14 +5716,7 @@ function _prepareGradingInputs(sel, gameResult) {
       ? (hs > as ? homeOut.toLowerCase()
                  : (as > hs ? awayOut.toLowerCase() : 'push'))
       : 'pending';
-    console.log('[grade normalize]\n' +
-      '  ticketSel:        ' + (sel.matchup || sel.game || '-') + '\n' +
-      '  originalPick:     ' + pickIn + '\n' +
-      '  normalizedPick:   ' + pickOut + '\n' +
-      '  winner:           ' + winnerRaw + '\n' +
-      '  normalizedWinner: ' + winnerCanon + '\n' +
-      '  gameHomeRaw:      ' + (gameResult.home || '-') + ' -> ' + homeOut + '\n' +
-      '  gameAwayRaw:      ' + (gameResult.away || '-') + ' -> ' + awayOut);
+    
   } catch(_e){}
 
   // Clone shallowly; only override the fields _gradeSingleLeg reads.
@@ -5957,7 +5864,7 @@ function _logSportsDataIOFinals(scores) {
                ' | status=' + (g.status || '-') +
                ' | gameId=' + (g.id || '-'));
   }
-  console.log(lines.join('\n'));
+  
 }
 window._logSportsDataIOFinals = _logSportsDataIOFinals;
 
@@ -6169,17 +6076,17 @@ function runBalanceReconciliation() {
     ? { expectedSum: _round(sumPlayer), liveAvailableMinusStarting: liveDeltaFromStarting }
     : null;
 
-  console.log('[balance reconciliation]');
-  console.log('  pbTickets:        ' + pbTickets.length);
-  console.log('  hostActiveBets:   ' + hostActiveBets.length);
-  console.log('  ledger rows:      ' + ledger.length);
-  console.log('  settlements:      ' + settlements.length);
-  console.log('  mismatches:       ' + mismatches.length);
-  console.log('  hostMirror orphans (in host, not in pb-tickets): ' + orphans.length);
-  console.log('  sum playerDeltaExpected: ' + _round(sumPlayer));
-  console.log('  sum hostDeltaExpected:   ' + _round(sumHost));
+  
+  
+  
+  
+  
+  
+  
+  
+  
   if (liveDeltaFromStarting != null) {
-    console.log('  live (available - starting): ' + liveDeltaFromStarting);
+    
   }
   if (aggregateDrift) {
     console.warn('  AGGREGATE DRIFT: per-ticket sum (' + aggregateDrift.expectedSum +
@@ -6205,10 +6112,10 @@ function runBalanceReconciliation() {
         };
       }));
     } else {
-      rows.forEach(function(r){ console.log(JSON.stringify(r)); });
+      rows.forEach(function(r){  });
     }
   } catch(_e) {
-    rows.forEach(function(r){ console.log(JSON.stringify(r)); });
+    rows.forEach(function(r){  });
   }
 
   if (mismatches.length) {
@@ -6217,7 +6124,7 @@ function runBalanceReconciliation() {
       console.warn('  ' + r.ticketId + ' (' + r.sport + ', ' + r.status + ') -> ' + r.issue);
     });
   } else {
-    console.log('[balance reconciliation] all rows consistent.');
+    
   }
   if (orphans.length) {
     console.warn('[balance reconciliation] ' + orphans.length + ' host orphan ticket(s) not in pb-tickets:');
@@ -6375,28 +6282,28 @@ function runSinglePlayerBetAudit(playerId) {
     match:                issues.length === 0
   };
 
-  console.log('[player audit] ' + playerId);
-  console.log('  startingBalance:       $' + report.startingBalance.toFixed(2));
-  console.log('  activeRisk:            $' + report.activeRisk.toFixed(2));
-  console.log('  settledWins (profit):  $' + report.settledWins.toFixed(2));
-  console.log('  settledLosses (risk):  $' + report.settledLosses.toFixed(2));
-  console.log('  pushVoidRisk:          $' + report.pushVoidRisk.toFixed(2));
-  console.log('  balanceExpected:       $' + report.balanceExpected.toFixed(2));
+  
+  
+  
+  
+  
+  
+  
   if (report.balanceDisplayed != null) {
-    console.log('  balanceDisplayed:      $' + report.balanceDisplayed.toFixed(2) + (report.isCurrentPlayer ? '' : ' (not current player)'));
+    
   } else {
-    console.log('  balanceDisplayed:      (not current player — cannot compare to live)');
+    
   }
-  console.log('  hostAtRiskFromPlayer:  $' + report.hostAtRiskFromPlayer.toFixed(2));
-  console.log('  hostPnlFromPlayer:     ' + (report.hostPnlFromPlayer >= 0 ? '+$' : '-$') + Math.abs(report.hostPnlFromPlayer).toFixed(2));
-  console.log('  ticketCount (pb):      ' + report.ticketCount);
-  console.log('  ticketCount (host):    ' + report.hostTicketCount);
-  console.log('  sports:                ' + (Object.keys(sports).length ? JSON.stringify(sports) : '(none)'));
+  
+  
+  
+  
+  
   if (issues.length) {
     console.warn('  issues:');
     issues.forEach(function(x){ console.warn('    - ' + x); });
   } else {
-    console.log('  match:                 true');
+    
   }
   return report;
 }
@@ -6430,13 +6337,13 @@ function runMultiPlayerBetAudit() {
   var unownedPb   = pbTickets.filter(function(t){ return t && !t.playerId; }).length;
   var unownedHost = hostActiveBets.filter(function(t){ return t && !t.playerId; }).length;
 
-  console.log('[multi-player audit]');
-  console.log('  distinctPlayerIds:    ' + pids.length + ' (' + (pids.join(', ') || 'none') + ')');
-  console.log('  pbTicketsTotal:       ' + pbTickets.length);
-  console.log('  hostActiveBetsTotal:  ' + hostActiveBets.length);
-  console.log('  unowned pb (no pid):  ' + unownedPb);
-  console.log('  unowned host (no pid):' + unownedHost);
-  console.log('  duplicate ticket ids: ' + duplicateIds.length + (duplicateIds.length ? ' (' + duplicateIds.join(', ') + ')' : ''));
+  
+  
+  
+  
+  
+  
+  
 
   var rows = [];
   pids.forEach(function(pid){
@@ -6457,9 +6364,9 @@ function runMultiPlayerBetAudit() {
 
   try {
     if (typeof console.table === 'function') console.table(rows);
-    else rows.forEach(function(r){ console.log(JSON.stringify(r)); });
+    else rows.forEach(function(r){  });
   } catch (_e) {
-    rows.forEach(function(r){ console.log(JSON.stringify(r)); });
+    rows.forEach(function(r){  });
   }
 
   // Cross-player ID bleed check
@@ -6520,31 +6427,31 @@ function dumpTicketById(ticketId) {
   var host = hostMirror.find(function(t){ return t && t.id === ticketId; }) || null;
   var rows = ledger.filter(function(L){ return L && L.ticketId === ticketId; });
 
-  console.log('[dumpTicketById] ' + ticketId);
+  
   if (pb) {
-    console.log('--- pb-tickets entry ---');
-    console.log(JSON.stringify(pb, null, 2));
+    
+    
     var legs = Array.isArray(pb.selections) ? pb.selections : (Array.isArray(pb.legs) ? pb.legs : []);
-    console.log('--- legs (' + legs.length + ') ---');
+    
     legs.forEach(function(s, i){
       var keys = (s && typeof s === 'object') ? Object.keys(s) : [];
-      console.log('  leg[' + i + '] keys: ' + (keys.length ? keys.join(', ') : '(none)'));
-      console.log('  leg[' + i + '] json: ' + JSON.stringify(s));
+      
+      
     });
   } else {
     console.warn('--- not found in pb-tickets ---');
   }
   if (host) {
-    console.log('--- hostActiveBets mirror entry ---');
-    console.log(JSON.stringify(host, null, 2));
+    
+    
   } else {
-    console.log('--- no hostActiveBets mirror entry ---');
+    
   }
   if (rows.length) {
-    console.log('--- pb-ledger rows for this ticket (' + rows.length + ') ---');
-    rows.forEach(function(L, i){ console.log('  [' + i + '] ' + JSON.stringify(L)); });
+    
+    rows.forEach(function(L, i){  });
   } else {
-    console.log('--- no pb-ledger rows for this ticket ---');
+    
   }
   return { pb: pb, host: host, ledger: rows };
 }
@@ -6556,7 +6463,7 @@ window.dumpTicketById = dumpTicketById;
 // is hard-coded per push so it changes commit-over-commit.
 // ---------------------------------------------------------------------------
 try {
-  console.log('[my bets bundle] commit=9ab4da5+display — ticketCard supports {label,name,game} legs; dumpTicketById available');
+  
 } catch(_e){}
 
 // Main grading entry point — called by Check Results button
@@ -6591,7 +6498,7 @@ window._ticketSportKey         = _ticketSportKey;
 window._isSupportedForGrading  = _isSupportedForGrading;
 
 async function checkOpenTickets() {
-  console.log('[grading start] checking active tickets');
+  
   var btn = document.getElementById('check-results-btn');
   if (btn) { btn.textContent = '⏳ Checking…'; btn.disabled = true; }
 
@@ -6610,12 +6517,9 @@ async function checkOpenTickets() {
       var summary = skippedUnsupported.map(function(t){
         return '    - ' + (t.id || '?') + ' sport=' + (_ticketSportKey(t) || '(empty)');
       }).join('\n');
-      console.log('[grading skipped unsupported sport]\n' +
-        '  count: ' + skippedUnsupported.length + '\n' +
-        '  supportedSports: ' + JSON.stringify(GRADER_SUPPORTED_SPORTS) + '\n' +
-        '  tickets:\n' + summary);
+      
     }
-    console.log('[grading start] active tickets (after sport allowlist):', activeTickets.length);
+    
 
     if (!activeTickets.length) {
       showToast('No active bets to grade');
@@ -6630,13 +6534,7 @@ async function checkOpenTickets() {
       throw new Error('Scores unavailable: ' + scores.error);
     }
     _logSportsDataIOFinals(scores);
-    console.log('[auto finalize pass]\n' +
-      '  source:         sportsdataio\n' +
-      '  datesFetched:   ' + (scores.datesFetched || []).join(', ') + '\n' +
-      '  gamesByDate:    ' + JSON.stringify(scores.gamesByDate || {}) + '\n' +
-      '  totalGames:     ' + scores.games.length + '\n' +
-      '  completedGames: ' + scores.completedCount + '\n' +
-      '  activeTickets:  ' + activeTickets.length);
+    
 
     var gradedCount = 0;
     var totalPayout = 0;
@@ -6644,7 +6542,7 @@ async function checkOpenTickets() {
     activeTickets.forEach(function(ticket) {
       var gradeResult = _gradeTicket(ticket, scores.resultsMap, scores.completedGames);
       if (!gradeResult) {
-        console.log('[ticket graded] NOT YET COMPLETE:', ticket.id);
+        
         return;
       }
 
@@ -6710,15 +6608,7 @@ async function checkOpenTickets() {
       ticket.grading.fullPayoutAdded = result === 'won'  ? payout : (result === 'push' ? ticket.riskAmount : 0);
       totalPayout += payout;
 
-      console.log('[balance grading audit]',
-        '\n  ticketId:        ', ticket.id,
-        '\n  result:          ', result.toUpperCase(),
-        '\n  risk:            $' + (ticket.riskAmount||0).toFixed(2),
-        '\n  payout:          $' + payout.toFixed(2),
-        '\n  balanceBeforeGrade: $' + balBefore.toFixed(2),
-        '\n  balanceChange:   $' + balChange.toFixed(2),
-        '\n  balanceAfterGrade:  $' + balAfter.toFixed(2)
-      );
+      
 
       addLedgerEntry({
         id: 'G'+Date.now()+Math.random().toString(36).slice(2,6),
@@ -6735,13 +6625,7 @@ async function checkOpenTickets() {
         finalScoreObj: finalScoreObj   // structured for the host-side grader
       });
 
-      console.log('[auto graded ticket]',
-        '\n  ticketId:    ', ticket.id,
-        '\n  result:      ', result.toUpperCase(),
-        '\n  finalScore:  ', legacyScore,
-        '\n  finalScoreObj:', JSON.stringify(finalScoreObj),
-        '\n  source:      sportsdataio (Check Results)'
-      );
+      
       gradedCount++;
     });
 
@@ -6767,13 +6651,10 @@ async function checkOpenTickets() {
       }
     });
     localStorage.setItem('hostActiveBets', JSON.stringify(hostBets));
-    console.log('[host balance graded]\n' +
-      '  hostActiveBets total:    ' + hostBets.length + '\n' +
-      '  hostActiveBets updated:  ' + hostUpdated + '\n' +
-      '  source:                  Check Results');
+    
 
     syncBalanceDisplays();
-    console.log('[balance updated] after grading', gradedCount, 'tickets');
+    
 
     // Update last graded timestamp
     localStorage.setItem('pb-last-graded', new Date().toISOString());
@@ -6841,13 +6722,7 @@ function revertFutureGrades() {
     var check = _canGradeTicket(t, nowMs);
     if (check.canGrade) return;
     var prevStatus = t.status;
-    console.log('[future-game-block]',
-      '\n  ticketId:     ', t.id || '?',
-      '\n  commenceTime: ', check.commenceTime,
-      '\n  now:          ', check.now,
-      '\n  blockedReason:', check.reason,
-      '\n  prevStatus:   ', prevStatus
-    );
+    
     t.status          = 'active';
     t.gradedAt        = null;
     t.grading         = null;
@@ -6875,7 +6750,7 @@ function revertFutureGrades() {
     try { betTickets = tickets; } catch(_e) {}
     try { syncBalanceDisplays(); } catch(_e) {}
     try { renderMyBets(); } catch(_e) {}
-    console.log('[future-game-block] reverted', reverted.length, 'ticket(s) to active:', reverted.join(', '));
+    
     try { showToast && showToast('⚠️ ' + reverted.length + ' future-game grade(s) reverted → Active'); } catch(_e) {}
   }
   return { reverted: reverted };
@@ -6954,7 +6829,11 @@ async function loadPlayerDashboardFromDb(opts) {
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
   var pid  = _safeId(pl.id != null ? pl.id : pl.username);
   var cid  = _safeId(club.id != null ? club.id : club.clubId);
-  if (!pid) return { ok:false, fallbackReason:'no_player_id' };
+  if (!pid) {
+    _balanceFromServer = false;
+    try { syncBalanceDisplays(); } catch(_e){}
+    return { ok:false, fallbackReason:'no_player_id' };
+  }
   try {
     var qs   = '?playerId='+encodeURIComponent(pid)+(cid?'&clubId='+encodeURIComponent(cid):'');
     var resp = await (typeof _pbFetch === 'function' ? _pbFetch('/api/player/dashboard'+qs) : fetch('/api/player/dashboard'+qs));
@@ -6988,13 +6867,21 @@ async function loadPlayerDashboardFromDb(opts) {
       if (b.availableBalance != null && isNaN(b.availableBalance)) throw new Error('NaN balance from DB');
       if (b.openRisk < 0) throw new Error('negative openRisk from DB');
     }
-    syncBalanceDisplays();
+    if (b && b.availableBalance != null && !isNaN(Number(b.availableBalance))) {
+      applyDisplayedBalance(Number(b.availableBalance));
+      _balanceFromServer = true;
+    } else {
+      _balanceFromServer = false;
+      syncBalanceDisplays();
+    }
     _updatePlayerSourceBadge('db');
     var _activeN = (data.tickets && data.tickets.active) ? data.tickets.active.length : 0;
-    console.log('[player dashboard db] playerId='+pid+' available=$'+(b&&b.availableBalance)+' openRisk=$'+(b&&b.openRisk)+' active='+_activeN);
+    
     return data;
   } catch(e) {
     console.warn('[player dashboard db] fallback to localStorage:', e.message);
+    _balanceFromServer = false;
+    try { syncBalanceDisplays(); } catch(_e){}
     _updatePlayerSourceBadge('localStorage');
     return { ok:false, fallbackReason:e.message };
   }
@@ -7017,7 +6904,7 @@ function _updatePlayerSourceBadge(source) {
 }
 
 async function runPlayerDashboardDbAudit() {
-  console.log('[player dashboard db audit] ─── START ───');
+  
   var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
   var pid  = _safeId(pl.id != null ? pl.id : pl.username);
@@ -7034,19 +6921,7 @@ async function runPlayerDashboardDbAudit() {
   } catch(e) { fallbackReason = e.message; }
   var db = dbData && dbData.balance;
   var delta = db ? Math.abs((db.availableBalance||0) - localBal.available) : null;
-  console.log('[player dashboard db audit]',
-    '\n  playerId:         ', pid||'(none)',
-    '\n  clubId:           ', cid||'(none)',
-    '\n  localAvailable:   $', localBal.available,
-    '\n  dbAvailable:      ', db ? '$'+db.availableBalance : 'n/a',
-    '\n  localOpenRisk:    $', localBal.openRisk,
-    '\n  dbOpenRisk:       ', db ? '$'+db.openRisk : 'n/a',
-    '\n  delta:            ', delta !== null ? '$'+delta.toFixed(2)+(delta < 0.02 ? ' ✅' : ' ⚠️') : 'n/a',
-    '\n  dbActive:         ', dbData && dbData.tickets ? dbData.tickets.active.length : 'n/a',
-    '\n  dbWeek:           ', dbData && dbData.weekly ? dbData.weekly.currentWeek+' net=$'+dbData.weekly.settledNet : 'n/a',
-    '\n  fallbackReason:   ', fallbackReason||'none',
-    '\n  status:           ', !fallbackReason && delta<0.02 ? '✅ in_sync' : '⚠️ gap'
-  );
+  
   return dbData;
 }
 window.loadPlayerDashboardFromDb  = loadPlayerDashboardFromDb;
@@ -7062,11 +6937,11 @@ window.runPlayerDashboardDbAudit  = runPlayerDashboardDbAudit;
 async function gradeTodaysActiveTickets() {
   // Guard: browser grading blocked in server-authoritative mode
   if (_GRADING_MODE !== 'browser_fallback_dev') {
-    console.log('[browser grade blocked] server authoritative mode active — use runServerGrade()');
-    console.log('[browser grade blocked] to enable browser grading: enableBrowserGradeFallbackForSession()');
+    
+    
     return { blocked:true, reason:'server_authoritative', graded:0, skipped:0 };
   }
-  console.log('[live grading audit] ─── START (browser fallback mode) ───');
+  
   var nowMs = Date.now();
 
   // Step 1: Load canonical tickets
@@ -7079,10 +6954,10 @@ async function gradeTodaysActiveTickets() {
   hostBets.forEach(function(t){ if(t&&t.id&&!seen[t.id]){ tickets.push(t); seen[t.id]=true; } });
 
   var active = tickets.filter(function(t){ var s=(t.status||'').toLowerCase(); return (s==='active'||s==='open') && !t.gradedAt; });
-  console.log('[live grading audit] active tickets:', active.length, '| total:', tickets.length);
+  
 
   if (!active.length) {
-    console.log('[live grading audit] nothing to grade');
+    
     try { showToast('No active tickets to grade', 'info'); } catch(_e){}
     return { graded: 0, skipped: 0, results: [] };
   }
@@ -7097,14 +6972,14 @@ async function gradeTodaysActiveTickets() {
     return { graded: 0, skipped: 0, error: e.message };
   }
   if (scores.error) {
-    console.log('[live grading audit] scores unavailable:', scores.error);
+    
     try { showToast('Scores unavailable: ' + scores.error, 'warning'); } catch(_e){}
     return { graded: 0, skipped: 0, error: scores.error };
   }
 
   var resultsMap     = scores.resultsMap;
   var completedGames = scores.completedGames || [];
-  console.log('[live grading audit] completed games:', completedGames.length);
+  
 
   var auditRows = [];
   var gradedCount = 0, skippedCount = 0;
@@ -7279,29 +7154,12 @@ async function gradeTodaysActiveTickets() {
     try { showToast('No tickets graded — check console for details', 'info'); } catch(_e) {}
   }
 
-  console.log('[live grading audit] ─── DONE ─── graded=' + gradedCount + ' skipped=' + skippedCount);
+  
   return { graded: gradedCount, skipped: skippedCount, results: auditRows };
 }
 
 function _logAuditRow(row) {
-  console.log('[live grading audit]',
-    '\n  ticketId:           ', row.ticketId,
-    '\n  type:               ', row.type,
-    '\n  legs:               ', row.legs,
-    '\n  canonicalGameKey:   ', row.canonicalGameKey,
-    '\n  commenceTime:       ', row.commenceTime,
-    '\n  matchedGame:        ', row.matchedGame || '(none)',
-    '\n  gameStatus:         ', row.gameStatus  || '(none)',
-    '\n  finalScore:         ', row.finalScore  || '(none)',
-    '\n  legResult:          ', row.legResult   || '(none)',
-    '\n  ticketResult:       ', row.ticketResult || '(none)',
-    '\n  playerBalanceBefore:', row.playerBalanceBefore != null ? ('$'+row.playerBalanceBefore.toFixed(2)) : 'n/a',
-    '\n  playerBalanceAfter: ', row.playerBalanceAfter  != null ? ('$'+row.playerBalanceAfter.toFixed(2))  : 'n/a',
-    '\n  hostExposureBefore: ', '$'+(row.hostExposureBefore||0).toFixed(2),
-    '\n  hostExposureAfter:  ', row.hostExposureAfter != null ? ('$'+row.hostExposureAfter.toFixed(2)) : 'n/a',
-    '\n  hostProfitDelta:    ', row.hostProfitDelta  != null ? ((row.hostProfitDelta>=0?'+':'')+row.hostProfitDelta.toFixed(2)) : 'n/a',
-    '\n  reason:             ', row.reason || ''
-  );
+  
 }
 
 window.gradeTodaysActiveTickets = gradeTodaysActiveTickets;
@@ -7313,7 +7171,7 @@ var _autoGradeRunning  = false;
 async function _autoGradePoll() {
   // Guard: in server-authoritative mode this function must never run
   if (_GRADING_MODE !== 'browser_fallback_dev') {
-    console.log('[browser grade blocked] _autoGradePoll suppressed — server authoritative mode');
+    
     return;
   }
   if (_autoGradeRunning) return;
@@ -7338,11 +7196,7 @@ async function _autoGradePoll() {
       var summaryAuto = skippedUnsupportedAuto.map(function(t){
         return '    - ' + (t.id || '?') + ' sport=' + (_ticketSportKey(t) || '(empty)');
       }).join('\n');
-      console.log('[grading skipped unsupported sport]\n' +
-        '  source: auto-poll\n' +
-        '  count:  ' + skippedUnsupportedAuto.length + '\n' +
-        '  supportedSports: ' + JSON.stringify(GRADER_SUPPORTED_SPORTS) + '\n' +
-        '  tickets:\n' + summaryAuto);
+      
     }
 
     if (!activeMLB.length) {
@@ -7353,7 +7207,7 @@ async function _autoGradePoll() {
     // SportsDataIO ONLY — grading never reads from any live odds provider.
     var scores = await _fetchAndNormalizeScores({ daysBack: 2 });
     if (scores.error) {
-      console.log('[auto grade poll] scores unavailable:', scores.error);
+      
       _autoGradeRunning = false;
       return;
     }
@@ -7362,13 +7216,7 @@ async function _autoGradePoll() {
     var completedGames = scores.completedGames || [];
 
     _logSportsDataIOFinals(scores);
-    console.log('[auto finalize pass]\n' +
-      '  source:         sportsdataio\n' +
-      '  datesFetched:   ' + (scores.datesFetched || []).join(', ') + '\n' +
-      '  gamesByDate:    ' + JSON.stringify(scores.gamesByDate || {}) + '\n' +
-      '  totalGames:     ' + scores.games.length + '\n' +
-      '  completedGames: ' + completedGames.length + '\n' +
-      '  activeTickets:  ' + activeMLB.length);
+    
 
     var ticketsGraded = 0;
 
@@ -7380,11 +7228,7 @@ async function _autoGradePoll() {
         // HARD GATE: never grade a ticket whose game hasn't started yet
         var _gateCheck = _canGradeTicket(ticket, Date.now());
         if (!_gateCheck.canGrade) {
-          console.log('[future-game-block]',
-            '\n  ticketId:     ', ticket.id,
-            '\n  commenceTime: ', _gateCheck.commenceTime,
-            '\n  now:          ', _gateCheck.now,
-            '\n  blockedReason:', _gateCheck.reason);
+          
           return; // skip — leave ticket active
         }
 
@@ -7426,22 +7270,8 @@ async function _autoGradePoll() {
         ticket.grading.balanceAfter  = balAfter;
         ticket.grading.balanceChange = balChange;
 
-        console.log('[balance grading audit]',
-          '\n  ticketId:           ', ticket.id,
-          '\n  result:             ', result.toUpperCase(),
-          '\n  risk:               $' + (parseFloat(ticket.riskAmount)||0).toFixed(2),
-          '\n  payout:             $' + payout.toFixed(2),
-          '\n  balanceBeforeGrade: $' + balBefore.toFixed(2),
-          '\n  balanceChange:      ' + (balChange >= 0 ? '+$' : '-$') + Math.abs(balChange).toFixed(2),
-          '\n  balanceAfterGrade:  $' + balAfter.toFixed(2)
-        );
-        console.log('[auto graded ticket]',
-          '\n  ticketId:    ', ticket.id,
-          '\n  game:        ', legacyScore,
-          '\n  result:      ', result.toUpperCase(),
-          '\n  finalScoreObj:', JSON.stringify(finalScoreObj),
-          '\n  source:      sportsdataio (auto-poll)'
-        );
+        
+        
 
         addLedgerEntry({
           id: 'AG' + Date.now() + Math.random().toString(36).slice(2, 6),
@@ -7466,12 +7296,7 @@ async function _autoGradePoll() {
       }
     });
 
-    console.log('[auto grade tick]',
-      '\n  gamesChecked:   ', completedGames.length,
-      '\n  ticketsChecked: ', activeMLB.length,
-      '\n  ticketsGraded:  ', ticketsGraded,
-      '\n  timestamp:      ', ts
-    );
+    
 
     if (ticketsGraded > 0) {
       // Persist all changes
@@ -7499,10 +7324,7 @@ async function _autoGradePoll() {
           }
         });
         localStorage.setItem('hostActiveBets', JSON.stringify(hostBets));
-        console.log('[host balance graded]\n' +
-          '  hostActiveBets total:    ' + hostBets.length + '\n' +
-          '  hostActiveBets updated:  ' + hostUpdated + '\n' +
-          '  source:                  auto-poll');
+        
       } catch(e) {
         console.error('[host balance graded] mirror failed:', e && e.message || e);
       }
@@ -7625,7 +7447,7 @@ async function _acquireSessionToken(actorId, clubId, roleHintDevOnly) {
     if (data.ok && data.token) {
       _storeAuthToken(data.token, data.expiresIn);
       localStorage.setItem('pb-actor-role', data.role);
-      console.log('[auth] session token acquired actor='+actorId+' role='+data.role+' jti='+data.jti);
+      
       return data;
     } else {
       console.warn('[auth] token acquisition denied:', data.error);
@@ -7644,10 +7466,10 @@ var _evPollTimer = null;
 var _evPolling   = false;
 
 var _EV_ACTIONS = {
-  ticket_graded:     function() { try{ loadPlayerDashboardFromDb().then(function(){ try{ renderMyBets(); }catch(_e){} syncBalanceDisplays(); }); }catch(_e){ try{ renderMyBets(); }catch(_e2){} syncBalanceDisplays(); } },
-  balance_changed:   function() { try{ loadPlayerDashboardFromDb().then(function(){ syncBalanceDisplays(); }); }catch(_e){} },
-  ticket_placed:     function() { try{ loadPlayerDashboardFromDb({ keepPending: true }).then(function(){ try{ renderMyBets(); }catch(_e){} syncBalanceDisplays(); }); }catch(_e){ try{ renderMyBets(); }catch(_e2){} syncBalanceDisplays(); } },
-  ticket_canceled:   function() { try{ loadPlayerDashboardFromDb().then(function(){ try{ renderMyBets(); }catch(_e){} syncBalanceDisplays(); }); }catch(_e){ try{ renderMyBets(); }catch(_e2){} syncBalanceDisplays(); } },
+  ticket_graded:     function() { try{ loadPlayerDashboardFromDb().then(function(){ try{ renderMyBets(); }catch(_e){} }); }catch(_e){ try{ renderMyBets(); }catch(_e2){} try{ if(!_balanceFromServer) syncBalanceDisplays(); }catch(_e3){} } },
+  balance_changed:   function() { try{ loadPlayerDashboardFromDb(); }catch(_e){} },
+  ticket_placed:     function() { try{ loadPlayerDashboardFromDb({ keepPending: true }).then(function(){ try{ renderMyBets(); }catch(_e){} }); }catch(_e){ try{ renderMyBets(); }catch(_e2){} try{ if(!_balanceFromServer) syncBalanceDisplays(); }catch(_e3){} } },
+  ticket_canceled:   function() { try{ loadPlayerDashboardFromDb().then(function(){ try{ renderMyBets(); }catch(_e){} }); }catch(_e){ try{ renderMyBets(); }catch(_e2){} try{ if(!_balanceFromServer) syncBalanceDisplays(); }catch(_e3){} } },
   odds_refreshed:    function() { try{ _checkMarketStatus&&_checkMarketStatus(); }catch(_e){} },
   payment_confirmed: function() { /* settlement panel refresh handled by host */ },
   payment_voided:    function() { /* settlement panel refresh handled by host */ },
@@ -7678,7 +7500,6 @@ async function _pollEvents() {
     actionSet.forEach(function(type) {
       try { _EV_ACTIONS[type](data.events.filter(function(e){ return e.type===type; })); } catch(_e){}
     });
-    if (data.events.length) console.log('[events] received', data.events.length, 'events, cursor='+_evCursor);
   } catch(_e) { /* fail silently — never block UI */ } finally { _evPolling=false; }
 }
 
@@ -7732,7 +7553,7 @@ async function _verifyOrRefreshSession() {
         var pl = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
         var secsLeft = pl.exp - Math.floor(Date.now()/1000);
         if (secsLeft > 0 && secsLeft < _SESSION_REFRESH_THRESHOLD_SEC) {
-          console.log('[session] near expiry ('+secsLeft+'s left) — refreshing');
+          
           return _refreshSession();
         }
       }
@@ -7747,7 +7568,7 @@ async function _verifyOrRefreshSession() {
 async function _refreshSession() {
   var ok = await _refreshAuthToken();
   if (ok) {
-    console.log('[session] refreshed via token rotate/reissue');
+    
     return { ok:true, refreshed:true };
   }
   console.warn('[session] refresh failed');
@@ -7764,7 +7585,7 @@ async function _logout() {
   try { localStorage.removeItem('pb-player-email'); } catch(_e){}
   try { localStorage.removeItem('pb-test-user'); } catch(_e){}
   try { localStorage.removeItem('pb-actor-role'); } catch(_e){}
-  console.log('[session] logged out — token cleared');
+  
   return { ok:true };
 }
 
@@ -7777,14 +7598,14 @@ function enableBrowserGradeFallbackForSession() {
   _GRADING_MODE = 'browser_fallback_dev';
   sessionStorage.setItem('pb-grading-mode', 'browser_fallback_dev');
   _updateGradingSourceBadge('BrowserFallback DEV');
-  console.log('[grading authority] BROWSER FALLBACK ENABLED for this session — dev use only');
+  
   return 'Browser grading enabled (dev). Use disableBrowserGradeFallbackForSession() to restore.';
 }
 function disableBrowserGradeFallbackForSession() {
   _GRADING_MODE = 'server_authoritative';
   sessionStorage.removeItem('pb-grading-mode');
   _updateGradingSourceBadge('Server');
-  console.log('[grading authority] server authoritative mode restored');
+  
   return 'Server authoritative mode restored.';
 }
 function checkGradingAuthorityStatus() {
@@ -7801,21 +7622,21 @@ window.checkGradingAuthorityStatus           = checkGradingAuthorityStatus;
 
 function startAutoGradeDaemon() {
   if (_autoGradeInterval) return;
-  console.log('[auto grade daemon] started — 60s poll — mode:', _GRADING_MODE);
+  
   _dispatchGradePoll(); // immediate
   _autoGradeInterval = setInterval(_dispatchGradePoll, 60000);
 }
 
 function stopAutoGradeDaemon() {
   if (_autoGradeInterval) { clearInterval(_autoGradeInterval); _autoGradeInterval = null; }
-  console.log('[auto grade daemon] stopped');
+  
 }
 
 // Dispatch: server grade in normal mode, browser grade only in dev fallback
 function _dispatchGradePoll() {
   // Dev bypass: grading has no data to work with — skip silently
   if (_pDev) {
-    console.log('[auto grade daemon] DEV mode — skipping grade poll');
+    
     return;
   }
   if (_GRADING_MODE === 'server_authoritative') {
@@ -7827,7 +7648,7 @@ function _dispatchGradePoll() {
     }
   } else {
     // Dev fallback: browser grading allowed
-    console.log('[auto grade daemon] browser fallback mode — running browser grade');
+    
     if (typeof _autoGradePoll === 'function') _autoGradePoll();
   }
 }
@@ -8151,13 +7972,7 @@ function renderMyBets() {
       var __rawFields = Object.keys(__firstLeg).filter(function(k){
         var v = __firstLeg[k]; return v != null && v !== '';
       }).map(function(k){ return k+'='+String(__firstLeg[k]).slice(0,40); }).join(' | ');
-      console.log('[ticket render resolved]\n' +
-        '  ticketId:         ' + (t.id || '-') + '\n' +
-        '  rawFields:        ' + (__rawFields || '(empty leg)') + '\n' +
-        '  renderedMatchup:  ' + (_legMatchupText(__firstLeg) || '(omitted)') + '\n' +
-        '  renderedPick:     ' + _legPickText(__firstLeg) + '\n' +
-        '  renderedMarket:   ' + (_legMarketText(__firstLeg) || '(omitted)') + '\n' +
-        '  renderedSport:    ' + (ticketSport || '(omitted)'));
+      
     } catch(_e){}
     var isDeletePending = t.deleteRequestStatus === 'pending';
     var isDeleteDenied  = t.deleteRequestStatus === 'denied';
@@ -8328,13 +8143,7 @@ function renderMyBets() {
   var hiddenSettledCount = settledAll.length - settled.length;
   // One-shot debug so we can verify the cutoff is doing the right thing.
   try {
-    console.log('[mybets lifecycle]\n' +
-      '  totalTickets:        ' + betTickets.length + '\n' +
-      '  active:              ' + active.length + '\n' +
-      '  settledAll:          ' + settledAll.length + '\n' +
-      '  settledShown:        ' + settled.length + ' (within 12h of gradedAt)\n' +
-      '  settledHidden:       ' + hiddenSettledCount + ' (older than 12h, still in pb-tickets, visible in Results)\n' +
-      '  ttlHours:            12');
+    
   } catch(_e){}
   // [render source] — explicit attribution so we never again wonder
   // 'is My Bets rendering from somewhere other than pb-tickets?'.
@@ -8345,24 +8154,14 @@ function renderMyBets() {
   // no host-mirror direct rendering.
   try {
     function _firstId(arr) { return (Array.isArray(arr) && arr[0] && arr[0].id) ? String(arr[0].id) : '—'; }
-    console.log('[render source]\n' +
-      '  section:        active\n' +
-      '  sourceName:     pb-tickets (via betTickets, reloaded in renderMyBets body)\n' +
-      '  ticketCount:    ' + active.length + '\n' +
-      '  firstTicketId:  ' + _firstId(active));
-    console.log('[render source]\n' +
-      '  section:        settled\n' +
-      '  sourceName:     pb-tickets (via betTickets, reloaded in renderMyBets body)\n' +
-      '  ticketCount:    ' + settled.length + '\n' +
-      '  firstTicketId:  ' + _firstId(settled));
+    
+    
   } catch(_e){}
   // TEMP DEBUG — dump real persisted schema for one active + one settled
   // ticket so we can see EXACTLY what confirmBet/saveTickets writes,
   // independent of any defensive rendering helpers. Strip after the
   // display regression is verified closed.
   try {
-    if (active.length)  console.log('[raw ticket object] ACTIVE\n'  + JSON.stringify(active[0],  null, 2));
-    if (settled.length) console.log('[raw ticket object] SETTLED\n' + JSON.stringify(settled[0], null, 2));
   } catch(_e){
     console.warn('[raw ticket object] dump failed', _e && _e.message || _e);
   }
@@ -8388,14 +8187,7 @@ function renderMyBets() {
         if (__k === 'hostActiveBets') _allKeys.push(__k);
       }
     } catch(_e){}
-    console.log('[ticket source audit]\n' +
-      '  renderMyBets source:       pb-tickets\n' +
-      '  grading source:            pb-tickets (checkOpenTickets + _autoGradePoll)\n' +
-      '  confirmBet write target:   pb-tickets (via saveTickets) + hostActiveBets mirror\n' +
-      '  pb-tickets present:        ' + (_ptRaw === null ? 'no (key missing)' : (Array.isArray(_ptArr) ? ('yes ['+_ptArr.length+' entries]') : 'yes (not array, len='+_ptRaw.length+')')) + '\n' +
-      '  hostActiveBets present:    ' + (_habRaw === null ? 'no (key missing)' : (Array.isArray(_habArr) ? ('yes ['+_habArr.length+' entries]') : 'yes (not array, len='+_habRaw.length+')')) + '\n' +
-      '  betTickets in-memory:      ' + (Array.isArray(betTickets) ? betTickets.length : 'not array') + '\n' +
-      '  pb-* keys in localStorage: ' + _allKeys.join(', '));
+    
   } catch(_e){
     console.warn('[ticket source audit] failed:', _e && _e.message || _e);
   }
@@ -8505,7 +8297,7 @@ function bsSingleInput(el) {
   el.value = val;
   var cellId = el.dataset.cid;
   var amt = parseFloat(val) || 0;
-  console.log('input value changed', amt, cellId);
+  
   bsStakes[cellId] = amt;
   bsStake = Object.values(bsStakes).reduce(function(s,v){ return s+(v||0); }, 0);
   bsSyncPlaceBtn();
@@ -8531,14 +8323,14 @@ function bsParlayInput(el) {
     bsSyncPlaceBtn();
     return;
   }
-  console.log('parlay amount changed', amt);
+  
   bsStake = amt;
   // For singles: fan stake into each bsStakes[cellId] so payout calc works
   if (bsType === 'straight') {
     betSlip.forEach(function(b) { bsStakes[b.cellId] = amt; });
   }
   var valid = betSlip.length >= (bsType==='parlay'?2:1) && amt > 0;
-  console.log('parlay button enabled', valid);
+  
   bsSyncPlaceBtn();
 }
 
@@ -8609,7 +8401,7 @@ function bsAddStake(a) {
     bsStake = (bsStake || 0) + a;
     var inp = document.getElementById('bs-stake-inp');
     if (inp) { inp.value = bsStake; }
-    console.log('parlay amount changed', bsStake);
+    
     bsSyncPlaceBtn();
     return;
   }
@@ -8627,7 +8419,7 @@ function bsAddStake(a) {
       payEl.textContent = _b ? 'Payout: '+fmtDollar(bsStake * amToDecimal(_b.odds)) : '';
     }
   });
-  console.log('[stake input change]','\n  source: quick-button +$'+a,'\n  bsType:',bsType,'\n  bsStake:',bsStake,'\n  bsStakes:',JSON.stringify(bsStakes),'\n  cardInputsUpdated:',document.querySelectorAll('input[data-cid]').length);
+  
   bsSyncPlaceBtn();
   // Sync visual selection state across all rendered cells
   document.querySelectorAll('.odds-cell').forEach(function(el) {
@@ -8660,7 +8452,7 @@ function bsAddStake(a) {
     if (!teaserOk && typeof bsType !== 'undefined' && bsType === 'teaser') {
       try {
         var fallback = (betSlip.length >= 2) ? 'parlay' : 'straight';
-        console.log('[bet slip] teaser auto-switch → ' + fallback + ' (slip became teaser-ineligible)');
+        
         bsSetType(fallback);
       } catch (_e) { /* swallow — leg sync must not break */ }
     }
@@ -8709,7 +8501,7 @@ function numpadKey(k) {
   if (parts[1] && parts[1].length > 2) numpadStr = parts[0] + '.' + parts[1].slice(0,2);
   document.getElementById('numpad-display').textContent = numpadStr;
   var val = parseFloat(numpadStr) || 0;
-  console.log('amount input changed', val);
+  
   if (!numpadTarget) return;
   if (numpadTarget.type === 'all') {
     bsSetStakeAll(val);
@@ -8725,11 +8517,11 @@ function numpadKey(k) {
       payEl.textContent = val > 0 && _b ? 'Payout: '+fmtDollar(val * amToDecimal(_b.odds)) : '';
     }
     bsSyncPlaceBtn();
-    console.log('[stake input change]','\n  source: numpad single','\n  cellId:',numpadTarget.cellId,'\n  bsStake:',bsStake,'\n  bsStakes:',JSON.stringify(bsStakes));
+    
   } else {
     bsStake = val;
     bsSetStake(val);
-    console.log('[stake input change]','\n  source: numpad parlay/teaser','\n  bsStake:',bsStake);
+    
   }
 }
 
@@ -8975,15 +8767,7 @@ function bsSyncPlaceBtn() {
       if (_combinedDec <= 1)      _combinedAmer = '--';
       else if (_combinedDec >= 2) _combinedAmer = '+' + Math.round((_combinedDec - 1) * 100);
       else                        _combinedAmer = '' + Math.round(-100 / (_combinedDec - 1));
-      console.log('PARLAY_FOOTER_STATE'
-        + ' bsType=' + bsType
-        + ' legs=' + (Array.isArray(betSlip) ? betSlip.length : 0)
-        + ' stakeRaw=' + JSON.stringify(_stakeInpRaw)
-        + ' stakeNum=' + _stakeInpNum
-        + ' bsStake=' + bsStake
-        + ' combinedOdds=' + _combinedAmer
-        + ' payout=' + (totalPay > 0 ? totalPay.toFixed(2) : '--')
-        + ' disabled=' + (!valid));
+      
     } catch (_dbg) { /* never let the diagnostic break the sync */ }
   }
 }
@@ -9018,7 +8802,7 @@ function bsRemove(i) {
 }
 
 function clearSlip() {
-  console.log('clear all clicked');
+  
   bsStakes = {}; bsStake = 0; rrStakes = {}; _pendingRisk = 0; _pendingPayout = 0; _pendingProfit = 0; _pendingSnapshot = null;
   // Clear footer stake input DOM immediately
   var inp = document.getElementById('bs-stake-inp');
@@ -9037,7 +8821,7 @@ function clearSlip() {
     el.removeAttribute('aria-selected');
     el.dataset.selected = 'false';
   });
-  console.log('selections after clear', betSlip);
+  
   bsUpdate();
 }
 
@@ -9096,7 +8880,7 @@ document.addEventListener('click', function(e) {
 
   if (!odds) return; // ignore cells with no valid odds
 
-  console.log('odds clicked:', { id, game, market, pick, odds, gameKey, gameStatus });
+  
 
   // Check if this cell is already selected
   var existingIdx = betSlip.findIndex(function(b) { return b.cellId === id; });
@@ -9187,12 +8971,7 @@ document.addEventListener('click', function(e) {
 
     // Conflict check with audit log
     var _cfResult = _checkBetConflict({ cellId: id, canonicalGameKey: _cKey, pick: pick, market: market });
-    console.log('[conflict check]',
-      '\n  newLegKey:     ', _cKey,
-      '\n  newPick:       ', pick,
-      '\n  blocked:       ', _cfResult.conflict,
-      '\n  reason:        ', _cfResult.reason || 'none'
-    );
+    
     if (_cfResult.conflict) {
       showToast(_cfResult.message, 'warning');
       return;
@@ -9212,9 +8991,9 @@ document.addEventListener('click', function(e) {
       line: _line, gameId: _gameId, providerGameId: _gameId,
       homeTeam: _home, awayTeam: _away, gameStatus: gameStatus
     });
-    console.log('[highlight] adding selected to:', id, 'classList before:', cell.className);
+    
     cell.classList.add('selected');
-    console.log('[highlight] classList after:', cell.className);
+    
 
     // Same-game parlay: allowed if different markets
   }
@@ -9244,10 +9023,7 @@ function _checkPlacementGate(leg, nowMs) {
   if (_isGameFinal(officialStatus)) {
     var r1 = { allowed: false, blockedReason: 'game_already_final', officialStatus: officialStatus,
                message: 'Bet unavailable: this game has already started or finalized.' };
-    console.log('[bet placement gate]', '\n  attemptId:', attemptId, '\n  canonicalGameKey:', (leg.canonicalGameKey||'?'),
-      '\n  commenceTime:', (ct||'?'), '\n  now:', new Date(nowMs).toISOString(),
-      '\n  officialStatus:', officialStatus, '\n  market:', (leg.market||'?'),
-      '\n  allowed:', false, '\n  blockedReason:', r1.blockedReason);
+    
     return r1;
   }
   // Gate 2: commenceTime in the past (game already started)
@@ -9255,13 +9031,10 @@ function _checkPlacementGate(leg, nowMs) {
     var r2 = { allowed: false, blockedReason: 'game_already_started', commenceTime: ct,
                now: new Date(nowMs).toISOString(),
                message: 'Bet unavailable: this game has already started or finalized.' };
-    console.log('[bet placement gate]', '\n  attemptId:', attemptId, '\n  canonicalGameKey:', (leg.canonicalGameKey||'?'),
-      '\n  commenceTime:', ct, '\n  now:', r2.now,
-      '\n  officialStatus:', (officialStatus||'(none)'), '\n  market:', (leg.market||'?'),
-      '\n  allowed:', false, '\n  blockedReason:', r2.blockedReason);
+    
     return r2;
   }
-  console.log('[bet placement gate] allowed legKey=' + (leg.canonicalGameKey||'?') + ' commenceTime=' + (ct||'?'));
+  
   return { allowed: true };
 }
 function _checkTicketPlacementGate(legs, nowMs) {
@@ -9371,15 +9144,7 @@ function _checkBetConflict(newLeg) {
     if (ex.cellId === newLeg.cellId) continue;
     var exToken = _pickConflictToken(ex);
     var sameGame = !!(newLeg.canonicalGameKey && ex.canonicalGameKey && newLeg.canonicalGameKey === ex.canonicalGameKey);
-    console.log('[conflict check]',
-      '\n  newLegKey:     ', newLeg.canonicalGameKey || '(none)',
-      '\n  existingLegKey:', ex.canonicalGameKey || '(none)',
-      '\n  sameGame:      ', sameGame,
-      '\n  existingPick:  ', ex.pick,
-      '\n  newPick:       ', newLeg.pick,
-      '\n  blocked:       ', exToken === newToken,
-      '\n  reason:        ', exToken === newToken ? 'slip_conflict' : 'no_conflict'
-    );
+    
     if (exToken && exToken === newToken) {
       return { conflict: true, reason: 'slip_conflict',
                message: 'Conflicting bet: you already have action on the opposite side of this game.' };
@@ -9397,15 +9162,7 @@ function _checkBetConflict(newLeg) {
     for (var k = 0; k < sels.length; k++) {
       var selToken = _pickConflictToken(sels[k]);
       if (selToken && selToken === newToken) {
-        console.log('[conflict check]',
-          '\n  newLegKey:     ', newLeg.canonicalGameKey || '(none)',
-          '\n  existingLegKey:', sels[k].canonicalGameKey || '(none)',
-          '\n  sameGame:      ', newLeg.canonicalGameKey === sels[k].canonicalGameKey,
-          '\n  existingPick:  ', sels[k].pick,
-          '\n  newPick:       ', newLeg.pick,
-          '\n  blocked:       ', true,
-          '\n  reason:        ', 'active_ticket_conflict ticketId=' + t.id
-        );
+        
         return { conflict: true, reason: 'active_ticket_conflict', ticketId: t.id,
                  message: 'Conflicting bet: you already have active action on the opposite side of this game.' };
       }
@@ -9478,7 +9235,7 @@ function bsToggle(cellId, game, time, market, pick, odds) {
   sel.gameId = _c.gameId;
   sel.providerGameId = _c.gameId;
 
-  console.log('selected bet:', sel);
+  
 
   // Replace same game+market
   betSlip = betSlip.filter(function(b) {
@@ -9508,7 +9265,7 @@ function bsToggle(cellId, game, time, market, pick, odds) {
     var conflict = _checkBetConflict(sel);
     if (conflict.conflict) {
       showToast(conflict.message, 'warning');
-      console.log('[conflict] blocked pick="' + pick + '" reason=' + conflict.reason + (conflict.ticketId ? ' ticketId=' + conflict.ticketId : ''));
+      
       return; // do not add — leave slip unchanged
     }
     betSlip.push(sel);
@@ -9518,21 +9275,7 @@ function bsToggle(cellId, game, time, market, pick, odds) {
 }
 
 // ── MOBILE DEBUG BANNER ──────────────────────────────────────────────────────
-function dbgBanner(msg, color) {
-  var b = document.getElementById('_dbg_banner');
-  if (!b) {
-    b = document.createElement('div');
-    b.id = '_dbg_banner';
-    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#000;color:#0f0;font-size:16px;font-weight:900;padding:16px 12px;text-align:center;font-family:monospace;white-space:pre-wrap;word-break:break-all;border-bottom:3px solid #0f0;pointer-events:none';
-    document.body.appendChild(b);
-  }
-  b.style.background = color || '#000';
-  b.style.color = '#fff';
-  b.textContent = msg;
-  b.style.display = 'block';
-  clearTimeout(b._t);
-  b._t = setTimeout(function(){ b.style.display='none'; }, 10000);
-}
+function dbgBanner(msg, color) {}
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── HIT TEST: runs 1s after slip opens, logs exact blocker ──────────────────
@@ -9543,9 +9286,9 @@ function runPlaceBetHitTest() {
   var x = r.left + r.width / 2;
   var y = r.top + r.height / 2;
   var hit = document.elementFromPoint(x, y);
-  console.log('BUTTON:', btn);
-  console.log('BUTTON RECT:', JSON.stringify({top:Math.round(r.top),left:Math.round(r.left),bottom:Math.round(r.bottom),right:Math.round(r.right),width:Math.round(r.width),height:Math.round(r.height)}));
-  console.log('ELEMENT AT BUTTON CENTER:', hit);
+  
+  
+  
   if (hit && hit !== btn) {
     var cs = window.getComputedStyle(hit);
     console.warn('BLOCKER:', hit.tagName, '#'+hit.id, '.'+hit.className, 'z-index:'+cs.zIndex, 'pointer-events:'+cs.pointerEvents, 'display:'+cs.display);
@@ -9554,21 +9297,21 @@ function runPlaceBetHitTest() {
     var safe = ['BUTTON','A','INPUT','SELECT','TEXTAREA'];
     if (safe.indexOf(hit.tagName) === -1) {
       hit.style.pointerEvents = 'none';
-      console.log('AUTO-FIXED: set pointer-events:none on blocker');
+      
       dbgBanner('AUTO-FIXED BLOCKER:\n'+hit.tagName+(hit.id?' #'+hit.id:'')+(hit.className?'\n.'+String(hit.className).replace(/ /g,' .'):''), '#060');
     }
   } else if (hit === btn) {
     dbgBanner('HIT TEST PASS\nButton reachable - attaching onclick', '#006');
-    console.log('HIT TEST PASS: button is hittable');
+    
     // Attach direct onclick as final fallback
     btn.onclick = function(e) {
       e.preventDefault();
       e.stopPropagation();
-      console.log('PLACE BET DIRECT CLICK');
+      
       dbgBanner('✅ CLICK FIRED\nbsPlaceBet called', '#020');
       window.bsPlaceBet();
     };
-    console.log('Direct onclick attached to button');
+    
   } else {
     console.warn('HIT TEST: elementFromPoint returned null at', x, y);
     dbgBanner('HIT TEST: null at '+Math.round(x)+','+Math.round(y)+'\nButton rect: '+JSON.stringify({t:Math.round(r.top),l:Math.round(r.left),w:Math.round(r.width),h:Math.round(r.height)}), '#550');
@@ -9758,7 +9501,7 @@ function _purgeMockTickets(){
         localStorage.setItem('pb-tickets-version', String(_v + 1));
       } catch(_e){}
       try { betTickets = cleaned; } catch(_e){}
-      console.log('[mock purge] removed ' + purged + ' MOCK-* ticket(s) from pb-tickets');
+      
     }
     return { purged: purged, before: before, after: cleaned.length };
   } catch(err) {
@@ -9885,24 +9628,7 @@ function _resWeekAggregates(weekStart, weekEnd){
       netContrib = 0; inNet = false; inPending = true;
       reason = 'active-pending-no-net';
     }
-    console.log('[results aggregate audit]',
-      '\n  ticketId:               ', t.id || '?',
-      '\n  status (raw):           ', rawStatus,
-      '\n  status (displayStatus): ', s,
-      '\n  hiddenBy12h:            ', hidden12h,
-      '\n  includedInVisibleResults:', true,
-      '\n  includedInWeeklyNet:    ', inNet,
-      '\n  includedInWagered:      ', (s !== 'canceled' && s !== 'voided' && s !== 'deleted'),
-      '\n  includedInWon:          ', (s === 'won'),
-      '\n  includedInLost:         ', (s === 'lost'),
-      '\n  includedInRecord:       ', (s === 'won' || s === 'lost' || s === 'push' || s === 'pushed'),
-      '\n  includedInPending:      ', inPending,
-      '\n  includedInCanceled:     ', inCanceled,
-      '\n  risk:                   $'+(risk.toFixed(2)),
-      '\n  toWin:                  $'+(profit.toFixed(2)),
-      '\n  netContribution:        $'+(netContrib.toFixed(2)),
-      '\n  reason:                 ', reason
-    );
+    
   });
   return {
     totalBets:    totalBets,
@@ -9943,23 +9669,7 @@ function renderPlayerResults(){
   var _excluded = _allTix.length - _weekTix.length;
   var _sampleIncluded = _weekTix.slice(0,2).map(function(t){ return (t.id||'?')+':'+((typeof _displayStatus==='function')?_displayStatus(t):(t.status||'?')); }).join(', ') || 'none';
   var _sampleExcluded = _hidden12h.slice(0,2).map(function(t){ return (t.id||'?')+':hidden-12h-'+(t.status||'?'); }).join(', ') || 'none';
-  console.log('[results aggregate audit summary]',
-    '\n  buildSha:               ', window.PBS_BUILD_SHA || 'unknown',
-    '\n  ticketsTotal:           ', _allTix.length,
-    '\n  ticketsInWeekWindow:    ', _allWeekTix.length,
-    '\n  ticketsUsedForWeeklyKpis:', _weekTix.length,
-    '\n  ticketsHiddenBy12h:     ', _hidden12h.length,
-    '\n  ticketsExcluded:        ', _excluded,
-    '\n  weeklyNet:              ', net,
-    '\n  wagered:                ', agg.totalWagered,
-    '\n  won:                    ', agg.totalWon,
-    '\n  lost:                   ', agg.totalLost,
-    '\n  pending:                ', agg.pendingCount,
-    '\n  settled:                ', agg.settledCount,
-    '\n  canceled:               ', agg.canceledCount,
-    '\n  sampleIncluded:         ', _sampleIncluded,
-    '\n  sampleExcluded:         ', _sampleExcluded
-  );
+  
   // ─────────────────────────────────────────────────────────────────────────
 
   var bigColor = net > 0 ? 'var(--green)' : net < 0 ? 'var(--red)' : '#fff';
@@ -10252,7 +9962,7 @@ function _wireResultsButtons(el){
       // circuit breaker is open.
       if (typeof _isScoresGradingSuspended === 'function' && _isScoresGradingSuspended()) {
         try { showToast && showToast('Scores unavailable — grading suspended'); } catch(_e){}
-        console.log('[scores unavailable — grading suspended]\n  simulateGradeResults refused');
+        
         return;
       }
       var raw = localStorage.getItem('pb-tickets') || '[]';
@@ -10260,7 +9970,7 @@ function _wireResultsButtons(el){
       try { tickets = JSON.parse(raw); } catch(_e) { tickets = []; }
       if (!Array.isArray(tickets) || !tickets.length) {
         try { showToast && showToast('No tickets to grade'); } catch(_e){}
-        console.log('[simulate grade] no tickets');
+        
         return;
       }
       var graded = 0;
@@ -10330,14 +10040,7 @@ function _wireResultsButtons(el){
         }
 
         var oddsStr = t.odds || (legs[0] && legs[0].odds) || '';
-        console.log('[ticket graded]\n' +
-                    '  player: '         + (t.playerName || t.playerUsername || '?') + '\n' +
-                    '  wager: $'         + risk.toFixed(2) + '\n' +
-                    '  odds: '           + oddsStr + '\n' +
-                    '  result: '         + nextStatus.toUpperCase() + '\n' +
-                    '  payout: $'        + ticketPayout.toFixed(2) + '\n' +
-                    '  balanceBefore: $' + rowBefore.toFixed(2) + '\n' +
-                    '  balanceAfter: $'  + runningBalance.toFixed(2));
+        
         graded++;
       });
 
@@ -10347,9 +10050,7 @@ function _wireResultsButtons(el){
               String((parseInt(localStorage.getItem('pb-tickets-version')||'0',10)||0) + 1)); } catch(_e){}
       var bsAfter = (typeof calcAvailableBalance === 'function') ? calcAvailableBalance() : null;
       var balanceAfter = bsAfter ? bsAfter.available : null;
-      console.log('[simulate grade] graded ' + graded + ' ticket(s) | balanceBefore: ' +
-                  (balanceBefore != null ? '$'+balanceBefore.toFixed(2) : '(unknown)') +
-                  ' | balanceAfter: ' + (balanceAfter != null ? '$'+balanceAfter.toFixed(2) : '(unknown)'));
+      
 
       // Append a per-flip ledger entry for the math test trail
       tickets.filter(function(t){ return t.simulated && t.gradedAt && t.status !== 'active' && t.status !== 'open'; }).forEach(function(t){
@@ -10722,7 +10423,7 @@ function _isScoresGradingSuspended(){
   if (!_SCORES_GRADING_SUSPENDED) return false;
   if (Date.now() - _SCORES_SUSPENSION_AT > _scoresBackoffMs()) {
     _SCORES_GRADING_SUSPENDED = false;
-    console.log('[scores grading resumed] backoff window elapsed; next failure will re-suspend with a longer window');
+    
     return false;
   }
   return true;
@@ -10838,18 +10539,7 @@ function _logSettledDisplayGuard(t){
       else if (typeof t.finalScore === 'object') fsShape = 'object';
       else fsShape = typeof t.finalScore;
     }
-    console.log('[settled display guard]\n' +
-                '  ticketId:         ' + (t.id || '?') + '\n' +
-                '  teams:            ' + (teams || '-') + '\n' +
-                '  storedStatus:     ' + (stored || '-') + '\n' +
-                '  gradedAt:         ' + (t.gradedAt || '-') + '\n' +
-                '  gradingSource:    ' + (t.gradingSource || '-') + '\n' +
-                '  finalScoreShape:  ' + fsShape + '\n' +
-                '  hasFinalScore:    ' + (_hasFinalScore(t) ? 'yes' : 'no') + '\n' +
-                '  sourceGameStatus: ' + (src || '-') + '\n' +
-                '  reason:           ' + reason + '\n' +
-                '  advisoryNotes:    ' + (advisory || 'none') + '\n' +
-                '  displayStatus:    ' + display + (stored !== display ? ' (FORCED ACTIVE because ' + reason + ')' : ''));
+    
   } catch(_e){}
 }
 window._hasFinalScore     = _hasFinalScore;
@@ -10911,7 +10601,7 @@ function _backfillLegacySettledMetadata() {
     }
     if (changed) {
       localStorage.setItem('pb-tickets', JSON.stringify(tickets));
-      console.log('[settled backfill] back-filled metadata on ' + changed + ' settled ticket(s)');
+      
     }
   } catch(_e) {
     console.warn('[settled backfill] error:', _e && _e.message || _e);
@@ -10957,7 +10647,7 @@ try { _backfillLegacySettledMetadata(); } catch(_e){}
       throw err;
     });
   };
-  console.log('[scores fetch guard] installed');
+  
 })();
 
 // =============================================================================
@@ -11047,14 +10737,14 @@ function loadLiveGamesFromSportsDataIO(){
       'Scores unavailable — grading suspended.<br>' +
       '<span style="font-size:0.72rem;color:#555">' + (_SCORES_SUSPENSION_REASON || 'upstream error') +
       '<br>Tickets remain ACTIVE; live feed will return when service recovers.</span></div>';
-    console.log('[scores unavailable — grading suspended]\n  loadLiveGamesFromSportsDataIO short-circuited');
+    
     return;
   }
   el.innerHTML = '<div class="empty">Loading…</div>';
   _liveFetchToday().then(function(games){
     games = Array.isArray(games) ? games : [];
     var live = games.filter(function(g){ return g && _liveIsLiveStatus(g.Status); });
-    console.log('[live sportsdataio]\n  gamesChecked: ' + games.length + '\n  liveGamesShown: ' + live.length);
+    
     var cnt = document.getElementById('live-count');
     if (cnt) cnt.textContent = live.length + (live.length === 1 ? ' game' : ' games');
     if (!live.length) {
@@ -11136,7 +10826,7 @@ function gradeTicketByScores(ticketId, legScores) {
   // Refuse to grade when scores provider is currently unavailable. Tickets
   // stay ACTIVE; no balance settlement.
   if (typeof _isScoresGradingSuspended === 'function' && _isScoresGradingSuspended()) {
-    console.log('[scores unavailable — grading suspended]\n  gradeTicketByScores refused for ticketId=' + ticketId);
+    
     return 'scores unavailable — grading suspended';
   }
   var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
@@ -11209,16 +10899,7 @@ function gradeTicketByScores(ticketId, legScores) {
     }
   } catch(_e){}
 
-  console.log('[ticket graded]\n' +
-              '  player: '         + (t.playerName || t.playerUsername || '?') + '\n' +
-              '  wager: $'         + risk.toFixed(2) + '\n' +
-              '  odds: '           + (t.odds || (legs[0] && legs[0].odds) || '') + '\n' +
-              '  result: '         + nextStatus.toUpperCase() + '\n' +
-              '  payout: $'        + ticketPayout.toFixed(2) + '\n' +
-              '  balanceBefore: $' + (balanceBefore != null ? balanceBefore.toFixed(2) : '?') + '\n' +
-              '  balanceAfter: $'  + (balanceAfter  != null ? balanceAfter.toFixed(2)  : '?') + '\n' +
-              '  source: manual\n' +
-              '  finalScore: '     + legScores.map(function(s,i){ return (legs[i]&&legs[i].awayTeam||'A')+' '+s.away+' · '+(legs[i]&&legs[i].homeTeam||'H')+' '+s.home+(s.status&&s.status!=='final'?(' ('+s.status+')'):''); }).join(' | '));
+  
 
   // Refresh UI
   try { betTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(_e){}
@@ -11471,7 +11152,6 @@ window.openGradingConsole = openGradingConsole;
       <input id="bs-stake-inp" type="text" inputmode="decimal" placeholder="0.00"
         oninput="bsParlayInput(this)" onclick="event.stopPropagation()"
         ontouchstart="event.stopPropagation()" onpointerdown="event.stopPropagation()"
-        onfocus="console.log('amount input focused', bsType)"
         style="flex:1;background:none;border:none;outline:none;font-size:1rem;font-weight:900;color:#111;pointer-events:auto;user-select:text;-webkit-user-select:text;position:relative;z-index:20;-webkit-user-select:text">
     </div>
     <div class="dkslip-payout" id="dk-payout-row" style="display:none;margin-bottom:8px">
@@ -11576,7 +11256,7 @@ window.openGradingConsole = openGradingConsole;
         if (!d || !d.sha) return;
         var latest = String(d.sha).trim(), cur = String(CURRENT_SHA).trim();
         if (latest && cur && cur !== 'unknown' && latest !== cur) _showStaleBanner(latest, d.builtAt);
-        else { var x = document.getElementById('_pbs_stale_banner'); if (x) { x.remove(); document.body.style.paddingTop = ''; } console.log('[version guard] ✅ up to date sha=' + cur); }
+        else { var x = document.getElementById('_pbs_stale_banner'); if (x) { x.remove(); document.body.style.paddingTop = ''; }  }
       }).catch(function() {});
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _check);
@@ -11609,18 +11289,18 @@ function _updateDbSourceBadge(source, localCount, dbCount, fallbackReason) {
 
 // Phase B read validation helper — runs a full sequence of checks
 async function runPhaseBReadValidation() {
-  console.log('[Phase B Read Validation] ─── START ───');
+  
   var results = {};
 
   // 1. Check feature flag
   results.flagEnabled = _DB_PRIMARY_READS_ENABLED;
-  console.log('[Phase B] 1. feature flag:', results.flagEnabled ? '✅ enabled' : '❌ disabled (call enableDbPrimaryReadsForSession())');
+  
 
   // 2. Check backend env
   try {
     var envR = await fetch('/api/env-check').then(function(r){ return r.json(); });
     results.backendHasSupabase = envR.hasSupabaseUrl && envR.hasSupabaseServiceKey;
-    console.log('[Phase B] 2. backend Supabase env:', results.backendHasSupabase ? '✅ configured' : '❌ MISSING — add vars to pocketbooks-sports-backend Railway service');
+    
   } catch(e) { results.backendHasSupabase = false; console.warn('[Phase B] 2. env-check failed:', e.message); }
 
   // 3. Run DB primary read trial
@@ -11633,18 +11313,18 @@ async function runPhaseBReadValidation() {
   if (!results.dbRead) {
     results.dbRead = { sourceUsed:'localStorage', fallbackReason:'missing_validation_result', hydrated:false, cacheUpdated:false, localCount:0, dbCount:0 };
   }
-  console.log('[Phase B] 3. DB read trial: sourceUsed='+results.dbRead.sourceUsed, 'fallback='+(results.dbRead.fallbackReason||'none'));
+  
 
   // 4. Check for duplicate tickets in current betTickets
   var ids = betTickets.map(function(t){ return t.id; });
   var dupes = ids.filter(function(id,i){ return ids.indexOf(id) !== i; });
   results.duplicateTickets = dupes.length;
-  console.log('[Phase B] 4. duplicate tickets in render set:', dupes.length === 0 ? '✅ none' : '❌ DUPES: '+dupes.join(','));
+  
 
   // 5. Balance unchanged
   var bal = calcAvailableBalance();
   results.balance = bal.available;
-  console.log('[Phase B] 5. available balance: $'+bal.available.toFixed(2), '| openRisk: $'+bal.openRisk.toFixed(2));
+  
 
   // 6. Full persistence audit
   results.persistence = await runFullPersistenceAudit();
@@ -11655,9 +11335,9 @@ async function runPhaseBReadValidation() {
   var pass = results.flagEnabled && results.backendHasSupabase &&
     results.dbRead.sourceUsed === 'db' && !results.duplicateTickets && persistenceOk;
   if (results.persistence && results.persistence.warnings && results.persistence.warnings.length) {
-    console.log('[Phase B] ⚠️ warnings (non-blocking):', results.persistence.warnings.join('; '));
+    
   }
-  console.log('[Phase B] ─── RESULT:', pass ? '✅ DB-PRIMARY READS VALIDATED' : '⚠️ VALIDATION INCOMPLETE — check items above');
+  
   return results;
 }
 window.runPhaseBReadValidation = runPhaseBReadValidation;
@@ -11689,13 +11369,13 @@ async function _maybeAutoEnableDbPrimaryReads() {
     if (!env.hasSupabaseUrl || !env.hasSupabaseServiceKey) return;
     // Supabase is ready and this is a dev identity — auto-enable
     _DB_PRIMARY_READS_ENABLED = true;
-    console.log('[db primary read] AUTO-ENABLED for dev identity — sourceUsed will be determined by safety checks');
+    
   } catch(_e) { /* network error — stay on localStorage */ }
 }
 
 // Multi-device persistence check: logs all state needed to verify cross-device consistency
 async function runMultiDevicePersistenceCheck() {
-  console.log('[multi-device check] ─── START ───');
+  
   var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
   // String() coercion: id/username may be numeric or null
@@ -11714,19 +11394,7 @@ async function runMultiDevicePersistenceCheck() {
   // Balance
   var bal = calcAvailableBalance();
 
-  console.log('[multi-device check]',
-    '\n  playerId:       ', pid,
-    '\n  clubId:         ', cid,
-    '\n  sourceUsed:     ', sourceUsed,
-    '\n  localCount:     ', localTickets.length,
-    '\n  dbCount:        ', dbCount === -1 ? '(db not configured)' : dbCount,
-    '\n  lastTicketId:   ', lastTicketId,
-    '\n  cacheHydrated:  ', cacheHydrated,
-    '\n  balance:        $'+bal.available.toFixed(2),
-    '\n  isDevIdentity:  ', _isDevIdentity(),
-    '\n  dbPrimaryFlag:  ', _DB_PRIMARY_READS_ENABLED,
-    '\n  status:         ', (dbCount === localTickets.length || dbCount >= localTickets.length) ? '✅ counts match' : '⚠️ counts differ'
-  );
+  
 
   return { playerId:pid, clubId:cid, sourceUsed, localCount:localTickets.length, dbCount, lastTicketId, cacheHydrated, balance:bal.available };
 }
@@ -11805,9 +11473,9 @@ window.runMultiDevicePersistenceCheck = runMultiDevicePersistenceCheck;
       var r = await fetch('/api/markets/live');
       var d = await r.json();
       console.group('[live cache] audit');
-      console.log('status:', d.sourceStatus, '| games:', d.gameCount, '| markets:', d.marketCount);
-      console.log('updatedAt:', d.updatedAt, '| cacheAge:', d.cacheAgeMs!=null?Math.round(d.cacheAgeMs/1000)+'s':'n/a');
-      console.log('suspended:', d.suspendedMarkets && d.suspendedMarkets.length);
+      
+      
+      
       if (d.warnings && d.warnings.length) console.warn('warnings:', d.warnings.join(', '));
       console.groupEnd();
       return d;
@@ -11817,7 +11485,7 @@ window.runMultiDevicePersistenceCheck = runMultiDevicePersistenceCheck;
     try {
       var r = await fetch('/api/markets/health');
       var d = await r.json();
-      console.log('[live cache health]', JSON.stringify(d));
+      
       return d;
     } catch(e) { console.error('[checkLiveCacheHealth] error:', e.message); }
   };
@@ -11825,7 +11493,7 @@ window.runMultiDevicePersistenceCheck = runMultiDevicePersistenceCheck;
     try {
       var r = await _pbFetch('/api/markets/refresh', { method:'POST' });
       var d = await r.json();
-      console.log('[live cache] forced refresh:', JSON.stringify(d));
+      
       return d;
     } catch(e) { console.error('[forceLiveOddsRefresh] error:', e.message); }
   };
@@ -11833,25 +11501,18 @@ window.runMultiDevicePersistenceCheck = runMultiDevicePersistenceCheck;
   // devHealth — one-call health summary
   window.devHealth = async function() {
     var sha = window.PBS_BUILD_SHA || 'unknown';
-    console.log('[devHealth] sha=' + sha);
+    
     var result = { version: sha };
     try { result.dbPrimary       = checkDbPrimaryReadStatus ? checkDbPrimaryReadStatus() : null; } catch(_e) {}
     try { result.gradingAuthority = checkGradingAuthorityStatus ? checkGradingAuthorityStatus() : null; } catch(_e) {}
     try { result.persistence      = await runFullPersistenceAudit(); } catch(_e) { result.persistence = { error: _e.message }; }
     try { result.multiDevice      = await runMultiDevicePersistenceCheck(); } catch(_e) { result.multiDevice = { error: _e.message }; }
     try { result.grading          = await checkServerGradeStatus(); } catch(_e) { result.grading = { error: _e.message }; }
-    console.log('[devHealth] done', JSON.stringify({ version:result.version, dbPrimary:result.dbPrimary, gradingMode:result.gradingAuthority&&result.gradingAuthority.mode }));
+    
     return result;
   };
 
-  console.log('[PBS globals]',
-    'grade:', typeof window.grade,
-    '| runServerGrade:', typeof window.runServerGrade,
-    '| devHealth:', typeof window.devHealth,
-    '| gradingAuth:', typeof window.checkGradingAuthorityStatus,
-    '| dbPrimary:', typeof window.enableDbPrimaryReadsForSession,
-    '| repair:', typeof window.repairAllTicketIdentities
-  );
+  
 })();
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -11897,13 +11558,12 @@ window._checkMarketStatus = _checkMarketStatus;
 // Initialize grading authority badge + verify session on page load
 document.addEventListener('DOMContentLoaded', function() {
   _updateGradingSourceBadge(_GRADING_MODE === 'server_authoritative' ? 'Server' : 'BrowserFallback DEV');
-  console.log('[grading authority] init mode:', _GRADING_MODE);
+  
   // Verify session if token stored
   try {
     if (localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token')) {
       _verifyOrRefreshSession().then(function(r) {
         if (r.cleared) console.warn('[session] token was revoked/invalid — re-auth required');
-        else if (r.refreshed) console.log('[session] token auto-refreshed on boot');
       }).catch(function(_e){});
     }
   } catch(_e){}
