@@ -476,6 +476,15 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
 }
 
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* My Bets — overflow menu on active ticket cards */
+.bet-menu-wrap{position:relative;flex-shrink:0}
+.bet-menu-btn{background:none;border:none;color:#999;font-size:1.15rem;line-height:1;padding:2px 6px;cursor:pointer;letter-spacing:1px;border-radius:6px}
+.bet-menu-btn:hover{color:#666;background:#f5f5f5}
+.bet-menu-dropdown{display:none;position:absolute;right:0;top:100%;margin-top:4px;background:#1a1a1a;border:1px solid #333;border-radius:8px;min-width:140px;z-index:80;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.35)}
+.bet-menu-wrap.open .bet-menu-dropdown{display:block}
+.bet-menu-item{display:block;width:100%;background:none;border:none;color:#e57373;font-size:0.78rem;font-weight:700;text-align:left;padding:10px 14px;cursor:pointer}
+.bet-menu-item:hover{background:#222}
 </style>
 
 <script>
@@ -4648,13 +4657,39 @@ async function submitDeleteRequest(ticketId) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 
+function closeAllBetMenus(exceptId) {
+  document.querySelectorAll('.bet-menu-wrap.open').forEach(function(el) {
+    if (exceptId && el.id === 'bet-menu-' + exceptId) return;
+    el.classList.remove('open');
+  });
+}
+
 // Request delete button delegation (player) — useCapture:true fires before stopPropagation
 document.addEventListener('click', function(e) {
   var btn = e.target.closest ? e.target.closest('[data-reqdelete]') : null;
   if (!btn) return;
   e.stopPropagation();
+  closeAllBetMenus();
   requestBetDelete(btn.dataset.reqdelete, e);
 }, true);
+
+// Active-ticket ⋯ menu: toggle one at a time; close on outside click.
+document.addEventListener('click', function(e) {
+  var menuBtn = e.target.closest ? e.target.closest('[data-bet-menu]') : null;
+  if (menuBtn) {
+    e.stopPropagation();
+    var id = menuBtn.getAttribute('data-bet-menu');
+    var wrap = document.getElementById('bet-menu-' + id);
+    if (!wrap) return;
+    var wasOpen = wrap.classList.contains('open');
+    closeAllBetMenus();
+    if (!wasOpen) wrap.classList.add('open');
+    return;
+  }
+  if (!(e.target.closest && e.target.closest('.bet-menu-wrap'))) {
+    closeAllBetMenus();
+  }
+});
 
 // ═══ TICKET-VERSION REFRESH (BUG #2) ═════════════════════════════════════════
 // Host actions (approve/deny/cancel) mutate pb-tickets + pb-tickets-version.
@@ -7935,15 +7970,24 @@ function renderMyBets() {
       && _cancelElig.reason === 'game_started'
       && (displayStatus==='active'||displayStatus==='open')
       && !isDeletePending && !isVoided;
-    var deleteBtn = canRequestDelete
-      ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;text-align:right"><button data-reqdelete="'+t.id+'" onclick="event.stopPropagation();requestBetDelete(\''+t.id+'\',event)" style="font-size:0.72rem;font-weight:700;color:#cc0000;background:none;border:1.5px solid #cc0000;border-radius:20px;padding:5px 14px;cursor:pointer;pointer-events:auto;position:relative;z-index:50">✕ Request Cancel</button></div>'
-      : cancelDisabledByGame
-        ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;text-align:right"><span title="Once a game starts, the ticket is no longer eligible for Request Cancel." style="font-size:0.72rem;font-weight:700;color:#888;background:#f5f5f5;border:1.5px solid #ddd;border-radius:20px;padding:5px 14px;cursor:not-allowed;display:inline-block">✕ '+CANCEL_DISABLED_LABEL+'</span></div>'
-      : isDeletePending
+    var deleteBtn = isDeletePending
         ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;font-size:0.72rem;color:#f59e0b;font-weight:700;text-align:center">⏳ Waiting for host approval…</div>'
         : isDeleteDenied
           ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;font-size:0.72rem;color:#cc0000;font-weight:700;text-align:center">❌ Delete request denied</div>'
           : '';
+    // Overflow menu (⋯) lives in the header on active tickets only.
+    // Cancel Bet reuses data-reqdelete → requestBetDelete (existing flow).
+    var showBetMenu = (displayStatus==='active'||displayStatus==='open') && !isVoided;
+    var overflowMenu = showBetMenu
+      ? '<div class="bet-menu-wrap" id="bet-menu-'+t.id+'">' +
+          '<button type="button" class="bet-menu-btn" data-bet-menu="'+t.id+'" aria-label="Bet options" aria-haspopup="true">⋯</button>' +
+          '<div class="bet-menu-dropdown" role="menu">' +
+            (cancelDisabledByGame
+              ? '<button type="button" class="bet-menu-item" role="menuitem" disabled style="opacity:0.45;cursor:not-allowed" title="Once a game starts, the ticket is no longer eligible for Request Cancel.">Cancel Bet</button>'
+              : '<button type="button" class="bet-menu-item" role="menuitem" data-reqdelete="'+t.id+'">Cancel Bet</button>') +
+          '</div>' +
+        '</div>'
+      : '';
     // Ticket type label fallback chain so we never paint 'undefined' at
     // the top of a card. Modern tickets have t.type ('Straight' /
     // 'Parlay' / etc.); older shapes may only have bet_type or imply
@@ -7995,7 +8039,10 @@ function renderMyBets() {
           '<div style="font-size:0.88rem;font-weight:900;color:#111">' + sportBadge + typeLabel+'</div>' +
           '<div style="font-size:0.62rem;color:#aaa;margin-top:2px">'+dateStr+'</div>' +
         '</div>' +
-        statusBadge +
+        '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
+          statusBadge +
+          overflowMenu +
+        '</div>' +
       '</div>' +
       '<div style="margin-bottom:10px">' + picks + morePicks + '</div>' +
       '<div style="font-size:0.6rem;color:#ccc;margin-bottom:10px">Ticket: '+t.id+'</div>' +
