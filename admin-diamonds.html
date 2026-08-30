@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Admin Diamonds — PocketBooks Sports</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--bg:#050505;--card:#111;--card2:#191919;--border:#222;--green:#00ff88;--cyan:#00c2ff;--gold:#f5c842;--red:#ff3d57;--purple:#7c3aed;--white:#fff;--gray:#555;--light:#999}
+body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(--bg);color:var(--white);min-height:100vh;max-width:960px;margin:0 auto;padding-bottom:80px}
+.gate{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center}
+.gate-title{font-size:1.2rem;font-weight:900;margin-bottom:8px;color:var(--purple)}
+.gate-sub{font-size:0.78rem;color:var(--gray);line-height:1.6}
+.hdr{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:rgba(5,5,5,0.97);position:sticky;top:0;z-index:100;border-bottom:1px solid var(--border)}
+.admin-badge{background:linear-gradient(135deg,#4c1d95,#7c3aed);color:#fff;font-size:0.58rem;font-weight:900;padding:3px 8px;border-radius:6px;letter-spacing:1px;text-transform:uppercase}
+.hdr-title{font-size:0.95rem;font-weight:900}
+.hdr-link{font-size:0.72rem;color:var(--gray);text-decoration:none;background:var(--card2);border:1px solid var(--border);padding:5px 11px;border-radius:8px;font-weight:700}
+.nav-tabs{display:flex;gap:0;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border);background:rgba(5,5,5,0.95);position:sticky;top:53px;z-index:99}
+.nav-tabs::-webkit-scrollbar{display:none}
+.ntab{flex-shrink:0;padding:10px 14px;font-size:0.72rem;font-weight:700;color:var(--gray);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+.ntab.active{color:var(--purple);border-bottom-color:var(--purple)}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:14px}
+@media(max-width:700px){.stat-grid{grid-template-columns:1fr 1fr}}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;position:relative;overflow:hidden}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--purple)}
+.sc-val{font-size:1.25rem;font-weight:900;margin-bottom:4px}
+.sc-lbl{font-size:0.6rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;font-weight:700}
+.section{display:none;padding:14px}
+.section.active{display:block}
+.sec-title{font-size:1rem;font-weight:900;margin-bottom:12px}
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.filters input,.filters select,textarea.inp,.inp{padding:10px 12px;background:var(--card2);border:1.5px solid var(--border);border-radius:10px;color:var(--white);font-size:0.82rem;outline:none}
+.filters input:focus,.filters select:focus,.inp:focus{border-color:var(--purple)}
+.btn{padding:10px 14px;border:none;border-radius:10px;font-size:0.78rem;font-weight:800;cursor:pointer}
+.btn-p{background:var(--purple);color:#fff}
+.btn-g{background:rgba(0,255,136,0.12);color:var(--green);border:1px solid rgba(0,255,136,0.25)}
+.btn-c{background:rgba(0,194,255,0.12);color:var(--cyan);border:1px solid rgba(0,194,255,0.25)}
+.btn-r{background:rgba(255,61,87,0.15);color:var(--red);border:1px solid rgba(255,61,87,0.3)}
+.btn-d{background:var(--card2);color:var(--gray);border:1px solid var(--border)}
+.table-wrap{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:0.75rem}
+th{text-align:left;font-size:0.58rem;font-weight:800;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;padding:10px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:9px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+tr:last-child td{border:none}
+.pill{font-size:0.56rem;font-weight:800;padding:3px 7px;border-radius:6px;text-transform:uppercase;display:inline-block}
+.p-ok{background:rgba(0,255,136,0.1);color:var(--green)}
+.p-warn{background:rgba(245,200,66,0.12);color:var(--gold)}
+.p-bad{background:rgba(255,61,87,0.12);color:var(--red)}
+.mismatch-banner{background:rgba(255,61,87,0.12);border:1px solid rgba(255,61,87,0.35);color:var(--red);padding:12px 14px;border-radius:12px;font-weight:900;margin-bottom:12px;letter-spacing:1px}
+.note{font-size:0.72rem;color:var(--gray);line-height:1.5;margin-bottom:12px}
+.loading{text-align:center;padding:24px;color:var(--gray);font-size:0.82rem}
+.mono{font-family:ui-monospace,monospace;font-size:0.68rem;word-break:break-all}
+.pos{color:var(--green);font-weight:800}
+.neg{color:var(--red);font-weight:800}
+.form-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:center}
+</style>
+</head>
+<body>
+<div id="gate" class="gate">
+  <div style="font-size:2.4rem;margin-bottom:12px">💎</div>
+  <div class="gate-title">Diamond Control Center</div>
+  <div class="gate-sub">Admin only. Checking session…</div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="hdr">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="admin-badge">⚡ Admin</div>
+      <div class="hdr-title">Diamond Management</div>
+    </div>
+    <a class="hdr-link" href="admin.html">← Admin</a>
+  </div>
+  <div class="nav-tabs">
+    <div class="ntab active" data-sec="overview" onclick="setSec('overview')">Overview</div>
+    <div class="ntab" data-sec="purchases" onclick="setSec('purchases')">Purchases</div>
+    <div class="ntab" data-sec="ledger" onclick="setSec('ledger')">Ledger</div>
+    <div class="ntab" data-sec="hosts" onclick="setSec('hosts')">Host Audit</div>
+    <div class="ntab" data-sec="weekly" onclick="setSec('weekly')">Weekly Charges</div>
+    <div class="ntab" data-sec="audit" onclick="setSec('audit')">Run Audit</div>
+    <div class="ntab" data-sec="history" onclick="setSec('history')">Audit History</div>
+    <div class="ntab" data-sec="adjust" onclick="setSec('adjust')">Adjustments</div>
+  </div>
+
+  <div class="filters" id="global-filters">
+    <input id="f-host" placeholder="Host / clubId" style="min-width:140px">
+    <input id="f-tx" placeholder="txHash" style="min-width:140px">
+    <input id="f-bettor" placeholder="Bettor" style="min-width:120px">
+    <input id="f-from" type="date">
+    <input id="f-to" type="date">
+    <select id="f-type">
+      <option value="">All types</option>
+      <option value="HOST_DIAMOND_PURCHASE">Purchase</option>
+      <option value="HOST_ACTIVE_BETTOR_CHARGE">Bettor charge</option>
+      <option value="HOST_DIAMOND_ADJUSTMENT">Adjustment</option>
+      <option value="HOST_DIAMOND_REFUND">Refund</option>
+      <option value="HOST_DIAMOND_TOPUP">Top-up</option>
+    </select>
+    <select id="f-status">
+      <option value="">All statuses</option>
+      <option value="created">created</option>
+      <option value="hash_submitted">hash_submitted</option>
+      <option value="pending_review">pending_review</option>
+      <option value="confirmed">confirmed</option>
+      <option value="credited">credited</option>
+      <option value="rejected">rejected</option>
+    </select>
+    <button class="btn btn-d" onclick="applyFilters()">Apply filters</button>
+  </div>
+
+  <div class="section active" id="sec-overview">
+    <div class="stat-grid" id="ov-grid"><div class="loading" style="grid-column:1/-1">Loading…</div></div>
+  </div>
+
+  <div class="section" id="sec-purchases">
+    <div class="sec-title">Diamond Purchases</div>
+    <div class="note">Approve credits host diamonds once. Already credited rows hide Approve.</div>
+    <div id="purchases-el" class="loading">Loading…</div>
+  </div>
+
+  <div class="section" id="sec-ledger">
+    <div class="sec-title">Diamond Ledger</div>
+    <div id="ledger-el" class="loading">Loading…</div>
+  </div>
+
+  <div class="section" id="sec-hosts">
+    <div class="sec-title">Host Audit</div>
+    <div class="note">Click a host for expected vs stored balance. MISMATCH is credits − debits ≠ stored.</div>
+    <div id="hosts-el" class="loading">Loading…</div>
+    <div id="host-detail"></div>
+  </div>
+
+  <div class="section" id="sec-weekly">
+    <div class="sec-title">Weekly Bettor Charges</div>
+    <div id="weekly-el" class="loading">Loading…</div>
+  </div>
+
+  <div class="section" id="sec-audit">
+    <div class="sec-title">Run Diamond Audit</div>
+    <div class="note">Read only. Never auto-fixes balances. Results are saved to audit history.</div>
+    <button class="btn btn-p" onclick="runAudit()">Run Diamond Audit</button>
+    <div id="audit-el" style="margin-top:14px"></div>
+  </div>
+
+  <div class="section" id="sec-history">
+    <div class="sec-title">Audit History</div>
+    <div id="history-el" class="loading">Loading…</div>
+  </div>
+
+  <div class="section" id="sec-adjust">
+    <div class="sec-title">Admin Adjustments</div>
+    <div class="note">Reason is required. Always writes a ledger entry before updating the stored balance.</div>
+    <div class="form-row">
+      <input class="inp" id="adj-host" placeholder="clubId or hostId">
+      <input class="inp" id="adj-amt" type="number" min="0.01" step="0.01" placeholder="Amount">
+      <select class="inp" id="adj-dir"><option value="credit">Credit</option><option value="debit">Debit</option></select>
+    </div>
+    <textarea class="inp" id="adj-reason" placeholder="Required reason" style="width:100%;min-height:80px;margin-bottom:10px"></textarea>
+    <button class="btn btn-p" onclick="submitAdjust()">Post adjustment</button>
+    <div id="adj-msg" class="note" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<script>
+window.PBS_BUILD_SHA = 'unknown';
+const ROLE_RANK = { owner:5, full_admin:4, settlement_manager:3, risk_viewer:2, player:1, view_only:0 };
+const _isPreview = new URLSearchParams(location.search).get('preview') === '1';
+let _overviewHosts = [];
+
+function _token() {
+  try {
+    return localStorage.getItem('pb-admin-token')
+      || localStorage.getItem('pb-session-token')
+      || localStorage.getItem('pb-sports-token') || '';
+  } catch (_e) { return ''; }
+}
+function _headers() {
+  var h = { 'Content-Type':'application/json' };
+  var t = _token();
+  if (t) h.Authorization = 'Bearer ' + t;
+  try {
+    var club = JSON.parse(localStorage.getItem('pb-club')||'{}');
+    var cid = String(club.id != null ? club.id : club.clubId || '').trim();
+    if (cid) h['X-Club-Id'] = cid;
+  } catch (_e) {}
+  return h;
+}
+async function _pbFetch(url, opts) {
+  opts = opts || {};
+  return fetch(url, Object.assign({}, opts, { headers: Object.assign(_headers(), opts.headers || {}) }));
+}
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+  });
+}
+function qs() {
+  var p = new URLSearchParams();
+  var host = document.getElementById('f-host').value.trim();
+  var tx = document.getElementById('f-tx').value.trim();
+  var bettor = document.getElementById('f-bettor').value.trim();
+  var from = document.getElementById('f-from').value;
+  var to = document.getElementById('f-to').value;
+  var type = document.getElementById('f-type').value;
+  var status = document.getElementById('f-status').value;
+  if (host) p.set('host', host);
+  if (tx) p.set('txHash', tx);
+  if (bettor) p.set('bettor', bettor);
+  if (from) p.set('from', from);
+  if (to) p.set('to', to);
+  if (type) p.set('type', type);
+  if (status) p.set('status', status);
+  var s = p.toString();
+  return s ? '?' + s : '';
+}
+function pill(status) {
+  var st = String(status||'');
+  var cls = st === 'credited' ? 'p-ok' : (st === 'rejected' || st === 'MISMATCH' ? 'p-bad' : 'p-warn');
+  return '<span class="pill '+cls+'">'+esc(st)+'</span>';
+}
+function toast(msg) {
+  var t = document.createElement('div');
+  t.style.cssText = 'position:fixed;top:72px;left:50%;transform:translateX(-50%);background:#1c1c1c;border:1px solid #333;color:#fff;padding:12px 18px;border-radius:12px;z-index:999;font-size:0.82rem';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(function(){ t.remove(); }, 2600);
+}
+function setSec(id) {
+  document.querySelectorAll('.section').forEach(function(s){ s.classList.toggle('active', s.id === 'sec-'+id); });
+  document.querySelectorAll('.ntab').forEach(function(t){ t.classList.toggle('active', t.getAttribute('data-sec') === id); });
+  if (id === 'overview') loadOverview();
+  if (id === 'purchases') loadPurchases();
+  if (id === 'ledger') loadLedger();
+  if (id === 'hosts') loadHosts();
+  if (id === 'weekly') loadWeekly();
+  if (id === 'history') loadHistory();
+}
+function applyFilters() {
+  var active = document.querySelector('.ntab.active');
+  setSec(active ? active.getAttribute('data-sec') : 'overview');
+}
+function isAdmin(actor) {
+  if (!actor) return false;
+  if (actor.platformRole === 'platform_admin') return true;
+  var role = actor.role || actor.user && actor.user.role;
+  if (role === 'master_admin' || role === 'admin') return true;
+  return (ROLE_RANK[role] || 0) >= ROLE_RANK.full_admin;
+}
+
+const MOCK = {
+  overview: { totalDiamondsHeld: 420, totalPurchased: 900, totalDebited: 480, pendingVerifications: 2, hostsWithBalances: 3, weeklyCharges: 45,
+    hosts: [{ clubId:'club-1', hostId:'host-a', storedBalance:200 }, { clubId:'club-2', hostId:'host-b', storedBalance:220 }] },
+  purchases: { purchases: [
+    { intentId:'DI_1', date:new Date().toISOString(), hostId:'host-a', clubId:'club-1', diamonds:100, usd:100, crypto:'BTC', txHash:'abc123hash', status:'hash_submitted', credited:false },
+    { intentId:'DI_2', date:new Date().toISOString(), hostId:'host-b', clubId:'club-2', diamonds:50, usd:50, crypto:'USDT', txHash:'def456hash', status:'credited', credited:true }
+  ]},
+  ledger: { ledger: [
+    { displayType:'DIAMOND_PURCHASE', who:'host-a', amount:100, balanceBefore:100, balanceAfter:200, reference:'abc123hash', createdAt:new Date().toISOString() },
+    { displayType:'ACTIVE_BETTOR_CHARGE', who:'host-a', amount:-15, balanceBefore:200, balanceAfter:185, reference:'player-9', createdAt:new Date().toISOString() }
+  ]},
+  weekly: { charges: [
+    { hostId:'host-a', bettor:'player-9', period:'2026-08-24', amount:15, ledgerId:'HAB_1', flags:[] },
+    { hostId:'host-b', bettor:'player-2', period:'2026-08-24', amount:15, ledgerId:null, flags:['missing_ledger_entry'] }
+  ]},
+  history: { history: [] }
+};
+
+async function api(path, opts) {
+  if (_isPreview) {
+    if (path.indexOf('/overview') >= 0) return MOCK.overview;
+    if (path.indexOf('/purchases') >= 0 && (!opts || opts.method === 'GET' || !opts.method)) return MOCK.purchases;
+    if (path.indexOf('/ledger') >= 0) return MOCK.ledger;
+    if (path.indexOf('/weekly-charges') >= 0) return MOCK.weekly;
+    if (path.indexOf('/audit/history') >= 0) return MOCK.history;
+    if (path.indexOf('/audit/run') >= 0) return { ok:true, autoFix:false, mismatchCount:0, mismatches:[], checks:[] };
+    if (path.indexOf('/adjust') >= 0) return { ok:true, balanceBefore:200, balanceAfter:210, ledgerId:'ADJ_PREVIEW' };
+    if (path.indexOf('/hosts/') >= 0) return { ok:true, expectedBalance:200, storedBalance:200, mismatch:false, flag:'OK', ledger:MOCK.ledger.ledger, hostId:'host-a', clubId:'club-1' };
+    return { ok:true };
+  }
+  var r = await _pbFetch(path, opts);
+  var data = {};
+  try { data = await r.json(); } catch (_e) {}
+  if (!r.ok) throw new Error(data.error || ('http_'+r.status));
+  return data;
+}
+
+async function gate() {
+  if (_isPreview) { showApp(); return; }
+  var tok = _token();
+  if (!tok) { location.href = 'admin.html'; return; }
+  try {
+    var v = await _pbFetch('/api/auth/verify');
+    var d = await v.json();
+    if (v.ok && isAdmin(d)) { showApp(); return; }
+  } catch (_e) {}
+  try {
+    var me = await _pbFetch('/api/auth/me');
+    var u = await me.json();
+    if (me.ok && isAdmin(u)) { showApp(); return; }
+  } catch (_e) {}
+  location.href = 'lobby.html';
+}
+function showApp() {
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  loadOverview();
+}
+
+async function loadOverview() {
+  var el = document.getElementById('ov-grid');
+  el.innerHTML = '<div class="loading" style="grid-column:1/-1">Loading…</div>';
+  try {
+    var d = await api('/api/admin/diamonds/overview');
+    _overviewHosts = d.hosts || [];
+    var cards = [
+      ['Total held', d.totalDiamondsHeld],
+      ['Total purchased', d.totalPurchased],
+      ['Total debited', d.totalDebited],
+      ['Pending verifications', d.pendingVerifications],
+      ['Hosts with balances', d.hostsWithBalances],
+      ['Weekly charges', d.weeklyCharges]
+    ];
+    el.innerHTML = cards.map(function(c){
+      return '<div class="stat-card"><div class="sc-val">'+esc(c[1])+'</div><div class="sc-lbl">'+esc(c[0])+'</div></div>';
+    }).join('');
+  } catch (e) { el.innerHTML = '<div class="loading" style="color:var(--red);grid-column:1/-1">'+esc(e.message)+'</div>'; }
+}
+
+async function loadPurchases() {
+  var el = document.getElementById('purchases-el');
+  el.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    var d = await api('/api/admin/diamonds/purchases'+qs());
+    var rows = d.purchases || [];
+    if (!rows.length) { el.innerHTML = '<div class="loading">No purchases</div>'; return; }
+    el.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Host</th><th>Diamonds</th><th>USD</th><th>Crypto</th><th>TxHash</th><th>Status</th><th>Actions</th></tr></thead><tbody>' +
+      rows.map(function(p){
+        var actions = '<button class="btn btn-c" onclick="verifyPurchase(\''+esc(p.intentId||p.id)+'\')">Verify</button> ';
+        if (!p.credited && p.status !== 'credited')
+          actions += '<button class="btn btn-g" onclick="approvePurchase(\''+esc(p.intentId||p.id)+'\')">Approve &amp; Credit</button> ';
+        if (p.status !== 'credited' && p.status !== 'rejected')
+          actions += '<button class="btn btn-r" onclick="rejectPurchase(\''+esc(p.intentId||p.id)+'\')">Reject</button>';
+        return '<tr><td>'+esc((p.date||'').slice(0,16).replace('T',' '))+'</td><td>'+esc(p.hostId)+'<div class="mono">'+esc(p.clubId)+'</div></td><td>'+esc(p.diamonds)+'</td><td>'+esc(p.usd)+'</td><td>'+esc(p.crypto)+'</td><td class="mono">'+esc(p.txHash||'—')+'</td><td>'+pill(p.status)+'</td><td style="white-space:nowrap">'+actions+'</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  } catch (e) { el.innerHTML = '<div class="loading" style="color:var(--red)">'+esc(e.message)+'</div>'; }
+}
+
+async function verifyPurchase(id) {
+  try {
+    var d = await api('/api/admin/diamonds/purchases/'+encodeURIComponent(id)+'/verify', { method:'POST', body:'{}' });
+    toast('Verify: '+(d.scanStatus||'done')+(d.matched?' matched':''));
+    loadPurchases();
+  } catch (e) { toast(e.message); }
+}
+async function approvePurchase(id) {
+  if (!confirm('Approve and credit this purchase? Will not credit twice.')) return;
+  try {
+    var d = await api('/api/admin/diamonds/purchases/'+encodeURIComponent(id)+'/approve', { method:'POST', body:'{}' });
+    toast(d.idempotent || d.already_credited ? 'Already credited' : 'Credited +'+(d.diamonds||'')+'d');
+    loadPurchases();
+  } catch (e) { toast(e.message); }
+}
+async function rejectPurchase(id) {
+  var reason = prompt('Reject reason (required)');
+  if (!reason || !reason.trim()) return;
+  try {
+    await api('/api/admin/diamonds/purchases/'+encodeURIComponent(id)+'/reject', { method:'POST', body: JSON.stringify({ reason: reason.trim() }) });
+    toast('Rejected');
+    loadPurchases();
+  } catch (e) { toast(e.message); }
+}
+
+async function loadLedger() {
+  var el = document.getElementById('ledger-el');
+  el.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    var d = await api('/api/admin/diamonds/ledger'+qs());
+    var rows = d.ledger || [];
+    if (!rows.length) { el.innerHTML = '<div class="loading">No ledger rows</div>'; return; }
+    el.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Type</th><th>Who</th><th>Amount</th><th>Before</th><th>After</th><th>Reference</th><th>When</th></tr></thead><tbody>' +
+      rows.map(function(r){
+        var cls = (r.amount||0) < 0 ? 'neg' : 'pos';
+        var amt = (r.amount||0) > 0 ? '+'+r.amount : String(r.amount);
+        return '<tr><td>'+esc(r.displayType)+'</td><td>'+esc(r.who||r.hostId)+'</td><td class="'+cls+'">'+esc(amt)+'</td><td>'+esc(r.balanceBefore)+'</td><td>'+esc(r.balanceAfter)+'</td><td class="mono">'+esc(r.reference||'—')+'</td><td>'+esc((r.createdAt||'').slice(0,16).replace('T',' '))+'</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  } catch (e) { el.innerHTML = '<div class="loading" style="color:var(--red)">'+esc(e.message)+'</div>'; }
+}
+
+async function loadHosts() {
+  var el = document.getElementById('hosts-el');
+  try {
+    if (!_overviewHosts.length) {
+      var d = await api('/api/admin/diamonds/overview');
+      _overviewHosts = d.hosts || [];
+    }
+    if (!_overviewHosts.length) { el.innerHTML = '<div class="loading">No hosts</div>'; return; }
+    el.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Host</th><th>Club</th><th>Stored</th></tr></thead><tbody>' +
+      _overviewHosts.map(function(h){
+        return '<tr style="cursor:pointer" onclick="openHostAudit(\''+esc(h.clubId||h.hostId)+'\')"><td>'+esc(h.hostId)+'</td><td class="mono">'+esc(h.clubId)+'</td><td>'+esc(h.storedBalance)+'</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  } catch (e) { el.innerHTML = '<div class="loading" style="color:var(--red)">'+esc(e.message)+'</div>'; }
+}
+
+async function openHostAudit(hostId) {
+  var el = document.getElementById('host-detail');
+  el.innerHTML = '<div class="loading">Loading host…</div>';
+  try {
+    var d = await api('/api/admin/diamonds/hosts/'+encodeURIComponent(hostId)+'/audit');
+    var banner = d.mismatch
+      ? '<div class="mismatch-banner">MISMATCH — expected '+esc(d.expectedBalance)+' vs stored '+esc(d.storedBalance)+'</div>'
+      : '<div class="note">Balances match (expected '+esc(d.expectedBalance)+' = stored '+esc(d.storedBalance)+').</div>';
+    var rows = d.ledger || [];
+    el.innerHTML = banner + '<div class="table-wrap"><table><thead><tr><th>Type</th><th>Amount</th><th>Before</th><th>After</th><th>Ref</th></tr></thead><tbody>' +
+      rows.map(function(r){
+        return '<tr><td>'+esc(r.displayType)+'</td><td>'+esc(r.amount)+'</td><td>'+esc(r.balanceBefore)+'</td><td>'+esc(r.balanceAfter)+'</td><td class="mono">'+esc(r.reference||'—')+'</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  } catch (e) { el.innerHTML = '<div class="loading" style="color:var(--red)">'+esc(e.message)+'</div>'; }
+}
+
+async function loadWeekly() {
+  var el = document.getElementById('weekly-el');
+  el.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    var d = await api('/api/admin/diamonds/weekly-charges'+qs());
+    var rows = d.charges || [];
+    if (!rows.length) { el.innerHTML = '<div class="loading">No weekly charges</div>'; return; }
+    el.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Host</th><th>Bettor</th><th>Period</th><th>Amount</th><th>Ledger ID</th><th>Flags</th></tr></thead><tbody>' +
+      rows.map(function(r){
+        var flags = (r.flags||[]).map(function(f){ return pill(f); }).join(' ') || '—';
+        return '<tr><td>'+esc(r.hostId)+'</td><td>'+esc(r.bettor)+'</td><td>'+esc(r.period)+'</td><td>'+esc(r.amount)+'</td><td class="mono">'+esc(r.ledgerId||'—')+'</td><td>'+flags+'</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  } catch (e) { el.innerHTML = '<div class="loading" style="color:var(--red)">'+esc(e.message)+'</div>'; }
+}
+
+async function runAudit() {
+  var el = document.getElementById('audit-el');
+  el.innerHTML = '<div class="loading">Running read-only audit…</div>';
+  try {
+    var d = await api('/api/admin/diamonds/audit/run', { method:'POST', body:'{}' });
+    var mismatches = d.mismatches || [];
+    el.innerHTML = '<div class="note">Saved '+esc(d.auditId||'')+' · autoFix='+esc(d.autoFix)+' · mismatches='+esc(d.mismatchCount)+'</div>' +
+      (mismatches.length
+        ? '<div class="table-wrap"><table><thead><tr><th>Check</th><th>Flag</th><th>Detail</th></tr></thead><tbody>' +
+          mismatches.map(function(m){
+            return '<tr><td>'+esc(m.check)+'</td><td>'+pill(m.flag)+'</td><td class="mono">'+esc(JSON.stringify(m))+'</td></tr>';
+          }).join('') + '</tbody></table></div>'
+        : '<div class="note">No mismatches.</div>');
+    loadHistory();
+  } catch (e) { el.innerHTML = '<div class="loading" style="color:var(--red)">'+esc(e.message)+'</div>'; }
+}
+
+async function loadHistory() {
+  var el = document.getElementById('history-el');
+  el.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    var d = await api('/api/admin/diamonds/audit/history');
+    var rows = d.history || [];
+    if (!rows.length) { el.innerHTML = '<div class="loading">No audit runs yet</div>'; return; }
+    el.innerHTML = '<div class="table-wrap"><table><thead><tr><th>When</th><th>By</th><th>Mismatches</th></tr></thead><tbody>' +
+      rows.map(function(r){
+        return '<tr><td>'+esc(r.runAt||r.createdAt)+'</td><td>'+esc(r.runBy)+'</td><td>'+esc(r.mismatchCount)+'</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  } catch (e) { el.innerHTML = '<div class="loading" style="color:var(--red)">'+esc(e.message)+'</div>'; }
+}
+
+async function submitAdjust() {
+  var host = document.getElementById('adj-host').value.trim();
+  var amt = document.getElementById('adj-amt').value;
+  var dir = document.getElementById('adj-dir').value;
+  var reason = document.getElementById('adj-reason').value.trim();
+  var msg = document.getElementById('adj-msg');
+  if (!host || !reason) { msg.textContent = 'Host and reason are required.'; return; }
+  try {
+    var d = await api('/api/admin/diamonds/adjust', {
+      method:'POST',
+      headers: { 'Idempotency-Key': 'ADJUI_'+Date.now()+'_'+Math.random().toString(16).slice(2) },
+      body: JSON.stringify({ clubId: host, amountDiamonds: amt, direction: dir, reason: reason })
+    });
+    msg.textContent = (d.idempotent ? 'Idempotent replay. ' : '') + 'Balance '+d.balanceBefore+' → '+d.balanceAfter+' · '+d.ledgerId;
+  } catch (e) { msg.textContent = e.message; }
+}
+
+gate();
+</script>
+</body>
+</html>
