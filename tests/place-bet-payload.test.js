@@ -66,6 +66,108 @@ function _normalizeGameKeyToOwls(existingKey, away, home, sport, isoTime) {
   return [sportPart, awayPart, homePart, datePart].join('|');
 }
 
+function _isoScheduledStart(v, dateHint, allowDisplay) {
+  if (v == null || v === '') return null;
+  var s = String(v).trim();
+  if (!s || /^tbd$/i.test(s)) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    var ms0 = new Date(s).getTime();
+    if (!isNaN(ms0)) return new Date(ms0).toISOString();
+  }
+  var ms = new Date(s).getTime();
+  if (!isNaN(ms) && /T\d{2}:/.test(s)) return new Date(ms).toISOString();
+  if (!allowDisplay) {
+    if (!isNaN(ms) && /^\d{4}/.test(s)) return new Date(ms).toISOString();
+    return null;
+  }
+  var dateStr = _isoDateFromValue(dateHint);
+  if (!dateStr && dateHint) {
+    var hintParts = String(dateHint).split('|');
+    var last = hintParts[hintParts.length - 1] || '';
+    if (/^\d{4}-\d{2}-\d{2}/.test(last)) dateStr = last.slice(0, 10);
+  }
+  var tm = s.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (tm && dateStr) {
+    var hour = parseInt(tm[1], 10);
+    var min = parseInt(tm[2], 10);
+    var ap = String(tm[3] || '').toUpperCase();
+    if (ap === 'PM' && hour !== 12) hour += 12;
+    if (ap === 'AM' && hour === 12) hour = 0;
+    var hh = (hour < 10 ? '0' : '') + hour;
+    var mm = (min < 10 ? '0' : '') + min;
+    var builtMs = new Date(dateStr + 'T' + hh + ':' + mm + ':00').getTime();
+    if (!isNaN(builtMs)) return new Date(builtMs).toISOString();
+  }
+  if (!isNaN(ms)) return new Date(ms).toISOString();
+  return null;
+}
+function _stripCellGameId(cellId) {
+  var s = String(cellId || '');
+  if (!s) return '';
+  s = s.replace(/-(sp-aw|sp-hw|ml-aw|ml-hw|ov|un)$/i, '');
+  s = s.replace(/-(tot|atot|pp)-.*$/i, '');
+  return s;
+}
+function _lookupCachedGame(cellId, canonicalGameKey, away, home) {
+  var cache = (typeof window !== 'undefined' && window.gamesCache) ? window.gamesCache : {};
+  var id = String(cellId || '');
+  if (id && cache[id]) return cache[id];
+  var stripped = _stripCellGameId(id);
+  if (stripped && cache[stripped]) return cache[stripped];
+  var keys = Object.keys(cache);
+  var best = null, bestLen = 0, i, k, g;
+  for (i = 0; i < keys.length; i++) {
+    k = keys[i];
+    if (k && id.indexOf(k) === 0 && k.length > bestLen) {
+      best = cache[k];
+      bestLen = k.length;
+    }
+  }
+  if (best) return best;
+  if (canonicalGameKey) {
+    for (i = 0; i < keys.length; i++) {
+      g = cache[keys[i]];
+      if (g && g.canonicalGameKey && g.canonicalGameKey === canonicalGameKey) return g;
+    }
+  }
+  var a = String(away || '').toLowerCase();
+  var h = String(home || '').toLowerCase();
+  if (a && h) {
+    for (i = 0; i < keys.length; i++) {
+      g = cache[keys[i]];
+      if (!g) continue;
+      var ga = String(g.away || g.away_team || '').toLowerCase();
+      var gh = String(g.home || g.home_team || '').toLowerCase();
+      if (ga === a && gh === h) return g;
+    }
+  }
+  return null;
+}
+function _resolveScheduledStart(obj, cachedGame) {
+  obj = obj || {};
+  var dateHint = obj.canonicalGameKey || obj.canonical_game_key
+    || (cachedGame && cachedGame.canonicalGameKey) || null;
+  var list = [
+    obj.scheduledStart, obj.scheduled_start, obj.commenceTime, obj.commence_time,
+    obj.time, obj.start,
+    cachedGame && cachedGame.scheduledStart,
+    cachedGame && cachedGame.scheduled_start,
+    cachedGame && cachedGame.time,
+    cachedGame && cachedGame.commence_time,
+    cachedGame && cachedGame.commenceTime
+  ];
+  var i, iso;
+  for (i = 0; i < list.length; i++) {
+    iso = _isoScheduledStart(list[i], dateHint || list[i], false);
+    if (iso) return iso;
+  }
+  for (i = 0; i < list.length; i++) {
+    iso = _isoScheduledStart(list[i], dateHint || list[i], true);
+    if (iso) return iso;
+  }
+  return null;
+}
+
 console.log('\n-- Place-bet payload alignment --');
 
 test('player.html ships the Owls key + line helpers', function() {
@@ -73,6 +175,16 @@ test('player.html ships the Owls key + line helpers', function() {
   assert(html.indexOf('function _extractSlipPointLine') !== -1);
   assert(html.indexOf('line:_extractSlipPointLine(leg.pick, leg.line)') !== -1);
   assert(html.indexOf('canonicalGameKey:_normalizeGameKeyToOwls(') !== -1);
+});
+
+test('player.html stamps ISO scheduledStart onto every POST leg', function() {
+  assert(html.indexOf('function _resolveScheduledStart') !== -1);
+  assert(html.indexOf('function _lookupCachedGame') !== -1);
+  assert(html.indexOf('scheduledStart:_legIso') !== -1);
+  assert(html.indexOf('scheduled_start:_legIso') !== -1);
+  assert(html.indexOf('data-start=') !== -1);
+  assert(html.indexOf("id.split('-').slice(0,4)") === -1,
+    'must not look up gamesCache with cellId.split(-).slice(0,4)');
 });
 
 test('hyphenated MLB key becomes Owls snapshot key', function() {
@@ -99,6 +211,41 @@ test('totals pick yields a numeric line; moneyline does not', function() {
   assertEq(_extractSlipPointLine('Over 8', null), 8);
   assertEq(_extractSlipPointLine('Colorado Rockies', null), null);
   assertEq(_extractSlipPointLine('Colorado Rockies To Win', null), null);
+});
+
+test('unhyphenated Owls cell id strips market suffix', function() {
+  assertEq(_stripCellGameId('abc123def456-ml-aw'), 'abc123def456');
+  assertEq(_stripCellGameId('abc123def456-sp-hw'), 'abc123def456');
+  assertEq(_stripCellGameId('abc123def456-ov'), 'abc123def456');
+});
+
+test('ISO scheduledStart passes through', function() {
+  assertEq(_isoScheduledStart('2026-08-30T17:35:00Z'), '2026-08-30T17:35:00.000Z');
+});
+
+test('display time converts when game-key date is present', function() {
+  var iso = _isoScheduledStart('Sun 7:10 PM', 'baseball_mlb|Miami Marlins|Washington Nationals|2026-08-30', true);
+  assert(iso && !isNaN(new Date(iso).getTime()), 'must produce parseable ISO');
+  assert(iso.indexOf('2026-08-3') === 0,
+    'must keep the hinted calendar date, got ' + iso);
+});
+
+test('cache fills scheduledStart when slip field is empty', function() {
+  global.window = { gamesCache: {
+    abc123def456: {
+      id: 'abc123def456',
+      away: 'Miami Marlins',
+      home: 'Washington Nationals',
+      time: '2026-08-30T16:15:00Z',
+      scheduledStart: '2026-08-30T16:15:00Z',
+      canonicalGameKey: 'baseball_mlb|Miami Marlins|Washington Nationals|2026-08-30'
+    }
+  } };
+  var game = _lookupCachedGame('abc123def456-ml-aw', '', 'Miami Marlins', 'Washington Nationals');
+  assert(game && game.id === 'abc123def456', 'must find cache by prefix, not slice(0,4)');
+  var iso = _resolveScheduledStart({ scheduledStart: null, time: 'Sun 7:10 PM' }, game);
+  assertEq(iso, '2026-08-30T16:15:00.000Z');
+  delete global.window;
 });
 
 console.log('\nPlace-bet payload tests: ' + _pass + ' passed, ' + _fail + ' failed');

@@ -1876,6 +1876,7 @@ async function loadGames(sport, opts){
         const f=(odds>0?'+':'')+odds;
         const safeGame=(aw+' vs '+hw).replace(/"/g,'').replace(/'/g,'');
         const safeTime=g.time||'';
+        const isoStart=String(g.scheduledStart||g.time||g.commence_time||'').replace(/"/g,'');
         const safeMkt=(marketType||'Market').replace(/"/g,'').replace(/'/g,'');
         // Build clean pick label: always include full team name
         var pickLabel = teamPick || top || f;
@@ -1886,6 +1887,7 @@ async function loadGames(sport, opts){
           data-id="${id}"
           data-game="${safeGame}"
           data-time="${safeTime}"
+          data-start="${isoStart}"
           data-market="${safeMkt}"
           data-pick="${safePick}"
           data-odds="${odds}"
@@ -2781,6 +2783,7 @@ function renderMarkets(tab) {
           '<span class="mkt-pick-name">'+row.name+'</span>' +
           '<div class="mkt-odds-box odds-cell'+(isSelected?' selected':'')+'" id="c-'+row.id+'" '+
           'data-id="'+row.id+'" data-game="'+row.game.replace(/"/g,'')+'" data-time="'+(row.time||'')+'" '+
+          'data-start="'+((currentGame&&(currentGame.scheduledStart||currentGame.time||currentGame.commence_time))||row.time||'')+'" '+
           'data-market="'+row.market+'" data-pick="'+row.pick.replace(/"/g,'')+'" data-odds="'+row.odds+'" data-sport="'+(currentGame.sport||'')+'">' +
           '<span class="mkt-odds-num'+posClass+'">'+fmtO+'</span>' +
           '</div></div>';
@@ -3887,11 +3890,116 @@ function _extractSlipPointLine(pick, line) {
   var m = String(pick || '').match(/(?:^|\s)([+-]?\d+(?:\.\d+)?)(?:\s|$)/);
   return m ? Number(m[1]) : null;
 }
-function _isoScheduledStart(v) {
+function _isoScheduledStart(v, dateHint, allowDisplay) {
   if (v == null || v === '') return null;
-  var ms = new Date(v).getTime();
-  if (isNaN(ms)) return null;
-  return new Date(ms).toISOString();
+  var s = String(v).trim();
+  if (!s || /^tbd$/i.test(s)) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    var ms0 = new Date(s).getTime();
+    if (!isNaN(ms0)) return new Date(ms0).toISOString();
+  }
+  var ms = new Date(s).getTime();
+  if (!isNaN(ms) && /T\d{2}:/.test(s)) return new Date(ms).toISOString();
+  if (!allowDisplay) {
+    if (!isNaN(ms) && /^\d{4}/.test(s)) return new Date(ms).toISOString();
+    return null;
+  }
+  var dateStr = _isoDateFromValue(dateHint);
+  if (!dateStr && dateHint) {
+    var hintParts = String(dateHint).split('|');
+    var last = hintParts[hintParts.length - 1] || '';
+    if (/^\d{4}-\d{2}-\d{2}/.test(last)) dateStr = last.slice(0, 10);
+  }
+  var tm = s.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (tm && dateStr) {
+    var hour = parseInt(tm[1], 10);
+    var min = parseInt(tm[2], 10);
+    var ap = String(tm[3] || '').toUpperCase();
+    if (ap === 'PM' && hour !== 12) hour += 12;
+    if (ap === 'AM' && hour === 12) hour = 0;
+    var hh = (hour < 10 ? '0' : '') + hour;
+    var mm = (min < 10 ? '0' : '') + min;
+    var builtMs = new Date(dateStr + 'T' + hh + ':' + mm + ':00').getTime();
+    if (!isNaN(builtMs)) return new Date(builtMs).toISOString();
+  }
+  if (!isNaN(ms)) return new Date(ms).toISOString();
+  return null;
+}
+function _stripCellGameId(cellId) {
+  var s = String(cellId || '');
+  if (!s) return '';
+  s = s.replace(/-(sp-aw|sp-hw|ml-aw|ml-hw|ov|un)$/i, '');
+  s = s.replace(/-(tot|atot|pp)-.*$/i, '');
+  return s;
+}
+function _lookupCachedGame(cellId, canonicalGameKey, away, home) {
+  var cache = (typeof window !== 'undefined' && window.gamesCache) ? window.gamesCache : {};
+  var id = String(cellId || '');
+  if (id && cache[id]) return cache[id];
+  var stripped = _stripCellGameId(id);
+  if (stripped && cache[stripped]) return cache[stripped];
+  var keys = Object.keys(cache);
+  var best = null, bestLen = 0, i, k, g;
+  for (i = 0; i < keys.length; i++) {
+    k = keys[i];
+    if (k && id.indexOf(k) === 0 && k.length > bestLen) {
+      best = cache[k];
+      bestLen = k.length;
+    }
+  }
+  if (best) return best;
+  if (canonicalGameKey) {
+    for (i = 0; i < keys.length; i++) {
+      g = cache[keys[i]];
+      if (g && g.canonicalGameKey && g.canonicalGameKey === canonicalGameKey) return g;
+    }
+  }
+  var a = String(away || '').toLowerCase();
+  var h = String(home || '').toLowerCase();
+  if (a && h) {
+    for (i = 0; i < keys.length; i++) {
+      g = cache[keys[i]];
+      if (!g) continue;
+      var ga = String(g.away || g.away_team || '').toLowerCase();
+      var gh = String(g.home || g.home_team || '').toLowerCase();
+      if (ga === a && gh === h) return g;
+    }
+  }
+  return null;
+}
+function _resolveScheduledStart(obj, cachedGame) {
+  obj = obj || {};
+  var dateHint = obj.canonicalGameKey || obj.canonical_game_key
+    || (cachedGame && cachedGame.canonicalGameKey) || null;
+  var list = [
+    obj.scheduledStart, obj.scheduled_start, obj.commenceTime, obj.commence_time,
+    obj.time, obj.start,
+    cachedGame && cachedGame.scheduledStart,
+    cachedGame && cachedGame.scheduled_start,
+    cachedGame && cachedGame.time,
+    cachedGame && cachedGame.commence_time,
+    cachedGame && cachedGame.commenceTime
+  ];
+  var i, iso;
+  for (i = 0; i < list.length; i++) {
+    iso = _isoScheduledStart(list[i], dateHint || list[i], false);
+    if (iso) return iso;
+  }
+  for (i = 0; i < list.length; i++) {
+    iso = _isoScheduledStart(list[i], dateHint || list[i], true);
+    if (iso) return iso;
+  }
+  var cellId = obj.cellId || obj.gameId || obj.providerGameId;
+  if (cellId && typeof document !== 'undefined' && document.getElementById) {
+    var el = document.getElementById('c-' + cellId) || document.getElementById('cell-' + cellId);
+    if (el) {
+      var elStart = el.getAttribute('data-start') || (el.dataset && el.dataset.start) || el.getAttribute('data-time');
+      iso = _isoScheduledStart(elStart, dateHint, false)
+        || _isoScheduledStart(elStart, dateHint, true);
+      if (iso) return iso;
+    }
+  }
+  return null;
 }
 // Always emit Owls snapshot format: baseball_mlb|Miami Marlins|Washington Nationals|YYYY-MM-DD
 function _normalizeGameKeyToOwls(existingKey, away, home, sport, isoTime) {
@@ -3921,21 +4029,12 @@ function _makeSelection(b) {
     (homeLower && pck.includes(homeLower.split(' ').pop())) ? 'home' : 'away';
   var now = new Date();
   var placedDate = now.toISOString().slice(0,10);
-  // commenceTime: prefer ISO scheduledStart. Do NOT use the lobby display
-  // string ("Sun 7:10 PM") — Node cannot parse it, and it leaves the
-  // snapshot key date empty.
-  var commenceTime = b.scheduledStart || b.commenceTime || null;
-  if (!commenceTime || isNaN(new Date(commenceTime).getTime())) {
-    commenceTime = null;
-  }
-  // Provider game ID: strip the market suffix from cellId (e.g. 'abc123-sp-aw' -> 'abc123')
-  var oddsApiGameId = b.cellId ? b.cellId.split('-').slice(0,4).join('-') : null;
-  // Pull full game object from render-time cache for richer identity
-  var cachedGame = (window.gamesCache && oddsApiGameId) ? window.gamesCache[oddsApiGameId] : null;
-  // Prefer commenceTime from the cached game object if betSlip entry lacks it
-  if (!commenceTime && cachedGame) {
-    commenceTime = cachedGame.time || cachedGame.commence_time || null;
-  }
+  // scheduledStart: Owls ISO from slip/cache. Do not send lobby display
+  // strings ("Sun 7:10 PM") — convert them only when a YYYY-MM-DD hint exists.
+  var cachedGame = _lookupCachedGame(b.cellId, b.canonicalGameKey, awayTeam, homeTeam);
+  var commenceTime = _resolveScheduledStart(b, cachedGame);
+  var oddsApiGameId = (cachedGame && (cachedGame.id || cachedGame.providerGameId))
+    || _stripCellGameId(b.cellId) || null;
   if (!awayTeam && cachedGame)  awayTeam  = cachedGame.away || cachedGame.away_team  || '';
   if (!homeTeam && cachedGame)  homeTeam  = cachedGame.home || cachedGame.home_team  || '';
   // canonicalGameKey: must match Owls normalizer format stored in odds_snapshots.
@@ -3977,6 +4076,7 @@ function _makeSelection(b) {
     side:              side,
     // ── LEGACY COMPAT ──
     gameId:            oddsApiGameId,
+    cellId:            b.cellId || null,
     matchup:           b.game || '',
     placedDate:        placedDate
   };
@@ -4121,7 +4221,7 @@ async function confirmBet() {
   var _pgLegs = (snap.legs || []).map(function(b) {
     return { cellId:b.cellId, pick:b.pick, market:b.market,
       canonicalGameKey:b.canonicalGameKey||null,
-      scheduledStart:b.scheduledStart||b.commenceTime||b.time||null,
+      scheduledStart:_resolveScheduledStart(b, _lookupCachedGame(b.cellId, b.canonicalGameKey, b.awayTeam, b.homeTeam)),
       gameStatus:b.gameStatus||'' };
   });
   var _pg = _checkTicketPlacementGate(_pgLegs, Date.now());
@@ -4272,17 +4372,25 @@ async function confirmBet() {
       // undefined for Single/Parlay/Teaser so it is omitted from the JSON body.
       rrStakes: snap.type === 'rr' ? snap.rrStakes : undefined,
       legs:(_t0.selections||snap.legs||[]).map(function(leg){
+        var _legCached = _lookupCachedGame(
+          leg.cellId || leg.providerGameId || leg.gameId,
+          leg.canonicalGameKey || leg.canonical_game_key,
+          leg.awayTeam, leg.homeTeam
+        );
+        var _legIso = _resolveScheduledStart(leg, _legCached);
         return { legId:leg.legId, pick:_stripMoneylinePickSuffix(leg.pick), market:_normalizeSlipMarket(leg.market), odds:leg.odds,
           line:_extractSlipPointLine(leg.pick, leg.line), side:leg.side||null,
           canonicalGameKey:_normalizeGameKeyToOwls(
             leg.canonicalGameKey||leg.canonical_game_key||'',
             leg.awayTeam||'', leg.homeTeam||'',
             leg.sport||_currentSport||'mlb',
-            leg.scheduledStart||leg.commenceTime||null
+            _legIso
           ),
           sport:leg.sport||_currentSport||'mlb',
           homeTeam:leg.homeTeam||'', awayTeam:leg.awayTeam||'',
-          scheduledStart:_isoScheduledStart(leg.scheduledStart||leg.commenceTime)||leg.scheduledStart||leg.commenceTime||null,
+          scheduledStart:_legIso,
+          scheduled_start:_legIso,
+          commenceTime:_legIso,
           providerGameId:leg.providerGameId||null, providerName:leg.providerName||'odds-api' };
       })
     };
@@ -9019,22 +9127,22 @@ document.addEventListener('click', function(e) {
       return;
     }
 
-    // Build canonicalGameKey for this cell
-    // IMPORTANT: `time` from data-time is a display string ("Sun 7:10 PM") not ISO.
-    // Use the raw ISO commence_time from gamesCache when available.
+    // Build canonicalGameKey for this cell.
+    // Prefer Owls ISO from gamesCache / data-start. data-time may be ISO or a
+    // lobby display string ("Sun 7:10 PM") — convert only with a date hint.
     var _teams = game.split(' vs ');
     var _away = (_teams[0]||'').trim(), _home = (_teams[1]||'').trim();
-    var _oddsGameId = id ? id.split('-').slice(0,4).join('-') : null;
-    var _cachedG = (window.gamesCache && _oddsGameId) ? window.gamesCache[_oddsGameId] : null;
-    var _rawTime = (_cachedG && (_cachedG.time || _cachedG.commence_time)) || null;
-    // Prefer the game's Owls canonicalGameKey from the odds payload. Rebuild
-    // as baseball_mlb|Away|Home|YYYY-MM-DD — never mlb| or hyphenated slugs.
+    var _cachedG = _lookupCachedGame(id, '', _away, _home);
+    var _dataStart = cell.getAttribute('data-start') || (cell.dataset && cell.dataset.start) || '';
+    var _isoTime = _resolveScheduledStart({
+      scheduledStart: _dataStart,
+      time: time,
+      canonicalGameKey: (_cachedG && _cachedG.canonicalGameKey) || ''
+    }, _cachedG);
     var _cKey = _normalizeGameKeyToOwls(
       (_cachedG && _cachedG.canonicalGameKey) || '',
-      _away, _home, sp || _currentSport || 'mlb', _rawTime
+      _away, _home, sp || _currentSport || 'mlb', _isoTime
     );
-    // Also grab raw ISO time for placement gate / ticket leg
-    var _isoTime = _rawTime || null;
 
     // Placement gate: block started/final games (use ISO time, not display string)
     var _pgResult = _checkPlacementGate({ cellId: id, canonicalGameKey: _cKey, scheduledStart: _isoTime, gameStatus: gameStatus, market: market, pick: pick }, Date.now());
@@ -9286,24 +9394,36 @@ function bsToggle(cellId, game, time, market, pick, odds) {
   var sel = bsNormalize(cellId, game, time, market, pick, odds);
   if (!sel.odds) { console.warn('bsToggle: invalid odds', odds); return; }
 
-  // Attach canonicalGameKey from gamesCache so conflict engine can use it
-  var oddsApiGameId = cellId ? cellId.split('-').slice(0,4).join('-') : null;
-  var cachedGame = (window.gamesCache && oddsApiGameId) ? window.gamesCache[oddsApiGameId] : null;
+  var teams2 = (game||'').split(' vs ');
+  var awayT = (teams2[0]||'').trim(), homeT = (teams2[1]||'').trim();
+  var cachedGame = _lookupCachedGame(cellId, '', awayT, homeT);
+  var cellEl0 = document.getElementById('c-' + cellId) || document.getElementById('cell-' + cellId);
+  var dataStart = cellEl0
+    ? (cellEl0.getAttribute('data-start') || (cellEl0.dataset && cellEl0.dataset.start) || '')
+    : '';
+  sel.scheduledStart = _resolveScheduledStart({
+    scheduledStart: dataStart,
+    time: time,
+    canonicalGameKey: (cachedGame && cachedGame.canonicalGameKey) || ''
+  }, cachedGame);
+  sel.line = _extractSlipPointLine(sel.pick, sel.line);
   if (cachedGame) {
-    var teams2 = (game||'').split(' vs ');
-    var awayT = (teams2[0]||'').trim(), homeT = (teams2[1]||'').trim();
-    var ctRaw = cachedGame.time || cachedGame.commence_time || _isoScheduledStart(time) || null;
     sel.canonicalGameKey = _normalizeGameKeyToOwls(
       cachedGame.canonicalGameKey || '',
       awayT || cachedGame.away || '',
       homeT || cachedGame.home || '',
       sel.sport || _currentSport || cachedGame.sport || 'mlb',
-      ctRaw
+      sel.scheduledStart
     );
     sel.homeTeam = homeT || cachedGame.home || '';
     sel.awayTeam = awayT || cachedGame.away || '';
-    sel.scheduledStart = _isoScheduledStart(ctRaw) || (cachedGame.time || cachedGame.commence_time || null);
-    sel.line = _extractSlipPointLine(sel.pick, sel.line);
+  } else if (awayT && homeT) {
+    sel.canonicalGameKey = _normalizeGameKeyToOwls(
+      sel.canonicalGameKey || '', awayT, homeT,
+      sel.sport || _currentSport || 'mlb', sel.scheduledStart
+    );
+    sel.homeTeam = homeT;
+    sel.awayTeam = awayT;
   }
 
   console.log('selected bet:', sel);
