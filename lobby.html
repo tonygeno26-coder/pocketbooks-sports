@@ -317,12 +317,15 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
           if (_ac && _isHost(_ac.role)) _hostRec = true;
         } catch(_e){}
         var _stay = _routeQs.get('stay') === '1' || _routeQs.get('from') === 'host';
-        if (!_isHost(_role) && !_hostRec) {
-          location.replace('survivor.html');
-          return;
-        }
+        // Hosts (JWT host/admin OR stored pb-host / host-role club) stay on
+        // sportsbook. JWT role `user` is the default for real hosts too — do
+        // NOT treat it as a player-only signal or they bounce to Survivor.
         if ((_isHost(_role) || _hostRec) && !_stay) {
           location.replace('index.html?from=lobby');
+          return;
+        }
+        if (!_isHost(_role) && !_hostRec && _nr(_role) === 'player') {
+          location.replace('survivor.html');
           return;
         }
       }
@@ -1004,16 +1007,19 @@ async function submitAuth(e) {
       localStorage.setItem('pb-player', JSON.stringify(_rec));
       if (typeof isAppHostRole === 'function' ? isAppHostRole(_loginRole) : (_loginRole === 'host' || _loginRole === 'owner' || _loginRole === 'admin' || _loginRole === 'master_admin' || _loginRole === 'creator')) {
         localStorage.setItem('pb-host', JSON.stringify(_rec));
-      } else {
-        try { localStorage.removeItem('pb-host'); } catch(_he){}
       }
+      // Do not remove pb-host when JWT says `user` — that is the default
+      // users.role for real hosts. Club / stored-host signals decide.
     } catch(_e){}
 
-    // Players go to Survivor; hosts/admins go to the dashboard. Never leave a
-    // regular user sitting on the sportsbook lobby after login.
+    // JWT host/admin → dashboard. Stored host / hosted clubs → dashboard.
+    // Confirmed player-only (after club hydration) → Survivor.
+    if (typeof hydrateHostFromClubs === 'function') {
+      try { await hydrateHostFromClubs(); } catch(_he){}
+    }
     if (typeof routeAuthedUser === 'function') {
       routeAuthedUser(_loginRole);
-    } else if (['host','admin','master_admin','owner','creator','full_admin'].indexOf(String(_loginRole||'').toLowerCase()) !== -1) {
+    } else if (typeof isHostSession === 'function' ? isHostSession() : (['host','admin','master_admin','owner','creator','full_admin'].indexOf(String(_loginRole||'').toLowerCase()) !== -1)) {
       window.location.href = 'index.html?from=lobby';
     } else {
       window.location.href = 'survivor.html';
@@ -1142,9 +1148,11 @@ function checkAuthGate() {
     var _stay = fromParam === 'host' || new URLSearchParams(window.location.search).get('stay') === '1';
     if (typeof isHostSession === 'function' && isHostSession()) {
       if (!_stay) window.location.replace('index.html?from=lobby');
-    } else {
+    } else if (typeof isPlayerOnlyRole === 'function' && isPlayerOnlyRole(typeof readSessionRole === 'function' ? readSessionRole() : '') && !(typeof hasHostSessionSignals === 'function' && hasHostSessionSignals())) {
       window.location.replace('survivor.html');
     }
+    // JWT `user` with no host signals yet: stay and let loadMyClubs +
+    // _maybeAutoRoute decide after club hydration.
   }
 }
 
@@ -1341,17 +1349,21 @@ async function loadUser() {
         username: u.name || u.username || prev.username,
         name:     u.name || prev.name,
         email:    u.email || prev.email,
-        role:     u.role || prev.role || 'player',
+        role:     (typeof isAppHostRole === 'function' && isAppHostRole(prev.role)) ? prev.role : (u.role || prev.role || 'player'),
       })));
     } catch(_e){}
     await loadMyClubs();
+    try {
+      if (typeof hasHostSessionSignals === 'function' && hasHostSessionSignals() && typeof persistHostRecord === 'function') persistHostRecord();
+    } catch(_e){}
     _maybeAutoRoute();
   } catch(e) {}
 }
 
-// Auto-route after sign-in / returning session:
-//   host/admin/master_admin/owner/creator → host dashboard
-//   player/user (and any other non-host role) → Survivor Pool
+// Auto-route after sign-in / returning session (runs after club hydration):
+//   host/admin/master_admin/owner/creator OR stored host / host-role club → dashboard
+//   confirmed player-only (no host signals) → Survivor Pool
+//   JWT `user` is NOT player-only — hosts use that default role.
 // Hosts may stay on the lobby with ?from=host or ?stay=1.
 function _maybeAutoRoute() {
   var params = new URLSearchParams(window.location.search);
@@ -1391,6 +1403,30 @@ function isCohostRole(r) {
 }
 function isHostRole(r) { return isOwnerRole(r) || isCohostRole(r); }
 function isAppHostRole(r) { return isHostRole(r); }
+function isPlayerOnlyRole(r) { return normRole(r) === 'player'; }
+function persistHostRecord(rec) {
+  if (!rec) {
+    try { rec = JSON.parse(localStorage.getItem('pb-player')||'null')||{}; } catch(_e){ rec = {}; }
+  }
+  var role = rec.role;
+  if (!isAppHostRole(role)) role = 'host';
+  localStorage.setItem('pb-host', JSON.stringify({
+    id: rec.id || rec.hostId || null,
+    hostId: rec.hostId || rec.id || null,
+    username: rec.username || rec.name || '',
+    name: rec.name || rec.username || '',
+    email: rec.email || '',
+    role: role
+  }));
+}
+async function hydrateHostFromClubs() {
+  try { if (typeof loadMyClubs === 'function') await loadMyClubs(); } catch(_e){}
+  if (hasHostSessionSignals()) {
+    persistHostRecord();
+    return true;
+  }
+  return isHostSession();
+}
 function readSessionRole() {
   try {
     var h = JSON.parse(localStorage.getItem('pb-host')||'null');
@@ -1434,7 +1470,8 @@ function isHostSession() {
   return isAppHostRole(readSessionRole()) || hasHostSessionSignals();
 }
 function routeAuthedUser(role) {
-  if (isAppHostRole(role)) {
+  if (isAppHostRole(role) || isHostSession()) {
+    if (!isAppHostRole(role) && hasHostSessionSignals()) persistHostRecord();
     window.location.href = 'index.html?from=lobby';
   } else {
     window.location.href = 'survivor.html';

@@ -46,7 +46,9 @@
       var ac = JSON.parse(localStorage.getItem('pb-active-club')||localStorage.getItem('pb-club')||'null');
       if (ac && _isHost(ac.role)) hostRec = true;
     } catch(_e){}
-    if (!_isHost(role) && !hostRec) {
+    // JWT `user` is the default users.role for real hosts. Only bounce
+    // confirmed player-only sessions with no stored host / host-role club.
+    if (!_isHost(role) && !hostRec && _nr(role) === 'player') {
       location.replace('survivor.html');
     }
   } catch(_e){}

@@ -1270,6 +1270,10 @@ function _survivorHostSession() {
     var clubs = JSON.parse(localStorage.getItem('pb-clubs') || '[]');
     if (Array.isArray(clubs) && clubs.some(function (c) { return _isSurvivorHostRole(c.role); })) return true;
   } catch (_e) {}
+  try {
+    var ac = JSON.parse(localStorage.getItem('pb-active-club') || localStorage.getItem('pb-club') || 'null');
+    if (ac && _isSurvivorHostRole(ac.role)) return true;
+  } catch (_e) {}
   return false;
 }
 function _profileInitials() {
@@ -1289,6 +1293,23 @@ function setupSurvivorNav() {
   }
   var dash = document.getElementById('nav-dashboard');
   if (dash && _survivorHostSession()) dash.style.display = '';
+  // Durable escape hatch: JWT role is often `user` even for hosts. If we
+  // cannot confirm locally, probe hosted clubs and reveal Dashboard.
+  if (dash && dash.style.display === 'none' && TOKEN) {
+    api('GET', '/api/clubs').then(function (rows) {
+      if (!Array.isArray(rows) || !rows.length) return;
+      try {
+        var p = _sessionPlayer();
+        localStorage.setItem('pb-host', JSON.stringify({
+          id: p.id || null,
+          username: p.username || p.name || '',
+          email: p.email || '',
+          role: 'host'
+        }));
+      } catch (_e) {}
+      dash.style.display = '';
+    }).catch(function () {});
+  }
 }
 function openProfileModal() {
   var p = _sessionPlayer();

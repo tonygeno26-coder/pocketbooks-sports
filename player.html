@@ -496,7 +496,18 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
     var role = '';
     try { var p = JSON.parse(localStorage.getItem('pb-player')||'null'); if (p && p.role) role = p.role; } catch(_e){}
     try { var h = JSON.parse(localStorage.getItem('pb-host')||'null'); if (h && _isHost(h.role)) role = h.role; } catch(_e){}
-    if (!_isHost(role)) {
+    var hostRec = false;
+    try { var hr = JSON.parse(localStorage.getItem('pb-host')||'null'); if (hr && (hr.id || hr.username || hr.hostId || hr.role)) hostRec = true; } catch(_e){}
+    try {
+      var clubs = JSON.parse(localStorage.getItem('pb-clubs')||'[]');
+      if (Array.isArray(clubs) && clubs.some(function(c){ return _isHost(c.role); })) hostRec = true;
+    } catch(_e){}
+    try {
+      var ac = JSON.parse(localStorage.getItem('pb-active-club')||localStorage.getItem('pb-club')||'null');
+      if (ac && _isHost(ac.role)) hostRec = true;
+    } catch(_e){}
+    // JWT `user` is the default for real hosts — do not bounce them.
+    if (!_isHost(role) && !hostRec && String(role||'').toLowerCase() === 'player') {
       location.replace('survivor.html');
     }
   } catch(_e){}
