@@ -1903,14 +1903,14 @@ async function loadGames(sport, opts){
           <div class="mc-team">${teamAvatar(aw)}<div><div class="mc-city">${awC}</div><div class="mc-name">${awN}</div></div></div>
           ${cell(g.id+'-sp-aw',awSp?(awSp.line>0?'+':'')+awSp.line:null,awSp?awSp.odds:null,'Run Line',aw+' '+(awSp?(awSp.line>0?'+':'')+awSp.line:''),aw)}
           ${cell(g.id+'-ov',ov?'O '+ov.line:null,ov?ov.odds:null,'Total',ov?'Over '+ov.line:null)}
-          ${cell(g.id+'-ml-aw',null,awML?awML.odds:null,'Moneyline',aw+' To Win')}
+          ${cell(g.id+'-ml-aw',null,awML?awML.odds:null,'Moneyline',aw)}
         </div>
         <div class="mc-divider"></div>
         <div class="mc-team-row">
           <div class="mc-team">${teamAvatar(hw)}<div><div class="mc-city">${hwC}</div><div class="mc-name">${hwN}</div></div></div>
           ${cell(g.id+'-sp-hw',hwSp?(hwSp.line>0?'+':'')+hwSp.line:null,hwSp?hwSp.odds:null,'Run Line',hw+' '+(hwSp?(hwSp.line>0?'+':'')+hwSp.line:''),hw)}
           ${cell(g.id+'-un',un?'U '+un.line:null,un?un.odds:null,'Total',un?'Under '+un.line:null)}
-          ${cell(g.id+'-ml-hw',null,hwML?hwML.odds:null,'Moneyline',hw+' To Win')}
+          ${cell(g.id+'-ml-hw',null,hwML?hwML.odds:null,'Moneyline',hw)}
         </div>
         <div class="mc-footer"><span class="mc-time">${time}</span></div>
       </div>`;
@@ -2725,7 +2725,7 @@ function renderMarkets(tab) {
     // Moneyline
     if (g.moneyline && g.moneyline.length) {
       groups.push({ title: 'Moneyline', rows: g.moneyline.map(function(m){
-        return { name: m.team, id: g.id+'-ml-'+m.team.split(' ').pop(), odds: m.odds, market: 'To Win', pick: m.team+' ML', game: g.away+' vs '+g.home, time: g.time };
+        return { name: m.team, id: g.id+'-ml-'+m.team.split(' ').pop(), odds: m.odds, market: 'Moneyline', pick: m.team, game: g.away+' vs '+g.home, time: g.time };
       })});
     }
     // Spreads
@@ -3842,12 +3842,28 @@ function evaluateCancelEligibility(t, now) {
 window.evaluateCancelEligibility = evaluateCancelEligibility;
 var CANCEL_DISABLED_LABEL = 'Cancel unavailable — game started';
 
+// Lobby cells used to label moneylines as "Miami Marlins To Win". Snapshot
+// lookup keys are the team name only. Strip the suffix everywhere a pick
+// enters the slip or the place-bet payload.
+function _stripMoneylinePickSuffix(pick) {
+  return String(pick || '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+to\s+win\s*$/i, '')
+    .replace(/\s+ml\s*$/i, '')
+    .trim();
+}
+function _normalizeSlipMarket(market) {
+  var m = String(market || '').trim();
+  if (/^to\s+win$/i.test(m) || /^win$/i.test(m)) return 'Moneyline';
+  return m || 'Market';
+}
+
 function _makeSelection(b) {
   // Parse 'Away Team vs Home Team' into structured pieces.
   var teams2 = (b.game||'').split(' vs ');
   var awayTeam = (teams2[0] || '').trim();
   var homeTeam = (teams2[1] || '').trim();
-  var pck = (b.pick||'').toLowerCase();
+  var pck = _stripMoneylinePickSuffix(b.pick||'').toLowerCase();
   var homeLower = homeTeam.toLowerCase();
   var side = pck.includes('over') ? 'over' : pck.includes('under') ? 'under' :
     (homeLower && pck.includes(homeLower.split(' ').pop())) ? 'home' : 'away';
@@ -3907,8 +3923,8 @@ function _makeSelection(b) {
     homeTeam:          homeTeam,
     awayTeam:          awayTeam,
     // ── MARKET IDENTITY ──
-    market:            b.market || '',
-    pick:              b.pick   || '',
+    market:            _normalizeSlipMarket(b.market),
+    pick:              _stripMoneylinePickSuffix(b.pick || ''),
     odds:              b.odds,
     side:              side,
     // ── LEGACY COMPAT ──
@@ -4208,7 +4224,7 @@ async function confirmBet() {
       // undefined for Single/Parlay/Teaser so it is omitted from the JSON body.
       rrStakes: snap.type === 'rr' ? snap.rrStakes : undefined,
       legs:(_t0.selections||snap.legs||[]).map(function(leg){
-        return { legId:leg.legId, pick:leg.pick, market:leg.market, odds:leg.odds,
+        return { legId:leg.legId, pick:_stripMoneylinePickSuffix(leg.pick), market:_normalizeSlipMarket(leg.market), odds:leg.odds,
           line:leg.line||null, side:leg.side||null,
           canonicalGameKey:leg.canonicalGameKey||leg.canonical_game_key||'',
           sport:leg.sport||_currentSport||'mlb',
@@ -8876,8 +8892,8 @@ document.addEventListener('click', function(e) {
   var id      = cell.dataset.id || '';
   var game    = cell.dataset.game || 'Unknown Game';
   var time    = cell.dataset.time || '';
-  var market  = cell.dataset.market || 'Market';
-  var pick    = cell.dataset.pick || '';
+  var market  = _normalizeSlipMarket(cell.dataset.market || 'Market');
+  var pick    = _stripMoneylinePickSuffix(cell.dataset.pick || '');
   var odds    = parseInt(cell.dataset.odds) || 0;
   var sp      = cell.dataset.sport || '';
   var gameStatus = cell.dataset.status || '';
@@ -9207,10 +9223,10 @@ function bsNormalize(cellId, game, time, market, pick, odds) {
     cellId: cellId,
     game: game || 'Unknown Game',
     time: time || '',
-    market: market || 'Market',
-    pick: pick || 'Selection',
+    market: _normalizeSlipMarket(market),
+    pick: _stripMoneylinePickSuffix(pick) || 'Selection',
     odds: oddsNum,
-    gameKey: (game||'') + '|' + (market||'')
+    gameKey: (game||'') + '|' + _normalizeSlipMarket(market)
   };
 }
 
