@@ -34,7 +34,9 @@ a.live-link{margin-left:auto;padding:7px 16px;background:rgba(0,194,255,0.12);bo
 .go-btn:hover{background:rgba(0,194,255,0.2)}
 
 /* ── Screens grid (compact) ────────────────────────────────────────────────── */
-.screens{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-bottom:14px}
+.screen-section{margin-bottom:16px}
+.sec-title{font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.6px;font-weight:800;margin:0 0 8px 2px}
+.screens{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-bottom:0}
 .screen-link{display:flex;flex-direction:column;background:#111;border:1px solid #222;border-radius:10px;padding:10px 12px;cursor:pointer;transition:border-color 0.12s;text-align:left;font-family:inherit;color:inherit;text-decoration:none}
 .screen-link:hover{border-color:#00c2ff}
 .screen-link.active{border-color:#00c2ff;background:rgba(0,194,255,0.05)}
@@ -83,8 +85,8 @@ a.live-link{margin-left:auto;padding:7px 16px;background:rgba(0,194,255,0.12);bo
   <div class="mode-badge" id="mode-badge">DESKTOP</div>
 </div>
 
-<!-- Screen quick-pick (loads into preview iframe instead of new window) -->
-<div class="screens" id="screens"></div>
+<!-- Screen quick-pick (loads into preview iframe instead of new window). Public — no auth. -->
+<div id="screens"></div>
 
 <!-- Stage / iframe -->
 <div class="stage">
@@ -101,26 +103,47 @@ var VP = {
   tablet:  { w: 820,  h: 900, label: 'TABLET',  cls: 'tablet'  },
   mobile:  { w: 430,  h: 900, label: 'MOBILE',  cls: 'mobile'  },
 };
-var SCREENS = [
-  { url:'lobby.html?screen=signin',              name:'Welcome / Sign In', icon:'🔐', role:'auth'   },
-  { url:'lobby.html?screen=signup',              name:'Sign Up',           icon:'✍️', role:'auth'   },
-  { url:'lobby.html?screen=home&preview=1',      name:'Home Lobby',        icon:'🏠', role:'lobby'  },
-  { url:'lobby.html?screen=join&preview=1',      name:'Join Club',         icon:'🔍', role:'lobby'  },
-  { url:'lobby.html?screen=create&preview=1',    name:'Create Club',       icon:'🏆', role:'lobby'  },
-  { url:'lobby.html?screen=myclubs&preview=1',   name:'My Clubs',          icon:'🃏', role:'lobby'  },
-  { url:'lobby.html?screen=requests&preview=1',  name:'Requests',          icon:'📨', role:'lobby'  },
-  { url:'lobby.html?screen=messages&preview=1',  name:'Messages',          icon:'💬', role:'lobby'  },
-  { url:'lobby.html?screen=settings&preview=1',  name:'Settings',          icon:'⚙️', role:'lobby'  },
-  { url:'lobby.html?screen=pending&preview=1',   name:'Pending Approval',  icon:'⏳', role:'lobby'  },
-  { url:'survivor.html',                         name:'Survivor Pool',     icon:'🛡️', role:'lobby'  },
-  { url:'player.html',                name:'Player Dashboard',  icon:'📈', role:'player' },
-  { url:'index.html',                 name:'Host Dashboard',    icon:'👑', role:'host'   },
-  { url:'admin.html',                 name:'Admin Panel',       icon:'⚡', role:'admin'  },
-  { url:'lobby.html',                 name:'Live Lobby',        icon:'🚀', role:'live'   },
-  { url:'player.html?preview=1&testUser=1', name:'Test P1',    icon:'👤', role:'test'   },
-  { url:'player.html?preview=1&testUser=2', name:'Test RR',    icon:'👤', role:'test'   },
-  { url:'player.html?preview=1&testUser=3', name:'Test Edge',  icon:'👤', role:'test'   },
+var SECTIONS = [
+  {
+    title: 'Auth',
+    screens: [
+      { url:'lobby.html?screen=signin',              name:'Welcome / Sign In', icon:'🔐', role:'auth'   },
+      { url:'lobby.html?screen=signup',              name:'Sign Up',           icon:'✍️', role:'auth'   },
+    ]
+  },
+  {
+    title: 'Lobby',
+    screens: [
+      { url:'lobby.html?screen=join&preview=1',      name:'Join Club',         icon:'🔍', role:'lobby'  },
+      { url:'lobby.html?screen=create&preview=1',    name:'Create Club',       icon:'🏆', role:'lobby'  },
+      { url:'lobby.html?screen=myclubs&preview=1',   name:'My Clubs',          icon:'🃏', role:'lobby'  },
+      { url:'lobby.html?screen=requests&preview=1',  name:'Requests',          icon:'📨', role:'lobby'  },
+      { url:'lobby.html?screen=messages&preview=1',  name:'Messages',          icon:'💬', role:'lobby'  },
+      { url:'lobby.html?screen=settings&preview=1',  name:'Settings',          icon:'⚙️', role:'lobby'  },
+      { url:'lobby.html?screen=pending&preview=1',   name:'Pending Approval',  icon:'⏳', role:'lobby'  },
+    ]
+  },
+  {
+    title: 'Sportsbook',
+    screens: [
+      { url:'index.html',                            name:'Host Dashboard',    icon:'👑', role:'host'   },
+      { url:'player.html?preview=1',                 name:'Player Dashboard',  icon:'📈', role:'player' },
+      { url:'lobby.html?screen=home&preview=1',      name:'Lobby',             icon:'🏠', role:'lobby'  },
+      { url:'lobby.html',                            name:'Live Lobby',        icon:'🚀', role:'live'   },
+      { url:'admin.html',                            name:'Admin Panel',       icon:'⚡', role:'admin'  },
+      { url:'survivor.html',                         name:'Survivor Pool',     icon:'🛡️', role:'lobby'  },
+    ]
+  },
+  {
+    title: 'Test Players',
+    screens: [
+      { url:'player.html?preview=1&testUser=1',      name:'Test P1',           icon:'👤', role:'test'   },
+      { url:'player.html?preview=1&testUser=2',      name:'Test RR',           icon:'👤', role:'test'   },
+      { url:'player.html?preview=1&testUser=3',      name:'Test Edge',         icon:'👤', role:'test'   },
+    ]
+  },
 ];
+var SCREENS = SECTIONS.reduce(function(acc, sec){ return acc.concat(sec.screens); }, []);
 
 var currentVp = 'desktop';
 var currentUrl = 'lobby.html?screen=signin';
@@ -160,20 +183,32 @@ function loadUrl(url) {
   });
 }
 
-// Build screens grid
+// Build screens grid — public, no auth. Never redirect this page.
 (function(){
-  var grid = document.getElementById('screens');
-  SCREENS.forEach(function(s){
-    var btn = document.createElement('button');
-    btn.className = 'screen-link';
-    btn.dataset.url = s.url;
-    btn.innerHTML =
-      '<div class="sl-icon">' + s.icon + '</div>' +
-      '<div class="sl-name">' + s.name + '</div>' +
-      '<div class="sl-url">' + s.url + '</div>' +
-      '<span class="sl-role role-' + s.role + '">' + s.role + '</span>';
-    btn.addEventListener('click', function(){ loadUrl(s.url); });
-    grid.appendChild(btn);
+  var root = document.getElementById('screens');
+  SECTIONS.forEach(function(sec){
+    var wrap = document.createElement('div');
+    wrap.className = 'screen-section';
+    var hdr = document.createElement('div');
+    hdr.className = 'sec-title';
+    hdr.textContent = sec.title;
+    wrap.appendChild(hdr);
+    var grid = document.createElement('div');
+    grid.className = 'screens';
+    sec.screens.forEach(function(s){
+      var btn = document.createElement('button');
+      btn.className = 'screen-link';
+      btn.dataset.url = s.url;
+      btn.innerHTML =
+        '<div class="sl-icon">' + s.icon + '</div>' +
+        '<div class="sl-name">' + s.name + '</div>' +
+        '<div class="sl-url">' + s.url + '</div>' +
+        '<span class="sl-role role-' + s.role + '">' + s.role + '</span>';
+      btn.addEventListener('click', function(){ loadUrl(s.url); });
+      grid.appendChild(btn);
+    });
+    wrap.appendChild(grid);
+    root.appendChild(wrap);
   });
 })();
 
