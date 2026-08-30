@@ -262,7 +262,6 @@ body.theme-light [style*="color:#00c2ff"]{color:#0064c8!important}
 body.theme-light [style*="color:#ff3d57"],body.theme-light [style*="color:#ff6b6b"],body.theme-light [style*="color:#ff4444"]{color:#cc0000!important}
 body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
 
-
 /* ═══ MOBILE (≤480px / iPhone 375) — layout only, no redesign ═══ */
 @media (max-width:480px){
   html,body{overflow-x:hidden;max-width:100%}
@@ -286,7 +285,6 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
   .club-row{min-width:0}
   .cr-name{overflow:hidden;text-overflow:ellipsis}
 }
-
 
 </style>
 <script>
@@ -365,7 +363,7 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
   if (forceHome && hasState) {
     // Inject style BEFORE body renders — overrides .auth-screen{display:flex}
     document.write('<style id="pb-hide-auth">#auth-screen{display:none!important;visibility:hidden!important;pointer-events:none!important;position:absolute!important;z-index:-9999!important}</style>');
-    console.log('[PRE-RENDER] auth-screen suppressed before DOM builds');
+    
   }
   if (location.search.includes('preview=1')) {
     document.write('<style>#auth-screen{display:none!important;visibility:hidden!important;pointer-events:none!important;position:absolute!important;z-index:-9999!important}</style>');
@@ -534,7 +532,7 @@ try {
     <div class="bn-ico"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
     <div class="bn-lbl">Messages</div>
   </div>
-  <div class="bn" id="player-lobby-profile-btn" onclick="console.log('[PROFILE OPEN] player lobby clicked'); document.querySelectorAll('.bn').forEach(function(n){n.classList.remove('active');}); this.classList.add('active'); if (typeof showPlayerSettings==='function') { showPlayerSettings(); } else { console.error('[PROFILE OPEN] showPlayerSettings is not defined'); }">
+  <div class="bn" id="player-lobby-profile-btn" onclick="document.querySelectorAll('.bn').forEach(function(n){n.classList.remove('active');}); this.classList.add('active'); if (typeof showPlayerSettings==='function') { showPlayerSettings(); } else { console.error('[PROFILE OPEN] showPlayerSettings is not defined'); }">
     <div class="bn-ico"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
     <div class="bn-lbl">Profile</div>
   </div>
@@ -1077,9 +1075,7 @@ function returnToLobby() {
   var _club      = JSON.parse(localStorage.getItem('pb-active-club') || localStorage.getItem('pb-club') || 'null');
   var _players   = JSON.parse(localStorage.getItem('pb-club-players') || '[]');
   var _hasTickets = (JSON.parse(localStorage.getItem('pb-tickets') || '[]')).length > 0;
-  console.log('Return to Lobby clicked', {
-    player: _player, club: _club, clubPlayers: _players.length, hasTickets: _hasTickets
-  });
+  
   if (!_player && !_players.length && !_hasTickets && !TOKEN) {
     // Truly no session — show sign-in
     document.getElementById('auth-screen').style.display = 'flex';
@@ -1165,7 +1161,7 @@ function checkAuthGate() {
     }
     var _cntEl = document.getElementById('club-count-lbl');
     if (_cntEl) _cntEl.textContent = _storedClubs.length + ' club' + (_storedClubs.length !== 1 ? 's' : '');
-    console.log('[lobby] auth bypassed: from=' + fromParam + ' | clubs:', _storedClubs.length);
+    
     return;
   }
   // Accept JWT OR any local session signal
@@ -1175,12 +1171,12 @@ function checkAuthGate() {
     false
   );
   var isAuthed = hasJWT || hasSession;
-  console.log('[lobby] checkAuthGate', { hasJWT: hasJWT, hasSession: hasSession, isAuthed: isAuthed });
+  
   var _authEl = document.getElementById('auth-screen');
-  if (!isAuthed) { console.trace('[AUTH SCREEN SHOWN HERE] checkAuthGate, isAuthed=false'); }
+  if (!isAuthed) {  }
   if (_authEl) _authEl.style.display = isAuthed ? 'none' : 'flex';
   if (isAuthed) {
-    console.log('[AUTH] checkAuthGate: hiding auth, showing lobby');
+    
     if (typeof hideSportsbookChromeForPlayers === 'function') hideSportsbookChromeForPlayers();
     var _stay = fromParam === 'host' || new URLSearchParams(window.location.search).get('stay') === '1';
     if (typeof isHostSession === 'function' && isHostSession()) {
@@ -1615,7 +1611,6 @@ async function loadMyClubs() {
 function renderClubsList() {
   const el = document.getElementById('clubs-list-el');
   if (!el) return;
-  if (typeof showToast === 'function') showToast('LOBBY CLUBS RENDERED: '+userClubs.length);
   if (!userClubs.length) {
     el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#444;font-size:0.85rem"><div style="font-size:2rem;margin-bottom:10px">🃏</div>No clubs yet — join or create one</div>';
     return;
@@ -1703,7 +1698,7 @@ function selectClub(id, action) {
 // Called before navigating to player.html or index.html.
 // Issues a club-scoped JWT via /api/auth/token so player.html always has one.
 async function _acquireClubToken(playerId, clubId) {
-  console.log('TOKEN_WRITE_ATTEMPT playerId='+playerId+' clubId='+clubId);
+  
   try {
     var resp = await fetch(API + '/api/auth/token', {
       method: 'POST',
@@ -1724,10 +1719,10 @@ async function _acquireClubToken(playerId, clubId) {
           _lpl.id = _tokenActorId; // ensure pb-player.id matches token actorId
           if (_tokenRole) _lpl.role = _tokenRole;
           localStorage.setItem('pb-player', JSON.stringify(_lpl));
-          console.log('TOKEN_SCOPE role='+(_tokenRole||'?')+' clubId='+clubId+' playerCapable=true actorId='+_tokenActorId);
+          
         }
       } catch(_td){}
-      console.log('TOKEN_WRITE_SUCCESS playerId='+playerId+' clubId='+clubId);
+      
       return { ok:true, token:data.token, role:data.role, status:data.status || 'active', club_id:data.club_id || data.clubId || clubId };
     } else {
       console.warn('TOKEN_WRITE_FAILED reason='+(data.error||data.code||'no_token_in_response'));
@@ -1782,7 +1777,7 @@ function enterActiveClub(action) {
   try { _navPlayer = JSON.parse(localStorage.getItem('pb-player')||'null'); } catch(_){}
   var _navPid = _navPlayer && (_navPlayer.id != null ? String(_navPlayer.id) : _navPlayer.username) || null;
   var _navCid = String(activeClub.id != null ? activeClub.id : (activeClub.clubId || ''));
-  console.log('ROUTE_DECISION action='+(action||'(default)')+' localRole='+(activeClub.role||'player')+' pending_token=true');
+  
 
   if (_navPid && _navCid) {
     _acquireClubToken(_navPid, _navCid).then(function(result) {
@@ -1801,7 +1796,7 @@ function enterActiveClub(action) {
         status: result.status || 'active'
       });
       try { syncSelectedClubStorage(syncedClub); } catch(_e){}
-      console.log('ROUTE_DECISION canonicalRole='+canonicalRole+' route='+dest);
+      
       window.location.href = dest + '?from=lobby';
     });
   } else {
@@ -1963,7 +1958,7 @@ function applyPlayerTheme() {
 try { if (typeof document!=='undefined') { if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',applyPlayerTheme); else applyPlayerTheme(); } } catch(_e){}
 
 function showPlayerSettings() {
-  console.log('[PROFILE OPEN] showPlayerSettings invoked');
+  
   var existing = document.getElementById('ps-overlay'); if (existing) existing.remove();
   var s = loadPlayerSettings();
   var ov = document.createElement('div');
@@ -2011,7 +2006,7 @@ function showPlayerSettings() {
   // Mount to documentElement (above body) so any body-level overflow:hidden
   // or auth-screen wrappers can't hide the modal.
   (document.documentElement || document.body).appendChild(ov);
-  console.log('[PROFILE OPEN] modal mounted; rect=', ov.getBoundingClientRect && ov.getBoundingClientRect());
+  
   ov.addEventListener('click', function(e){ if (e.target===ov) ov.remove(); });
   ov.querySelector('#ps-close').addEventListener('click', function(){ ov.remove(); });
   Array.prototype.forEach.call(ov.querySelectorAll('[data-pset-theme]'), function(b){
@@ -2072,7 +2067,7 @@ const isPreview = new URLSearchParams(window.location.search).get('preview') ===
 const _isAuthScreen = (_screen === 'signin' || _screen === 'signup');
 if (isPreview && !_isAuthScreen) {
   // DevPreview mode (non-auth): force hide auth, render preview, never run auth gate.
-  console.log('[preview]', { screen: _screen, preview: true });
+  
   // 1) Force hide auth-screen up front (style + inline display).
   (function forceHideAuth(){
     var ae = document.getElementById('auth-screen');
@@ -2160,7 +2155,6 @@ if (activeClub) setActiveClub(activeClub);
       if (typeof renderClubsList === 'function') renderClubsList();
       if (typeof updateClubsTilePreview === 'function') updateClubsTilePreview();
       if (typeof showMyClubsSection === 'function') showMyClubsSection(true);
-      if (typeof showToast === 'function') showToast('LOBBY CLUBS RENDERED: '+saved.length);
     }
   }, 400);
 })();

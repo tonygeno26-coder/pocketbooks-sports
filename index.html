@@ -209,7 +209,6 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
   [data-results-jump]:hover{border-color:rgba(0,194,255,0.35)!important}
 }
 
-
 /* ═══ MOBILE (≤480px / iPhone 375) — layout only, no redesign ═══ */
 @media (max-width:480px){
   html,body{overflow-x:hidden;max-width:100%}
@@ -247,7 +246,6 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
   }
   table{max-width:100%}
 }
-
 
 </style>
 
@@ -979,18 +977,7 @@ function refreshHostDashboardStats(trigger) {
   var profitEl = document.getElementById('stat-profit');
   if (profitEl) profitEl.style.color = hostProfit >= 0 ? 'var(--green, #00ff88)' : 'var(--red, #ff3d57)';
 
-  console.log('[host stats refresh]',
-    '\n  trigger:       ', trigger,
-    '\n  source:        ', 'pb-tickets(' + pbTickets.length + ') + hostActiveBets(' + hostBets.length + ')',
-    '\n  ticketsLoaded: ', allTickets.length,
-    '\n  activeTickets: ', active.length,
-    '\n  handle:        $' + handle.toFixed(2),
-    '\n  atRisk:        $' + atRisk.toFixed(2),
-    '\n  profit:        $' + hostProfit.toFixed(2),
-    '\n  holdPct:       ', holdPct !== null ? holdPct.toFixed(1) + '%' : 'n/a (no settled)',
-    '\n  playersOwe:    $' + playersOwe.toFixed(2),
-    '\n  hostOwes:      $' + hostOwes.toFixed(2)
-  );
+  
 
   return { handle, atRisk, hostProfit, holdPct, active: active.length, settled: settled.length, playersOwe, hostOwes };
 }
@@ -1016,6 +1003,12 @@ async function loadHostDashboardFromDb(trigger) {
     var qs  = cid ? '?clubId='+encodeURIComponent(cid) : '';
     var resp = await (typeof _pbFetch === 'function' ? _pbFetch('/api/host/dashboard'+qs) : fetch('/api/host/dashboard'+qs));
     var data = await resp.json();
+    // Apply the club roster even if stats validation fails later — otherwise
+    // the Players tab stays on "No players yet" / empty localStorage.
+    if (data && Array.isArray(data.players)) {
+      try { _applyHostDashboardPlayers(data.players); } catch(_pe) {}
+    }
+    _hostPlayersFetchDone = true;
     if (!data.ok || !data.stats) throw new Error(data.error || 'missing stats');
     var valid = _validateHostStats(data.stats);
     if (!valid.safe) throw new Error('invalid_stats:'+valid.warnings.join(','));
@@ -1034,23 +1027,23 @@ async function loadHostDashboardFromDb(trigger) {
     _set('host-bets-count',   activeCount+' bet'+(activeCount!==1?'s':''));
     var profitEl = document.getElementById('stat-profit');
     if (profitEl) profitEl.style.color = s.profit>=0 ? 'var(--green,#00ff88)' : 'var(--red,#ff3d57)';
-    _applyHostDashboardTickets(data);
-    _applyHostDashboardPlayers(data.players || []);
+    try { _applyHostDashboardTickets(data); } catch(_te) {}
     _updateHostSourceBadge('db', data.warnings||[]);
     _setHostDbPrimary(true);  // Lock DOM authority to DB
     _hostRenderQuiet = true;
     try { renderHostBets(); } catch(_rb) {}
     try { renderPlayersTab(); } catch(_rp) {}
     _hostRenderQuiet = false;
-    console.log('[host db read] trigger='+trigger+' source=db clubId='+(cid||'?')+
-      ' handle=$'+s.handle+' active='+activeCount+' atRisk=$'+atRisk+' players='+(data.players||[]).length);
+    
     return { source:'db', stats:s, summary:summary, warnings:data.warnings||[], activeTickets:data.activeTickets||[], players:data.players||[] };
   } catch(e) {
     // Fallback to localStorage calculation
     console.warn('[host db read] fallback to localStorage: '+e.message);
+    _hostPlayersFetchDone = true;
     _setHostDbPrimary(false); // Release DOM authority back to localStorage
     _updateHostSourceBadge('localStorage', [e.message]);
     refreshHostDashboardStats('db_fallback:'+trigger);
+    try { renderPlayersTab(); } catch(_rp) {}
     return { source:'localStorage', fallbackReason:e.message };
   }
 }
@@ -1071,7 +1064,7 @@ function _updateHostSourceBadge(source, warnings) {
 }
 
 async function runHostDbReadAudit() {
-  console.log('[host db audit] ─── START ───');
+  
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
   var cid  = club.id || club.clubId || null;
 
@@ -1093,18 +1086,7 @@ async function runHostDbReadAudit() {
   var dbStats = dbData && dbData.stats;
   var sourceUsed = (!fallbackReason && dbStats) ? 'db' : 'localStorage';
 
-  console.log('[host db audit]',
-    '\n  clubId:             ', cid || '(none)',
-    '\n  sourceUsed:         ', sourceUsed,
-    '\n  dbActiveTickets:    ', dbData ? (dbData.activeTickets||[]).length : 'n/a',
-    '\n  localActiveTickets: ', localActive,
-    '\n  dbHandle:           ', dbStats ? '$'+dbStats.handle : 'n/a',
-    '\n  localHandle:        ', '$'+localHandle,
-    '\n  dbActiveRisk:       ', dbStats ? '$'+dbStats.activeRisk : 'n/a',
-    '\n  dbProfit:           ', dbStats ? '$'+dbStats.profit : 'n/a',
-    '\n  fallbackReason:     ', fallbackReason || 'none',
-    '\n  status:             ', !fallbackReason && dbStats ? '✅ db_primary' : '⚠️ localStorage'
-  );
+  
   return { sourceUsed, dbStats, fallbackReason };
 }
 window.loadHostDashboardFromDb    = loadHostDashboardFromDb;
@@ -1175,8 +1157,7 @@ async function renderSettlementPreviewFromDb() {
       if (settEl) settEl.insertAdjacentHTML('afterbegin', html);
     }
 
-    console.log('[settlement preview] source=db players='+players.length+
-      ' playersOwe=$'+totals.playersOwe+' hostOwes=$'+totals.hostOwes+' net=$'+totals.net);
+    
     return data;
   } catch(e) {
     console.warn('[settlement preview] DB failed, keeping existing local UI:', e.message);
@@ -1185,7 +1166,7 @@ async function renderSettlementPreviewFromDb() {
 }
 
 async function runSettlementDbAudit() {
-  console.log('[settlement db audit] ─── START ───');
+  
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
   var cid  = club.id || club.clubId || null;
 
@@ -1198,21 +1179,6 @@ async function runSettlementDbAudit() {
     if (!dbData.ok) fallbackReason = dbData.error;
   } catch(e) { fallbackReason = e.message; }
 
-  var t = dbData && dbData.totals;
-  var p = dbData && dbData.players || [];
-  console.log('[settlement db audit]',
-    '\n  clubId:       ', cid || '(none)',
-    '\n  source:       ', fallbackReason ? 'db_error' : 'db',
-    '\n  playerCount:  ', p.length,
-    '\n  playersOwe:   ', t ? '$'+t.playersOwe : 'n/a',
-    '\n  hostOwes:     ', t ? '$'+t.hostOwes   : 'n/a',
-    '\n  net:          ', t ? (t.net>=0?'+':'')+'$'+t.net : 'n/a',
-    '\n  fallbackReason:', fallbackReason || 'none',
-    '\n  status:       ', !fallbackReason ? '✅ db_preview' : '❌ error'
-  );
-  if (p.length) {
-    p.forEach(function(pl){ console.log('  player:', pl.username, 'owesHost:$'+pl.owesHost, 'hostOwes:$'+pl.hostOwes, 'openRisk:$'+pl.openRisk); });
-  }
   return dbData;
 }
 window.renderSettlementPreviewFromDb = renderSettlementPreviewFromDb;
@@ -1291,7 +1257,7 @@ async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes) {
       try { await renderSettlementPreviewFromDb(); } catch(_e){}
       try { await loadHostDashboardFromDb('post_settlement'); } catch(_e){}
       if (typeof showToastHost === 'function') showToastHost('✅ Settlement recorded: $'+amt.toFixed(2));
-      console.log('[settlement execution] ok ledgerEntryId='+data.ledgerEntryId+' direction='+direction+' amount='+amt);
+      
     } catch(e) {
       btn.textContent = 'Confirm Settlement'; btn.disabled = false;
       if (typeof showToastHost === 'function') showToastHost('❌ Settlement failed: '+e.message);
@@ -1302,7 +1268,7 @@ async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes) {
 window.openSettlePlayerModal = openSettlePlayerModal;
 
 async function runSettlementExecutionAudit() {
-  console.log('[settlement execution audit] ─── START ───');
+  
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
   var cid  = club.id || club.clubId || null;
   try {
@@ -1310,14 +1276,7 @@ async function runSettlementExecutionAudit() {
     var r1 = await fetch('/api/host/settlements-preview'+qs).then(function(r){ return r.json(); });
     var r2 = await fetch('/api/mirror/audit/ledger?limit=10').then(function(r){ return r.json(); });
     var settlements = (r2.recent||[]).filter(function(e){ return e.type==='settlement'; });
-    console.log('[settlement execution audit]',
-      '\n  clubId:           ', cid||'(none)',
-      '\n  previewPlayers:   ', (r1.players||[]).length,
-      '\n  playersOwe:       ', r1.totals ? '$'+r1.totals.playersOwe : 'n/a',
-      '\n  hostOwes:         ', r1.totals ? '$'+r1.totals.hostOwes   : 'n/a',
-      '\n  ledgerSettlements:', settlements.length,
-      '\n  recentSettlement: ', settlements[0] ? settlements[0].id+' $'+settlements[0].amount : '(none)'
-    );
+    
     return { preview: r1, settlements };
   } catch(e) { console.error('[settlement execution audit] error:', e.message); }
 }
@@ -1374,7 +1333,7 @@ async function createWeeklyRollover(confirm) {
     // Refresh views
     try { await renderSettlementPreviewFromDb(); } catch(_e){}
     try { await loadHostDashboardFromDb('post_rollover'); } catch(_e){}
-    console.log('[weekly rollover] executed week='+week+' players='+data.playersSnapshotted);
+    
     return data;
   } catch(e) {
     if (typeof showToastHost === 'function') showToastHost('❌ Rollover failed: '+e.message);
@@ -1383,7 +1342,7 @@ async function createWeeklyRollover(confirm) {
 }
 
 async function runWeeklyRolloverAudit() {
-  console.log('[weekly rollover audit] ─── START ───');
+  
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
   var cid  = club.id || club.clubId || null;
   var week = _currentISOWeek();
@@ -1391,16 +1350,10 @@ async function runWeeklyRolloverAudit() {
     var qs = cid ? '?clubId='+encodeURIComponent(cid) : '';
     var hist = await fetch('/api/host/rollover-history'+qs).then(function(r){ return r.json(); });
     var snap = await fetch('/api/host/week-snapshot?week='+encodeURIComponent(week)+(cid?'&clubId='+encodeURIComponent(cid):'')).then(function(r){ return r.json(); });
-    console.log('[weekly rollover audit]',
-      '\n  clubId:          ', cid||'(none)',
-      '\n  currentWeek:     ', week,
-      '\n  rolloverCount:   ', (hist.history||[]).length,
-      '\n  latestRollover:  ', hist.history&&hist.history[0] ? hist.history[0].rollover_week+' ('+hist.history[0].performed_at+')' : '(none)',
-      '\n  currentSnapshot: ', snap.players ? snap.players.length+' players' : 'none (week not closed yet)'
-    );
+    
     if (hist.history&&hist.history[0]) {
       var t = JSON.parse(hist.history[0].totals_snapshot||'{}');
-      console.log('  lastRolloverTotals: playersOwe=$'+(t.playersOwe||0)+' hostOwes=$'+(t.hostOwes||0)+' net=$'+(t.net||0));
+      
     }
     return { history: hist.history, snapshots: snap.players };
   } catch(e) { console.error('[weekly rollover audit] error:', e.message); }
@@ -1515,20 +1468,16 @@ function _renderHistoricalSnapshot(week, rolloverRow, players) {
 }
 
 async function runWeeklyHistoryAudit() {
-  console.log('[weekly history audit] ─── START ───');
+  
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
   var cid  = club.id || club.clubId || null;
   try {
     var qs   = cid ? '?clubId='+encodeURIComponent(cid) : '';
     var hist = await fetch('/api/host/rollover-history'+qs).then(function(r){ return r.json(); });
-    console.log('[weekly history audit]',
-      '\n  clubId:       ', cid||'(none)',
-      '\n  closedWeeks:  ', (hist.history||[]).length,
-      '\n  weeks:        ', (hist.history||[]).map(function(r){ return r.rollover_week; }).join(', ') || '(none)'
-    );
+    
     (hist.history||[]).forEach(function(r){
       var t={}; try{t=JSON.parse(r.totals_snapshot||'{}');}catch(_e){}
-      console.log('  '+r.rollover_week+': playersOwe=$'+(t.playersOwe||0)+' hostOwes=$'+(t.hostOwes||0)+' net=$'+(t.net||0)+' players='+r.players_count);
+      
     });
     return hist;
   } catch(e) { console.error('[weekly history audit] error:', e.message); }
@@ -1539,7 +1488,7 @@ window.runWeeklyHistoryAudit = runWeeklyHistoryAudit;
 
 // ── SETTLEMENT RECONCILIATION AUDIT (Phase C Step 7, read-only) ────────────────────
 async function runSettlementReconciliationAudit() {
-  console.log('[settlement reconciliation] ─── START ───');
+  
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
   var cid  = club.id || club.clubId || null;
   try {
@@ -1551,22 +1500,7 @@ async function runSettlementReconciliationAudit() {
     var lt = data.ledgerTotals       || {};
     var pt = data.settlementPreviewTotals || {};
     var lr = data.latestRollover     || {};
-    console.log('[settlement reconciliation]',
-      '\n  clubId:            ', cid||'(none)',
-      '\n  ticketProfit:      $', tt.profit,
-      '\n  ticketActiveRisk:  $', tt.activeRisk,
-      '\n  ticketSettledGain: $', tt.settledGain,
-      '\n  ticketSettledLoss: $', tt.settledLoss,
-      '\n  ledgerNet:          $', lt.net,
-      '\n  ledger.settlement:  $', lt.settlement,
-      '\n  previewPlayersOwe: $', pt.playersOwe,
-      '\n  previewHostOwes:   $', pt.hostOwes,
-      '\n  previewNet:        $', pt.net,
-      '\n  latestSnapshot:    ', lr.rolloverWeek ? (lr.rolloverWeek+' net=$'+lr.net) : '(none)',
-      '\n  mismatches:        ', data.mismatches.length,
-      data.mismatches.length ? '\n  ⚠️ '+data.mismatches.map(function(m){ return m.category+' delta='+m.delta; }).join('; ') : '',
-      '\n  status:            ', data.status === 'balanced' ? '✅ BALANCED' : '❌ MISMATCH'
-    );
+    
     return data;
   } catch(e) { console.error('[settlement reconciliation] error:', e.message); }
 }
@@ -1588,7 +1522,7 @@ var _currentStaffRole = 'owner'; // default: owner until permissions loaded
 function setStaffRole(role) {
   if (!_ROLE_LEVELS_CLIENT[role]) { console.warn('[permissions] unknown role:', role); return; }
   _currentStaffRole = role;
-  console.log('[permissions] staff role set:', role);
+  
   _applyPermissionGates();
 }
 
@@ -1610,7 +1544,7 @@ function _applyPermissionGates() {
     el.disabled       = !allowed;
     el.title          = allowed ? '' : 'Not permitted for role: '+role;
   });
-  console.log('[permissions] gates applied for role:', role);
+  
 }
 
 // Fetch staff role from backend (looks up club_members.staff_role)
@@ -1621,7 +1555,6 @@ async function loadStaffRole() {
   try {
     var r = await fetch('/api/permissions/roles');
     var data = await r.json();
-    if (data.ok) console.log('[permissions] available roles:', data.roles.map(function(r){ return r.role; }).join(', '));
   } catch(_e) {}
 }
 
@@ -1632,7 +1565,7 @@ async function checkMyPermission(action) {
       body:JSON.stringify({ role:_currentStaffRole, action })
     });
     var data = await resp.json();
-    console.log('[permissions]', action, '->', data.allowed ? '✅ permitted' : '❌ denied ('+data.reason+')');
+    
     return data;
   } catch(e) {
     console.warn('[permissions] check failed:', e.message);
@@ -1760,31 +1693,28 @@ function runHostStatsAudit() {
     settledHandle: _round(auditSettledHandle - live.settledHandle)
   } : null;
 
-  console.log('[host stats audit]');
-  console.log('  hostActiveBets:        ' + hostBets.length);
-  console.log('  pb-tickets:            ' + pbTickets.length);
-  console.log('  by status:');
+  
+  
+  
+  
   Object.keys(byStatus).forEach(function(k){
     var b = byStatus[k];
     if (b.count === 0) return;
-    console.log('    ' + k +
-                ' count=' + b.count +
-                ' risk=$' + _round(b.riskSum).toFixed(2) +
-                ' profit=$' + _round(b.profitSum).toFixed(2));
+    
   });
-  console.log('  derived (audit math):');
-  console.log('    Handle:            $' + auditHandle.toFixed(2));
-  console.log('    Active At Risk:    $' + auditAtRisk.toFixed(2));
-  console.log('    Host Profit:       $' + auditProfit.toFixed(2));
-  console.log('    Settled Handle:    $' + auditSettledHandle.toFixed(2));
-  console.log('    Hold %:            ' + (auditHoldPct != null ? auditHoldPct.toFixed(2) + '%' : '—'));
+  
+  
+  
+  
+  
+  
   if (live) {
-    console.log('  live (calcHostStats):');
-    console.log('    Handle:            $' + live.handle.toFixed(2));
-    console.log('    Active At Risk:    $' + live.atRisk.toFixed(2));
-    console.log('    Host Profit:       $' + live.hostProfit.toFixed(2));
-    console.log('    Settled Handle:    $' + live.settledHandle.toFixed(2));
-    console.log('    Hold %:            ' + (live.holdPct != null ? live.holdPct.toFixed(2) + '%' : '—'));
+    
+    
+    
+    
+    
+    
     var anyDrift = ['handle','atRisk','hostProfit','settledHandle'].some(function(k){ return Math.abs(deltas[k]) > 0.01; });
     if (anyDrift) {
       console.warn('  AUDIT VS LIVE DRIFT:');
@@ -1799,7 +1729,7 @@ function runHostStatsAudit() {
     console.warn('[host stats audit] ' + mismatches.length + ' mismatch(es) vs pb-tickets:');
     mismatches.forEach(function(m){ console.warn('  ' + m.ticketId + ' -> ' + m.issue); });
   } else {
-    console.log('[host stats audit] no host vs pb-tickets drift');
+    
   }
 
   return {
@@ -1889,14 +1819,14 @@ function getLiveCreditPosition(opts) {
   Object.keys(totals).forEach(function(k){ totals[k] = _round(totals[k]); });
   totals.netPosition = _round(totals.playerOwesHost - totals.hostOwesPlayer);
 
-  console.log('[live credit position]');
-  console.log('  scope: ' + (ws != null ? (new Date(ws).toISOString() + ' -> ' + (we != null ? new Date(we).toISOString() : 'now')) : 'all hostActiveBets'));
-  console.log('  players:           ' + rows.length);
-  console.log('  Players owe you:   $' + totals.playerOwesHost.toFixed(2));
-  console.log('  You owe players:   $' + totals.hostOwesPlayer.toFixed(2));
-  console.log('  Net position:      ' + (totals.netPosition >= 0 ? '+$' : '-$') + Math.abs(totals.netPosition).toFixed(2));
-  console.log('  Active risk:       $' + totals.activeRisk.toFixed(2));
-  console.log('  Active exposure:   $' + totals.activeExposure.toFixed(2));
+  
+  
+  
+  
+  
+  
+  
+  
   if (typeof console.table === 'function' && rows.length) {
     console.table(rows.map(function(r){
       return {
@@ -1919,6 +1849,7 @@ window.getLiveCreditPosition = getLiveCreditPosition;
 var _hostDbActiveTickets = null;
 var _hostDbPlayers = null;
 var _hostDbPlayersById = null;
+var _hostPlayersFetchDone = false;
 
 function _normalizeHostTicket(t) {
   if (!t || typeof t !== 'object') return t;
@@ -2006,6 +1937,7 @@ function _hostPlayersFromDbOrLocal(){
       if (pid == null || pid === '' || pid === 'unknown') return null;
       return {
         playerId: String(pid),
+        username: dp.username || '',
         playerName: dp.username || dp.playerName || String(pid),
         status: dp.status || 'approved',
         realName: (dp.playerName && dp.playerName !== dp.username) ? dp.playerName : '',
@@ -2040,10 +1972,6 @@ function loadHostActiveBets(){
     var exposure = parseFloat(t.potentialProfit||0);
     return s+exposure;
   },0);
-  active.forEach(function(t){
-    console.log('active ticket:', t.id, 'playerRisk:', t.riskAmount, 'hostExposure:', t.potentialProfit);
-  });
-  showToastHost('HOST EXPOSURE: '+active.length+' active bets = $'+totalRisk.toFixed(2)+' owed to players if all win');
   var el=document.getElementById('stat-active-bets');
   var el2=document.getElementById('stat-active-risk');
   var cnt=document.getElementById('host-bets-count');
@@ -2204,9 +2132,6 @@ function hostDenyDelete(ticketId) {
 var _hostRenderQuiet = false;
 function renderHostBets(){
   var active=loadHostActiveBets();
-  if (!_hostRenderQuiet) {
-    showToastHost('HOST BETS RENDERED WITH PLAYER NAMES\n'+active.length+' bets · players: '+[...new Set(active.map(function(t){return t.playerUsername||t.playerName||'?';}))]  .join(', '));
-  }
   var el=document.getElementById('host-bets-list');
   if(!el) return;
   // Update delete request badge
@@ -2371,15 +2296,8 @@ function renderHostBets(){
 
 const SECTIONS=['home-content','bets-section','players-section','settlements-section','crypto-section'];
 function returnToLobby() {
-  console.log('[host returnToLobby] clicked');
-  console.log('[host returnToLobby] state before nav', {
-    host:        localStorage.getItem('pb-host'),
-    activeClub:  localStorage.getItem('pb-active-club'),
-    clubs:       localStorage.getItem('pb-clubs'),
-    club:        localStorage.getItem('pb-club'),
-    clubPlayers: localStorage.getItem('pb-club-players'),
-    tickets:     localStorage.getItem('pb-tickets')
-  });
+  
+  
   sessionStorage.setItem('pb-force-lobby-home', '1');
   window.location.href = 'lobby.html';
 }
@@ -2447,7 +2365,6 @@ function setBN(el,tab){
       betLimits:{straight:{min:1,max:100},parlay:{min:1,max:100},teaser:{min:1,max:100},roundRobin:{min:1,max:100}}
     };
     localStorage.setItem('pb-player-limits', JSON.stringify(allLimits));
-    showToastHost('MOCK PLAYER LOADED');
   }
 })();
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2517,8 +2434,6 @@ function openPlayerSettings(pid, _p){
   var existing=document.getElementById('ps-overlay');
   if(existing)existing.remove();
   var p=_p||(loadClubPlayers().find(function(x){return x.playerId===pid;})||{});
-  var _pActiveBets=JSON.parse(localStorage.getItem('hostActiveBets')||'[]').filter(function(b){return b.playerId===pid&&(b.status==='active'||b.status==='open');});
-  showToastHost('PLAYER ACTIVE BETS: '+_pActiveBets.length+'\nID: '+pid+'\nrealName: '+(p.realName||''));
   var lim=getHostPlayerLimits(pid);
   var sa=lim.sportsAccess||{};
   var bl=lim.betLimits||{};
@@ -2612,54 +2527,87 @@ function openPlayerSettings(pid, _p){
 
 var _playersActiveTab = 'all';
 var _playersSearch = '';
+var _playersExpanded = {};
+
+function togglePlayerExpand(pid) {
+  pid = String(pid || '');
+  if (!pid) return;
+  _playersExpanded[pid] = !_playersExpanded[pid];
+  renderPlayersTab();
+}
 
 function renderPlayersTab(){
   var el = document.getElementById('players-section');
   if (!el) return;
-  var requests = loadJoinRequests();
+  var requests = [];
+  try { requests = loadJoinRequests(); } catch(_jr) { requests = []; }
+  var dbReady = Array.isArray(_hostDbPlayers) || !!_hostPlayersFetchDone;
   var players  = _hostPlayersFromDbOrLocal();
-  if (!_hostRenderQuiet) {
-    showToastHost('LIST RENDERED\nplayers: '+players.length+'\nnames: '+players.map(function(p){return p.playerName||p.realName||'none';}).join(','));
-  }
 
   function getActiveBetsCount(pid){
     return _hostBetsFromDbOrLocal().filter(function(b){ return String(b.playerId)===String(pid) && (b.status==='active'||b.status==='open'); }).length;
   }
   function getOpenRiskAmt(pid){
-    return _hostBetsFromDbOrLocal().filter(function(b){ return String(b.playerId)===String(pid) && (b.status==='active'||b.status==='open'); }).reduce(function(s,b){return s+(b.potentialProfit||0);},0);
+    return _hostBetsFromDbOrLocal().filter(function(b){ return String(b.playerId)===String(pid) && (b.status==='active'||b.status==='open'); }).reduce(function(s,b){return s+(Number(b.riskAmount)||0);},0);
   }
   function avatarHtml(name, color){
     var abbr=(name||'?').slice(0,2).toUpperCase();
     var bg = color || '#2a2a2a';
     return '<div style="width:40px;height:40px;border-radius:50%;background:'+bg+';display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:900;color:#fff;flex-shrink:0">'+abbr+'</div>';
   }
+  function playerBetsHtml(pid) {
+    var bets = _hostBetsFromDbOrLocal().filter(function(b){
+      return String(b.playerId)===String(pid) && (b.status==='active'||b.status==='open');
+    });
+    if (!bets.length) {
+      return '<div style="padding:4px 16px 14px 68px;font-size:0.75rem;color:#666">No active bets</div>';
+    }
+    return '<div style="padding:0 16px 12px 68px">' + bets.map(function(b){
+      var sel = (b.selections||[]).map(function(s){
+        return (s && (s.pick || s.matchup || s.label)) || '';
+      }).filter(Boolean).join(', ');
+      var label = (b.type||'Bet') + (sel ? (' · '+sel) : '');
+      return '<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #1a1a1a">'
+        +'<div style="font-size:0.78rem;color:#ccc;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+label+'</div>'
+        +'<div style="font-size:0.78rem;font-weight:700;color:#ff3d57;flex-shrink:0">$'+(Number(b.riskAmount)||0).toFixed(2)+'</div>'
+      +'</div>';
+    }).join('') + '</div>';
+  }
   function playerRow(p){
-    var lim=getHostPlayerLimits(p.playerId);
     var dbp = (_hostDbPlayersById && _hostDbPlayersById[String(p.playerId)]) || null;
+    var uname = (dbp && dbp.username) ? dbp.username : (p.username || p.playerName || p.playerId);
     var avail = (dbp && dbp.availableBalance != null && !isNaN(dbp.availableBalance))
-      ? Number(dbp.availableBalance) : getAvailCredit(p.playerId);
+      ? Number(dbp.availableBalance)
+      : (p.availableBalance != null && !isNaN(p.availableBalance) ? Number(p.availableBalance) : getAvailCredit(p.playerId));
     var openRisk = (dbp && dbp.openRisk != null && !isNaN(dbp.openRisk))
-      ? Number(dbp.openRisk) : getOpenRiskAmt(p.playerId);
+      ? Number(dbp.openRisk)
+      : (p.openRisk != null && !isNaN(p.openRisk) ? Number(p.openRisk) : getOpenRiskAmt(p.playerId));
     var activeBets = (dbp && dbp.activeBetCount != null)
-      ? Number(dbp.activeBetCount) : getActiveBetsCount(p.playerId);
+      ? Number(dbp.activeBetCount)
+      : (p.activeBetCount != null ? Number(p.activeBetCount) : getActiveBetsCount(p.playerId));
+    if (isNaN(avail)) avail = 0;
+    if (isNaN(openRisk)) openRisk = 0;
+    if (isNaN(activeBets)) activeBets = 0;
+    var expanded = !!_playersExpanded[String(p.playerId)];
     var sc=p.status==='blocked'?'#ff3d57':p.status==='approved'?'#00ff88':'#f5c842';
-    return '<div data-pid="'+p.playerId+'" onclick="openPlayerProfile(this.dataset.pid)" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #1a1a1a;cursor:pointer;-webkit-tap-highlight-color:transparent">'
-      +avatarHtml(p.playerName, p.color||'#2a4a3a')
+    return '<div data-pid="'+p.playerId+'" style="border-bottom:1px solid #1a1a1a">'
+      +'<div onclick="togglePlayerExpand(this.parentNode.dataset.pid)" style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent">'
+      +avatarHtml(uname, p.color||'#2a4a3a')
       +'<div style="flex:1;min-width:0">'
         +'<div style="display:flex;align-items:center;gap:8px">'
-          +'<span style="font-size:0.88rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(dbp && dbp.username ? dbp.username : p.playerName)+'</span>'
+          +'<span style="font-size:0.88rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+uname+'</span>'
           +'<span style="font-size:0.6rem;font-weight:800;color:'+sc+';background:rgba(0,0,0,0.3);padding:2px 7px;border-radius:10px;border:1px solid '+sc+';flex-shrink:0">'+(p.status||'approved').toUpperCase()+'</span>'
         +'</div>'
         +(p.realName?'<div style="font-size:0.72rem;color:#aaa;margin-top:1px">'+p.realName+'</div>':'')
-        +'<div style="font-size:0.65rem;color:#444;margin-top:1px">ID: '+p.playerId+'</div>'
         +'<div style="font-size:0.68rem;color:#555;margin-top:2px">'
           +'<span style="color:#00c2ff">$'+avail.toFixed(2)+'</span> bal'
-          +(openRisk?' · <span style="color:#ff6b6b">$'+openRisk.toFixed(2)+' open</span>':'')
-          +(lim.creditLimit?' · <span style="color:#555">$'+(lim.creditLimit||0)+' credit</span>':'')
-          +(activeBets?' · <span style="color:#f5c842">'+activeBets+' active bet'+(activeBets>1?'s':'')+'</span>':'')
+          +' · <span style="color:#ff6b6b">$'+openRisk.toFixed(2)+' open</span>'
+          +' · <span style="color:#f5c842">'+activeBets+' active bet'+(activeBets===1?'':'s')+'</span>'
         +'</div>'
       +'</div>'
-      +'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#444" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>'
+      +'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#444" stroke-width="2.5" stroke-linecap="round" style="transform:rotate('+(expanded?90:0)+'deg);transition:transform .15s;flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>'
+      +'</div>'
+      +(expanded ? playerBetsHtml(p.playerId) : '')
     +'</div>';
   }
   function requestRow(r){
@@ -2675,18 +2623,31 @@ function renderPlayersTab(){
       +'</div>'
     +'</div>';
   }
+  function emptyOrLoadingHtml() {
+    if (!dbReady) {
+      return '<div style="margin:16px;background:#141414;border:1px solid #252525;border-radius:18px;padding:32px 20px;text-align:center">'
+        +'<div style="font-size:0.9rem;font-weight:800;margin-bottom:6px">Loading players…</div>'
+        +'<div style="font-size:0.8rem;color:#666">Fetching club roster</div>'
+      +'</div>';
+    }
+    return '<div style="margin:16px;background:#141414;border:1px solid #252525;border-radius:18px;padding:32px 20px;text-align:center">'
+      +'<div style="font-size:2.5rem;margin-bottom:12px">👥</div>'
+      +'<div style="font-size:1rem;font-weight:800;margin-bottom:6px">No players yet</div>'
+      +'<div style="font-size:0.8rem;color:#666">Share your club code to get join requests</div>'
+    +'</div>';
+  }
 
   // Filter by search + tab
   var q=(_playersSearch||'').toLowerCase();
   var filtered=players.filter(function(p){
-    var nm = String((p && p.playerName) || '');
+    var nm = String((p && (p.username || p.playerName)) || '');
     var id = String((p && p.playerId) || '');
     if(q && nm.toLowerCase().indexOf(q) === -1 && id.toLowerCase().indexOf(q) === -1) return false;
     if(_playersActiveTab==='applicants') return false;
     return true;
   });
   var filteredReqs=requests.filter(function(r){
-    if(q && !r.playerName.toLowerCase().includes(q)) return false;
+    if(q && !(r.playerName||'').toLowerCase().includes(q)) return false;
     return true;
   });
 
@@ -2705,49 +2666,48 @@ function renderPlayersTab(){
       +'<div style="display:flex;gap:4px;margin-bottom:0">'
         +['all','applicants'].map(function(t){
           var isActive=t===_playersActiveTab;
-          var cnt=t==='all'?players.length:requests.length;
+          var cnt=t==='all'?(dbReady?players.length:null):requests.length;
           return '<button onclick="_playersActiveTab=\''+t+'\';renderPlayersTab()" style="flex:1;padding:8px 4px;background:'+(isActive?'#fff':'transparent')+';color:'+(isActive?'#000':'#555')+';border:none;border-radius:8px;font-size:0.78rem;font-weight:800;cursor:pointer">'+t.charAt(0).toUpperCase()+t.slice(1)+(cnt?' ('+cnt+')':'')+'</button>';
         }).join('')
       +'</div>'
     +'</div>'
-    // List
-    +'<div>';
+    // List — dedicated node so Home #player-list is not the Players-tab target
+    +'<div id="players-tab-list" class="player-list">';
 
+  var listInner = '';
   if (_playersActiveTab==='applicants') {
     if (!filteredReqs.length) {
-      html+='<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">No pending applicants</div>';
+      listInner='<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">No pending applicants</div>';
     } else {
-      html+=filteredReqs.map(requestRow).join('');
+      listInner=filteredReqs.map(requestRow).join('');
     }
   } else {
-    // Show applicants banner if any
     if (requests.length && !q) {
-      html+='<div onclick="_playersActiveTab=\'applicants\';renderPlayersTab()" style="margin:10px 16px;background:rgba(245,200,66,0.08);border:1px solid rgba(245,200,66,0.3);border-radius:12px;padding:10px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between">'
+      listInner+='<div onclick="_playersActiveTab=\'applicants\';renderPlayersTab()" style="margin:10px 16px;background:rgba(245,200,66,0.08);border:1px solid rgba(245,200,66,0.3);border-radius:12px;padding:10px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between">'
         +'<span style="font-size:0.82rem;font-weight:700;color:#f5c842">'+requests.length+' pending request'+(requests.length>1?'s':'')+'</span>'
         +'<span style="font-size:0.72rem;color:#f5c842">Review →</span>'
       +'</div>';
     }
-    if (!filtered.length) {
-      html+='<div style="margin:16px;background:#141414;border:1px solid #252525;border-radius:18px;padding:32px 20px;text-align:center">'
-        +'<div style="font-size:2.5rem;margin-bottom:12px">👥</div>'
-        +'<div style="font-size:1rem;font-weight:800;margin-bottom:6px">No players yet</div>'
-        +'<div style="font-size:0.8rem;color:#666">Share your club code to get join requests</div>'
-      +'</div>';
+    if (!dbReady || !filtered.length) {
+      listInner+=emptyOrLoadingHtml();
     } else {
-      html+=filtered.map(playerRow).join('');
+      listInner+=filtered.map(playerRow).join('');
     }
   }
-  // ══ COHOSTS / STAFF section ══
-  html += _renderClubStaffPanel();
-  html+='</div><div style="height:80px"></div>';
+  html+=listInner;
+  html+='</div>';
+  try { html += _renderClubStaffPanel(); } catch(_sp) {}
+  html+='<div style="height:80px"></div>';
   el.style.background='#0a0a0a';
   el.style.minHeight='100vh';
   el.innerHTML=html;
-  _wireClubStaffPanel(el);
+  try { _wireClubStaffPanel(el); } catch(_sw) {}
   var listEl = document.getElementById('player-list');
   if (listEl) {
     if (_playersActiveTab==='applicants') {
       listEl.innerHTML = filteredReqs.length ? filteredReqs.map(requestRow).join('') : '';
+    } else if (!dbReady) {
+      listEl.innerHTML = '<div style="text-align:center;padding:24px 12px;color:#555;font-size:0.82rem">Loading players…</div>';
     } else if (!filtered.length) {
       listEl.innerHTML = '<div style="text-align:center;padding:24px 12px;color:#555;font-size:0.82rem">No players yet</div>';
     } else {
@@ -2838,8 +2798,7 @@ function _wireClubStaffPanel(scope) {
 
 
 function savePlayerProfile(pid){
-  showToastHost('SAVE CLICKED: '+pid);
-  console.log('savePlayerProfile', pid);
+  
   // Read current input values
   var realNameInp = document.getElementById('ps-realname');
   var notesInp    = document.getElementById('ps-notes');
@@ -2849,25 +2808,24 @@ function savePlayerProfile(pid){
   var notes    = notesInp    ? notesInp.value    : '';
   var credit   = creditInp   ? parseFloat(creditInp.value)||0 : 0;
   var signal   = signalInp   ? signalInp.value.trim() : '';
-  console.log('values:', {realName:realName, notes:notes, credit:credit});
+  
   // Load players from localStorage (do not use stale in-memory ref)
   var players = JSON.parse(localStorage.getItem('pb-club-players')||'[]');
   var idx = players.findIndex(function(p){ return p.playerId===pid; });
-  console.log('clubPlayers before save:', JSON.stringify(players));
+  
   if (idx === -1) {
-    showToastHost('SAVE ERROR: PLAYER NOT FOUND\nID: '+pid);
+    showToastHost('Player not found');
     console.warn('Player not found:', pid, 'players:', players);
     return;
   }
   players[idx] = Object.assign({}, players[idx], { realName:realName, notes:notes, signalContact:signal });
   localStorage.setItem('pb-club-players', JSON.stringify(players));
-  showToastHost('LOCALSTORAGE SAVED\nrealName: '+realName);
   // Save limits
   var lim = getHostPlayerLimits(pid);
   lim.creditLimit = credit;
   saveHostPlayerLimits(pid, lim);
-  console.log('clubPlayers after save:', JSON.stringify(players));
-  showToastHost('PLAYER SAVED\n'+(realName||players[idx].playerName));
+  
+  showToastHost('✅ Player saved');
   var ov = document.getElementById('ps-overlay');
   if (ov) ov.remove();
   _playersActiveTab='all';
@@ -3310,7 +3268,7 @@ function generateSignalReceipt(opts) {
   arr.unshift(receipt);
   saveSignalReceipts(arr);
   // TODO: hook real Signal bot/API here. For now, log + leave as pending.
-  console.log('[signal] receipt generated', receipt);
+  
   return receipt;
 }
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -3355,7 +3313,7 @@ function resetSettlementPayments(playerId) {
 // Use: seedMockSettlementPlayers(true) to force seed even with real data.
 function seedMockSettlementPlayers(force) {
   if (!force && localStorage.getItem('pb-mock-seed-disabled') === '1') {
-    console.log('[seedMock] disabled by pb-mock-seed-disabled flag');
+    
     return false;
   }
   var existing = loadClubPlayers();
@@ -3513,10 +3471,7 @@ function _purgeHostMockData() {
     } catch(_e){}
 
     if (summary.mkTicketsRemoved || summary.mockPlayersRemoved || summary.mockLimitsRemoved) {
-      console.log('[host mock purge]',
-        'tickets=' + summary.mkTicketsRemoved,
-        'players=' + summary.mockPlayersRemoved,
-        'limits='  + summary.mockLimitsRemoved);
+      
     }
     return summary;
   } catch (err) {
@@ -4530,7 +4485,7 @@ var _HOST_DB_PRIMARY = false;
 // Prevents localStorage poll/events from overwriting authoritative DB values.
 function _setHostDbPrimary(active) {
   _HOST_DB_PRIMARY = active;
-  console.log('[host render authority] HOST_DB_PRIMARY_MODE =', active);
+  
 }
 
 // Canonical host stats dispatch: uses DB when primary, localStorage otherwise.
@@ -4538,23 +4493,14 @@ function _setHostDbPrimary(active) {
 async function _dispatchHostStatsRefresh(trigger) {
   // Always try DB first. _HOST_DB_PRIMARY starts false; waiting for it to
   // be true before fetching meant page_load never called /api/host/dashboard.
-  console.log('[host render authority]',
-    '\n  source=db_attempt',
-    '\n  trigger='+trigger
-  );
+  
   try {
     var r = await loadHostDashboardFromDb('dispatch:'+trigger);
     if (r && r.source === 'db') {
       var domHandle  = (document.getElementById('stat-handle')||{}).textContent || '?';
       var domProfit  = (document.getElementById('stat-profit')||{}).textContent || '?';
       var domActive  = (document.getElementById('stat-active-bets')||{}).textContent || '?';
-      console.log('[host render authority]',
-        '\n  source=db',
-        '\n  domHandle='+domHandle,
-        '\n  domProfit='+domProfit,
-        '\n  domActiveBets='+domActive,
-        '\n  localSuppressed=true'
-      );
+      
       return;
     }
   } catch(_e) {
@@ -4611,7 +4557,7 @@ async function _dispatchHostStatsRefresh(trigger) {
         if (!d || !d.sha) return;
         var latest = String(d.sha).trim(), cur = String(CURRENT_SHA).trim();
         if (latest && cur && cur !== 'unknown' && latest !== cur) _showStaleBanner(latest, d.builtAt);
-        else { var x = document.getElementById('_pbs_stale_banner'); if (x) { x.remove(); document.body.style.paddingTop = ''; } console.log('[version guard] ✅ up to date sha=' + cur); }
+        else { var x = document.getElementById('_pbs_stale_banner'); if (x) { x.remove(); document.body.style.paddingTop = ''; }  }
       }).catch(function() {});
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _check);
