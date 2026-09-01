@@ -568,31 +568,38 @@ try {
         </div>
       </form>
 
-      <form id="signup-form" method="post" action="" autocomplete="off" style="display:none" hidden inert onsubmit="event.preventDefault(); submitAuth(); return false;">
-        <input id="a-name" class="auth-inp" name="name" placeholder="Display name" autocomplete="name" disabled>
+      <!-- Signup is a <template> so its password / autocomplete=username fields
+           are NOT in the live document on the Sign In tab. inert+disabled is not
+           enough — password managers still scan hidden type=password fields and
+           steal focus from #a-email (especially Telegram's username autocomplete). -->
+      <div id="signup-form-slot"></div>
+      <template id="tpl-signup-form">
+      <form id="signup-form" method="post" action="" autocomplete="off" onsubmit="event.preventDefault(); submitAuth(); return false;">
+        <input id="a-name" class="auth-inp" name="name" placeholder="Display name" autocomplete="name">
         <div style="display:flex;gap:8px;margin-bottom:10px">
-          <select id="a-contact-method" class="auth-inp" style="flex:0 0 auto;width:auto;padding-right:10px;cursor:pointer" onchange="updateSignupContactAttrs()" disabled>
+          <select id="a-contact-method" class="auth-inp" style="flex:0 0 auto;width:auto;padding-right:10px;cursor:pointer" onchange="updateSignupContactAttrs()">
             <option value="telegram">Telegram</option>
             <option value="signal">Signal</option>
             <option value="email">Email</option>
           </select>
-          <input id="a-contact-value" class="auth-inp" name="telegram" placeholder="@username" type="text" autocomplete="off" style="flex:1;margin-bottom:0" disabled>
+          <input id="a-contact-value" class="auth-inp" name="telegram" placeholder="@username" type="text" autocomplete="off" style="flex:1;margin-bottom:0">
         </div>
         <div id="signup-contact-hint" style="font-size:0.62rem;color:#666;margin:-6px 0 10px;padding:0 4px">Select how we can reach you — required for account recovery.</div>
-        <input id="a-pass-signup" class="auth-inp" name="password" placeholder="Password" type="password" autocomplete="off" disabled>
-        <input id="a-pass2" class="auth-inp" name="password_confirm" placeholder="Confirm password" type="password" autocomplete="off" disabled>
+        <input id="a-pass-signup" class="auth-inp" name="new-password" placeholder="Password" type="password" autocomplete="new-password">
+        <input id="a-pass2" class="auth-inp" name="new-password-confirm" placeholder="Confirm password" type="password" autocomplete="new-password">
         <div id="signup-checks">
           <label class="auth-check">
-            <input type="checkbox" id="check-age" disabled>
+            <input type="checkbox" id="check-age">
             <span class="auth-check-label">I confirm I am 21 years of age or older</span>
           </label>
           <label class="auth-check">
-            <input type="checkbox" id="check-terms" disabled>
+            <input type="checkbox" id="check-terms">
             <span class="auth-check-label">I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a></span>
           </label>
         </div>
-        <button type="submit" class="auth-submit" id="auth-signup-btn" disabled>Create My Account →</button>
+        <button type="submit" class="auth-submit" id="auth-signup-btn">Create My Account →</button>
       </form>
+      </template>
 
       <div class="auth-footer" id="auth-footer-text">Don't have an account? <span style="color:var(--cyan);cursor:pointer" onclick="setAuthTab('signup')">Create one free</span></div>
     </div>
@@ -710,38 +717,104 @@ function _authSubmitBtn() {
   return document.getElementById(authMode === 'signup' ? 'auth-signup-btn' : 'auth-submit-btn');
 }
 
+function _disarmCredentialInputs(form) {
+  if (!form) return;
+  form.querySelectorAll('input').forEach(function(el) {
+    if (el.type === 'password') {
+      el.setAttribute('data-real-type', 'password');
+      el.type = 'text';
+    }
+    var ac = el.getAttribute('autocomplete');
+    if (ac && ac !== 'off') {
+      el.setAttribute('data-real-autocomplete', ac);
+      el.setAttribute('autocomplete', 'off');
+    }
+    var n = el.getAttribute('name');
+    if (n && /^(username|password|email|telegram|new-password)/.test(n)) {
+      el.setAttribute('data-real-name', n);
+      el.setAttribute('name', 'x-' + n);
+    }
+  });
+}
+
+function _restoreCredentialInputs(form) {
+  if (!form) return;
+  form.querySelectorAll('input').forEach(function(el) {
+    var rt = el.getAttribute('data-real-type');
+    if (rt) { el.type = rt; el.removeAttribute('data-real-type'); }
+    var ac = el.getAttribute('data-real-autocomplete');
+    if (ac) { el.setAttribute('autocomplete', ac); el.removeAttribute('data-real-autocomplete'); }
+    var n = el.getAttribute('data-real-name');
+    if (n) { el.setAttribute('name', n); el.removeAttribute('data-real-name'); }
+  });
+}
+
 function _armAuthForm(form, on) {
   if (!form) return;
+  var active = document.activeElement;
+  var preserve = !!(active && form.contains(active));
   form.inert = !on;
   form.hidden = !on;
   form.style.display = on ? 'block' : 'none';
   form.setAttribute('autocomplete', on ? 'on' : 'off');
+  if (on) _restoreCredentialInputs(form);
+  else _disarmCredentialInputs(form);
   form.querySelectorAll('input,select,textarea,button').forEach(function(el) {
-    el.disabled = !on;
-    if (!on && (el.type === 'password' || el.getAttribute('autocomplete') === 'username')) {
-      el.setAttribute('autocomplete', 'off');
+    // Never disable the field the user is currently typing in.
+    if (preserve && el === active) {
+      el.disabled = false;
+      return;
     }
+    el.disabled = !on;
   });
+  if (preserve && active && !active.disabled) {
+    try { active.focus(); } catch (_e) {}
+  }
+}
+
+function _mountSignupForm() {
+  var slot = document.getElementById('signup-form-slot');
+  if (!slot) return null;
+  if (document.getElementById('signup-form')) return document.getElementById('signup-form');
+  var tpl = document.getElementById('tpl-signup-form');
+  if (!tpl) return null;
+  slot.appendChild(tpl.content.cloneNode(true));
+  return document.getElementById('signup-form');
+}
+
+function _unmountSignupForm() {
+  var slot = document.getElementById('signup-form-slot');
+  if (slot) slot.innerHTML = '';
 }
 
 function setAuthTab(mode) {
   var loginForm = document.getElementById('login-form');
   var signupForm = document.getElementById('signup-form');
-  var already = authMode === mode
-    && loginForm && signupForm
-    && ((mode==='login' && loginForm.style.display !== 'none' && signupForm.style.display === 'none')
-      || (mode==='signup' && signupForm.style.display !== 'none' && loginForm.style.display === 'none'));
+  var loginVisible = !!(loginForm && loginForm.style.display !== 'none' && !loginForm.hidden && !loginForm.inert);
+  var signupVisible = !!(signupForm && signupForm.style.display !== 'none' && !signupForm.hidden);
+  var already = authMode === mode && (
+    (mode === 'login' && loginVisible && !signupVisible) ||
+    (mode === 'signup' && signupVisible && loginForm && loginForm.style.display === 'none')
+  );
+  var ae = document.activeElement;
+  // Boot / preview re-calls setAuthTab('login') ~100ms later. Do not rebuild
+  // (or toggle disabled) while the identifier/password field is focused.
+  if (mode === 'login' && loginForm && ae && loginForm.contains(ae) &&
+      (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) {
+    if (signupForm) _unmountSignupForm();
+    return;
+  }
   if (already) return;
   authMode = mode;
   document.getElementById('tab-login').classList.toggle('active', mode==='login');
   document.getElementById('tab-signup').classList.toggle('active', mode==='signup');
-  _armAuthForm(loginForm, mode==='login');
-  _armAuthForm(signupForm, mode==='signup');
-  if (mode==='signup') {
-    var pass1 = document.getElementById('a-pass-signup');
-    var pass2 = document.getElementById('a-pass2');
-    if (pass1) pass1.setAttribute('autocomplete', 'new-password');
-    if (pass2) pass2.setAttribute('autocomplete', 'new-password');
+  if (mode === 'login') {
+    _unmountSignupForm();
+    _armAuthForm(loginForm, true);
+  } else {
+    _armAuthForm(loginForm, false);
+    signupForm = _mountSignupForm();
+    _armAuthForm(signupForm, true);
     updateSignupContactAttrs();
   }
   var emailEl = document.getElementById('a-email');
