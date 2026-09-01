@@ -264,8 +264,8 @@ const MOCK = {
   overview: { totalDiamondsHeld: 420, totalPurchased: 900, totalDebited: 480, pendingVerifications: 2, hostsWithBalances: 3, weeklyCharges: 45,
     hosts: [{ clubId:'club-1', hostId:'host-a', storedBalance:200 }, { clubId:'club-2', hostId:'host-b', storedBalance:220 }] },
   purchases: { purchases: [
-    { intentId:'DI_1', date:new Date().toISOString(), hostId:'host-a', clubId:'club-1', diamonds:100, usd:100, crypto:'BTC', txHash:'abc123hash', status:'hash_submitted', credited:false },
-    { intentId:'DI_2', date:new Date().toISOString(), hostId:'host-b', clubId:'club-2', diamonds:50, usd:50, crypto:'USDT', txHash:'def456hash', status:'credited', credited:true }
+    { intentId:'DI_1', date:new Date().toISOString(), hostId:'host-a', clubId:'club-1', diamonds:100, usd:100, crypto:'BTC', network:'Bitcoin', txHash:'abc123hash', status:'hash_submitted', credited:false },
+    { intentId:'DI_2', date:new Date().toISOString(), hostId:'host-b', clubId:'club-2', diamonds:50, usd:50, crypto:'USDT', network:null, txHash:'def456hash', status:'credited', credited:true }
   ]},
   ledger: { ledger: [
     { displayType:'DIAMOND_PURCHASE', who:'host-a', amount:100, balanceBefore:100, balanceAfter:200, reference:'abc123hash', createdAt:new Date().toISOString() },
@@ -346,14 +346,15 @@ async function loadPurchases() {
     var d = await api('/api/admin/diamonds/purchases'+qs());
     var rows = d.purchases || [];
     if (!rows.length) { el.innerHTML = '<div class="loading">No purchases</div>'; return; }
-    el.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Host</th><th>Diamonds</th><th>USD</th><th>Crypto</th><th>TxHash</th><th>Status</th><th>Actions</th></tr></thead><tbody>' +
+    el.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Date</th><th>Host</th><th>Diamonds</th><th>USD</th><th>Crypto</th><th>Network</th><th>TxHash</th><th>Status</th><th>Actions</th></tr></thead><tbody>' +
       rows.map(function(p){
         var actions = '<button class="btn btn-c" onclick="verifyPurchase(\''+esc(p.intentId||p.id)+'\')">Verify</button> ';
         if (!p.credited && p.status !== 'credited')
           actions += '<button class="btn btn-g" onclick="approvePurchase(\''+esc(p.intentId||p.id)+'\')">Approve &amp; Credit</button> ';
         if (p.status !== 'credited' && p.status !== 'rejected')
           actions += '<button class="btn btn-r" onclick="rejectPurchase(\''+esc(p.intentId||p.id)+'\')">Reject</button>';
-        return '<tr><td>'+esc((p.date||'').slice(0,16).replace('T',' '))+'</td><td>'+esc(p.hostId)+'<div class="mono">'+esc(p.clubId)+'</div></td><td>'+esc(p.diamonds)+'</td><td>'+esc(p.usd)+'</td><td>'+esc(p.crypto)+'</td><td class="mono">'+esc(p.txHash||'—')+'</td><td>'+pill(p.status)+'</td><td style="white-space:nowrap">'+actions+'</td></tr>';
+        var network = (p.network == null || p.network === '') ? '—' : p.network;
+        return '<tr><td>'+esc((p.date||'').slice(0,16).replace('T',' '))+'</td><td>'+esc(p.hostId)+'<div class="mono">'+esc(p.clubId)+'</div></td><td>'+esc(p.diamonds)+'</td><td>'+esc(p.usd)+'</td><td>'+esc(p.crypto)+'</td><td>'+esc(network)+'</td><td class="mono">'+esc(p.txHash||'—')+'</td><td>'+pill(p.status)+'</td><td style="white-space:nowrap">'+actions+'</td></tr>';
       }).join('') + '</tbody></table></div>';
   } catch (e) { el.innerHTML = '<div class="loading" style="color:var(--red)">'+esc(e.message)+'</div>'; }
 }
