@@ -998,19 +998,9 @@ window.PBS_BUILD_DATE = '2026-06-02T09:54:15.131Z';
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // dbgBanner must be defined FIRST — called by balance engine before any other function
 function dbgBanner(msg, color) {}
-// Sync balance on page load immediately
-(function(){
-  try {
-    var _t = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
-    var _open = _t.filter(function(t){return t.status==='active'||t.status==='open';});
-    var _start = parseFloat(localStorage.getItem('pb-balance-start')) || 1000;
-    var _risk = _open.reduce(function(s,t){return s+(parseFloat(t.riskAmount)||0);},0);
-    var _avail = Math.round((_start - _risk)*100)/100;
-    var _el = document.getElementById('player-balance-display');
-    if (_el) _el.textContent = '$'+_avail.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-    
-  } catch(e){ console.error('balance init error', e); }
-})();
+// Do not paint a localStorage-derived balance before the dashboard hydrates.
+// HTML already shows "..." on #player-balance-display. If a session token
+// exists, wait for loadPlayerDashboardFromDb(); otherwise leave the placeholder.
 let TOKEN=localStorage.getItem('pb-sports-token')||'';
 var _TOKEN_SKEW_MS = 5 * 60 * 1000;
 var _tokenRefreshInFlight = null;
@@ -1232,7 +1222,8 @@ try {
 
 // ═══ CENTRALIZED BALANCE ENGINE ══════════════════════════════════════════════
 // availableBalance = startingBalance - openRisk + settledWinnings + refunds
-// Source of truth: localStorage['pb-balance-start'] + localStorage['pb-tickets']
+// Display authority: /api/player/dashboard (availableBalance / balanceAfter).
+// localStorage['pb-balance-start'] + ['pb-tickets'] is fallback only.
 var _BASE_BALANCE = 1000; // default starting balance
 // Migrate: if old pb-balance exists and no pb-balance-start, use it as starting balance
 (function(){
@@ -1332,6 +1323,12 @@ function calcAvailableBalance() {
   };
 }
 var _balanceFromServer = false;
+function _liveAvailableBalance() {
+  if (_balanceFromServer && typeof playerBalance === 'number' && !isNaN(playerBalance)) {
+    return playerBalance;
+  }
+  return calcAvailableBalance().available;
+}
 function applyDisplayedBalance(amount) {
   var n = Number(amount);
   if (isNaN(n)) return false;
@@ -1356,8 +1353,14 @@ function syncBalanceDisplays() {
   return s;
 }
 var playerBalance = calcAvailableBalance().available;
-// Sync display as soon as functions are defined (localStorage until DB hydrates)
-document.addEventListener('DOMContentLoaded', function(){ if (!_balanceFromServer) syncBalanceDisplays(); });
+// Signed-in sessions wait for /api/player/dashboard. Do not flash localStorage.
+document.addEventListener('DOMContentLoaded', function(){
+  if (_balanceFromServer) return;
+  var tok = '';
+  try { tok = localStorage.getItem('pb-sports-token') || localStorage.getItem('pb-session-token') || ''; } catch(_e){}
+  if (tok) return;
+  syncBalanceDisplays();
+});
 // ══ PLAYER SETTINGS (Signal / theme / display currency) ═════════════════════════════════════
 var CURRENCY_RATES = { USD:1, EUR:0.92, GBP:0.79, CAD:1.36, AUD:1.51, MXN:17.20 };
 var CURRENCY_SYMBOLS = { USD:'$', EUR:'€', GBP:'£', CAD:'CA$', AUD:'A$', MXN:'MX$' };
@@ -1392,10 +1395,7 @@ try {
 } catch(_e) {}
 // ═══════════════════════════════════════════════════════════════════════════════
 function fmtBalance(){
-  if (_balanceFromServer && typeof playerBalance === 'number' && !isNaN(playerBalance)) {
-    return _fmtCurrency(playerBalance);
-  }
-  return _fmtCurrency(calcAvailableBalance().available);
+  return _fmtCurrency(_liveAvailableBalance());
 }
 
 function showPlayerSettings() {
@@ -3661,8 +3661,7 @@ function openBetConfirm() {
     '</div>';
   }).join('');
 
-  var _avBal = calcAvailableBalance().available;
-  playerBalance = _avBal;
+  var _avBal = _liveAvailableBalance();
   var insufficient = _avBal < bsStake;
   var confirmLabel = insufficient ? 'Insufficient Balance'
     : (bsType==='straight' && betSlip.length > 1 ? 'Confirm '+betSlip.length+' Bets' : 'Confirm Bet');
@@ -4253,10 +4252,7 @@ async function confirmBet() {
 
   // ── Balance check ─────────────────────────────────────────────────────────
   _cbStep = 'BALANCE_CHECK';
-  var _avail = (_balanceFromServer && typeof playerBalance === 'number' && !isNaN(playerBalance))
-    ? playerBalance
-    : calcAvailableBalance().available;
-  playerBalance = _avail;
+  var _avail = _liveAvailableBalance();
   var riskAmount = snap.risk;
   bsStake = riskAmount;
   if (_avail < riskAmount) {
@@ -4901,7 +4897,18 @@ function _refreshFromStorage(reason) {
   if (!_playerTicketsFromDb) {
     try { betTickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]'); } catch(ex) {}
   }
-  syncBalanceDisplays();
+  if (typeof loadPlayerDashboardFromDb === 'function') {
+    try {
+      loadPlayerDashboardFromDb().then(function(){
+        var sec = document.getElementById('mybets-section');
+        if (sec && sec.style.display !== 'none') {
+          try { renderMyBets(); } catch(_e){}
+        }
+      }).catch(function(){ syncBalanceDisplays(); });
+    } catch(_e) { syncBalanceDisplays(); }
+  } else {
+    syncBalanceDisplays();
+  }
   var sec = document.getElementById('mybets-section');
   if (sec && sec.style.display !== 'none') {
     renderMyBets();
@@ -4909,11 +4916,13 @@ function _refreshFromStorage(reason) {
   
 }
 window.addEventListener('storage', function(e) {
-  if (e.key === 'pb-balance') {
-    // Legacy key — still listen so any straggler writers don't desync displays.
-    loadBalance();
-    syncBalanceDisplays();
-    
+  if (e.key === 'pb-balance' || e.key === 'pb-balance-start') {
+    if (typeof loadPlayerDashboardFromDb === 'function') {
+      try { loadPlayerDashboardFromDb(); } catch(_e) { loadBalance(); }
+    } else {
+      loadBalance();
+      syncBalanceDisplays();
+    }
   }
   if (e.key === 'pb-tickets' || e.key === 'pb-tickets-version') {
     var v = parseInt(localStorage.getItem('pb-tickets-version') || '0', 10) || 0;
@@ -7509,7 +7518,14 @@ function _startEventPoller() {
   // Pause when tab hidden
   document.addEventListener('visibilitychange', function() {
     if (document.hidden) { clearInterval(_evPollTimer); _evPollTimer=null; }
-    else { _evPollTimer=setInterval(_pollEvents,12000); _pollEvents(); }
+    else {
+      _evPollTimer=setInterval(_pollEvents,12000);
+      _pollEvents();
+      try { loadPlayerDashboardFromDb(); } catch(_e){}
+    }
+  });
+  window.addEventListener('pageshow', function() {
+    try { loadPlayerDashboardFromDb(); } catch(_e){}
   });
   _pollEvents(); // immediate
 }

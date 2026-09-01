@@ -281,7 +281,11 @@ var hostHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8')
 
 test('does not pin Bets tab to activeTickets[0]', function() {
   assert(!/_hostDbActiveTickets\s*=\s*(data\.)?activeTickets\[0\]/.test(hostHtml), 'no activeTickets[0] assignment');
-  assert(hostHtml.indexOf('_hostDbActiveTickets = active.map(_normalizeHostTicket)') !== -1, 'maps ALL active tickets');
+  assert(
+    hostHtml.indexOf('_hostDbActiveTickets = active.map(_normalizeHostTicket)') !== -1
+    || hostHtml.indexOf('var active = ((data && data.activeTickets) || []).map(_normalizeHostTicket)') !== -1,
+    'maps ALL active tickets'
+  );
 });
 
 test('Bets tab expands all player groups by default', function() {
@@ -315,6 +319,26 @@ test('clicking a player expands their active bets', function() {
 
 test('applyHostDashboardPlayers caches club roster', function() {
   assert(hostHtml.indexOf("localStorage.setItem('pb-club-players'") !== -1, 'DB players cached to pb-club-players');
+});
+
+test('getAvailCredit and getOpenRisk prefer dashboard player rows', function() {
+  assert(hostHtml.indexOf('_hostDbPlayersById[String(pid)]') !== -1, 'credit helpers look up DB player');
+  assert(hostHtml.indexOf('dbp.availableBalance') !== -1, 'availableBalance from DB preferred');
+  assert(hostHtml.indexOf('dbp.openRisk') !== -1, 'openRisk from DB preferred');
+});
+
+test('player profile active bets read DB tickets, not hostActiveBets localStorage first', function() {
+  assert(hostHtml.indexOf('_hostBetsFromDbOrLocal()') !== -1, 'profile bets use DB-or-local helper');
+  assert(!/JSON\.parse\(localStorage\.getItem\('hostActiveBets'\)\|\|'\[\]'\)\.filter\(function\(b\)\{return b\.playerId===pid/.test(hostHtml),
+    'profile no longer reads hostActiveBets directly');
+});
+
+test('diamond pill hydrates from /api/host/diamond-usage', function() {
+  assert(hostHtml.indexOf('function applyServerDiamondBalance') !== -1, 'applyServerDiamondBalance defined');
+  assert(hostHtml.indexOf('function _hydrateHostDiamondPill') !== -1, '_hydrateHostDiamondPill defined');
+  assert(hostHtml.indexOf("/api/host/diamond-usage'") !== -1 || hostHtml.indexOf('/api/host/diamond-usage') !== -1, 'pill fetches diamond-usage');
+  assert(hostHtml.indexOf("'?clubId='+encodeURIComponent(cid)") !== -1, 'diamond hydrate passes clubId');
+  assert(hostHtml.indexOf('applyServerDiamondBalance(balance)') !== -1, 'diamond card writes pill from server');
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

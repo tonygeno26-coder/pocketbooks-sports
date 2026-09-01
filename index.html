@@ -2583,10 +2583,17 @@ function saveHostPlayerLimits(pid,limits){
   localStorage.setItem('pb-player-limits',JSON.stringify(all));
 }
 function getOpenRisk(pid){
-  var bets=JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
-  return bets.filter(function(b){return (b.status==='active'||b.status==='open')&&b.playerId===pid;}).reduce(function(s,b){return s+(b.riskAmount||0);},0);
+  var dbp = (_hostDbPlayersById && _hostDbPlayersById[String(pid)]) || null;
+  if (dbp && dbp.openRisk != null && !isNaN(Number(dbp.openRisk))) return Number(dbp.openRisk);
+  var bets = (typeof _hostBetsFromDbOrLocal === 'function') ? _hostBetsFromDbOrLocal() : [];
+  if (!bets.length) {
+    try { bets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]'); } catch(_e){ bets = []; }
+  }
+  return bets.filter(function(b){return (b.status==='active'||b.status==='open')&&String(b.playerId)===String(pid);}).reduce(function(s,b){return s+(Number(b.riskAmount)||0);},0);
 }
 function getAvailCredit(pid){
+  var dbp = (_hostDbPlayersById && _hostDbPlayersById[String(pid)]) || null;
+  if (dbp && dbp.availableBalance != null && !isNaN(Number(dbp.availableBalance))) return Number(dbp.availableBalance);
   var lim=getHostPlayerLimits(pid);
   return Math.max(0,(lim.creditLimit||0)-getOpenRisk(pid));
 }
@@ -2707,7 +2714,7 @@ function openPlayerSettings(pid, _p){
     )
   // Active bets for this player
   +(function(){
-    var pBets=JSON.parse(localStorage.getItem('hostActiveBets')||'[]').filter(function(b){return b.playerId===pid&&(b.status==='active'||b.status==='open');});
+    var pBets=(typeof _hostBetsFromDbOrLocal==='function'?_hostBetsFromDbOrLocal():[]).filter(function(b){return String(b.playerId)===String(pid)&&(b.status==='active'||b.status==='open');});
     if(!pBets.length) return '';
     return '<div style="background:#1a1a1a;border-radius:12px;padding:14px;margin-bottom:12px">'
       +'<div style="font-size:0.7rem;color:#555;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Active Bets ('+pBets.length+')</div>'
@@ -3290,8 +3297,10 @@ document.addEventListener('click', function(e) {
 });
 
 // ═══ HOST DIAMOND PILL (display) ════════════════════════════════════════════════════════════
-// Reads local balance for the header pill. Buy flow is diamonds.js only.
+// Header pill prefers /api/host/diamond-usage. localStorage is cache/fallback only.
+var _diamondBalanceFromServer = null;
 function getDiamondBalance() {
+  if (_diamondBalanceFromServer != null && !isNaN(_diamondBalanceFromServer)) return _diamondBalanceFromServer;
   var v = parseInt(localStorage.getItem('pb-diamonds') || '0', 10);
   return isNaN(v) ? 0 : v;
 }
@@ -3299,9 +3308,25 @@ function setDiamondBalance(n) {
   localStorage.setItem('pb-diamonds', String(parseInt(n, 10) || 0));
   syncDiamondDisplay();
 }
+function applyServerDiamondBalance(n) {
+  var v = parseInt(n, 10);
+  if (isNaN(v)) return;
+  _diamondBalanceFromServer = v;
+  try { localStorage.setItem('pb-diamonds', String(v)); } catch(_e){}
+  syncDiamondDisplay();
+}
 function syncDiamondDisplay() {
   var el = document.getElementById('diamond-count');
   if (el) el.textContent = getDiamondBalance().toLocaleString('en-US');
+}
+function _hydrateHostDiamondPill() {
+  if (typeof _pbFetch !== 'function') return;
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+  var cid = club.id || club.clubId || '';
+  var url = '/api/host/diamond-usage' + (cid ? ('?clubId='+encodeURIComponent(cid)) : '');
+  _pbFetch(url).then(function(r){ return r.json(); }).then(function(d){
+    if (d && d.ok && d.balanceDiamonds != null) applyServerDiamondBalance(d.balanceDiamonds);
+  }).catch(function(){});
 }
 syncDiamondDisplay();
 
@@ -4015,6 +4040,7 @@ function _renderHostDiamondCard(container, usage) {
   if (!container) return;
   if (!usage||!usage.ok) { container.innerHTML='<div style="font-size:0.7rem;color:#666;padding:4px">Diamond data unavailable</div>'; return; }
   var balance   = usage.balanceDiamonds||0;
+  try { applyServerDiamondBalance(balance); } catch(_e){}
   var used      = usage.capacityUsed||0;
   var remaining = usage.capacityRemaining||0;
   var total     = usage.capacityTotal||0;
@@ -4074,7 +4100,10 @@ async function loadHostDiamondCard() {
   var container = document.getElementById('host-diamond-card');
   if (!container) return;
   try {
-    var r = await _pbFetch('/api/host/diamond-usage');
+    var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+    var cid = club.id || club.clubId || '';
+    var url = '/api/host/diamond-usage' + (cid ? ('?clubId='+encodeURIComponent(cid)) : '');
+    var r = await _pbFetch(url);
     var d = await r.json();
     _renderHostDiamondCard(container, d);
     // Also load weekly report below the balance card
@@ -4714,6 +4743,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 (function _hostDashboardInit() {
   function _doInit() {
     _dispatchHostStatsRefresh('page_load');
+    _hydrateHostDiamondPill();
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', _doInit);
@@ -4724,6 +4754,16 @@ async function _dispatchHostStatsRefresh(trigger) {
   window.addEventListener('storage', function(e) {
     if (e.key === 'pb-tickets' || e.key === 'hostActiveBets' || e.key === 'pb-tickets-version') {
       _dispatchHostStatsRefresh('storage_event:' + e.key);
+    }
+  });
+  window.addEventListener('pageshow', function() {
+    _dispatchHostStatsRefresh('pageshow');
+    _hydrateHostDiamondPill();
+  });
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+      _dispatchHostStatsRefresh('visibility');
+      _hydrateHostDiamondPill();
     }
   });
   // Poll: use DB when primary, localStorage otherwise
