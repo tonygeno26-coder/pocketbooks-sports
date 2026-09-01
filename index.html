@@ -774,9 +774,10 @@ function renderAdminCrypto() {
     <span id="host-bets-count" style="font-size:0.72rem;color:var(--cyan);background:var(--cyan-dim);padding:3px 10px;border-radius:12px">0 bets</span>
   </div>
   <div id="host-bets-tabs" style="display:flex;gap:6px;padding:0 16px 10px;flex-wrap:wrap">
-    <button type="button" class="host-bets-tab active" data-bets-tab="active" style="flex:1;min-width:90px;min-height:40px;padding:8px 10px;border-radius:10px;border:1px solid rgba(0,194,255,0.35);background:rgba(0,194,255,0.14);color:var(--cyan);font-size:0.72rem;font-weight:900;cursor:pointer">ACTIVE <span id="host-bets-tab-active">0</span></button>
-    <button type="button" class="host-bets-tab" data-bets-tab="settled" style="flex:1;min-width:90px;min-height:40px;padding:8px 10px;border-radius:10px;border:1px solid #333;background:#141414;color:#888;font-size:0.72rem;font-weight:900;cursor:pointer">SETTLED <span id="host-bets-tab-settled">0</span></button>
-    <button type="button" class="host-bets-tab" data-bets-tab="all" style="flex:1;min-width:90px;min-height:40px;padding:8px 10px;border-radius:10px;border:1px solid #333;background:#141414;color:#888;font-size:0.72rem;font-weight:900;cursor:pointer">ALL <span id="host-bets-tab-all">0</span></button>
+    <button type="button" class="host-bets-tab active" data-bets-tab="all" style="flex:1;min-width:70px;min-height:40px;padding:8px 8px;border-radius:10px;border:1px solid rgba(0,194,255,0.35);background:rgba(0,194,255,0.14);color:var(--cyan);font-size:0.68rem;font-weight:900;cursor:pointer">ALL <span id="host-bets-tab-all">0</span></button>
+    <button type="button" class="host-bets-tab" data-bets-tab="active" style="flex:1;min-width:70px;min-height:40px;padding:8px 8px;border-radius:10px;border:1px solid #333;background:#141414;color:#888;font-size:0.68rem;font-weight:900;cursor:pointer">ACTIVE <span id="host-bets-tab-active">0</span></button>
+    <button type="button" class="host-bets-tab" data-bets-tab="settled" style="flex:1;min-width:70px;min-height:40px;padding:8px 8px;border-radius:10px;border:1px solid #333;background:#141414;color:#888;font-size:0.68rem;font-weight:900;cursor:pointer">SETTLED <span id="host-bets-tab-settled">0</span></button>
+    <button type="button" class="host-bets-tab" data-bets-tab="canceled" style="flex:1;min-width:70px;min-height:40px;padding:8px 8px;border-radius:10px;border:1px solid #333;background:#141414;color:#888;font-size:0.68rem;font-weight:900;cursor:pointer">CANCELED <span id="host-bets-tab-canceled">0</span></button>
   </div>
   <div id="host-bets-filters" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:0 16px 12px">
     <select id="host-bets-filter-player" style="min-height:40px;padding:8px 10px;background:#141414;border:1px solid #333;border-radius:10px;color:#fff;font-size:0.72rem;font-weight:700">
@@ -792,7 +793,7 @@ function renderAdminCrypto() {
     </select>
     <select id="host-bets-filter-date" style="min-height:40px;padding:8px 10px;background:#141414;border:1px solid #333;border-radius:10px;color:#fff;font-size:0.72rem;font-weight:700">
       <option value="">Any date</option>
-      <option value="7">Last 7 days</option>
+      <option value="7" selected>Last 7 days</option>
       <option value="30">Last 30 days</option>
       <option value="90">Last 90 days</option>
     </select>
@@ -1910,11 +1911,12 @@ var _hostDbAllTickets = null;
 var _hostDbPlayers = null;
 var _hostDbPlayersById = null;
 var _hostPlayersFetchDone = false;
-var _hostBetsTab = 'active';
+var _hostBetsTab = 'all';
 var _hostBetsFilterPlayer = '';
 var _hostBetsFilterStatus = '';
-var _hostBetsFilterDate = '';
+var _hostBetsFilterDate = '7';
 var _hostBetsUiWired = false;
+var _hostDbRecentSettledTickets = null;
 
 function _normalizeHostTicket(t) {
   if (!t || typeof t !== 'object') return t;
@@ -1966,12 +1968,16 @@ function _hostTicketStatusBucket(status) {
 function _hostTicketIsActive(t) { return _hostTicketStatusBucket(t && t.status) === 'active'; }
 function _hostTicketIsSettled(t) {
   var b = _hostTicketStatusBucket(t && t.status);
-  return b === 'won' || b === 'lost' || b === 'push' || b === 'void';
+  return b === 'won' || b === 'lost' || b === 'push';
+}
+function _hostTicketIsCanceled(t) {
+  return _hostTicketStatusBucket(t && t.status) === 'void';
 }
 
 function _applyHostDashboardTickets(data) {
   var active = ((data && data.activeTickets) || []).map(_normalizeHostTicket);
   var graded = ((data && data.gradedTickets) || []).map(_normalizeHostTicket);
+  var recentSettled = ((data && data.settledTickets) || []).map(_normalizeHostTicket);
   var seen = {};
   var all = active.concat(graded).filter(function(t) {
     if (!t || !t.id || seen[t.id]) return false;
@@ -1980,7 +1986,17 @@ function _applyHostDashboardTickets(data) {
   });
   _hostDbActiveTickets = active;
   _hostDbSettledTickets = graded.filter(_hostTicketIsSettled);
+  _hostDbRecentSettledTickets = recentSettled.length
+    ? recentSettled
+    : _hostDbSettledTickets.filter(function(t) {
+        var ms = Date.parse(t.gradedAt || t.placedAt || '') || 0;
+        return ms && (Date.now() - ms) <= 7 * 86400000;
+      });
   _hostDbAllTickets = all;
+  // Prefer All when there are no active bets so settled history is visible.
+  if (!_hostBetsUiWired && active.length === 0 && (_hostDbRecentSettledTickets.length || _hostDbSettledTickets.length)) {
+    _hostBetsTab = 'all';
+  }
   // Cache only — UI reads from _hostDb* arrays when present.
   try { localStorage.setItem('hostActiveBets', JSON.stringify(all)); } catch(_e) {}
   return _hostDbActiveTickets;
@@ -2081,16 +2097,25 @@ function loadHostActiveBets(){
 function _updateHostBetsTabCounts(allTickets){
   var all = allTickets || _hostAllTicketsDeduped();
   var activeN = all.filter(_hostTicketIsActive).length;
-  var settledN = all.filter(_hostTicketIsSettled).length;
+  var settledSrc = (_hostDbRecentSettledTickets && _hostDbRecentSettledTickets.length)
+    ? _hostDbRecentSettledTickets
+    : all.filter(_hostTicketIsSettled);
+  var settledN = settledSrc.length;
+  var canceledN = all.filter(_hostTicketIsCanceled).length;
   var allN = all.length;
   function _set(id, n){ var el=document.getElementById(id); if(el) el.textContent=String(n); }
   _set('host-bets-tab-active', activeN);
   _set('host-bets-tab-settled', settledN);
+  _set('host-bets-tab-canceled', canceledN);
   _set('host-bets-tab-all', allN);
   var cnt=document.getElementById('host-bets-count');
   if(cnt){
-    var n = _hostBetsTab==='active' ? activeN : (_hostBetsTab==='settled' ? settledN : allN);
-    var label = _hostBetsTab==='active' ? 'active' : (_hostBetsTab==='settled' ? 'settled' : '');
+    var n = _hostBetsTab==='active' ? activeN
+      : (_hostBetsTab==='settled' ? settledN
+      : (_hostBetsTab==='canceled' ? canceledN : allN));
+    var label = _hostBetsTab==='active' ? 'active'
+      : (_hostBetsTab==='settled' ? 'settled'
+      : (_hostBetsTab==='canceled' ? 'canceled' : ''));
     cnt.textContent = n + (label ? ' '+label : '') + ' bet' + (n!==1?'s':'');
   }
   // Sync tab button styles
@@ -2324,19 +2349,23 @@ function renderHostBets(){
   var badge = document.getElementById('del-req-badge');
   if (badge) { badge.textContent = delReqs.length || ''; badge.style.display = delReqs.length ? 'inline' : 'none'; }
 
+  if (_hostBetsTab === 'settled' && _hostDbRecentSettledTickets && _hostDbRecentSettledTickets.length) {
+    all = _hostDbRecentSettledTickets.slice();
+  }
   var list = all.filter(function(t){
     if (_hostBetsTab === 'active' && !_hostTicketIsActive(t)) return false;
     if (_hostBetsTab === 'settled' && !_hostTicketIsSettled(t)) return false;
+    if (_hostBetsTab === 'canceled' && !_hostTicketIsCanceled(t)) return false;
     if (_hostBetsFilterPlayer && String(t.playerId||'') !== String(_hostBetsFilterPlayer)) return false;
     if (_hostBetsFilterStatus) {
       var bucket = _hostTicketStatusBucket(t.status);
       if (_hostBetsFilterStatus === 'active' && bucket !== 'active') return false;
       if (_hostBetsFilterStatus !== 'active' && bucket !== _hostBetsFilterStatus) return false;
     }
-    if (_hostBetsFilterDate) {
+    if (_hostBetsFilterDate && _hostBetsTab !== 'settled') {
       var days = parseInt(_hostBetsFilterDate, 10) || 0;
       if (days > 0) {
-        var ms = Date.parse(t.placedAt || '') || 0;
+        var ms = Date.parse(t.gradedAt || t.placedAt || '') || 0;
         if (!ms || (Date.now() - ms) > days * 86400000) return false;
       }
     }
@@ -2377,7 +2406,9 @@ function renderHostBets(){
   }
 
   if(!list.length){
-    var emptyMsg = _hostBetsTab==='settled' ? 'No settled bets yet' : (_hostBetsTab==='all' ? 'No bets found' : 'No active bets yet');
+    var emptyMsg = _hostBetsTab==='settled' ? 'No settled bets in the last 7 days'
+      : (_hostBetsTab==='canceled' ? 'No canceled bets'
+      : (_hostBetsTab==='all' ? 'No bets found' : 'No active bets yet'));
     el.innerHTML = delSection + '<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">'+emptyMsg+'</div>';
     return;
   }
@@ -2424,6 +2455,11 @@ function renderHostBets(){
         g.bets.map(function(t) {
           var d=new Date(t.placedAt);
           var dt=isNaN(d)?(t.placedAt||'') : d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+          var settledDt = '';
+          if (t.gradedAt) {
+            var gd = new Date(t.gradedAt);
+            settledDt = isNaN(gd) ? String(t.gradedAt) : gd.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+          }
           var picks = (t.selections||[]).map(function(s, idx){
             var od = s.odds;
             if (od != null && od !== '' && !(String(od)[0]==='+'||String(od)[0]==='-')) {
@@ -2451,8 +2487,10 @@ function renderHostBets(){
             '</div>' +
             '<div style="font-size:0.62rem;color:#666;margin-bottom:4px">'+esc(g.playerName)+'</div>' +
             picks +
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:6px;border-top:1px solid #222;font-size:0.65rem;color:#777">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:6px;border-top:1px solid #222;font-size:0.65rem;color:#777;gap:8px;flex-wrap:wrap">' +
               '<span>Placed '+esc(dt)+'</span>' +
+              (settledDt ? '<span>Settled '+esc(settledDt)+'</span>' : '') +
+              '<span>Result <span style="color:#fff;font-weight:800;text-transform:uppercase">'+esc(t.status||'—')+'</span></span>' +
               '<span>Odds <span style="color:var(--cyan);font-weight:800">'+esc(oddsStr||'—')+'</span></span>' +
             '</div>' +
             '<div class="host-bet-metrics" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px">' +
