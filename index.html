@@ -746,10 +746,45 @@ function renderAdminCrypto() {
 <!-- Phase U: Admin System Panel (full_admin+ only) -->
 <div id="_admin-system-panel" style="display:none;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;margin:8px;overflow:hidden"></div>
 <div id="bets-section" style="display:none;padding-bottom:100px">
-  <div style="padding:16px 16px 8px;display:flex;justify-content:space-between;align-items:center">
-    <span style="font-size:1rem;font-weight:900">Active Bets</span>
+  <div style="padding:16px 16px 8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+    <span style="font-size:1rem;font-weight:900">Host Bets</span>
     <span id="host-bets-count" style="font-size:0.72rem;color:var(--cyan);background:var(--cyan-dim);padding:3px 10px;border-radius:12px">0 bets</span>
   </div>
+  <div id="host-bets-tabs" style="display:flex;gap:6px;padding:0 16px 10px;flex-wrap:wrap">
+    <button type="button" class="host-bets-tab active" data-bets-tab="active" style="flex:1;min-width:90px;min-height:40px;padding:8px 10px;border-radius:10px;border:1px solid rgba(0,194,255,0.35);background:rgba(0,194,255,0.14);color:var(--cyan);font-size:0.72rem;font-weight:900;cursor:pointer">ACTIVE <span id="host-bets-tab-active">0</span></button>
+    <button type="button" class="host-bets-tab" data-bets-tab="settled" style="flex:1;min-width:90px;min-height:40px;padding:8px 10px;border-radius:10px;border:1px solid #333;background:#141414;color:#888;font-size:0.72rem;font-weight:900;cursor:pointer">SETTLED <span id="host-bets-tab-settled">0</span></button>
+    <button type="button" class="host-bets-tab" data-bets-tab="all" style="flex:1;min-width:90px;min-height:40px;padding:8px 10px;border-radius:10px;border:1px solid #333;background:#141414;color:#888;font-size:0.72rem;font-weight:900;cursor:pointer">ALL <span id="host-bets-tab-all">0</span></button>
+  </div>
+  <div id="host-bets-filters" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:0 16px 12px">
+    <select id="host-bets-filter-player" style="min-height:40px;padding:8px 10px;background:#141414;border:1px solid #333;border-radius:10px;color:#fff;font-size:0.72rem;font-weight:700">
+      <option value="">All players</option>
+    </select>
+    <select id="host-bets-filter-status" style="min-height:40px;padding:8px 10px;background:#141414;border:1px solid #333;border-radius:10px;color:#fff;font-size:0.72rem;font-weight:700">
+      <option value="">All statuses</option>
+      <option value="active">Active</option>
+      <option value="won">Won</option>
+      <option value="lost">Lost</option>
+      <option value="push">Push</option>
+      <option value="void">Void</option>
+    </select>
+    <select id="host-bets-filter-date" style="min-height:40px;padding:8px 10px;background:#141414;border:1px solid #333;border-radius:10px;color:#fff;font-size:0.72rem;font-weight:700">
+      <option value="">Any date</option>
+      <option value="7">Last 7 days</option>
+      <option value="30">Last 30 days</option>
+      <option value="90">Last 90 days</option>
+    </select>
+  </div>
+  <style>
+    #bets-section{overflow-x:hidden;max-width:100%}
+    #host-bets-list{overflow-x:hidden;max-width:100%}
+    #host-bets-list *{max-width:100%;box-sizing:border-box;overflow-wrap:anywhere;word-break:break-word}
+    @media (max-width:480px){
+      #host-bets-filters{grid-template-columns:1fr!important}
+      #host-bets-tabs{flex-direction:column}
+      #host-bets-tabs .host-bets-tab{width:100%}
+      #host-bets-list .host-bet-metrics{grid-template-columns:1fr 1fr!important}
+    }
+  </style>
   <div id="host-bets-list"></div>
 </div>
 
@@ -1847,9 +1882,16 @@ function getLiveCreditPosition(opts) {
 window.getLiveCreditPosition = getLiveCreditPosition;
 
 var _hostDbActiveTickets = null;
+var _hostDbSettledTickets = null;
+var _hostDbAllTickets = null;
 var _hostDbPlayers = null;
 var _hostDbPlayersById = null;
 var _hostPlayersFetchDone = false;
+var _hostBetsTab = 'active';
+var _hostBetsFilterPlayer = '';
+var _hostBetsFilterStatus = '';
+var _hostBetsFilterDate = '';
+var _hostBetsUiWired = false;
 
 function _normalizeHostTicket(t) {
   if (!t || typeof t !== 'object') return t;
@@ -1864,7 +1906,7 @@ function _normalizeHostTicket(t) {
     if (odds != null && typeof odds === 'number') odds = odds > 0 ? '+'+odds : String(odds);
     return Object.assign({}, s, {
       pick: s.pick || s.label || s.name || '',
-      market: s.market || '',
+      market: s.market || s.market_type || '',
       odds: odds,
       homeTeam: home,
       awayTeam: away,
@@ -1873,7 +1915,7 @@ function _normalizeHostTicket(t) {
   });
   return Object.assign({}, t, {
     id: t.id,
-    type: t.type || 'Single',
+    type: t.type || (selections.length > 1 ? 'Parlay' : 'Single'),
     status: t.status || 'active',
     playerId: t.playerId || t.player_id,
     playerUsername: t.playerUsername || t.player_username || t.playerName || '',
@@ -1882,16 +1924,42 @@ function _normalizeHostTicket(t) {
     potentialProfit: t.potentialProfit != null ? Number(t.potentialProfit) : Number(t.potential_profit)||0,
     estimatedPayout: t.estimatedPayout != null ? Number(t.estimatedPayout) : Number(t.estimated_payout)||0,
     placedAt: t.placedAt || t.placed_at,
+    gradedAt: t.gradedAt || t.graded_at || null,
+    odds: t.odds || (selections[0] && selections[0].odds) || '',
     selections: selections
   });
 }
 
+function _hostTicketStatusBucket(status) {
+  var s = String(status || '').toLowerCase();
+  if (s === 'active' || s === 'open') return 'active';
+  if (s === 'won') return 'won';
+  if (s === 'lost') return 'lost';
+  if (s === 'push' || s === 'pushed') return 'push';
+  if (s === 'void' || s === 'voided' || s === 'canceled' || s === 'cancelled' || s === 'deleted' || s === 'refunded') return 'void';
+  return s || 'other';
+}
+
+function _hostTicketIsActive(t) { return _hostTicketStatusBucket(t && t.status) === 'active'; }
+function _hostTicketIsSettled(t) {
+  var b = _hostTicketStatusBucket(t && t.status);
+  return b === 'won' || b === 'lost' || b === 'push' || b === 'void';
+}
+
 function _applyHostDashboardTickets(data) {
-  var active = (data && data.activeTickets) || [];
-  var graded = (data && data.gradedTickets) || [];
-  var normalized = active.concat(graded).map(_normalizeHostTicket);
-  _hostDbActiveTickets = active.map(_normalizeHostTicket);
-  try { localStorage.setItem('hostActiveBets', JSON.stringify(normalized)); } catch(_e) {}
+  var active = ((data && data.activeTickets) || []).map(_normalizeHostTicket);
+  var graded = ((data && data.gradedTickets) || []).map(_normalizeHostTicket);
+  var seen = {};
+  var all = active.concat(graded).filter(function(t) {
+    if (!t || !t.id || seen[t.id]) return false;
+    seen[t.id] = true;
+    return true;
+  });
+  _hostDbActiveTickets = active;
+  _hostDbSettledTickets = graded.filter(_hostTicketIsSettled);
+  _hostDbAllTickets = all;
+  // Cache only — UI reads from _hostDb* arrays when present.
+  try { localStorage.setItem('hostActiveBets', JSON.stringify(all)); } catch(_e) {}
   return _hostDbActiveTickets;
 }
 
@@ -1951,21 +2019,26 @@ function _hostPlayersFromDbOrLocal(){
 }
 
 function _hostBetsFromDbOrLocal(){
-  // Successful /api/host/dashboard apply sets _hostDbActiveTickets to an array
+  // Successful /api/host/dashboard apply sets _hostDbAllTickets to an array
   // (possibly empty). null means the fetch never succeeded — only then fall
-  // back to localStorage. Never let empty hostActiveBets replace a DB payload.
+  // back to localStorage. DB is authoritative for Host Bets history.
+  if (Array.isArray(_hostDbAllTickets)) return _hostDbAllTickets;
+  if (Array.isArray(_hostDbActiveTickets) && Array.isArray(_hostDbSettledTickets)) {
+    return _hostDbActiveTickets.concat(_hostDbSettledTickets);
+  }
   if (Array.isArray(_hostDbActiveTickets)) return _hostDbActiveTickets;
-  try { return JSON.parse(localStorage.getItem('hostActiveBets')||'[]'); } catch(_e) { return []; }
+  try { return JSON.parse(localStorage.getItem('hostActiveBets')||'[]').map(_normalizeHostTicket); } catch(_e) { return []; }
 }
-function loadHostActiveBets(){
-  var raw = _hostBetsFromDbOrLocal();
-  // Deduplicate by ticket id
+function _hostAllTicketsDeduped(){
   var seen={};
-  var tickets=raw.filter(function(t){
-    if(!t.id||seen[t.id]) return false;
+  return _hostBetsFromDbOrLocal().filter(function(t){
+    if(!t||!t.id||seen[t.id]) return false;
     seen[t.id]=true; return true;
   });
-  var active=tickets.filter(function(t){return t.status==='active'||t.status==='open';});
+}
+function loadHostActiveBets(){
+  var tickets=_hostAllTicketsDeduped();
+  var active=tickets.filter(_hostTicketIsActive);
   // HOST EXPOSURE = potentialProfit (what host owes if player wins)
   // NOT riskAmount (that is the player's wager, not host liability)
   var totalRisk=active.reduce(function(s,t){
@@ -1974,13 +2047,78 @@ function loadHostActiveBets(){
   },0);
   var el=document.getElementById('stat-active-bets');
   var el2=document.getElementById('stat-active-risk');
-  var cnt=document.getElementById('host-bets-count');
   if(el) el.textContent=active.length;
   if(el2) el2.textContent='$'+totalRisk.toFixed(2);
-  if(cnt) cnt.textContent=active.length+' bet'+(active.length!==1?'s':'');
+  _updateHostBetsTabCounts(tickets);
   // Recalculate full host stats whenever active bets are loaded
   renderHostStats();
   return active;
+}
+
+function _updateHostBetsTabCounts(allTickets){
+  var all = allTickets || _hostAllTicketsDeduped();
+  var activeN = all.filter(_hostTicketIsActive).length;
+  var settledN = all.filter(_hostTicketIsSettled).length;
+  var allN = all.length;
+  function _set(id, n){ var el=document.getElementById(id); if(el) el.textContent=String(n); }
+  _set('host-bets-tab-active', activeN);
+  _set('host-bets-tab-settled', settledN);
+  _set('host-bets-tab-all', allN);
+  var cnt=document.getElementById('host-bets-count');
+  if(cnt){
+    var n = _hostBetsTab==='active' ? activeN : (_hostBetsTab==='settled' ? settledN : allN);
+    var label = _hostBetsTab==='active' ? 'active' : (_hostBetsTab==='settled' ? 'settled' : '');
+    cnt.textContent = n + (label ? ' '+label : '') + ' bet' + (n!==1?'s':'');
+  }
+  // Sync tab button styles
+  Array.prototype.forEach.call(document.querySelectorAll('.host-bets-tab'), function(btn){
+    var on = btn.getAttribute('data-bets-tab') === _hostBetsTab;
+    btn.classList.toggle('active', on);
+    btn.style.border = on ? '1px solid rgba(0,194,255,0.35)' : '1px solid #333';
+    btn.style.background = on ? 'rgba(0,194,255,0.14)' : '#141414';
+    btn.style.color = on ? 'var(--cyan)' : '#888';
+  });
+}
+
+function _wireHostBetsUi(){
+  if (_hostBetsUiWired) return;
+  _hostBetsUiWired = true;
+  Array.prototype.forEach.call(document.querySelectorAll('[data-bets-tab]'), function(btn){
+    btn.addEventListener('click', function(){
+      _hostBetsTab = btn.getAttribute('data-bets-tab') || 'active';
+      renderHostBets();
+    });
+  });
+  var fp = document.getElementById('host-bets-filter-player');
+  var fs = document.getElementById('host-bets-filter-status');
+  var fd = document.getElementById('host-bets-filter-date');
+  if (fp) fp.addEventListener('change', function(){ _hostBetsFilterPlayer = fp.value || ''; renderHostBets(); });
+  if (fs) fs.addEventListener('change', function(){ _hostBetsFilterStatus = fs.value || ''; renderHostBets(); });
+  if (fd) fd.addEventListener('change', function(){ _hostBetsFilterDate = fd.value || ''; renderHostBets(); });
+}
+
+function _hostStatusBadge(status){
+  var b = _hostTicketStatusBucket(status);
+  var map = {
+    active: { label:'ACTIVE', color:'var(--cyan)', bg:'var(--cyan-dim)', border:'rgba(0,194,255,0.25)' },
+    won:    { label:'WON',    color:'#00ff88', bg:'rgba(0,255,136,0.12)', border:'rgba(0,255,136,0.35)' },
+    lost:   { label:'LOST',   color:'#ff3d57', bg:'rgba(255,61,87,0.12)', border:'rgba(255,61,87,0.35)' },
+    push:   { label:'PUSH',   color:'#f5c842', bg:'rgba(245,200,66,0.12)', border:'rgba(245,200,66,0.35)' },
+    void:   { label:'VOID',   color:'#999', bg:'rgba(255,255,255,0.06)', border:'#444' }
+  };
+  var m = map[b] || { label:String(status||'UNKNOWN').toUpperCase(), color:'#888', bg:'#1a1a1a', border:'#333' };
+  return '<span style="font-size:0.58rem;font-weight:900;letter-spacing:0.4px;color:'+m.color+';background:'+m.bg+';padding:3px 8px;border-radius:10px;border:1px solid '+m.border+'">'+m.label+'</span>';
+}
+
+function _hostTicketPayoutLabel(t){
+  var b = _hostTicketStatusBucket(t.status);
+  var stake = parseFloat(t.riskAmount)||0;
+  var profit = parseFloat(t.potentialProfit)||0;
+  var est = parseFloat(t.estimatedPayout)||0;
+  if (b === 'won') return { label:'Payout', value: est > 0 ? est : (stake + profit) };
+  if (b === 'lost') return { label:'Payout', value: 0 };
+  if (b === 'push' || b === 'void') return { label:'Payout', value: stake };
+  return { label:'Est. Payout', value: est > 0 ? est : (stake + profit) };
 }
 
 
@@ -2131,20 +2269,62 @@ function hostDenyDelete(ticketId) {
 
 var _hostRenderQuiet = false;
 function renderHostBets(){
-  var active=loadHostActiveBets();
+  _wireHostBetsUi();
+  var all = _hostAllTicketsDeduped();
+  // Keep home-stat counters in sync from the same DB-backed list.
+  loadHostActiveBets();
   var el=document.getElementById('host-bets-list');
   if(!el) return;
-  // Update delete request badge
-  var delReqs = active.filter(function(t){ return t.deleteRequestStatus==='pending'; });
+
+  // Populate player filter options from server tickets (names, not raw UUIDs as labels).
+  var playerSel = document.getElementById('host-bets-filter-player');
+  if (playerSel) {
+    var prev = _hostBetsFilterPlayer;
+    var opts = { '': 'All players' };
+    all.forEach(function(t){
+      var pid = String(t.playerId || '');
+      if (!pid) return;
+      var dbp = (_hostDbPlayersById && _hostDbPlayersById[pid]) || null;
+      var name = (dbp && (dbp.username || dbp.playerName)) || t.playerUsername || t.playerName || 'Player';
+      if (name === pid) name = 'Player';
+      opts[pid] = name;
+    });
+    playerSel.innerHTML = Object.keys(opts).map(function(k){
+      return '<option value="'+k.replace(/"/g,'&quot;')+'">'+String(opts[k]).replace(/</g,'&lt;')+'</option>';
+    }).join('');
+    playerSel.value = prev;
+    _hostBetsFilterPlayer = playerSel.value || '';
+  }
+
+  var activeAll = all.filter(_hostTicketIsActive);
+  var delReqs = activeAll.filter(function(t){ return t.deleteRequestStatus==='pending'; });
   var badge = document.getElementById('del-req-badge');
   if (badge) { badge.textContent = delReqs.length || ''; badge.style.display = delReqs.length ? 'inline' : 'none'; }
-  if(!active.length){
-    el.innerHTML='<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">No active bets yet</div>';
-    return;
-  }
-  // Delete request alert section
+
+  var list = all.filter(function(t){
+    if (_hostBetsTab === 'active' && !_hostTicketIsActive(t)) return false;
+    if (_hostBetsTab === 'settled' && !_hostTicketIsSettled(t)) return false;
+    if (_hostBetsFilterPlayer && String(t.playerId||'') !== String(_hostBetsFilterPlayer)) return false;
+    if (_hostBetsFilterStatus) {
+      var bucket = _hostTicketStatusBucket(t.status);
+      if (_hostBetsFilterStatus === 'active' && bucket !== 'active') return false;
+      if (_hostBetsFilterStatus !== 'active' && bucket !== _hostBetsFilterStatus) return false;
+    }
+    if (_hostBetsFilterDate) {
+      var days = parseInt(_hostBetsFilterDate, 10) || 0;
+      if (days > 0) {
+        var ms = Date.parse(t.placedAt || '') || 0;
+        if (!ms || (Date.now() - ms) > days * 86400000) return false;
+      }
+    }
+    return true;
+  });
+
+  _updateHostBetsTabCounts(all);
+
+  // Delete request alert section (active tab only)
   var delSection = '';
-  if (delReqs.length) {
+  if (_hostBetsTab === 'active' && delReqs.length) {
     delSection = '<div style="margin:0 16px 8px;background:#2a1000;border:1.5px solid #cc0000;border-radius:14px;padding:14px">' +
       '<div style="font-size:0.72rem;font-weight:900;color:#cc0000;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">⚠️ '+delReqs.length+' Delete Request'+( delReqs.length>1?'s':'')+' Pending</div>' +
       delReqs.map(function(t){
@@ -2172,11 +2352,16 @@ function renderHostBets(){
       }).join('') +
     '</div>';
   }
-  // ══ GROUP BY PLAYER ══
-  // Persist expanded set across re-renders.
+
+  if(!list.length){
+    var emptyMsg = _hostBetsTab==='settled' ? 'No settled bets yet' : (_hostBetsTab==='all' ? 'No bets found' : 'No active bets yet');
+    el.innerHTML = delSection + '<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">'+emptyMsg+'</div>';
+    return;
+  }
+
   if (!window._hostBetsExpanded) window._hostBetsExpanded = {};
   var groups = {};
-  active.forEach(function(t) {
+  list.forEach(function(t) {
     var pid = t.playerId || (t.playerUsername||t.playerName||'unknown');
     var dbp = (_hostDbPlayersById && t.playerId && _hostDbPlayersById[String(t.playerId)]) || null;
     var resolvedName = (dbp && (dbp.username || dbp.playerName)) || t.playerUsername || t.playerName || 'Player';
@@ -2197,15 +2382,16 @@ function renderHostBets(){
     g.bets.push(t);
     g.risk     += parseFloat(t.riskAmount||0);
     g.exposure += parseFloat(t.potentialProfit||0);
-    g.payout   += parseFloat(t.estimatedPayout||0);
+    g.payout   += parseFloat((_hostTicketPayoutLabel(t).value)||0);
   });
   var groupArr = Object.keys(groups).map(function(k){ return groups[k]; })
     .sort(function(a,b){ return b.exposure - a.exposure; });
 
   function fmt$(n){ return '$'+(parseFloat(n)||0).toFixed(2); }
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 
   var groupsHtml = groupArr.map(function(g) {
-    var key = g.playerId || g.playerName;
+    var key = String(g.playerId || g.playerName);
     if (window._hostBetsExpanded[key] === undefined) window._hostBetsExpanded[key] = true;
     var open = window._hostBetsExpanded[key] !== false;
     var initials = (g.playerName||'?').split(/\s+/).map(function(w){return (w[0]||'').toUpperCase();}).slice(0,2).join('') || '?';
@@ -2214,58 +2400,66 @@ function renderHostBets(){
       betsHtml = '<div style="border-top:1px solid var(--border);padding:8px 14px 4px;background:#0c0c0c">' +
         g.bets.map(function(t) {
           var d=new Date(t.placedAt);
-          var dt=isNaN(d)?t.placedAt:d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
-          var sel0 = (t.selections && t.selections[0]) || {};
-          var picks = (t.selections||[]).map(function(s){
-            var od = (s.odds && (String(s.odds)[0]==='+'||String(s.odds)[0]==='-')) ? s.odds : (parseFloat(s.odds)>0?'+':'')+s.odds;
+          var dt=isNaN(d)?(t.placedAt||'') : d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+          var picks = (t.selections||[]).map(function(s, idx){
+            var od = s.odds;
+            if (od != null && od !== '' && !(String(od)[0]==='+'||String(od)[0]==='-')) {
+              var n = parseFloat(od); od = isNaN(n) ? od : ((n>0?'+':'')+n);
+            }
             var matchup = s.matchup || (s.awayTeam && s.homeTeam ? s.awayTeam+' @ '+s.homeTeam : '');
-            return '<div style="font-size:0.72rem;color:#bbb;padding:2px 0">'
-              +(matchup?'<div style="font-size:0.62rem;color:#777;margin-bottom:1px">'+matchup+'</div>':'')
-              +'<span style="font-weight:700">'+s.pick+'</span> <span style="color:var(--cyan);font-weight:700">'+od+'</span><span style="color:#555"> · '+(s.market||'')+'</span></div>';
-          }).join('');
+            var legPrefix = (t.selections||[]).length > 1 ? ('<span style="color:#555;font-weight:800;margin-right:4px">L'+(idx+1)+'</span>') : '';
+            return '<div style="font-size:0.72rem;color:#bbb;padding:4px 0;border-bottom:1px solid #1a1a1a">'
+              + legPrefix
+              +(matchup?'<div style="font-size:0.62rem;color:#777;margin-bottom:1px">'+esc(matchup)+'</div>':'')
+              +'<span style="font-weight:700">'+esc(s.pick||'—')+'</span> '
+              +'<span style="color:var(--cyan);font-weight:700">'+esc(od||'')+'</span>'
+              +'<span style="color:#555"> · '+esc(s.market||'')+'</span></div>';
+          }).join('') || '<div style="font-size:0.72rem;color:#666;padding:4px 0">No selections</div>';
           var statusBadge = t.deleteRequestStatus==='pending'
             ? '<span style="font-size:0.55rem;font-weight:800;color:#f59e0b;background:rgba(245,158,11,0.12);padding:2px 8px;border-radius:10px;border:1px solid #f59e0b">DEL?</span>'
-            : (t.status==='voided'||t.status==='deleted')
-              ? '<span style="font-size:0.55rem;font-weight:800;color:#555;background:#1a1a1a;padding:2px 8px;border-radius:10px;border:1px solid #333">VOID</span>'
-              : '<span style="font-size:0.55rem;font-weight:800;color:var(--cyan);background:var(--cyan-dim);padding:2px 8px;border-radius:10px;border:1px solid rgba(0,194,255,0.25)">ACTIVE</span>';
-          var canCancel = (t.status === 'active' || t.status === 'open');
+            : _hostStatusBadge(t.status);
+          var canCancel = _hostTicketIsActive(t);
+          var pay = _hostTicketPayoutLabel(t);
+          var oddsStr = t.odds || ((t.selections&&t.selections[0]&&t.selections[0].odds)||'');
           return '<div style="background:#141414;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
-              '<div style="font-size:0.78rem;font-weight:800">'+t.type+'</div>' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap">' +
+              '<div style="font-size:0.78rem;font-weight:800">'+esc(t.type||'Single')+' · <span style="color:#777;font-weight:700;font-size:0.65rem">'+esc(t.id)+'</span></div>' +
               statusBadge +
             '</div>' +
+            '<div style="font-size:0.62rem;color:#666;margin-bottom:4px">'+esc(g.playerName)+'</div>' +
             picks +
             '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:6px;border-top:1px solid #222;font-size:0.65rem;color:#777">' +
-              '<span>'+dt+'</span>' +
+              '<span>Placed '+esc(dt)+'</span>' +
+              '<span>Odds <span style="color:var(--cyan);font-weight:800">'+esc(oddsStr||'—')+'</span></span>' +
             '</div>' +
-            '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px">' +
-              '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Player Risk</div><div style="font-size:0.78rem;font-weight:800">'+fmt$(t.riskAmount)+'</div></div>' +
-              '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Host Exp.</div><div style="font-size:0.78rem;font-weight:800;color:#ff6b6b">'+fmt$(t.potentialProfit)+'</div></div>' +
-              '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Payout</div><div style="font-size:0.78rem;font-weight:800;color:var(--cyan)">'+fmt$(t.estimatedPayout)+'</div></div>' +
+            '<div class="host-bet-metrics" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px">' +
+              '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Stake</div><div style="font-size:0.78rem;font-weight:800">'+fmt$(t.riskAmount)+'</div></div>' +
+              '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">'+(canCancel?'Host Exp.':'Profit')+'</div><div style="font-size:0.78rem;font-weight:800;color:'+(canCancel?'#ff6b6b':'#ccc')+'">'+fmt$(t.potentialProfit)+'</div></div>' +
+              '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">'+esc(pay.label)+'</div><div style="font-size:0.78rem;font-weight:800;color:var(--cyan)">'+fmt$(pay.value)+'</div></div>' +
             '</div>' +
-            (canCancel ? '<button data-host-cancel="'+t.id+'" style="width:100%;margin-top:10px;padding:8px;background:transparent;border:1px solid #cc0000;border-radius:8px;color:#ff6b6b;font-size:0.7rem;font-weight:800;cursor:pointer;letter-spacing:0.3px">Cancel Bet</button>' : '') +
+            (canCancel ? '<button data-host-cancel="'+esc(t.id)+'" style="width:100%;margin-top:10px;padding:8px;background:transparent;border:1px solid #cc0000;border-radius:8px;color:#ff6b6b;font-size:0.7rem;font-weight:800;cursor:pointer;letter-spacing:0.3px">Cancel Bet</button>' : '') +
           '</div>';
         }).join('') +
       '</div>';
     }
     return '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;margin:8px 16px;overflow:hidden">' +
-      '<div data-host-group="'+key+'" style="padding:14px;cursor:pointer;display:flex;align-items:center;gap:12px;user-select:none">' +
-        '<div style="width:38px;height:38px;border-radius:50%;background:rgba(0,194,255,0.12);color:var(--cyan);display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:900;border:1.5px solid var(--cyan);flex-shrink:0">'+initials+'</div>' +
+      '<div data-host-group="'+esc(key)+'" style="padding:14px;cursor:pointer;display:flex;align-items:center;gap:12px;user-select:none">' +
+        '<div style="width:38px;height:38px;border-radius:50%;background:rgba(0,194,255,0.12);color:var(--cyan);display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:900;border:1.5px solid var(--cyan);flex-shrink:0">'+esc(initials)+'</div>' +
         '<div style="flex:1;min-width:0">' +
           '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">' +
-            '<span style="font-size:0.92rem;font-weight:900">'+g.playerName+'</span>' +
-            (g.playerReal?'<span style="font-size:0.65rem;color:var(--gray)">('+g.playerReal+')</span>':'') +
+            '<span style="font-size:0.92rem;font-weight:900">'+esc(g.playerName)+'</span>' +
+            (g.playerReal?'<span style="font-size:0.65rem;color:var(--gray)">('+esc(g.playerReal)+')</span>':'') +
           '</div>' +
-          '<div style="font-size:0.6rem;color:#666;font-family:monospace">' + (g.playerId?'ID: '+g.playerId+' · ':'') + g.bets.length+' bet'+(g.bets.length!==1?'s':'')+'</div>' +
+          '<div style="font-size:0.6rem;color:#666">'+g.bets.length+' bet'+(g.bets.length!==1?'s':'')+'</div>' +
         '</div>' +
         '<div style="text-align:right">' +
-          '<div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Exposure</div>' +
-          '<div style="font-size:0.95rem;font-weight:900;color:#ff6b6b">'+fmt$(g.exposure)+'</div>' +
+          '<div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">'+(_hostBetsTab==='active'?'Exposure':'Stake')+'</div>' +
+          '<div style="font-size:0.95rem;font-weight:900;color:'+(_hostBetsTab==='active'?'#ff6b6b':'#fff')+'">'+fmt$(_hostBetsTab==='active'?g.exposure:g.risk)+'</div>' +
         '</div>' +
         '<div style="font-size:0.85rem;color:var(--gray);transition:transform 0.15s;'+(open?'transform:rotate(90deg)':'')+'">›</div>' +
       '</div>' +
       '<div style="display:'+(open?'grid':'none')+';grid-template-columns:1fr 1fr;gap:6px;padding:0 14px 12px;font-size:0.65rem;color:#777">' +
-        '<div><span style="color:#555">Total Risk: </span><span style="color:#fff;font-weight:700">'+fmt$(g.risk)+'</span></div>' +
+        '<div><span style="color:#555">Total Stake: </span><span style="color:#fff;font-weight:700">'+fmt$(g.risk)+'</span></div>' +
         '<div><span style="color:#555">Total Payout: </span><span style="color:var(--cyan);font-weight:700">'+fmt$(g.payout)+'</span></div>' +
       '</div>' +
       betsHtml +
@@ -2273,7 +2467,6 @@ function renderHostBets(){
   }).join('');
 
   el.innerHTML = delSection + groupsHtml;
-  // Wire collapse toggles
   Array.prototype.forEach.call(el.querySelectorAll('[data-host-group]'), function(hd) {
     hd.addEventListener('click', function() {
       var k = hd.dataset.hostGroup;
@@ -2281,8 +2474,6 @@ function renderHostBets(){
       renderHostBets();
     });
   });
-  // Wire host cancel buttons (reuse hostApproveDelete — same canonical flow:
-  // status='canceled', refund via openRisk exclusion, version bump).
   Array.prototype.forEach.call(el.querySelectorAll('[data-host-cancel]'), function(btn) {
     btn.addEventListener('click', function(ev) {
       ev.stopPropagation();
@@ -2290,6 +2481,15 @@ function renderHostBets(){
       if (!confirm('Cancel this bet?')) return;
       hostApproveDelete(tid);
       renderHostBets();
+    });
+  });
+  Array.prototype.forEach.call(el.querySelectorAll('[data-delaction]'), function(btn) {
+    btn.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      var tid = btn.getAttribute('data-delid');
+      var act = btn.getAttribute('data-delaction');
+      if (act === 'approve') hostApproveDelete(tid);
+      else if (act === 'deny') hostDenyDelete(tid);
     });
   });
 }
