@@ -51,6 +51,11 @@ a.live-link{margin-left:auto;padding:7px 16px;background:rgba(0,194,255,0.12);bo
 .role-admin{background:rgba(239,68,68,0.1);color:#f87171;border:1px solid rgba(239,68,68,0.2)}
 .role-live{background:rgba(255,255,255,0.05);color:#888;border:1px solid #333}
 .role-test{background:rgba(255,165,0,0.1);color:#ffa500;border:1px solid rgba(255,165,0,0.2)}
+.role-bypass{background:rgba(245,200,66,0.14);color:#f5c842;border:1px solid rgba(245,200,66,0.35)}
+.host-bypass-status{margin:0 0 14px;padding:8px 12px;background:#111;border:1px solid #222;border-radius:10px;font-size:0.72rem;font-family:ui-monospace,Menlo,monospace;color:#888;min-height:18px}
+.host-bypass-status.ok{color:#00ff88;border-color:rgba(0,255,136,0.25)}
+.host-bypass-status.bad{color:#ff3d57;border-color:rgba(255,61,87,0.3)}
+.screen-link.busy{opacity:0.6;pointer-events:none}
 
 /* ── Preview stage ────────────────────────────────────────────────────────── */
 .stage{background:#0a0a0a;border:1px solid #1a1a1a;border-radius:14px;padding:18px;text-align:center;min-height:600px}
@@ -86,6 +91,7 @@ a.live-link{margin-left:auto;padding:7px 16px;background:rgba(0,194,255,0.12);bo
 </div>
 
 <!-- Screen quick-pick (loads into preview iframe instead of new window). Public — no auth. -->
+<div id="host-bypass-status" class="host-bypass-status">Host bypass idle — Login as Host prompts once per tab, then skips lobby.html.</div>
 <div id="screens"></div>
 
 <!-- Stage / iframe -->
@@ -109,6 +115,13 @@ var SECTIONS = [
     screens: [
       { url:'lobby.html?screen=signin',              name:'Welcome / Sign In', icon:'🔐', role:'auth'   },
       { url:'lobby.html?screen=signup',              name:'Sign Up',           icon:'✍️', role:'auth'   },
+    ]
+  },
+  {
+    title: 'Host Bypass',
+    screens: [
+      { action:'loginHost', name:'Login as Host', icon:'👑', role:'bypass', url:'POST /api/auth/login → index.html' },
+      { action:'hostToken', name:'Host Token',    icon:'🎫', role:'bypass', url:'POST /api/auth/token · actor 16' },
     ]
   },
   {
@@ -147,8 +160,140 @@ var SECTIONS = [
 ];
 var SCREENS = SECTIONS.reduce(function(acc, sec){ return acc.concat(sec.screens); }, []);
 
+var HOST_BYPASS = {
+  api: (location.protocol === 'file:')
+    ? 'https://pocketbooks-sports-backend-production.up.railway.app'
+    : '',
+  clubId: 'd616dc2a-95a6-473a-97b1-7da330878479',
+  actorId: '16',
+  ssEmail: 'pb-dev-host-email',
+  ssPass: 'pb-dev-host-pass'
+};
+
 var currentVp = 'desktop';
 var currentUrl = 'lobby.html?screen=signin';
+
+function setBypassStatus(msg, kind) {
+  var el = document.getElementById('host-bypass-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'host-bypass-status' + (kind ? ' ' + kind : '');
+}
+
+function decodeJwtPayload(token) {
+  try {
+    var parts = String(token || '').split('.');
+    if (parts.length !== 3) return {};
+    var json = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (json.length % 4) json += '=';
+    return JSON.parse(atob(json)) || {};
+  } catch (_e) { return {}; }
+}
+
+function seedHostSession(token, rec) {
+  rec = rec || {};
+  var payload = decodeJwtPayload(token);
+  var id = String(rec.id || rec.actorId || payload.actorId || payload.id || HOST_BYPASS.actorId);
+  var role = rec.role || payload.role || 'host';
+  if (role === 'user' || role === 'player') role = 'host';
+  var host = {
+    id: id,
+    hostId: id,
+    username: rec.username || rec.name || 'deadbeatpunk',
+    name: rec.name || rec.username || 'deadbeatpunk',
+    email: rec.email || '',
+    role: role
+  };
+  var club = {
+    id: HOST_BYPASS.clubId,
+    clubId: HOST_BYPASS.clubId,
+    name: 'Test Club',
+    code: 'TEST123',
+    role: 'host',
+    status: 'approved'
+  };
+  localStorage.setItem('pb-sports-token', token);
+  localStorage.setItem('pb-session-token', token);
+  localStorage.setItem('pb-host', JSON.stringify(host));
+  localStorage.setItem('pb-player', JSON.stringify(host));
+  localStorage.setItem('pb-actor-role', role);
+  localStorage.setItem('pb-club', JSON.stringify(club));
+  localStorage.setItem('pb-active-club', JSON.stringify(club));
+  localStorage.setItem('pb-clubs', JSON.stringify([club]));
+}
+
+async function bypassApi(path, body) {
+  var res = await fetch(HOST_BYPASS.api + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Club-Id': HOST_BYPASS.clubId },
+    body: JSON.stringify(body || {})
+  });
+  var data = null;
+  try { data = await res.json(); } catch (_e) { data = {}; }
+  return { ok: res.ok, status: res.status, data: data };
+}
+
+function promptHostCreds() {
+  var email = sessionStorage.getItem(HOST_BYPASS.ssEmail) || '';
+  var pass = sessionStorage.getItem(HOST_BYPASS.ssPass) || '';
+  if (!email) {
+    email = (prompt('Host identifier (email, display name, or @telegram) — cached in this tab only', email) || '').trim();
+    if (!email) return null;
+    sessionStorage.setItem(HOST_BYPASS.ssEmail, email);
+  }
+  if (!pass) {
+    pass = prompt('Host password (cached in this tab only, never written to git)') || '';
+    if (!pass) return null;
+    sessionStorage.setItem(HOST_BYPASS.ssPass, pass);
+  }
+  return { email: email, password: pass };
+}
+
+async function loginAsHost() {
+  var creds = promptHostCreds();
+  if (!creds) {
+    setBypassStatus('Host login cancelled — no credentials.', 'bad');
+    return;
+  }
+  setBypassStatus('Signing in as host…');
+  var res = await bypassApi('/api/auth/login', { email: creds.email, password: creds.password });
+  var token = res.data && res.data.token;
+  if (!res.ok || !token) {
+    try { sessionStorage.removeItem(HOST_BYPASS.ssPass); } catch (_e) {}
+    var err = (res.data && (res.data.error || res.data.message)) || ('HTTP ' + res.status);
+    setBypassStatus('Host login failed: ' + err + ' — click again to re-enter password.', 'bad');
+    return;
+  }
+  var user = res.data.user || {};
+  seedHostSession(token, {
+    id: user.id,
+    name: user.name,
+    email: user.email || creds.email,
+    role: user.role || 'host'
+  });
+  setBypassStatus('Host login ok — redirecting to index.html', 'ok');
+  location.href = 'index.html';
+}
+
+async function mintHostToken() {
+  setBypassStatus('Minting host token for actor 16…');
+  var res = await bypassApi('/api/auth/token', {
+    actorId: HOST_BYPASS.actorId,
+    clubId: HOST_BYPASS.clubId
+  });
+  var token = res.data && res.data.token;
+  if (!res.ok || !token) {
+    var err = (res.data && (res.data.error || res.data.message)) || ('HTTP ' + res.status);
+    setBypassStatus('Host token failed: ' + err, 'bad');
+    return;
+  }
+  seedHostSession(token, {
+    id: res.data.actorId || HOST_BYPASS.actorId,
+    role: res.data.role || 'host'
+  });
+  var tail = String(token).slice(-6);
+  setBypassStatus('Host token stored (jwt …' + tail + ', role=' + (res.data.role || 'host') + '). Open Host Dashboard or index.html.', 'ok');
+}
 
 function setViewport(key) {
   if (!VP[key]) return;
@@ -201,12 +346,24 @@ function loadUrl(url) {
       var btn = document.createElement('button');
       btn.className = 'screen-link';
       btn.dataset.url = s.url;
+      if (s.action) btn.dataset.action = s.action;
       btn.innerHTML =
         '<div class="sl-icon">' + s.icon + '</div>' +
         '<div class="sl-name">' + s.name + '</div>' +
         '<div class="sl-url">' + s.url + '</div>' +
         '<span class="sl-role role-' + s.role + '">' + s.role + '</span>';
-      btn.addEventListener('click', function(){ loadUrl(s.url); });
+      btn.addEventListener('click', function(){
+        if (s.action === 'loginHost' || s.action === 'hostToken') {
+          if (btn.classList.contains('busy')) return;
+          btn.classList.add('busy');
+          var run = s.action === 'loginHost' ? loginAsHost() : mintHostToken();
+          Promise.resolve(run).catch(function(err){
+            setBypassStatus('Host bypass error: ' + (err && err.message ? err.message : err), 'bad');
+          }).then(function(){ btn.classList.remove('busy'); });
+          return;
+        }
+        loadUrl(s.url);
+      });
       grid.appendChild(btn);
     });
     wrap.appendChild(grid);
