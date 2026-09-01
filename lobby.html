@@ -565,10 +565,11 @@ try {
     <div class="auth-card">
       <div id="auth-error" class="auth-error"></div>
 
-      <form id="login-form" method="post" action="" autocomplete="on" onsubmit="event.preventDefault(); submitAuth(); return false;">
+      <form id="login-form" method="post" action="" autocomplete="off" onsubmit="event.preventDefault(); submitAuth(); return false;">
         <div id="login-hint" style="font-size:0.62rem;color:#666;margin:0 0 8px;padding:0 4px">Sign in with your display name or email</div>
-        <input id="a-email" class="auth-inp" name="username" placeholder="Display name, email, or @telegram" type="text" autocomplete="username">
-        <input id="a-pass" class="auth-inp" name="password" placeholder="Password" type="password" autocomplete="current-password">
+        <!-- No name/autocomplete attrs — password managers steal focus from identifier. -->
+        <input id="a-email" class="auth-inp" placeholder="Display name, email, or @telegram" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">
+        <input id="signin-secret" class="auth-inp" placeholder="Password" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">
         <button type="submit" class="auth-submit" id="auth-submit-btn">Sign In →</button>
         <div id="auth-recovery-links" style="display:flex;justify-content:center;gap:14px;margin-top:14px;font-size:0.72rem">
           <span class="auth-recover-link" style="color:var(--cyan);cursor:pointer" onclick="openRecovery('username')">Forgot Username</span>
@@ -746,7 +747,10 @@ function _holdLoginForm() {
 }
 
 function _restoreLoginForm() {
-  if (document.getElementById('login-form')) return document.getElementById('login-form');
+  if (document.getElementById('login-form')) {
+    _wireSigninSecretField();
+    return document.getElementById('login-form');
+  }
   if (!_loginHold || !_loginHold.childNodes.length) return null;
   var slot = document.getElementById('signup-form-slot');
   var card = document.querySelector('.auth-card');
@@ -757,7 +761,28 @@ function _restoreLoginForm() {
     if (footer) card.insertBefore(_loginHold, footer);
     else card.appendChild(_loginHold);
   }
+  _wireSigninSecretField();
   return document.getElementById('login-form');
+}
+
+// Keep Sign In password as type=text until first keypress so password managers
+// do not attach to a password field and steal focus from #a-email.
+function _wireSigninSecretField() {
+  var el = document.getElementById('signin-secret');
+  if (!el || el.dataset.pmWired === '1') return;
+  el.dataset.pmWired = '1';
+  el.setAttribute('autocomplete', 'off');
+  el.removeAttribute('name');
+  if (el.type !== 'text' && !el.value) el.type = 'text';
+  el.addEventListener('focus', function () {
+    if (!el.value && el.type !== 'text') el.type = 'text';
+  });
+  el.addEventListener('keydown', function () {
+    if (el.type !== 'password') el.type = 'password';
+  });
+  el.addEventListener('input', function () {
+    if (el.value && el.type !== 'password') el.type = 'password';
+  });
 }
 
 function _unmountSignupForm() {
@@ -807,8 +832,9 @@ function setAuthTab(mode) {
   if (tabSignup) tabSignup.classList.toggle('active', mode === 'signup');
 
   if (mode === 'login') {
-    _unmountSignupForm();
+    _unmountSignupForm(); // signup must not remain in the DOM
     _restoreLoginForm();
+    _wireSigninSecretField();
   } else {
     _holdLoginForm();
     _mountSignupForm();
@@ -1028,7 +1054,9 @@ async function submitAuth(e) {
   if (e && e.preventDefault) e.preventDefault();
   const btn = _authSubmitBtn();
   const loginEmail = (document.getElementById('a-email') || {}).value.trim();
-  const passEl = document.getElementById(authMode === 'signup' ? 'a-pass-signup' : 'a-pass') || document.getElementById('a-pass');
+  const passEl = document.getElementById(authMode === 'signup' ? 'a-pass-signup' : 'signin-secret')
+    || document.getElementById('signin-secret')
+    || document.getElementById('a-pass');
   const pass = passEl ? passEl.value : '';
   // Signup contact method dropdown
   const contactMethodEl = document.getElementById('a-contact-method');
@@ -2206,10 +2234,12 @@ if (isPreview && !_isAuthScreen) {
   checkAuthGate();
   if (typeof hideSportsbookChromeForPlayers === 'function') hideSportsbookChromeForPlayers();
   // Default HTML already shows the login form. Calling setAuthTab('login') on
-  // boot re-armed inputs (disabled/type/name) and stole focus while typing.
-  // Only mount signup when explicitly forced.
+  // boot re-armed inputs and stole focus while typing — do not do that.
+  // Only mount signup when explicitly forced; signup stays out of the DOM otherwise.
   if (!TOKEN && window.__pbForceAuth === 'signup' && typeof setAuthTab === 'function') {
     setAuthTab('signup');
+  } else if (typeof _wireSigninSecretField === 'function') {
+    _wireSigninSecretField();
   }
   loadUser();
 }
