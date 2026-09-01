@@ -39,7 +39,8 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:#0a0
 .bg-scene{position:fixed;inset:0;z-index:0;overflow:hidden;background:linear-gradient(180deg,#03061a 0%,#060d1f 30%,#080e14 60%,#050a05 100%)}
 .bg-layer1{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 20%,rgba(0,30,80,0.6) 0%,transparent 60%)}
 .bg-layer2{position:absolute;inset:0;background:radial-gradient(ellipse at 80% 60%,rgba(0,60,20,0.2) 0%,transparent 50%)}
-.moon{position:absolute;top:12%;left:50%;transform:translateX(-50%);width:130px;height:130px;background:radial-gradient(circle at 40% 40%,#f0e8d0,#c8c0a0);border-radius:50%;box-shadow:0 0 40px rgba(240,232,208,0.35),0 0 100px rgba(240,232,208,0.12),0 0 200px rgba(240,232,208,0.05);animation:moonFloat 8s ease-in-out infinite}
+.moon{position:absolute;top:12%;left:50%;transform:translateX(-50%);width:130px;height:130px;background:radial-gradient(circle at 40% 40%,#f0e8d0,#c8c0a0);border-radius:50%;box-shadow:0 0 40px rgba(240,232,208,0.35),0 0 100px rgba(240,232,208,0.12),0 0 200px rgba(240,232,208,0.05);animation:moonFloat 8s ease-in-out infinite;pointer-events:none}
+.bg-layer1,.bg-layer2{pointer-events:none}
 @keyframes moonFloat{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-8px)}}
 .stars{position:absolute;inset:0;pointer-events:none}
 .star{position:absolute;background:#fff;border-radius:50%;animation:twinkle 3s infinite}
@@ -54,7 +55,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:#0a0
 .particles{position:absolute;inset:0;pointer-events:none}
 .particle{position:absolute;width:2px;height:2px;background:rgba(0,255,136,0.4);border-radius:50%;animation:drift linear infinite}
 @keyframes drift{0%{transform:translateY(100vh) translateX(0);opacity:0}10%{opacity:1}90%{opacity:0.5}100%{transform:translateY(-10vh) translateX(20px);opacity:0}}
-.trees{position:absolute;bottom:28%;left:0;right:0;height:90px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 430 90'%3E%3Cpolygon points='0,90 30,20 60,90' fill='%23030a03'/%3E%3Cpolygon points='40,90 70,12 100,90' fill='%23040c04'/%3E%3Cpolygon points='90,90 115,22 140,90' fill='%23030a03'/%3E%3Cpolygon points='130,90 160,8 190,90' fill='%23040c04'/%3E%3Cpolygon points='180,90 210,18 240,90' fill='%23030a03'/%3E%3Cpolygon points='230,90 255,28 280,90' fill='%23040c04'/%3E%3Cpolygon points='270,90 300,14 330,90' fill='%23030a03'/%3E%3Cpolygon points='320,90 350,20 380,90' fill='%23040c04'/%3E%3Cpolygon points='370,90 400,16 430,90' fill='%23030a03'/%3E%3C/svg%3E") repeat-x bottom;filter:blur(0.5px);animation:treeSway 12s ease-in-out infinite alternate}
+.trees{position:absolute;bottom:28%;left:0;right:0;height:90px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 430 90'%3E%3Cpolygon points='0,90 30,20 60,90' fill='%23030a03'/%3E%3Cpolygon points='40,90 70,12 100,90' fill='%23040c04'/%3E%3Cpolygon points='90,90 115,22 140,90' fill='%23030a03'/%3E%3Cpolygon points='130,90 160,8 190,90' fill='%23040c04'/%3E%3Cpolygon points='180,90 210,18 240,90' fill='%23030a03'/%3E%3Cpolygon points='230,90 255,28 280,90' fill='%23040c04'/%3E%3Cpolygon points='270,90 300,14 330,90' fill='%23030a03'/%3E%3Cpolygon points='320,90 350,20 380,90' fill='%23040c04'/%3E%3Cpolygon points='370,90 400,16 430,90' fill='%23030a03'/%3E%3C/svg%3E") repeat-x bottom;filter:blur(0.5px);animation:treeSway 12s ease-in-out infinite alternate;pointer-events:none}
 @keyframes treeSway{0%{transform:scaleX(1)}100%{transform:scaleX(1.02)}}
 .sports-icons{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .sports-icon{position:absolute;font-size:1.4rem;opacity:0.06;animation:floatIcon linear infinite}
@@ -568,38 +569,11 @@ try {
         </div>
       </form>
 
-      <!-- Signup is a <template> so its password / autocomplete=username fields
-           are NOT in the live document on the Sign In tab. inert+disabled is not
-           enough — password managers still scan hidden type=password fields and
-           steal focus from #a-email (especially Telegram's username autocomplete). -->
+      <!-- Signup markup is injected from JS only when Create Account is selected.
+           Keeping password fields out of the initial HTML (including <template>)
+           prevents password managers / Telegram autocomplete from scanning a
+           second credential form and stealing focus from #a-email. -->
       <div id="signup-form-slot"></div>
-      <template id="tpl-signup-form">
-      <form id="signup-form" method="post" action="" autocomplete="off" onsubmit="event.preventDefault(); submitAuth(); return false;">
-        <input id="a-name" class="auth-inp" name="name" placeholder="Display name" autocomplete="name">
-        <div style="display:flex;gap:8px;margin-bottom:10px">
-          <select id="a-contact-method" class="auth-inp" style="flex:0 0 auto;width:auto;padding-right:10px;cursor:pointer" onchange="updateSignupContactAttrs()">
-            <option value="telegram">Telegram</option>
-            <option value="signal">Signal</option>
-            <option value="email">Email</option>
-          </select>
-          <input id="a-contact-value" class="auth-inp" name="telegram" placeholder="@username" type="text" autocomplete="off" style="flex:1;margin-bottom:0">
-        </div>
-        <div id="signup-contact-hint" style="font-size:0.62rem;color:#666;margin:-6px 0 10px;padding:0 4px">Select how we can reach you — required for account recovery.</div>
-        <input id="a-pass-signup" class="auth-inp" name="new-password" placeholder="Password" type="password" autocomplete="new-password">
-        <input id="a-pass2" class="auth-inp" name="new-password-confirm" placeholder="Confirm password" type="password" autocomplete="new-password">
-        <div id="signup-checks">
-          <label class="auth-check">
-            <input type="checkbox" id="check-age">
-            <span class="auth-check-label">I confirm I am 21 years of age or older</span>
-          </label>
-          <label class="auth-check">
-            <input type="checkbox" id="check-terms">
-            <span class="auth-check-label">I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a></span>
-          </label>
-        </div>
-        <button type="submit" class="auth-submit" id="auth-signup-btn">Create My Account →</button>
-      </form>
-      </template>
 
       <div class="auth-footer" id="auth-footer-text">Don't have an account? <span style="color:var(--cyan);cursor:pointer" onclick="setAuthTab('signup')">Create one free</span></div>
     </div>
@@ -717,69 +691,65 @@ function _authSubmitBtn() {
   return document.getElementById(authMode === 'signup' ? 'auth-signup-btn' : 'auth-submit-btn');
 }
 
-function _disarmCredentialInputs(form) {
-  if (!form) return;
-  form.querySelectorAll('input').forEach(function(el) {
-    if (el.type === 'password') {
-      el.setAttribute('data-real-type', 'password');
-      el.type = 'text';
-    }
-    var ac = el.getAttribute('autocomplete');
-    if (ac && ac !== 'off') {
-      el.setAttribute('data-real-autocomplete', ac);
-      el.setAttribute('autocomplete', 'off');
-    }
-    var n = el.getAttribute('name');
-    if (n && /^(username|password|email|telegram|new-password)/.test(n)) {
-      el.setAttribute('data-real-name', n);
-      el.setAttribute('name', 'x-' + n);
-    }
-  });
+// Only one credential form may live in the document at a time.
+// Login nodes are moved (not cloned) into a hold fragment on signup so typed
+// values survive tab switches without re-creating inputs. Signup HTML is a JS
+// string so password managers never see it while Sign In is active.
+var _loginHold = null;
+var _SIGNUP_FORM_HTML =
+  '<form id="signup-form" method="post" action="" autocomplete="off" onsubmit="event.preventDefault(); submitAuth(); return false;">' +
+    '<input id="a-name" class="auth-inp" name="name" placeholder="Display name" autocomplete="name">' +
+    '<div style="display:flex;gap:8px;margin-bottom:10px">' +
+      '<select id="a-contact-method" class="auth-inp" style="flex:0 0 auto;width:auto;padding-right:10px;cursor:pointer" onchange="updateSignupContactAttrs()">' +
+        '<option value="telegram">Telegram</option>' +
+        '<option value="signal">Signal</option>' +
+        '<option value="email">Email</option>' +
+      '</select>' +
+      '<input id="a-contact-value" class="auth-inp" name="telegram" placeholder="@username" type="text" autocomplete="off" style="flex:1;margin-bottom:0">' +
+    '</div>' +
+    '<div id="signup-contact-hint" style="font-size:0.62rem;color:#666;margin:-6px 0 10px;padding:0 4px">Select how we can reach you — required for account recovery.</div>' +
+    '<input id="a-pass-signup" class="auth-inp" name="new-password" placeholder="Password" type="password" autocomplete="new-password">' +
+    '<input id="a-pass2" class="auth-inp" name="new-password-confirm" placeholder="Confirm password" type="password" autocomplete="new-password">' +
+    '<div id="signup-checks">' +
+      '<label class="auth-check"><input type="checkbox" id="check-age"><span class="auth-check-label">I confirm I am 21 years of age or older</span></label>' +
+      '<label class="auth-check"><input type="checkbox" id="check-terms"><span class="auth-check-label">I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a></span></label>' +
+    '</div>' +
+    '<button type="submit" class="auth-submit" id="auth-signup-btn">Create My Account →</button>' +
+  '</form>';
+
+function _authFieldFocused() {
+  var ae = document.activeElement;
+  if (!ae || !ae.closest) return false;
+  return !!ae.closest('#login-form, #signup-form');
 }
 
-function _restoreCredentialInputs(form) {
-  if (!form) return;
-  form.querySelectorAll('input').forEach(function(el) {
-    var rt = el.getAttribute('data-real-type');
-    if (rt) { el.type = rt; el.removeAttribute('data-real-type'); }
-    var ac = el.getAttribute('data-real-autocomplete');
-    if (ac) { el.setAttribute('autocomplete', ac); el.removeAttribute('data-real-autocomplete'); }
-    var n = el.getAttribute('data-real-name');
-    if (n) { el.setAttribute('name', n); el.removeAttribute('data-real-name'); }
-  });
+function _authDomMatches(mode) {
+  var loginLive = !!document.getElementById('login-form');
+  var signupLive = !!document.getElementById('signup-form');
+  if (mode === 'login') return loginLive && !signupLive;
+  return signupLive && !loginLive;
 }
 
-function _armAuthForm(form, on) {
-  if (!form) return;
-  var active = document.activeElement;
-  var preserve = !!(active && form.contains(active));
-  form.inert = !on;
-  form.hidden = !on;
-  form.style.display = on ? 'block' : 'none';
-  form.setAttribute('autocomplete', on ? 'on' : 'off');
-  if (on) _restoreCredentialInputs(form);
-  else _disarmCredentialInputs(form);
-  form.querySelectorAll('input,select,textarea,button').forEach(function(el) {
-    // Never disable the field the user is currently typing in.
-    if (preserve && el === active) {
-      el.disabled = false;
-      return;
-    }
-    el.disabled = !on;
-  });
-  if (preserve && active && !active.disabled) {
-    try { active.focus(); } catch (_e) {}
-  }
+function _holdLoginForm() {
+  var loginForm = document.getElementById('login-form');
+  if (!loginForm) return;
+  if (!_loginHold) _loginHold = document.createDocumentFragment();
+  _loginHold.appendChild(loginForm);
 }
 
-function _mountSignupForm() {
+function _restoreLoginForm() {
+  if (document.getElementById('login-form')) return document.getElementById('login-form');
+  if (!_loginHold || !_loginHold.childNodes.length) return null;
   var slot = document.getElementById('signup-form-slot');
-  if (!slot) return null;
-  if (document.getElementById('signup-form')) return document.getElementById('signup-form');
-  var tpl = document.getElementById('tpl-signup-form');
-  if (!tpl) return null;
-  slot.appendChild(tpl.content.cloneNode(true));
-  return document.getElementById('signup-form');
+  var card = document.querySelector('.auth-card');
+  if (!card) return null;
+  if (slot && slot.parentNode === card) card.insertBefore(_loginHold, slot);
+  else {
+    var footer = document.getElementById('auth-footer-text');
+    if (footer) card.insertBefore(_loginHold, footer);
+    else card.appendChild(_loginHold);
+  }
+  return document.getElementById('login-form');
 }
 
 function _unmountSignupForm() {
@@ -787,42 +757,64 @@ function _unmountSignupForm() {
   if (slot) slot.innerHTML = '';
 }
 
+function _mountSignupForm() {
+  var slot = document.getElementById('signup-form-slot');
+  if (!slot) return null;
+  if (document.getElementById('signup-form')) return document.getElementById('signup-form');
+  slot.innerHTML = _SIGNUP_FORM_HTML;
+  return document.getElementById('signup-form');
+}
+
+function _setAuthScreenVisible(show) {
+  var el = document.getElementById('auth-screen');
+  if (!el) return;
+  if (show) {
+    // Re-assigning display on an ancestor blurs focused inputs in some
+    // WebViews (iOS Safari / Telegram). Skip when already visible.
+    try {
+      var cs = window.getComputedStyle(el);
+      if (cs.display !== 'none' && cs.visibility !== 'hidden') return;
+    } catch (_e) {}
+    if (_authFieldFocused()) return;
+    el.style.display = 'flex';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
 function setAuthTab(mode) {
-  var loginForm = document.getElementById('login-form');
-  var signupForm = document.getElementById('signup-form');
-  var loginVisible = !!(loginForm && loginForm.style.display !== 'none' && !loginForm.hidden && !loginForm.inert);
-  var signupVisible = !!(signupForm && signupForm.style.display !== 'none' && !signupForm.hidden);
-  var already = authMode === mode && (
-    (mode === 'login' && loginVisible && !signupVisible) ||
-    (mode === 'signup' && signupVisible && loginForm && loginForm.style.display === 'none')
-  );
-  var ae = document.activeElement;
-  // Boot / preview re-calls setAuthTab('login') ~100ms later. Do not rebuild
-  // (or toggle disabled) while the identifier/password field is focused.
-  if (mode === 'login' && loginForm && ae && loginForm.contains(ae) &&
-      (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) {
-    if (signupForm) _unmountSignupForm();
+  mode = (mode === 'signup') ? 'signup' : 'login';
+
+  // Boot / preview re-entry while the user is already typing: do nothing.
+  if (authMode === mode && _authDomMatches(mode)) {
+    if (_authFieldFocused()) return;
     return;
   }
-  if (already) return;
+  if (authMode === mode && _authFieldFocused()) return;
+
   authMode = mode;
-  document.getElementById('tab-login').classList.toggle('active', mode==='login');
-  document.getElementById('tab-signup').classList.toggle('active', mode==='signup');
+  var tabLogin = document.getElementById('tab-login');
+  var tabSignup = document.getElementById('tab-signup');
+  if (tabLogin) tabLogin.classList.toggle('active', mode === 'login');
+  if (tabSignup) tabSignup.classList.toggle('active', mode === 'signup');
+
   if (mode === 'login') {
     _unmountSignupForm();
-    _armAuthForm(loginForm, true);
+    _restoreLoginForm();
   } else {
-    _armAuthForm(loginForm, false);
-    signupForm = _mountSignupForm();
-    _armAuthForm(signupForm, true);
+    _holdLoginForm();
+    _mountSignupForm();
     updateSignupContactAttrs();
   }
-  var emailEl = document.getElementById('a-email');
-  if (emailEl) emailEl.placeholder = 'Display name, email, or @telegram';
-  document.getElementById('auth-footer-text').innerHTML = mode==='login'
-    ? "Don't have an account? <span style='color:var(--cyan);cursor:pointer' onclick=\"setAuthTab('signup')\">Create one free</span>"
-    : "Already have an account? <span style='color:var(--cyan);cursor:pointer' onclick=\"setAuthTab('login')\">Sign in</span>";
-  document.getElementById('auth-error').style.display = 'none';
+
+  var footer = document.getElementById('auth-footer-text');
+  if (footer) {
+    footer.innerHTML = mode === 'login'
+      ? "Don't have an account? <span style='color:var(--cyan);cursor:pointer' onclick=\"setAuthTab('signup')\">Create one free</span>"
+      : "Already have an account? <span style='color:var(--cyan);cursor:pointer' onclick=\"setAuthTab('login')\">Sign in</span>";
+  }
+  var err = document.getElementById('auth-error');
+  if (err) err.style.display = 'none';
 }
 
 function showAuthError(msg) {
@@ -1150,8 +1142,12 @@ function returnToLobby() {
   var _hasTickets = (JSON.parse(localStorage.getItem('pb-tickets') || '[]')).length > 0;
   
   if (!_player && !_players.length && !_hasTickets && !TOKEN) {
-    // Truly no session — show sign-in
-    document.getElementById('auth-screen').style.display = 'flex';
+    // Truly no session — show sign-in (skip reassignment if already visible)
+    if (typeof _setAuthScreenVisible === 'function') _setAuthScreenVisible(true);
+    else {
+      var _as = document.getElementById('auth-screen');
+      if (_as) _as.style.display = 'flex';
+    }
     return;
   }
   // Determine role — players never re-enter the sportsbook.
@@ -1172,8 +1168,11 @@ function hasAnyPocketBooksState() {
   return hasToken && hasUser;
 }
 function hideAuthScreen() {
-  var el = document.getElementById('auth-screen');
-  if (el) el.style.display = 'none';
+  if (typeof _setAuthScreenVisible === 'function') _setAuthScreenVisible(false);
+  else {
+    var el = document.getElementById('auth-screen');
+    if (el) el.style.display = 'none';
+  }
 }
 function showLobbyContent() {
   var el = document.querySelector('.content');
@@ -1194,9 +1193,9 @@ function showLobbyContent() {
 function checkAuthGate() {
   // Hard override applied pre-render — honor it and skip session/auto-route logic.
   if (window.__pbForceAuth) {
-    var ae = document.getElementById('auth-screen');
-    if (ae) ae.style.display = 'flex';
-    if (typeof setAuthTab === 'function') setAuthTab(window.__pbForceAuth === 'signup' ? 'signup' : 'login');
+    if (typeof _setAuthScreenVisible === 'function') _setAuthScreenVisible(true);
+    // HTML already paints Sign In. Only switch when signup is forced.
+    if (window.__pbForceAuth === 'signup' && typeof setAuthTab === 'function') setAuthTab('signup');
     try {
       var _expiredMsg = new URLSearchParams(location.search).get('msg');
       if (_expiredMsg && typeof showAuthError === 'function') showAuthError(_expiredMsg);
@@ -1213,7 +1212,8 @@ function checkAuthGate() {
     }
   }
   if (fromParam === 'host') {
-    document.getElementById('auth-screen').style.display = 'none';
+    if (typeof _setAuthScreenVisible === 'function') _setAuthScreenVisible(false);
+    else { var _asHost = document.getElementById('auth-screen'); if (_asHost) _asHost.style.display = 'none'; }
     // Ensure lobby home content is visible
     var contentEl = document.querySelector('.content');
     if (contentEl) contentEl.style.display = '';
@@ -1245,9 +1245,11 @@ function checkAuthGate() {
   );
   var isAuthed = hasJWT || hasSession;
   
-  var _authEl = document.getElementById('auth-screen');
-  if (!isAuthed) {  }
-  if (_authEl) _authEl.style.display = isAuthed ? 'none' : 'flex';
+  if (typeof _setAuthScreenVisible === 'function') _setAuthScreenVisible(!isAuthed);
+  else {
+    var _authEl = document.getElementById('auth-screen');
+    if (_authEl) _authEl.style.display = isAuthed ? 'none' : 'flex';
+  }
   if (isAuthed) {
     
     if (typeof hideSportsbookChromeForPlayers === 'function') hideSportsbookChromeForPlayers();
@@ -1305,11 +1307,13 @@ if (_preview) {
   const authEl = document.getElementById('auth-screen');
   if (authEl) {
     if (_screen === 'signin' || _screen === 'signup') {
-      // Show auth screen, hide lobby
-      authEl.style.display = 'flex';
-      setTimeout(() => { if(typeof setAuthTab==='function') setAuthTab(_screen === 'signup' ? 'signup' : 'login'); }, 100);
+      // Show auth screen, hide lobby — no delayed setAuthTab (it stole focus).
+      if (typeof _setAuthScreenVisible === 'function') _setAuthScreenVisible(true);
+      else authEl.style.display = 'flex';
+      if (_screen === 'signup' && typeof setAuthTab === 'function') setAuthTab('signup');
     } else {
-      authEl.style.display = 'none';
+      if (typeof _setAuthScreenVisible === 'function') _setAuthScreenVisible(false);
+      else authEl.style.display = 'none';
     }
   }
 }
@@ -2183,14 +2187,21 @@ if (isPreview && !_isAuthScreen) {
   } catch(e) { console.warn('[preview] mock-data step failed (non-fatal):', e && e.message); }
 } else if (isPreview && _isAuthScreen) {
   // Preview of the auth screens: show auth, do not render lobby preview.
-  var _ae = document.getElementById('auth-screen');
-  if (_ae) _ae.style.display = 'flex';
-  setTimeout(function(){ if (typeof setAuthTab === 'function') setAuthTab(_screen === 'signup' ? 'signup' : 'login'); }, 100);
+  if (typeof _setAuthScreenVisible === 'function') _setAuthScreenVisible(true);
+  else {
+    var _ae = document.getElementById('auth-screen');
+    if (_ae) _ae.style.display = 'flex';
+  }
+  // Sign In is the default painted HTML — only switch when previewing signup.
+  if (_screen === 'signup' && typeof setAuthTab === 'function') setAuthTab('signup');
 } else {
   checkAuthGate();
   if (typeof hideSportsbookChromeForPlayers === 'function') hideSportsbookChromeForPlayers();
-  if (!TOKEN) {
-    setAuthTab(window.__pbForceAuth === 'signup' ? 'signup' : 'login');
+  // Default HTML already shows the login form. Calling setAuthTab('login') on
+  // boot re-armed inputs (disabled/type/name) and stole focus while typing.
+  // Only mount signup when explicitly forced.
+  if (!TOKEN && window.__pbForceAuth === 'signup' && typeof setAuthTab === 'function') {
+    setAuthTab('signup');
   }
   loadUser();
 }
