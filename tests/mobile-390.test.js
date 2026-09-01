@@ -23,6 +23,7 @@ console.log('\n-- 390px mobile layout --');
   'player.html',
   'index.html',
   'admin-diamonds.html',
+  'unresolved-grading.html',
   'test-dashboard.html',
   'survivor.html',
   'diamonds.js'

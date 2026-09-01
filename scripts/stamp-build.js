@@ -26,7 +26,7 @@ fs.writeFileSync(buildJsonPath, JSON.stringify(buildInfo, null, 2) + '\n');
 console.log(`[stamp] build.json → sha=${sha} builtAt=${builtAt}`);
 
 // Patch PBS_BUILD_SHA in HTML files
-const htmlFiles = ['player.html', 'index.html', 'dev.html', 'lobby.html', 'admin.html', 'admin-diamonds.html', 'test-dashboard.html']
+const htmlFiles = ['player.html', 'index.html', 'dev.html', 'lobby.html', 'admin.html', 'admin-diamonds.html', 'test-dashboard.html', 'unresolved-grading.html']
   .map(f => path.join(ROOT, f))
   .filter(f => fs.existsSync(f));
 
