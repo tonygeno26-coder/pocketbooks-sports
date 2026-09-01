@@ -2573,7 +2573,17 @@ function setBN(el,tab){
 
 // ── MOCK PLAYER FOR TESTING ───────────────────────────────────────────────────
 (function(){
-  var existing = JSON.parse(localStorage.getItem('pb-club-players')||'[]');
+  var hasToken = false;
+  try { hasToken = !!localStorage.getItem('pb-sports-token'); } catch(_e){}
+  var existing = [];
+  try { existing = JSON.parse(localStorage.getItem('pb-club-players')||'[]'); } catch(_e){}
+  // Real host sessions must not keep the demo P1001 row — it looks like
+  // "Test Player 1" and hides the actual club roster when the DB fetch fails.
+  if (hasToken && existing.length === 1 && existing[0] && existing[0].playerId === 'P1001') {
+    try { localStorage.removeItem('pb-club-players'); } catch(_e){}
+    existing = [];
+  }
+  if (hasToken) return;
   if (!existing.length) {
     var mock = [{
       playerId:'P1001', playerName:'TestPlayer01', realName:'', notes:'',
