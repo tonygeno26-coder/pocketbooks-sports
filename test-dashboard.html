@@ -484,6 +484,107 @@ window.PBS_BUILD_SHA = 'local';
       return d.toISOString();
     } catch (_e) { return null; }
   }
+  function _stripMoneylinePickSuffix(pick) {
+    return String(pick || '')
+      .replace(/\s+/g, ' ')
+      .replace(/\s+to\s+win\s*$/i, '')
+      .replace(/\s+ml\s*$/i, '')
+      .trim();
+  }
+  function _isoDateFromValue(v) {
+    if (v == null || v === '') return '';
+    var s = String(v).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    var ms = new Date(s).getTime();
+    if (!isNaN(ms)) return new Date(ms).toISOString().slice(0, 10);
+    return '';
+  }
+  function _owlsSportKey(sport) {
+    var s = String(sport || 'mlb').toLowerCase();
+    var map = { mlb: 'baseball_mlb', nba: 'basketball_nba', nfl: 'americanfootball_nfl', nhl: 'icehockey_nhl', wnba: 'basketball_wnba' };
+    if (map[s]) return map[s];
+    if (s.indexOf('baseball') === 0) return 'baseball_mlb';
+    if (s.indexOf('basketball') === 0) return 'basketball_nba';
+    if (s.indexOf('americanfootball') === 0) return 'americanfootball_nfl';
+    if (s.indexOf('icehockey') === 0) return 'icehockey_nhl';
+    return s;
+  }
+  function _titleCaseTeamName(name) {
+    return String(name || '').replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
+      .replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+  }
+  function _normalizeSlipMarket(market) {
+    var m = String(market || '').trim().toLowerCase();
+    if (!m) return 'moneyline';
+    if (m === 'to win' || m === 'win' || m === 'h2h' || m.indexOf('moneyline') >= 0) return 'moneyline';
+    if (m.indexOf('total') >= 0 || m === 'over' || m === 'under') return 'total';
+    if (m.indexOf('spread') >= 0 || m.indexOf('run line') >= 0 || m.indexOf('puck line') >= 0
+        || m.indexOf('runline') >= 0 || m.indexOf('handicap') >= 0) return 'spread';
+    return m;
+  }
+  function _extractSlipPointLine(pick, line) {
+    if (line != null && line !== '') {
+      var n = Number(line);
+      if (Number.isFinite(n)) return n;
+    }
+    var m = String(pick || '').match(/(?:^|\s)([+-]?\d+(?:\.\d+)?)(?:\s|$)/);
+    return m ? Number(m[1]) : null;
+  }
+  function _resolveScheduledStart(game) {
+    game = game || {};
+    var list = [
+      game.scheduledStart, game.scheduled_start, game.commenceTime, game.commence_time,
+      game.time, game.start
+    ];
+    for (var i = 0; i < list.length; i++) {
+      var iso = toIso(list[i]);
+      if (iso) return iso;
+    }
+    return null;
+  }
+  function _resolveGameId(game) {
+    game = game || {};
+    var id = game.id || game.providerGameId || game.provider_game_id || null;
+    return id != null && id !== '' ? String(id) : null;
+  }
+  function _normalizeGameKeyToOwls(existingKey, away, home, sport, isoTime) {
+    var dateStr = _isoDateFromValue(isoTime);
+    var parts = String(existingKey || '').split('|');
+    var sportPart = _owlsSportKey(parts[0] || sport);
+    var awayPart = _titleCaseTeamName(parts[1] || away);
+    var homePart = _titleCaseTeamName(parts[2] || home);
+    var last = parts[parts.length - 1] || '';
+    var datePart = /^\d{4}-\d{2}-\d{2}$/.test(last) ? last : dateStr;
+    return [sportPart, awayPart, homePart, datePart].join('|');
+  }
+  function _buildContractPlaceLeg(game, pick) {
+    game = game || {};
+    pick = pick || {};
+    var away = String(game.away || game.away_team || '').trim();
+    var home = String(game.home || game.home_team || '').trim();
+    var iso = _resolveScheduledStart(game);
+    var market = _normalizeSlipMarket(pick.market);
+    var pickStr = _stripMoneylinePickSuffix(pick.pick || '');
+    var line = pick.line;
+    if (market === 'moneyline') line = null;
+    else if (line != null && Number.isFinite(Number(line))) line = Number(line);
+    else line = _extractSlipPointLine(pickStr, null);
+    var gameId = _resolveGameId(game);
+    var canonicalGameKey = _normalizeGameKeyToOwls(
+      game.canonicalGameKey || game.canonical_game_key || pick.canonicalGameKey || '',
+      away, home, game.sport || 'mlb', iso
+    );
+    var oddsNum = Number(pick.odds);
+    return {
+      pick: pickStr,
+      market: market,
+      odds: Number.isFinite(oddsNum) ? oddsNum : pick.odds,
+      line: line,
+      canonicalGameKey: canonicalGameKey,
+      scheduledStart: iso,
+      gameId: gameId
+    };
+  }
   function oddsStr(n) {
     n = Number(n);
     if (!n) return '';
@@ -506,7 +607,8 @@ window.PBS_BUILD_SHA = 'local';
     var ml = Array.isArray(g.moneyline) ? g.moneyline : [];
     ml.forEach(function (m) {
       if (!m || m.odds == null) return;
-      var team = m.team || m.name || '';
+      var team = _stripMoneylinePickSuffix(m.team || m.name || '');
+      if (!team) return;
       var side = (String(team).toLowerCase() === String(g.home || '').toLowerCase()) ? 'home'
         : (String(team).toLowerCase() === String(g.away || '').toLowerCase()) ? 'away' : 'ml';
       opts.push({
@@ -517,6 +619,22 @@ window.PBS_BUILD_SHA = 'local';
         odds: Number(m.odds),
         line: null,
         side: side
+      });
+    });
+    var spreads = Array.isArray(g.spreads) ? g.spreads : [];
+    spreads.forEach(function (s) {
+      if (!s || s.odds == null || s.line == null) return;
+      var team = _stripMoneylinePickSuffix(s.team || s.name || '');
+      if (!team) return;
+      var line = Number(s.line);
+      opts.push({
+        key: 'sp:' + team + ':' + line,
+        label: team + ' ' + (line > 0 ? '+' : '') + line + ' ' + oddsStr(s.odds),
+        pick: team + ' ' + (line > 0 ? '+' : '') + line,
+        market: 'spread',
+        odds: Number(s.odds),
+        line: line,
+        side: team
       });
     });
     var totals = Array.isArray(g.totals) ? g.totals : [];
@@ -607,15 +725,14 @@ window.PBS_BUILD_SHA = 'local';
     if (!g) { log('Place bet', 'no games', false, cfg.label); return; }
     var pick = pickMap[$('bet-pick').value] || pickOptionsFor(g)[0];
     if (!pick) { log('Place bet', 'no pick', false, cfg.label); return; }
-    var leg = {
-      pick: pick.pick,
-      market: pick.market,
-      odds: Number(pick.odds),
-      line: pick.line,
-      canonicalGameKey: g.canonicalGameKey || g.id,
-      scheduledStart: toIso(g.scheduledStart || g.time),
-      gameId: g.id || g.providerGameId || g.canonicalGameKey
-    };
+    var leg = _buildContractPlaceLeg(g, pick);
+    if (!leg.gameId) { log('Place bet', 'missing gameId', false, cfg.label); return; }
+    if (!leg.scheduledStart) { log('Place bet', 'missing scheduledStart', false, cfg.label); return; }
+    if (!leg.canonicalGameKey || leg.canonicalGameKey.indexOf('|') < 0) {
+      log('Place bet', 'invalid canonicalGameKey', false, cfg.label);
+      return;
+    }
+    var idempotencyKey = idemKey('BET');
     var payout = ticketPayout(stake, [leg]);
     var payload = {
       clubId: CLUB_ID,
@@ -624,10 +741,10 @@ window.PBS_BUILD_SHA = 'local';
       stake: stake,
       payout: payout,
       potentialProfit: Math.round((payout - stake) * 100) / 100,
-      idempotencyKey: idemKey('BET'),
+      idempotencyKey: idempotencyKey,
       legs: [leg]
     };
-    var res = await api('POST', '/api/bets/place', payload, acct, { 'Idempotency-Key': payload.idempotencyKey });
+    var res = await api('POST', '/api/bets/place', payload, acct, { 'Idempotency-Key': idempotencyKey });
     if (res.status === 409 && res.data && res.data.code === 'odds_changed' && Number.isFinite(Number(res.data.serverOdds))) {
       payload.legs[0].odds = Number(res.data.serverOdds);
       payload.payout = ticketPayout(stake, payload.legs);
