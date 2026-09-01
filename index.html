@@ -8,6 +8,52 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Pocketbooks Sports — Host</title>
+<script>
+(function(){
+  try {
+    if (!localStorage.getItem('pb-sports-token')) {
+      location.replace('lobby.html' + (location.search || ''));
+      return;
+    }
+    function _nr(r){ return String(r||'').toLowerCase().trim(); }
+    function _isHost(r){
+      var n = _nr(r);
+      return n==='host'||n==='admin'||n==='master_admin'||n==='owner'||n==='creator'||n==='full_admin'
+        || n==='cohost'||n==='staff'||n==='settlement_manager'
+        || n.indexOf('cohost_')===0||n.indexOf('staff_')===0;
+    }
+    var role = '';
+    try { var p = JSON.parse(localStorage.getItem('pb-player')||'null'); if (p && p.role) role = p.role; } catch(_e){}
+    try { var h = JSON.parse(localStorage.getItem('pb-host')||'null'); if (h && _isHost(h.role)) role = h.role; } catch(_e){}
+    try { var ar = localStorage.getItem('pb-actor-role'); if (ar && _isHost(ar)) role = ar; } catch(_e){}
+    try {
+      if (!_isHost(role)) {
+        var tok = localStorage.getItem('pb-sports-token')||'';
+        var parts = tok.split('.');
+        if (parts.length === 3) {
+          var payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+          if (payload && payload.role) role = payload.role;
+        }
+      }
+    } catch(_e){}
+    var hostRec = false;
+    try { var hr = JSON.parse(localStorage.getItem('pb-host')||'null'); if (hr && (hr.id || hr.username || hr.hostId || hr.role)) hostRec = true; } catch(_e){}
+    try {
+      var clubs = JSON.parse(localStorage.getItem('pb-clubs')||'[]');
+      if (Array.isArray(clubs) && clubs.some(function(c){ return _isHost(c.role); })) hostRec = true;
+    } catch(_e){}
+    try {
+      var ac = JSON.parse(localStorage.getItem('pb-active-club')||localStorage.getItem('pb-club')||'null');
+      if (ac && _isHost(ac.role)) hostRec = true;
+    } catch(_e){}
+    // JWT `user` is the default users.role for real hosts. Only bounce
+    // confirmed player-only sessions with no stored host / host-role club.
+    if (!_isHost(role) && !hostRec && _nr(role) === 'player') {
+      location.replace('survivor.html');
+    }
+  } catch(_e){}
+})();
+</script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{
@@ -39,6 +85,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .diamond-pill{display:flex;align-items:center;gap:5px;background:var(--cyan-dim);border:1px solid rgba(0,194,255,0.25);padding:6px 14px;border-radius:20px;font-size:0.82rem;font-weight:800;color:var(--cyan);cursor:pointer;transition:transform 0.1s ease,border-color 0.15s ease}
 .diamond-pill:hover{border-color:var(--cyan);transform:scale(1.03)}
 .diamond-pill:active{transform:scale(0.97)}
+.buy-diamonds-nav-btn{background:#00ff88;color:#000;border:none;padding:6px 12px;border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap;letter-spacing:0.2px}
 .notif-btn{width:34px;height:34px;background:var(--card2);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .notif-btn svg{width:16px;height:16px;stroke:var(--light);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 
@@ -162,6 +209,59 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
   [data-results-jump]:hover{border-color:rgba(0,194,255,0.35)!important}
 }
 
+/* ═══ MOBILE (≤480px / iPhone 375) — layout only, no redesign ═══ */
+@media (max-width:480px){
+  html,body{overflow-x:hidden;max-width:100%}
+  .hdr{padding:10px 12px;gap:6px}
+  .hdr-left,.hdr-right{min-width:0;gap:6px}
+  .hdr-right{flex-shrink:1}
+  .hdr-title{font-size:0.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .buy-diamonds-nav-btn{min-height:44px;padding:8px 10px;font-size:0.65rem}
+  .diamond-pill{min-height:44px;padding:8px 10px}
+  .notif-btn{width:44px;height:44px;min-width:44px}
+  .club-bar{flex-wrap:wrap;gap:8px;padding:10px 12px}
+  .club-select{max-width:100%;min-height:44px}
+  .create-club-btn{min-height:44px}
+  .sc-amount,.stat-val{overflow:hidden;text-overflow:ellipsis;font-size:1.25rem}
+  .player-row{gap:8px;min-width:0}
+  .pr-left,.pr-name{min-width:0}
+  .pr-name{overflow:hidden;text-overflow:ellipsis}
+  .bn{min-height:44px;padding:8px 0}
+  .bnav{padding-bottom:max(16px,env(safe-area-inset-bottom,0px))}
+  .sec-action,.sf-pill{min-height:44px;display:inline-flex;align-items:center}
+  #modal-create-club > div,
+  #modal-limits > div,
+  #modal-add > div,
+  #modal-invite > div{
+    max-height:100dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom,0px));
+    box-sizing:border-box
+  }
+  #_invoice-modal,#_invoice-modal-inner,#_settle_modal,#_rollover_modal,#_phase-p-pay-modal{
+    max-height:100dvh;overflow:auto;-webkit-overflow-scrolling:touch
+  }
+  #_invoice-modal-inner{max-width:100%;overflow-x:auto}
+  #crypto-section,#settlements-section,#bets-section,#players-section{
+    overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%
+  }
+  table{max-width:100%}
+}
+
+/* ═══ 390px phones — tighten leftover 3-up grids and tap targets ═══ */
+@media (max-width:400px){
+  .hdr{flex-wrap:wrap}
+  .hdr-right{width:100%;justify-content:flex-end;flex-wrap:wrap}
+  .buy-diamonds-nav-btn,.diamond-pill{font-size:0.6rem;padding:8px}
+  #host-bets-tabs .host-bets-tab,#host-bets-filters select{
+    min-height:44px;width:100%
+  }
+  .player-row{flex-wrap:wrap}
+  .host-bet-metrics,[style*="grid-template-columns:1fr 1fr 1fr"]{
+    grid-template-columns:1fr 1fr!important
+  }
+  .modal,#_invoice-modal-inner{max-width:100vw;width:100%;box-sizing:border-box}
+}
+
 </style>
 
 <script>
@@ -175,142 +275,27 @@ try {
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',syncBody); else syncBody();
 })();
 
-// ═══ BUY DIAMONDS SYSTEM ══════════════════════════════════════════════════════
-// Wallet pool — admin-managed, never auto-generated
-var WALLET_POOL = {
-  'ETH': [
-    { address: '0x61F74cD55bA283269eb86a2AA7a882B2e1a9225F', network: 'ETH_ERC20', usageCount: 0, maxUsageCount: 10, active: true }
-  ],
-  'USDT': [
-    { address: '0x61F74cD55bA283269eb86a2AA7a882B2e1a9225F', network: 'ETH_ERC20', usageCount: 0, maxUsageCount: 10, active: true }
-  ],
-  'USDC': [
-    { address: '0x61F74cD55bA283269eb86a2AA7a882B2e1a9225F', network: 'ETH_ERC20', usageCount: 0, maxUsageCount: 10, active: true }
-  ],
-  'BTC': [
-    { address: 'bc1qu6um0h9qdy8nn6w3m2t4x3ava8lp6tm96erwc4', network: 'BTC', usageCount: 0, maxUsageCount: 3, active: true }
-  ]
-};
-
-var DIAMOND_PACKAGES = [
-  { diamonds: 500,   price: 4.99,  label: 'Starter',  bonus: '' },
-  { diamonds: 1200,  price: 9.99,  label: 'Popular',  bonus: '+200 bonus', highlight: true },
-  { diamonds: 2500,  price: 19.99, label: 'Pro',      bonus: '+500 bonus' },
-  { diamonds: 6000,  price: 44.99, label: 'Elite',    bonus: '+1000 bonus' },
-  { diamonds: 15000, price: 99.99, label: 'Whale',    bonus: '+3000 bonus' }
-];
-
-var _activeOrder = null; // { packageIdx, payMethod, walletAddress, createdAt }
-
-function getActiveWallet(method) {
-  var pool = WALLET_POOL[method] || [];
-  return pool.find(function(w){ return w.active && w.usageCount < w.maxUsageCount; }) || null;
-}
-
+// ═══ BUY DIAMONDS ══════════════════════════════════════════════════════════════
+// Purchase UI lives in diamonds.js. Keep entry-point names as thin wrappers.
 function showBuyDiamonds() {
-  var screen = document.getElementById('buy-diamonds-screen');
-  if (screen) screen.style.display = 'block';
-  _activeOrder = null;
-  renderPackageSelect();
+  if (typeof openBuyDiamondsModal === 'function') openBuyDiamondsModal();
 }
-function hideBuyDiamonds() {
-  var screen = document.getElementById('buy-diamonds-screen');
-  if (screen) screen.style.display = 'none';
-  _activeOrder = null;
-}
-
-function renderPackageSelect() {
-  var el = document.getElementById('buy-diamonds-content');
-  if (!el) return;
-  el.innerHTML =
-    '<div style="font-size:0.78rem;color:var(--light);margin-bottom:16px">Choose a diamond package to top up your account.</div>' +
-    DIAMOND_PACKAGES.map(function(pkg, i) {
-      return '<div onclick="selectPackage(' + i + ')" style="background:var(--card);border:1.5px solid '+(pkg.highlight?'var(--gold)':'var(--border)')+';border-radius:14px;padding:16px;margin-bottom:10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">' +
-        '<div>' +
-          '<div style="font-size:1rem;font-weight:900">💎 ' + pkg.diamonds.toLocaleString() + (pkg.bonus?' <span style="font-size:0.72rem;color:var(--gold);font-weight:700">'+pkg.bonus+'</span>':'') + '</div>' +
-          '<div style="font-size:0.72rem;color:var(--light);margin-top:2px">' + pkg.label + '</div>' +
-        '</div>' +
-        '<div style="font-size:1.1rem;font-weight:900;color:var(--green)">$' + pkg.price.toFixed(2) + '</div>' +
-      '</div>';
-    }).join('');
-}
-
-function selectPackage(idx) {
-  var el = document.getElementById('buy-diamonds-content');
-  var pkg = DIAMOND_PACKAGES[idx];
-  el.innerHTML =
-    '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px">' +
-      '<div style="font-size:0.72rem;color:var(--light);margin-bottom:4px">Selected Package</div>' +
-      '<div style="font-size:1rem;font-weight:900">💎 ' + pkg.diamonds.toLocaleString() + ' diamonds</div>' +
-      '<div style="font-size:0.82rem;color:var(--green);font-weight:700">$' + pkg.price.toFixed(2) + (pkg.bonus?' · '+pkg.bonus:'') + '</div>' +
-    '</div>' +
-    '<div style="font-size:0.82rem;font-weight:800;margin-bottom:10px">Select Payment Method:</div>' +
-    ['ETH','USDT','USDC','BTC'].map(function(method) {
-      var available = !!getActiveWallet(method);
-      var icons = { ETH: 'Ξ', USDT: '₮', USDC: 'Ⓢ', BTC: '₿' };
-      var _oc = available ? 'selectPayMethod(' + idx + ',\"' + method + '\")' : ''; return '<div onclick="' + _oc + '" style="background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:' + (available?'pointer':'not-allowed') + ';opacity:' + (available?'1':'0.4') + '">' +
-        '<div style="font-size:1.4rem;width:36px;text-align:center">' + icons[method] + '</div>' +
-        '<div>' +
-          '<div style="font-weight:800">' + method + (method!=='BTC'?' (ERC-20)':'') + '</div>' +
-          '<div style="font-size:0.7rem;color:var(--light)">' + (available ? 'Available' : 'Temporarily unavailable') + '</div>' +
-        '</div>' +
-      '</div>';
-    }).join('') +
-    '<button onclick="renderPackageSelect()" style="width:100%;margin-top:8px;padding:12px;background:transparent;border:1px solid var(--border);border-radius:12px;color:var(--light);font-size:0.82rem;cursor:pointer">← Back</button>';
-}
-
-function selectPayMethod(pkgIdx, method) {
-  var wallet = getActiveWallet(method);
-  if (!wallet) {
-    showToastHost('Payment temporarily unavailable. Please try again later.'); return;
-  }
-  var pkg = DIAMOND_PACKAGES[pkgIdx];
-  _activeOrder = { pkgIdx: pkgIdx, method: method, walletAddress: wallet.address, createdAt: new Date().toISOString() };
-  var isERC = method !== 'BTC';
-  var warning = isERC
-    ? 'Only send assets on the Ethereum/ERC-20 network to this address.'
-    : 'Only send Bitcoin (BTC) to this address.';
-  var network = isERC ? 'Ethereum ERC-20' : 'Bitcoin Mainnet';
-  var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(wallet.address);
-  var el = document.getElementById('buy-diamonds-content');
-  el.innerHTML =
-    '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px">' +
-      '<div style="font-size:0.72rem;color:var(--light)">Package</div>' +
-      '<div style="font-weight:900">💎 ' + pkg.diamonds.toLocaleString() + ' · $' + pkg.price.toFixed(2) + '</div>' +
-    '</div>' +
-    '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;text-align:center;margin-bottom:14px">' +
-      '<img src="' + qrUrl + '" style="width:180px;height:180px;border-radius:12px;background:#fff;padding:8px;margin-bottom:14px" alt="Payment QR">' +
-      '<div style="font-size:0.72rem;color:var(--light);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">' + method + ' Address · ' + network + '</div>' +
-      '<div id="wallet-addr-display" style="font-size:0.7rem;font-weight:700;color:var(--white);word-break:break-all;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px">' + wallet.address + '</div>' +
-      '<button id="copy-addr-btn" data-addr="' + wallet.address + '" onclick="copyWalletAddress(this.dataset.addr)" style="width:100%;padding:11px;background:var(--cyan-dim);border:1px solid rgba(0,194,255,0.3);border-radius:10px;color:var(--cyan);font-size:0.82rem;font-weight:800;cursor:pointer">📋 Copy Address</button>' +
-    '</div>' +
-    '<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:12px;margin-bottom:14px;font-size:0.75rem;color:#f59e0b">⚠️ ' + warning + '</div>' +
-    '<div style="font-size:0.72rem;color:var(--light);margin-bottom:16px">Send exactly <strong>$' + pkg.price.toFixed(2) + ' worth of ' + method + '</strong> to this address. Diamonds are credited after 1 network confirmation. Screenshot this page before sending.</div>' +
-    '<button onclick="selectPackage('+pkgIdx+')" style="width:100%;padding:12px;background:transparent;border:1px solid var(--border);border-radius:12px;color:var(--light);font-size:0.82rem;cursor:pointer">← Change Method</button>';
-}
-
-function copyWalletAddress(addr) {
-  navigator.clipboard.writeText(addr).then(function() {
-    var btn = document.getElementById('copy-addr-btn');
-    if (btn) { btn.textContent = '✅ Copied!'; btn.style.background = 'rgba(0,255,136,0.1)'; btn.style.color = 'var(--green)'; btn.style.borderColor = 'rgba(0,255,136,0.3)'; }
-    setTimeout(function() {
-      if (btn) { btn.textContent = '📋 Copy Address'; btn.style.background = 'var(--cyan-dim)'; btn.style.color = 'var(--cyan)'; btn.style.borderColor = 'rgba(0,194,255,0.3)'; }
-    }, 2500);
-  }).catch(function() {
-    // Fallback for browsers without clipboard API
-    var ta = document.createElement('textarea');
-    ta.value = addr; ta.style.position = 'fixed'; ta.style.opacity = '0';
-    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
-    document.body.removeChild(ta);
-    var btn = document.getElementById('copy-addr-btn');
-    if (btn) { btn.textContent = '✅ Copied!'; setTimeout(function(){ if(btn) btn.textContent = '📋 Copy Address'; }, 2500); }
-  });
+function showBuyDiamondsPage() {
+  if (typeof openBuyDiamondsModal === 'function') openBuyDiamondsModal();
 }
 // ══════════════════════════════════════════════════════════════════════════════
 
 
-// ═══ DEBUG / AUDIT ACCESS PANEL ═══════════════════════════════════════════════
+// ═══ DEBUG / AUDIT ACCESS PANEL (opt-in only: ?debug=1 or localStorage pb-debug=1) ═══
+function _pbsDebugEnabled() {
+  try {
+    if (new URLSearchParams(location.search).get('debug') === '1') return true;
+    if (localStorage.getItem('pb-debug') === '1') return true;
+  } catch (_e) {}
+  return false;
+}
 function openDebugPanel() {
+  if (!_pbsDebugEnabled()) return;
   var existing = document.getElementById('_debug_panel');
   if (existing) { existing.remove(); return; }
 
@@ -594,7 +579,8 @@ function renderAdminCrypto() {
     <div class="hdr-title">Host <span>Dashboard</span></div>
   </div>
   <div class="hdr-right">
-    <div class="diamond-pill" id="diamond-pill" onclick="showBuyDiamondsPage()" role="button" aria-label="Buy Diamonds" title="Buy Diamonds">💎 <span id="diamond-count">0</span></div>
+    <button type="button" class="buy-diamonds-nav-btn" id="buy-diamonds-nav-btn" onclick="openBuyDiamondsModal()">💎 Buy Diamonds</button>
+    <div class="diamond-pill" id="diamond-pill" onclick="openBuyDiamondsModal()" role="button" aria-label="Buy Diamonds" title="Buy Diamonds">💎 <span id="diamond-count">0</span></div>
     <div class="notif-btn">
       <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
     </div>
@@ -661,6 +647,7 @@ function renderAdminCrypto() {
   </div>
 </div>
 
+<div id="home-content">
 <!-- SETTLEMENT SUMMARY -->
 <div class="settlement">
   <div class="settle-card sc-red">
@@ -756,6 +743,7 @@ function renderAdminCrypto() {
        (e.g. approve/invite flow). UI removal only — no functional change. -->
 </div>
 <div class="player-list" id="player-list"></div>
+</div><!-- /home-content -->
 
 <!-- ADD PLAYER MODAL -->
 <div id="modal-add" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:200;align-items:flex-end;justify-content:center">
@@ -781,10 +769,46 @@ function renderAdminCrypto() {
 <!-- Phase U: Admin System Panel (full_admin+ only) -->
 <div id="_admin-system-panel" style="display:none;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;margin:8px;overflow:hidden"></div>
 <div id="bets-section" style="display:none;padding-bottom:100px">
-  <div style="padding:16px 16px 8px;display:flex;justify-content:space-between;align-items:center">
-    <span style="font-size:1rem;font-weight:900">Active Bets</span>
+  <div style="padding:16px 16px 8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+    <span style="font-size:1rem;font-weight:900">Host Bets</span>
     <span id="host-bets-count" style="font-size:0.72rem;color:var(--cyan);background:var(--cyan-dim);padding:3px 10px;border-radius:12px">0 bets</span>
   </div>
+  <div id="host-bets-tabs" style="display:flex;gap:6px;padding:0 16px 10px;flex-wrap:wrap">
+    <button type="button" class="host-bets-tab active" data-bets-tab="all" style="flex:1;min-width:70px;min-height:40px;padding:8px 8px;border-radius:10px;border:1px solid rgba(0,194,255,0.35);background:rgba(0,194,255,0.14);color:var(--cyan);font-size:0.68rem;font-weight:900;cursor:pointer">ALL <span id="host-bets-tab-all">0</span></button>
+    <button type="button" class="host-bets-tab" data-bets-tab="active" style="flex:1;min-width:70px;min-height:40px;padding:8px 8px;border-radius:10px;border:1px solid #333;background:#141414;color:#888;font-size:0.68rem;font-weight:900;cursor:pointer">ACTIVE <span id="host-bets-tab-active">0</span></button>
+    <button type="button" class="host-bets-tab" data-bets-tab="settled" style="flex:1;min-width:70px;min-height:40px;padding:8px 8px;border-radius:10px;border:1px solid #333;background:#141414;color:#888;font-size:0.68rem;font-weight:900;cursor:pointer">SETTLED <span id="host-bets-tab-settled">0</span></button>
+    <button type="button" class="host-bets-tab" data-bets-tab="canceled" style="flex:1;min-width:70px;min-height:40px;padding:8px 8px;border-radius:10px;border:1px solid #333;background:#141414;color:#888;font-size:0.68rem;font-weight:900;cursor:pointer">CANCELED <span id="host-bets-tab-canceled">0</span></button>
+  </div>
+  <div id="host-bets-filters" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:0 16px 12px">
+    <select id="host-bets-filter-player" style="min-height:40px;padding:8px 10px;background:#141414;border:1px solid #333;border-radius:10px;color:#fff;font-size:0.72rem;font-weight:700">
+      <option value="">All players</option>
+    </select>
+    <select id="host-bets-filter-status" style="min-height:40px;padding:8px 10px;background:#141414;border:1px solid #333;border-radius:10px;color:#fff;font-size:0.72rem;font-weight:700">
+      <option value="">All statuses</option>
+      <option value="active">Active</option>
+      <option value="won">Won</option>
+      <option value="lost">Lost</option>
+      <option value="push">Push</option>
+      <option value="void">Void</option>
+    </select>
+    <select id="host-bets-filter-date" style="min-height:40px;padding:8px 10px;background:#141414;border:1px solid #333;border-radius:10px;color:#fff;font-size:0.72rem;font-weight:700">
+      <option value="">Any date</option>
+      <option value="7" selected>Last 7 days</option>
+      <option value="30">Last 30 days</option>
+      <option value="90">Last 90 days</option>
+    </select>
+  </div>
+  <style>
+    #bets-section{overflow-x:hidden;max-width:100%}
+    #host-bets-list{overflow-x:hidden;max-width:100%}
+    #host-bets-list *{max-width:100%;box-sizing:border-box;overflow-wrap:anywhere;word-break:break-word}
+    @media (max-width:480px){
+      #host-bets-filters{grid-template-columns:1fr!important}
+      #host-bets-tabs{flex-direction:column}
+      #host-bets-tabs .host-bets-tab{width:100%}
+      #host-bets-list .host-bet-metrics{grid-template-columns:1fr 1fr!important}
+    }
+  </style>
   <div id="host-bets-list"></div>
 </div>
 
@@ -817,6 +841,32 @@ function renderAdminCrypto() {
 <script>
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 let TOKEN=localStorage.getItem('pb-sports-token')||'';
+
+function _getActorHeaders() {
+  var host = {}; try { host = JSON.parse(localStorage.getItem('pb-host')||'{}'); } catch(_e){}
+  var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+  var pid  = String(host.id || host.hostId || pl.id || pl.username || '').trim();
+  var cid  = String(club.id != null ? club.id : club.clubId || '').trim();
+  var role = '';
+  try { if (localStorage.getItem('pb-actor-role')) role = localStorage.getItem('pb-actor-role'); } catch(_e){}
+  if (!role) role = host.role || 'host';
+  var token = null;
+  try { token = localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token') || TOKEN; } catch(_e){}
+  var headers = {
+    'Content-Type': 'application/json',
+    'X-Actor-Id':   pid || 'anonymous',
+    'X-Club-Id':    cid || '',
+    'X-Actor-Role': role
+  };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  return headers;
+}
+async function _pbFetch(url, opts) {
+  opts = opts || {};
+  var headers = Object.assign(_getActorHeaders(), opts.headers || {});
+  return fetch(url, Object.assign({}, opts, { headers: headers }));
+}
 
 function showToastHost(msg){
   var t=document.createElement('div');
@@ -986,18 +1036,7 @@ function refreshHostDashboardStats(trigger) {
   var profitEl = document.getElementById('stat-profit');
   if (profitEl) profitEl.style.color = hostProfit >= 0 ? 'var(--green, #00ff88)' : 'var(--red, #ff3d57)';
 
-  console.log('[host stats refresh]',
-    '\n  trigger:       ', trigger,
-    '\n  source:        ', 'pb-tickets(' + pbTickets.length + ') + hostActiveBets(' + hostBets.length + ')',
-    '\n  ticketsLoaded: ', allTickets.length,
-    '\n  activeTickets: ', active.length,
-    '\n  handle:        $' + handle.toFixed(2),
-    '\n  atRisk:        $' + atRisk.toFixed(2),
-    '\n  profit:        $' + hostProfit.toFixed(2),
-    '\n  holdPct:       ', holdPct !== null ? holdPct.toFixed(1) + '%' : 'n/a (no settled)',
-    '\n  playersOwe:    $' + playersOwe.toFixed(2),
-    '\n  hostOwes:      $' + hostOwes.toFixed(2)
-  );
+  
 
   return { handle, atRisk, hostProfit, holdPct, active: active.length, settled: settled.length, playersOwe, hostOwes };
 }
@@ -1015,84 +1054,55 @@ function _validateHostStats(s) {
   return { safe: w.length===0, warnings: w };
 }
 
-function _getHostClubId() {
-  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
-  return club.id || club.clubId || null;
-}
-
-async function fetchHostDashboardData() {
-  var cid = _getHostClubId();
-  var qs  = cid ? '?clubId='+encodeURIComponent(cid) : '';
-  var resp = await fetch('/api/host/dashboard'+qs);
-  var data = await resp.json();
-  if (!data.ok || !data.stats) throw new Error(data.error || 'missing stats');
-  return data;
-}
-
-function mapDbTicketsToHostBets(activeTickets) {
-  var players = loadClubPlayers();
-  var byId = {};
-  players.forEach(function(p) {
-    var id = p.playerId || p.id || p.player_id;
-    if (id) byId[id] = p;
-  });
-  return (activeTickets || []).map(function(t) {
-    var p = byId[t.player_id] || {};
-    var shortId = t.player_id ? String(t.player_id).slice(0, 8) : '';
-    return {
-      id:                t.id,
-      playerId:          t.player_id,
-      playerUsername:    p.playerName || p.username || p.name || shortId || 'Player',
-      playerName:        p.playerName || p.username || p.name || shortId || 'Player',
-      playerRealName:    p.realName || p.real_name || '',
-      riskAmount:        parseFloat(t.risk_amount) || 0,
-      potentialProfit:   parseFloat(t.potential_profit) || 0,
-      estimatedPayout:   parseFloat(t.estimated_payout) || 0,
-      type:              t.type || 'Single',
-      status:            t.status || 'active',
-      placedAt:          t.placed_at || '',
-      selections:        t.selections || [],
-      deleteRequestStatus: t.delete_request_status || t.deleteRequestStatus || null
-    };
-  });
-}
-
 async function loadHostDashboardFromDb(trigger) {
   trigger = trigger || 'manual';
-  var cid = _getHostClubId();
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+  var cid  = club.id || club.clubId || null;
   try {
-    var data = await fetchHostDashboardData();
+    var qs  = cid ? '?clubId='+encodeURIComponent(cid) : '';
+    var resp = await (typeof _pbFetch === 'function' ? _pbFetch('/api/host/dashboard'+qs) : fetch('/api/host/dashboard'+qs));
+    var data = await resp.json();
+    // Apply the club roster even if stats validation fails later — otherwise
+    // the Players tab stays on "No players yet" / empty localStorage.
+    if (data && Array.isArray(data.players)) {
+      try { _applyHostDashboardPlayers(data.players); } catch(_pe) {}
+    }
+    _hostPlayersFetchDone = true;
+    if (!data.ok || !data.stats) throw new Error(data.error || 'missing stats');
     var valid = _validateHostStats(data.stats);
     if (!valid.safe) throw new Error('invalid_stats:'+valid.warnings.join(','));
-    // Render stats from DB
+    // Render stats from DB (summary aliases kept for newer clients)
     var s = data.stats;
+    var summary = data.summary || {};
+    var activeCount = summary.activeBetCount != null ? summary.activeBetCount : s.activeBetCount;
+    var atRisk = summary.atRisk != null ? summary.atRisk : s.hostAtRisk;
     function _fmtUSD(v){ return '$'+Math.abs(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
     function _set(id,val){ var el=document.getElementById(id); if(el) el.textContent=val; }
     _set('stat-handle',       _fmtUSD(s.handle));
     _set('stat-hold',         s.holdPct!==null ? s.holdPct.toFixed(1)+'%' : '—');
     _set('stat-profit',       (s.profit>=0?'+':'-')+_fmtUSD(s.profit));
-    _set('stat-active-risk',  _fmtUSD(s.hostAtRisk));
-    _set('stat-active-bets',  String(s.activeBetCount));
-    _set('host-bets-count',   s.activeBetCount+' bet'+(s.activeBetCount!==1?'s':''));
+    _set('stat-active-risk',  _fmtUSD(atRisk));
+    _set('stat-active-bets',  String(activeCount));
+    _set('host-bets-count',   activeCount+' bet'+(activeCount!==1?'s':''));
     var profitEl = document.getElementById('stat-profit');
     if (profitEl) profitEl.style.color = s.profit>=0 ? 'var(--green,#00ff88)' : 'var(--red,#ff3d57)';
+    try { _applyHostDashboardTickets(data); } catch(_te) {}
     _updateHostSourceBadge('db', data.warnings||[]);
     _setHostDbPrimary(true);  // Lock DOM authority to DB
-    var activeBets = mapDbTicketsToHostBets(data.activeTickets);
-    if (document.getElementById('host-bets-list')) _renderHostBetsList(activeBets);
-    console.log('[host db read] trigger='+trigger+' source=db clubId='+(cid||'?')+
-      ' handle=$'+s.handle+' active='+s.activeBetCount+' profit=$'+s.profit+
-      ' activeTickets='+activeBets.length);
-    return { source:'db', stats:s, warnings:data.warnings||[], activeTickets:activeBets };
+    _hostRenderQuiet = true;
+    try { renderHostBets(); } catch(_rb) {}
+    try { renderPlayersTab(); } catch(_rp) {}
+    _hostRenderQuiet = false;
+    
+    return { source:'db', stats:s, summary:summary, warnings:data.warnings||[], activeTickets:data.activeTickets||[], players:data.players||[] };
   } catch(e) {
     // Fallback to localStorage calculation
     console.warn('[host db read] fallback to localStorage: '+e.message);
+    _hostPlayersFetchDone = true;
     _setHostDbPrimary(false); // Release DOM authority back to localStorage
     _updateHostSourceBadge('localStorage', [e.message]);
     refreshHostDashboardStats('db_fallback:'+trigger);
-    if (document.getElementById('host-bets-list')) {
-      try { _renderHostBetsList(loadHostActiveBets()); } catch(_e){}
-    }
+    try { renderPlayersTab(); } catch(_rp) {}
     return { source:'localStorage', fallbackReason:e.message };
   }
 }
@@ -1113,7 +1123,7 @@ function _updateHostSourceBadge(source, warnings) {
 }
 
 async function runHostDbReadAudit() {
-  console.log('[host db audit] ─── START ───');
+  
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
   var cid  = club.id || club.clubId || null;
 
@@ -1127,7 +1137,7 @@ async function runHostDbReadAudit() {
   var dbData = null, fallbackReason = null;
   try {
     var qs = cid ? '?clubId='+encodeURIComponent(cid) : '';
-    var resp = await fetch('/api/host/dashboard'+qs);
+    var resp = await (typeof _pbFetch === 'function' ? _pbFetch('/api/host/dashboard'+qs) : fetch('/api/host/dashboard'+qs));
     dbData = await resp.json();
     if (!dbData.ok) fallbackReason = dbData.error || 'db_error';
   } catch(e) { fallbackReason = e.message; }
@@ -1135,18 +1145,7 @@ async function runHostDbReadAudit() {
   var dbStats = dbData && dbData.stats;
   var sourceUsed = (!fallbackReason && dbStats) ? 'db' : 'localStorage';
 
-  console.log('[host db audit]',
-    '\n  clubId:             ', cid || '(none)',
-    '\n  sourceUsed:         ', sourceUsed,
-    '\n  dbActiveTickets:    ', dbData ? (dbData.activeTickets||[]).length : 'n/a',
-    '\n  localActiveTickets: ', localActive,
-    '\n  dbHandle:           ', dbStats ? '$'+dbStats.handle : 'n/a',
-    '\n  localHandle:        ', '$'+localHandle,
-    '\n  dbActiveRisk:       ', dbStats ? '$'+dbStats.activeRisk : 'n/a',
-    '\n  dbProfit:           ', dbStats ? '$'+dbStats.profit : 'n/a',
-    '\n  fallbackReason:     ', fallbackReason || 'none',
-    '\n  status:             ', !fallbackReason && dbStats ? '✅ db_primary' : '⚠️ localStorage'
-  );
+  
   return { sourceUsed, dbStats, fallbackReason };
 }
 window.loadHostDashboardFromDb    = loadHostDashboardFromDb;
@@ -1217,8 +1216,7 @@ async function renderSettlementPreviewFromDb() {
       if (settEl) settEl.insertAdjacentHTML('afterbegin', html);
     }
 
-    console.log('[settlement preview] source=db players='+players.length+
-      ' playersOwe=$'+totals.playersOwe+' hostOwes=$'+totals.hostOwes+' net=$'+totals.net);
+    
     return data;
   } catch(e) {
     console.warn('[settlement preview] DB failed, keeping existing local UI:', e.message);
@@ -1227,7 +1225,7 @@ async function renderSettlementPreviewFromDb() {
 }
 
 async function runSettlementDbAudit() {
-  console.log('[settlement db audit] ─── START ───');
+  
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
   var cid  = club.id || club.clubId || null;
 
@@ -1240,21 +1238,6 @@ async function runSettlementDbAudit() {
     if (!dbData.ok) fallbackReason = dbData.error;
   } catch(e) { fallbackReason = e.message; }
 
-  var t = dbData && dbData.totals;
-  var p = dbData && dbData.players || [];
-  console.log('[settlement db audit]',
-    '\n  clubId:       ', cid || '(none)',
-    '\n  source:       ', fallbackReason ? 'db_error' : 'db',
-    '\n  playerCount:  ', p.length,
-    '\n  playersOwe:   ', t ? '$'+t.playersOwe : 'n/a',
-    '\n  hostOwes:     ', t ? '$'+t.hostOwes   : 'n/a',
-    '\n  net:          ', t ? (t.net>=0?'+':'')+'$'+t.net : 'n/a',
-    '\n  fallbackReason:', fallbackReason || 'none',
-    '\n  status:       ', !fallbackReason ? '✅ db_preview' : '❌ error'
-  );
-  if (p.length) {
-    p.forEach(function(pl){ console.log('  player:', pl.username, 'owesHost:$'+pl.owesHost, 'hostOwes:$'+pl.hostOwes, 'openRisk:$'+pl.openRisk); });
-  }
   return dbData;
 }
 window.renderSettlementPreviewFromDb = renderSettlementPreviewFromDb;
@@ -1333,7 +1316,7 @@ async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes) {
       try { await renderSettlementPreviewFromDb(); } catch(_e){}
       try { await loadHostDashboardFromDb('post_settlement'); } catch(_e){}
       if (typeof showToastHost === 'function') showToastHost('✅ Settlement recorded: $'+amt.toFixed(2));
-      console.log('[settlement execution] ok ledgerEntryId='+data.ledgerEntryId+' direction='+direction+' amount='+amt);
+      
     } catch(e) {
       btn.textContent = 'Confirm Settlement'; btn.disabled = false;
       if (typeof showToastHost === 'function') showToastHost('❌ Settlement failed: '+e.message);
@@ -1344,7 +1327,7 @@ async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes) {
 window.openSettlePlayerModal = openSettlePlayerModal;
 
 async function runSettlementExecutionAudit() {
-  console.log('[settlement execution audit] ─── START ───');
+  
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
   var cid  = club.id || club.clubId || null;
   try {
@@ -1352,14 +1335,7 @@ async function runSettlementExecutionAudit() {
     var r1 = await fetch('/api/host/settlements-preview'+qs).then(function(r){ return r.json(); });
     var r2 = await fetch('/api/mirror/audit/ledger?limit=10').then(function(r){ return r.json(); });
     var settlements = (r2.recent||[]).filter(function(e){ return e.type==='settlement'; });
-    console.log('[settlement execution audit]',
-      '\n  clubId:           ', cid||'(none)',
-      '\n  previewPlayers:   ', (r1.players||[]).length,
-      '\n  playersOwe:       ', r1.totals ? '$'+r1.totals.playersOwe : 'n/a',
-      '\n  hostOwes:         ', r1.totals ? '$'+r1.totals.hostOwes   : 'n/a',
-      '\n  ledgerSettlements:', settlements.length,
-      '\n  recentSettlement: ', settlements[0] ? settlements[0].id+' $'+settlements[0].amount : '(none)'
-    );
+    
     return { preview: r1, settlements };
   } catch(e) { console.error('[settlement execution audit] error:', e.message); }
 }
@@ -1416,7 +1392,7 @@ async function createWeeklyRollover(confirm) {
     // Refresh views
     try { await renderSettlementPreviewFromDb(); } catch(_e){}
     try { await loadHostDashboardFromDb('post_rollover'); } catch(_e){}
-    console.log('[weekly rollover] executed week='+week+' players='+data.playersSnapshotted);
+    
     return data;
   } catch(e) {
     if (typeof showToastHost === 'function') showToastHost('❌ Rollover failed: '+e.message);
@@ -1425,7 +1401,7 @@ async function createWeeklyRollover(confirm) {
 }
 
 async function runWeeklyRolloverAudit() {
-  console.log('[weekly rollover audit] ─── START ───');
+  
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
   var cid  = club.id || club.clubId || null;
   var week = _currentISOWeek();
@@ -1433,16 +1409,10 @@ async function runWeeklyRolloverAudit() {
     var qs = cid ? '?clubId='+encodeURIComponent(cid) : '';
     var hist = await fetch('/api/host/rollover-history'+qs).then(function(r){ return r.json(); });
     var snap = await fetch('/api/host/week-snapshot?week='+encodeURIComponent(week)+(cid?'&clubId='+encodeURIComponent(cid):'')).then(function(r){ return r.json(); });
-    console.log('[weekly rollover audit]',
-      '\n  clubId:          ', cid||'(none)',
-      '\n  currentWeek:     ', week,
-      '\n  rolloverCount:   ', (hist.history||[]).length,
-      '\n  latestRollover:  ', hist.history&&hist.history[0] ? hist.history[0].rollover_week+' ('+hist.history[0].performed_at+')' : '(none)',
-      '\n  currentSnapshot: ', snap.players ? snap.players.length+' players' : 'none (week not closed yet)'
-    );
+    
     if (hist.history&&hist.history[0]) {
       var t = JSON.parse(hist.history[0].totals_snapshot||'{}');
-      console.log('  lastRolloverTotals: playersOwe=$'+(t.playersOwe||0)+' hostOwes=$'+(t.hostOwes||0)+' net=$'+(t.net||0));
+      
     }
     return { history: hist.history, snapshots: snap.players };
   } catch(e) { console.error('[weekly rollover audit] error:', e.message); }
@@ -1557,20 +1527,16 @@ function _renderHistoricalSnapshot(week, rolloverRow, players) {
 }
 
 async function runWeeklyHistoryAudit() {
-  console.log('[weekly history audit] ─── START ───');
+  
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
   var cid  = club.id || club.clubId || null;
   try {
     var qs   = cid ? '?clubId='+encodeURIComponent(cid) : '';
     var hist = await fetch('/api/host/rollover-history'+qs).then(function(r){ return r.json(); });
-    console.log('[weekly history audit]',
-      '\n  clubId:       ', cid||'(none)',
-      '\n  closedWeeks:  ', (hist.history||[]).length,
-      '\n  weeks:        ', (hist.history||[]).map(function(r){ return r.rollover_week; }).join(', ') || '(none)'
-    );
+    
     (hist.history||[]).forEach(function(r){
       var t={}; try{t=JSON.parse(r.totals_snapshot||'{}');}catch(_e){}
-      console.log('  '+r.rollover_week+': playersOwe=$'+(t.playersOwe||0)+' hostOwes=$'+(t.hostOwes||0)+' net=$'+(t.net||0)+' players='+r.players_count);
+      
     });
     return hist;
   } catch(e) { console.error('[weekly history audit] error:', e.message); }
@@ -1581,7 +1547,7 @@ window.runWeeklyHistoryAudit = runWeeklyHistoryAudit;
 
 // ── SETTLEMENT RECONCILIATION AUDIT (Phase C Step 7, read-only) ────────────────────
 async function runSettlementReconciliationAudit() {
-  console.log('[settlement reconciliation] ─── START ───');
+  
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
   var cid  = club.id || club.clubId || null;
   try {
@@ -1593,22 +1559,7 @@ async function runSettlementReconciliationAudit() {
     var lt = data.ledgerTotals       || {};
     var pt = data.settlementPreviewTotals || {};
     var lr = data.latestRollover     || {};
-    console.log('[settlement reconciliation]',
-      '\n  clubId:            ', cid||'(none)',
-      '\n  ticketProfit:      $', tt.profit,
-      '\n  ticketActiveRisk:  $', tt.activeRisk,
-      '\n  ticketSettledGain: $', tt.settledGain,
-      '\n  ticketSettledLoss: $', tt.settledLoss,
-      '\n  ledgerNet:          $', lt.net,
-      '\n  ledger.settlement:  $', lt.settlement,
-      '\n  previewPlayersOwe: $', pt.playersOwe,
-      '\n  previewHostOwes:   $', pt.hostOwes,
-      '\n  previewNet:        $', pt.net,
-      '\n  latestSnapshot:    ', lr.rolloverWeek ? (lr.rolloverWeek+' net=$'+lr.net) : '(none)',
-      '\n  mismatches:        ', data.mismatches.length,
-      data.mismatches.length ? '\n  ⚠️ '+data.mismatches.map(function(m){ return m.category+' delta='+m.delta; }).join('; ') : '',
-      '\n  status:            ', data.status === 'balanced' ? '✅ BALANCED' : '❌ MISMATCH'
-    );
+    
     return data;
   } catch(e) { console.error('[settlement reconciliation] error:', e.message); }
 }
@@ -1630,7 +1581,7 @@ var _currentStaffRole = 'owner'; // default: owner until permissions loaded
 function setStaffRole(role) {
   if (!_ROLE_LEVELS_CLIENT[role]) { console.warn('[permissions] unknown role:', role); return; }
   _currentStaffRole = role;
-  console.log('[permissions] staff role set:', role);
+  
   _applyPermissionGates();
 }
 
@@ -1652,7 +1603,7 @@ function _applyPermissionGates() {
     el.disabled       = !allowed;
     el.title          = allowed ? '' : 'Not permitted for role: '+role;
   });
-  console.log('[permissions] gates applied for role:', role);
+  
 }
 
 // Fetch staff role from backend (looks up club_members.staff_role)
@@ -1663,7 +1614,6 @@ async function loadStaffRole() {
   try {
     var r = await fetch('/api/permissions/roles');
     var data = await r.json();
-    if (data.ok) console.log('[permissions] available roles:', data.roles.map(function(r){ return r.role; }).join(', '));
   } catch(_e) {}
 }
 
@@ -1674,7 +1624,7 @@ async function checkMyPermission(action) {
       body:JSON.stringify({ role:_currentStaffRole, action })
     });
     var data = await resp.json();
-    console.log('[permissions]', action, '->', data.allowed ? '✅ permitted' : '❌ denied ('+data.reason+')');
+    
     return data;
   } catch(e) {
     console.warn('[permissions] check failed:', e.message);
@@ -1802,31 +1752,28 @@ function runHostStatsAudit() {
     settledHandle: _round(auditSettledHandle - live.settledHandle)
   } : null;
 
-  console.log('[host stats audit]');
-  console.log('  hostActiveBets:        ' + hostBets.length);
-  console.log('  pb-tickets:            ' + pbTickets.length);
-  console.log('  by status:');
+  
+  
+  
+  
   Object.keys(byStatus).forEach(function(k){
     var b = byStatus[k];
     if (b.count === 0) return;
-    console.log('    ' + k +
-                ' count=' + b.count +
-                ' risk=$' + _round(b.riskSum).toFixed(2) +
-                ' profit=$' + _round(b.profitSum).toFixed(2));
+    
   });
-  console.log('  derived (audit math):');
-  console.log('    Handle:            $' + auditHandle.toFixed(2));
-  console.log('    Active At Risk:    $' + auditAtRisk.toFixed(2));
-  console.log('    Host Profit:       $' + auditProfit.toFixed(2));
-  console.log('    Settled Handle:    $' + auditSettledHandle.toFixed(2));
-  console.log('    Hold %:            ' + (auditHoldPct != null ? auditHoldPct.toFixed(2) + '%' : '—'));
+  
+  
+  
+  
+  
+  
   if (live) {
-    console.log('  live (calcHostStats):');
-    console.log('    Handle:            $' + live.handle.toFixed(2));
-    console.log('    Active At Risk:    $' + live.atRisk.toFixed(2));
-    console.log('    Host Profit:       $' + live.hostProfit.toFixed(2));
-    console.log('    Settled Handle:    $' + live.settledHandle.toFixed(2));
-    console.log('    Hold %:            ' + (live.holdPct != null ? live.holdPct.toFixed(2) + '%' : '—'));
+    
+    
+    
+    
+    
+    
     var anyDrift = ['handle','atRisk','hostProfit','settledHandle'].some(function(k){ return Math.abs(deltas[k]) > 0.01; });
     if (anyDrift) {
       console.warn('  AUDIT VS LIVE DRIFT:');
@@ -1841,7 +1788,7 @@ function runHostStatsAudit() {
     console.warn('[host stats audit] ' + mismatches.length + ' mismatch(es) vs pb-tickets:');
     mismatches.forEach(function(m){ console.warn('  ' + m.ticketId + ' -> ' + m.issue); });
   } else {
-    console.log('[host stats audit] no host vs pb-tickets drift');
+    
   }
 
   return {
@@ -1931,14 +1878,14 @@ function getLiveCreditPosition(opts) {
   Object.keys(totals).forEach(function(k){ totals[k] = _round(totals[k]); });
   totals.netPosition = _round(totals.playerOwesHost - totals.hostOwesPlayer);
 
-  console.log('[live credit position]');
-  console.log('  scope: ' + (ws != null ? (new Date(ws).toISOString() + ' -> ' + (we != null ? new Date(we).toISOString() : 'now')) : 'all hostActiveBets'));
-  console.log('  players:           ' + rows.length);
-  console.log('  Players owe you:   $' + totals.playerOwesHost.toFixed(2));
-  console.log('  You owe players:   $' + totals.hostOwesPlayer.toFixed(2));
-  console.log('  Net position:      ' + (totals.netPosition >= 0 ? '+$' : '-$') + Math.abs(totals.netPosition).toFixed(2));
-  console.log('  Active risk:       $' + totals.activeRisk.toFixed(2));
-  console.log('  Active exposure:   $' + totals.activeExposure.toFixed(2));
+  
+  
+  
+  
+  
+  
+  
+  
   if (typeof console.table === 'function' && rows.length) {
     console.table(rows.map(function(r){
       return {
@@ -1958,15 +1905,179 @@ function getLiveCreditPosition(opts) {
 }
 window.getLiveCreditPosition = getLiveCreditPosition;
 
-function loadHostActiveBets(){
-  var raw=JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
-  // Deduplicate by ticket id
+var _hostDbActiveTickets = null;
+var _hostDbSettledTickets = null;
+var _hostDbAllTickets = null;
+var _hostDbPlayers = null;
+var _hostDbPlayersById = null;
+var _hostPlayersFetchDone = false;
+var _hostBetsTab = 'all';
+var _hostBetsFilterPlayer = '';
+var _hostBetsFilterStatus = '';
+var _hostBetsFilterDate = '7';
+var _hostBetsUiWired = false;
+var _hostDbRecentSettledTickets = null;
+
+function _normalizeHostTicket(t) {
+  if (!t || typeof t !== 'object') return t;
+  var rawLegs = [];
+  if (Array.isArray(t.selections) && t.selections.length) rawLegs = t.selections;
+  else if (Array.isArray(t.legs) && t.legs.length) rawLegs = t.legs;
+  var selections = rawLegs.map(function(s) {
+    if (!s || typeof s !== 'object') return s;
+    var home = s.homeTeam || s.home_team || '';
+    var away = s.awayTeam || s.away_team || '';
+    var odds = s.odds;
+    if (odds != null && typeof odds === 'number') odds = odds > 0 ? '+'+odds : String(odds);
+    return Object.assign({}, s, {
+      pick: s.pick || s.label || s.name || '',
+      market: s.market || s.market_type || '',
+      odds: odds,
+      homeTeam: home,
+      awayTeam: away,
+      matchup: s.matchup || s.game || (away && home ? away + ' @ ' + home : '')
+    });
+  });
+  return Object.assign({}, t, {
+    id: t.id,
+    type: t.type || (selections.length > 1 ? 'Parlay' : 'Single'),
+    status: t.status || 'active',
+    playerId: t.playerId || t.player_id,
+    playerUsername: t.playerUsername || t.player_username || t.playerName || '',
+    playerName: t.playerName || t.playerUsername || t.player_username || 'Player',
+    riskAmount: t.riskAmount != null ? Number(t.riskAmount) : Number(t.risk_amount)||0,
+    potentialProfit: t.potentialProfit != null ? Number(t.potentialProfit) : Number(t.potential_profit)||0,
+    estimatedPayout: t.estimatedPayout != null ? Number(t.estimatedPayout) : Number(t.estimated_payout)||0,
+    placedAt: t.placedAt || t.placed_at,
+    gradedAt: t.gradedAt || t.graded_at || null,
+    odds: t.odds || (selections[0] && selections[0].odds) || '',
+    selections: selections
+  });
+}
+
+function _hostTicketStatusBucket(status) {
+  var s = String(status || '').toLowerCase();
+  if (s === 'active' || s === 'open') return 'active';
+  if (s === 'won') return 'won';
+  if (s === 'lost') return 'lost';
+  if (s === 'push' || s === 'pushed') return 'push';
+  if (s === 'void' || s === 'voided' || s === 'canceled' || s === 'cancelled' || s === 'deleted' || s === 'refunded') return 'void';
+  return s || 'other';
+}
+
+function _hostTicketIsActive(t) { return _hostTicketStatusBucket(t && t.status) === 'active'; }
+function _hostTicketIsSettled(t) {
+  var b = _hostTicketStatusBucket(t && t.status);
+  return b === 'won' || b === 'lost' || b === 'push';
+}
+function _hostTicketIsCanceled(t) {
+  return _hostTicketStatusBucket(t && t.status) === 'void';
+}
+
+function _applyHostDashboardTickets(data) {
+  var active = ((data && data.activeTickets) || []).map(_normalizeHostTicket);
+  var graded = ((data && data.gradedTickets) || []).map(_normalizeHostTicket);
+  var recentSettled = ((data && data.settledTickets) || []).map(_normalizeHostTicket);
+  var seen = {};
+  var all = active.concat(graded).filter(function(t) {
+    if (!t || !t.id || seen[t.id]) return false;
+    seen[t.id] = true;
+    return true;
+  });
+  _hostDbActiveTickets = active;
+  _hostDbSettledTickets = graded.filter(_hostTicketIsSettled);
+  _hostDbRecentSettledTickets = recentSettled.length
+    ? recentSettled
+    : _hostDbSettledTickets.filter(function(t) {
+        var ms = Date.parse(t.gradedAt || t.placedAt || '') || 0;
+        return ms && (Date.now() - ms) <= 7 * 86400000;
+      });
+  _hostDbAllTickets = all;
+  // Prefer All when there are no active bets so settled history is visible.
+  if (!_hostBetsUiWired && active.length === 0 && (_hostDbRecentSettledTickets.length || _hostDbSettledTickets.length)) {
+    _hostBetsTab = 'all';
+  }
+  // Cache only — UI reads from _hostDb* arrays when present.
+  try { localStorage.setItem('hostActiveBets', JSON.stringify(all)); } catch(_e) {}
+  return _hostDbActiveTickets;
+}
+
+function _applyHostDashboardPlayers(players) {
+  _hostDbPlayers = Array.isArray(players) ? players : [];
+  _hostDbPlayersById = {};
+  _hostDbPlayers.forEach(function(p) {
+    if (!p) return;
+    var pid = p.playerId || p.player_id;
+    if (pid != null) _hostDbPlayersById[String(pid)] = p;
+  });
+  // Cache roster so other host UI (profiles, limits) sees DB members even
+  // before the next render. Merge by playerId; never drop extra local rows.
+  try {
+    var existing = [];
+    try { existing = JSON.parse(localStorage.getItem('pb-club-players')||'[]'); } catch(_e) {}
+    var byId = {};
+    existing.forEach(function(p){ if (p && p.playerId) byId[String(p.playerId)] = p; });
+    _hostDbPlayers.forEach(function(dp) {
+      if (!dp) return;
+      var pid = String(dp.playerId || dp.player_id || '');
+      if (!pid || pid === 'unknown') return;
+      var prev = byId[pid] || {};
+      byId[pid] = Object.assign({}, prev, {
+        playerId: pid,
+        playerName: dp.username || dp.playerName || prev.playerName || pid,
+        status: prev.status || 'approved',
+        realName: prev.realName || ((dp.playerName && dp.playerName !== dp.username) ? dp.playerName : '')
+      });
+    });
+    localStorage.setItem('pb-club-players', JSON.stringify(Object.keys(byId).map(function(k){ return byId[k]; })));
+  } catch(_e) {}
+}
+
+function _hostPlayersFromDbOrLocal(){
+  // Successful /api/host/dashboard apply sets _hostDbPlayers to an array
+  // (possibly empty). null means the fetch never succeeded — only then fall
+  // back to localStorage pb-club-players. DB is the club roster source of truth.
+  if (Array.isArray(_hostDbPlayers)) {
+    return _hostDbPlayers.map(function(dp) {
+      if (!dp) return null;
+      var pid = dp.playerId || dp.player_id;
+      if (pid == null || pid === '' || pid === 'unknown') return null;
+      return {
+        playerId: String(pid),
+        username: dp.username || '',
+        playerName: dp.username || dp.playerName || String(pid),
+        status: dp.status || 'approved',
+        realName: (dp.playerName && dp.playerName !== dp.username) ? dp.playerName : '',
+        availableBalance: dp.availableBalance,
+        openRisk: dp.openRisk,
+        activeBetCount: dp.activeBetCount
+      };
+    }).filter(Boolean);
+  }
+  try { return JSON.parse(localStorage.getItem('pb-club-players')||'[]'); } catch(_e) { return []; }
+}
+
+function _hostBetsFromDbOrLocal(){
+  // Successful /api/host/dashboard apply sets _hostDbAllTickets to an array
+  // (possibly empty). null means the fetch never succeeded — only then fall
+  // back to localStorage. DB is authoritative for Host Bets history.
+  if (Array.isArray(_hostDbAllTickets)) return _hostDbAllTickets;
+  if (Array.isArray(_hostDbActiveTickets) && Array.isArray(_hostDbSettledTickets)) {
+    return _hostDbActiveTickets.concat(_hostDbSettledTickets);
+  }
+  if (Array.isArray(_hostDbActiveTickets)) return _hostDbActiveTickets;
+  try { return JSON.parse(localStorage.getItem('hostActiveBets')||'[]').map(_normalizeHostTicket); } catch(_e) { return []; }
+}
+function _hostAllTicketsDeduped(){
   var seen={};
-  var tickets=raw.filter(function(t){
-    if(!t.id||seen[t.id]) return false;
+  return _hostBetsFromDbOrLocal().filter(function(t){
+    if(!t||!t.id||seen[t.id]) return false;
     seen[t.id]=true; return true;
   });
-  var active=tickets.filter(function(t){return t.status==='active'||t.status==='open';});
+}
+function loadHostActiveBets(){
+  var tickets=_hostAllTicketsDeduped();
+  var active=tickets.filter(_hostTicketIsActive);
   // HOST EXPOSURE = potentialProfit (what host owes if player wins)
   // NOT riskAmount (that is the player's wager, not host liability)
   var totalRisk=active.reduce(function(s,t){
@@ -1975,13 +2086,87 @@ function loadHostActiveBets(){
   },0);
   var el=document.getElementById('stat-active-bets');
   var el2=document.getElementById('stat-active-risk');
-  var cnt=document.getElementById('host-bets-count');
   if(el) el.textContent=active.length;
   if(el2) el2.textContent='$'+totalRisk.toFixed(2);
-  if(cnt) cnt.textContent=active.length+' bet'+(active.length!==1?'s':'');
+  _updateHostBetsTabCounts(tickets);
   // Recalculate full host stats whenever active bets are loaded
   renderHostStats();
   return active;
+}
+
+function _updateHostBetsTabCounts(allTickets){
+  var all = allTickets || _hostAllTicketsDeduped();
+  var activeN = all.filter(_hostTicketIsActive).length;
+  var settledSrc = (_hostDbRecentSettledTickets && _hostDbRecentSettledTickets.length)
+    ? _hostDbRecentSettledTickets
+    : all.filter(_hostTicketIsSettled);
+  var settledN = settledSrc.length;
+  var canceledN = all.filter(_hostTicketIsCanceled).length;
+  var allN = all.length;
+  function _set(id, n){ var el=document.getElementById(id); if(el) el.textContent=String(n); }
+  _set('host-bets-tab-active', activeN);
+  _set('host-bets-tab-settled', settledN);
+  _set('host-bets-tab-canceled', canceledN);
+  _set('host-bets-tab-all', allN);
+  var cnt=document.getElementById('host-bets-count');
+  if(cnt){
+    var n = _hostBetsTab==='active' ? activeN
+      : (_hostBetsTab==='settled' ? settledN
+      : (_hostBetsTab==='canceled' ? canceledN : allN));
+    var label = _hostBetsTab==='active' ? 'active'
+      : (_hostBetsTab==='settled' ? 'settled'
+      : (_hostBetsTab==='canceled' ? 'canceled' : ''));
+    cnt.textContent = n + (label ? ' '+label : '') + ' bet' + (n!==1?'s':'');
+  }
+  // Sync tab button styles
+  Array.prototype.forEach.call(document.querySelectorAll('.host-bets-tab'), function(btn){
+    var on = btn.getAttribute('data-bets-tab') === _hostBetsTab;
+    btn.classList.toggle('active', on);
+    btn.style.border = on ? '1px solid rgba(0,194,255,0.35)' : '1px solid #333';
+    btn.style.background = on ? 'rgba(0,194,255,0.14)' : '#141414';
+    btn.style.color = on ? 'var(--cyan)' : '#888';
+  });
+}
+
+function _wireHostBetsUi(){
+  if (_hostBetsUiWired) return;
+  _hostBetsUiWired = true;
+  Array.prototype.forEach.call(document.querySelectorAll('[data-bets-tab]'), function(btn){
+    btn.addEventListener('click', function(){
+      _hostBetsTab = btn.getAttribute('data-bets-tab') || 'active';
+      renderHostBets();
+    });
+  });
+  var fp = document.getElementById('host-bets-filter-player');
+  var fs = document.getElementById('host-bets-filter-status');
+  var fd = document.getElementById('host-bets-filter-date');
+  if (fp) fp.addEventListener('change', function(){ _hostBetsFilterPlayer = fp.value || ''; renderHostBets(); });
+  if (fs) fs.addEventListener('change', function(){ _hostBetsFilterStatus = fs.value || ''; renderHostBets(); });
+  if (fd) fd.addEventListener('change', function(){ _hostBetsFilterDate = fd.value || ''; renderHostBets(); });
+}
+
+function _hostStatusBadge(status){
+  var b = _hostTicketStatusBucket(status);
+  var map = {
+    active: { label:'ACTIVE', color:'var(--cyan)', bg:'var(--cyan-dim)', border:'rgba(0,194,255,0.25)' },
+    won:    { label:'WON',    color:'#00ff88', bg:'rgba(0,255,136,0.12)', border:'rgba(0,255,136,0.35)' },
+    lost:   { label:'LOST',   color:'#ff3d57', bg:'rgba(255,61,87,0.12)', border:'rgba(255,61,87,0.35)' },
+    push:   { label:'PUSH',   color:'#f5c842', bg:'rgba(245,200,66,0.12)', border:'rgba(245,200,66,0.35)' },
+    void:   { label:'VOID',   color:'#999', bg:'rgba(255,255,255,0.06)', border:'#444' }
+  };
+  var m = map[b] || { label:String(status||'UNKNOWN').toUpperCase(), color:'#888', bg:'#1a1a1a', border:'#333' };
+  return '<span style="font-size:0.58rem;font-weight:900;letter-spacing:0.4px;color:'+m.color+';background:'+m.bg+';padding:3px 8px;border-radius:10px;border:1px solid '+m.border+'">'+m.label+'</span>';
+}
+
+function _hostTicketPayoutLabel(t){
+  var b = _hostTicketStatusBucket(t.status);
+  var stake = parseFloat(t.riskAmount)||0;
+  var profit = parseFloat(t.potentialProfit)||0;
+  var est = parseFloat(t.estimatedPayout)||0;
+  if (b === 'won') return { label:'Payout', value: est > 0 ? est : (stake + profit) };
+  if (b === 'lost') return { label:'Payout', value: 0 };
+  if (b === 'push' || b === 'void') return { label:'Payout', value: stake };
+  return { label:'Est. Payout', value: est > 0 ? est : (stake + profit) };
 }
 
 
@@ -2130,20 +2315,68 @@ function hostDenyDelete(ticketId) {
 }
 // ══════════════════════════════════════════════════════════════════════════════
 
-function _renderHostBetsList(active) {
+var _hostRenderQuiet = false;
+function renderHostBets(){
+  _wireHostBetsUi();
+  var all = _hostAllTicketsDeduped();
+  // Keep home-stat counters in sync from the same DB-backed list.
+  loadHostActiveBets();
   var el=document.getElementById('host-bets-list');
   if(!el) return;
-  // Update delete request badge
-  var delReqs = active.filter(function(t){ return t.deleteRequestStatus==='pending'; });
+
+  // Populate player filter options from server tickets (names, not raw UUIDs as labels).
+  var playerSel = document.getElementById('host-bets-filter-player');
+  if (playerSel) {
+    var prev = _hostBetsFilterPlayer;
+    var opts = { '': 'All players' };
+    all.forEach(function(t){
+      var pid = String(t.playerId || '');
+      if (!pid) return;
+      var dbp = (_hostDbPlayersById && _hostDbPlayersById[pid]) || null;
+      var name = (dbp && (dbp.username || dbp.playerName)) || t.playerUsername || t.playerName || 'Player';
+      if (name === pid) name = 'Player';
+      opts[pid] = name;
+    });
+    playerSel.innerHTML = Object.keys(opts).map(function(k){
+      return '<option value="'+k.replace(/"/g,'&quot;')+'">'+String(opts[k]).replace(/</g,'&lt;')+'</option>';
+    }).join('');
+    playerSel.value = prev;
+    _hostBetsFilterPlayer = playerSel.value || '';
+  }
+
+  var activeAll = all.filter(_hostTicketIsActive);
+  var delReqs = activeAll.filter(function(t){ return t.deleteRequestStatus==='pending'; });
   var badge = document.getElementById('del-req-badge');
   if (badge) { badge.textContent = delReqs.length || ''; badge.style.display = delReqs.length ? 'inline' : 'none'; }
-  if(!active.length){
-    el.innerHTML='<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">No active bets yet</div>';
-    return;
+
+  if (_hostBetsTab === 'settled' && _hostDbRecentSettledTickets && _hostDbRecentSettledTickets.length) {
+    all = _hostDbRecentSettledTickets.slice();
   }
-  // Delete request alert section
+  var list = all.filter(function(t){
+    if (_hostBetsTab === 'active' && !_hostTicketIsActive(t)) return false;
+    if (_hostBetsTab === 'settled' && !_hostTicketIsSettled(t)) return false;
+    if (_hostBetsTab === 'canceled' && !_hostTicketIsCanceled(t)) return false;
+    if (_hostBetsFilterPlayer && String(t.playerId||'') !== String(_hostBetsFilterPlayer)) return false;
+    if (_hostBetsFilterStatus) {
+      var bucket = _hostTicketStatusBucket(t.status);
+      if (_hostBetsFilterStatus === 'active' && bucket !== 'active') return false;
+      if (_hostBetsFilterStatus !== 'active' && bucket !== _hostBetsFilterStatus) return false;
+    }
+    if (_hostBetsFilterDate && _hostBetsTab !== 'settled') {
+      var days = parseInt(_hostBetsFilterDate, 10) || 0;
+      if (days > 0) {
+        var ms = Date.parse(t.gradedAt || t.placedAt || '') || 0;
+        if (!ms || (Date.now() - ms) > days * 86400000) return false;
+      }
+    }
+    return true;
+  });
+
+  _updateHostBetsTabCounts(all);
+
+  // Delete request alert section (active tab only)
   var delSection = '';
-  if (delReqs.length) {
+  if (_hostBetsTab === 'active' && delReqs.length) {
     delSection = '<div style="margin:0 16px 8px;background:#2a1000;border:1.5px solid #cc0000;border-radius:14px;padding:14px">' +
       '<div style="font-size:0.72rem;font-weight:900;color:#cc0000;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">⚠️ '+delReqs.length+' Delete Request'+( delReqs.length>1?'s':'')+' Pending</div>' +
       delReqs.map(function(t){
@@ -2171,16 +2404,26 @@ function _renderHostBetsList(active) {
       }).join('') +
     '</div>';
   }
-  // ══ GROUP BY PLAYER ══
-  // Persist expanded set across re-renders.
+
+  if(!list.length){
+    var emptyMsg = _hostBetsTab==='settled' ? 'No settled bets in the last 7 days'
+      : (_hostBetsTab==='canceled' ? 'No canceled bets'
+      : (_hostBetsTab==='all' ? 'No bets found' : 'No active bets yet'));
+    el.innerHTML = delSection + '<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">'+emptyMsg+'</div>';
+    return;
+  }
+
   if (!window._hostBetsExpanded) window._hostBetsExpanded = {};
   var groups = {};
-  active.forEach(function(t) {
+  list.forEach(function(t) {
     var pid = t.playerId || (t.playerUsername||t.playerName||'unknown');
+    var dbp = (_hostDbPlayersById && t.playerId && _hostDbPlayersById[String(t.playerId)]) || null;
+    var resolvedName = (dbp && (dbp.username || dbp.playerName)) || t.playerUsername || t.playerName || 'Player';
+    if (resolvedName === t.playerId) resolvedName = (dbp && dbp.username) || 'Player';
     if (!groups[pid]) {
       groups[pid] = {
         playerId:    t.playerId || '',
-        playerName:  t.playerUsername || t.playerName || 'Player',
+        playerName:  resolvedName,
         playerReal:  t.playerRealName || '',
         bets:        [],
         risk:        0,
@@ -2189,74 +2432,95 @@ function _renderHostBetsList(active) {
       };
     }
     var g = groups[pid];
+    if (g.playerName === 'Player' && resolvedName !== 'Player') g.playerName = resolvedName;
     g.bets.push(t);
     g.risk     += parseFloat(t.riskAmount||0);
     g.exposure += parseFloat(t.potentialProfit||0);
-    g.payout   += parseFloat(t.estimatedPayout||0);
+    g.payout   += parseFloat((_hostTicketPayoutLabel(t).value)||0);
   });
   var groupArr = Object.keys(groups).map(function(k){ return groups[k]; })
     .sort(function(a,b){ return b.exposure - a.exposure; });
 
   function fmt$(n){ return '$'+(parseFloat(n)||0).toFixed(2); }
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 
   var groupsHtml = groupArr.map(function(g) {
-    var key = g.playerId || g.playerName;
-    var open = !!window._hostBetsExpanded[key];
+    var key = String(g.playerId || g.playerName);
+    if (window._hostBetsExpanded[key] === undefined) window._hostBetsExpanded[key] = true;
+    var open = window._hostBetsExpanded[key] !== false;
     var initials = (g.playerName||'?').split(/\s+/).map(function(w){return (w[0]||'').toUpperCase();}).slice(0,2).join('') || '?';
     var betsHtml = '';
     if (open) {
       betsHtml = '<div style="border-top:1px solid var(--border);padding:8px 14px 4px;background:#0c0c0c">' +
         g.bets.map(function(t) {
           var d=new Date(t.placedAt);
-          var dt=isNaN(d)?t.placedAt:d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
-          var sel0 = (t.selections && t.selections[0]) || {};
-          var picks = (t.selections||[]).map(function(s){
-            var od = (s.odds && (s.odds[0]==='+'||s.odds[0]==='-')) ? s.odds : (parseFloat(s.odds)>0?'+':'')+s.odds;
-            return '<div style="font-size:0.72rem;color:#bbb;padding:2px 0"><span style="font-weight:700">'+s.pick+'</span> <span style="color:var(--cyan);font-weight:700">'+od+'</span><span style="color:#555"> · '+(s.market||'')+'</span></div>';
-          }).join('');
+          var dt=isNaN(d)?(t.placedAt||'') : d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+          var settledDt = '';
+          if (t.gradedAt) {
+            var gd = new Date(t.gradedAt);
+            settledDt = isNaN(gd) ? String(t.gradedAt) : gd.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+          }
+          var picks = (t.selections||[]).map(function(s, idx){
+            var od = s.odds;
+            if (od != null && od !== '' && !(String(od)[0]==='+'||String(od)[0]==='-')) {
+              var n = parseFloat(od); od = isNaN(n) ? od : ((n>0?'+':'')+n);
+            }
+            var matchup = s.matchup || (s.awayTeam && s.homeTeam ? s.awayTeam+' @ '+s.homeTeam : '');
+            var legPrefix = (t.selections||[]).length > 1 ? ('<span style="color:#555;font-weight:800;margin-right:4px">L'+(idx+1)+'</span>') : '';
+            return '<div style="font-size:0.72rem;color:#bbb;padding:4px 0;border-bottom:1px solid #1a1a1a">'
+              + legPrefix
+              +(matchup?'<div style="font-size:0.62rem;color:#777;margin-bottom:1px">'+esc(matchup)+'</div>':'')
+              +'<span style="font-weight:700">'+esc(s.pick||'—')+'</span> '
+              +'<span style="color:var(--cyan);font-weight:700">'+esc(od||'')+'</span>'
+              +'<span style="color:#555"> · '+esc(s.market||'')+'</span></div>';
+          }).join('') || '<div style="font-size:0.72rem;color:#666;padding:4px 0">No selections</div>';
           var statusBadge = t.deleteRequestStatus==='pending'
             ? '<span style="font-size:0.55rem;font-weight:800;color:#f59e0b;background:rgba(245,158,11,0.12);padding:2px 8px;border-radius:10px;border:1px solid #f59e0b">DEL?</span>'
-            : (t.status==='voided'||t.status==='deleted')
-              ? '<span style="font-size:0.55rem;font-weight:800;color:#555;background:#1a1a1a;padding:2px 8px;border-radius:10px;border:1px solid #333">VOID</span>'
-              : '<span style="font-size:0.55rem;font-weight:800;color:var(--cyan);background:var(--cyan-dim);padding:2px 8px;border-radius:10px;border:1px solid rgba(0,194,255,0.25)">ACTIVE</span>';
-          var canCancel = (t.status === 'active' || t.status === 'open');
+            : _hostStatusBadge(t.status);
+          var canCancel = _hostTicketIsActive(t);
+          var pay = _hostTicketPayoutLabel(t);
+          var oddsStr = t.odds || ((t.selections&&t.selections[0]&&t.selections[0].odds)||'');
           return '<div style="background:#141414;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
-              '<div style="font-size:0.78rem;font-weight:800">'+t.type+'</div>' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap">' +
+              '<div style="font-size:0.78rem;font-weight:800">'+esc(t.type||'Single')+' · <span style="color:#777;font-weight:700;font-size:0.65rem">'+esc(t.id)+'</span></div>' +
               statusBadge +
             '</div>' +
+            '<div style="font-size:0.62rem;color:#666;margin-bottom:4px">'+esc(g.playerName)+'</div>' +
             picks +
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:6px;border-top:1px solid #222;font-size:0.65rem;color:#777">' +
-              '<span>'+dt+'</span>' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:6px;border-top:1px solid #222;font-size:0.65rem;color:#777;gap:8px;flex-wrap:wrap">' +
+              '<span>Placed '+esc(dt)+'</span>' +
+              (settledDt ? '<span>Settled '+esc(settledDt)+'</span>' : '') +
+              '<span>Result <span style="color:#fff;font-weight:800;text-transform:uppercase">'+esc(t.status||'—')+'</span></span>' +
+              '<span>Odds <span style="color:var(--cyan);font-weight:800">'+esc(oddsStr||'—')+'</span></span>' +
             '</div>' +
-            '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px">' +
-              '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Player Risk</div><div style="font-size:0.78rem;font-weight:800">'+fmt$(t.riskAmount)+'</div></div>' +
-              '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Host Exp.</div><div style="font-size:0.78rem;font-weight:800;color:#ff6b6b">'+fmt$(t.potentialProfit)+'</div></div>' +
-              '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Payout</div><div style="font-size:0.78rem;font-weight:800;color:var(--cyan)">'+fmt$(t.estimatedPayout)+'</div></div>' +
+            '<div class="host-bet-metrics" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px">' +
+              '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Stake</div><div style="font-size:0.78rem;font-weight:800">'+fmt$(t.riskAmount)+'</div></div>' +
+              '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">'+(canCancel?'Host Exp.':'Profit')+'</div><div style="font-size:0.78rem;font-weight:800;color:'+(canCancel?'#ff6b6b':'#ccc')+'">'+fmt$(t.potentialProfit)+'</div></div>' +
+              '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">'+esc(pay.label)+'</div><div style="font-size:0.78rem;font-weight:800;color:var(--cyan)">'+fmt$(pay.value)+'</div></div>' +
             '</div>' +
-            (canCancel ? '<button data-host-cancel="'+t.id+'" style="width:100%;margin-top:10px;padding:8px;background:transparent;border:1px solid #cc0000;border-radius:8px;color:#ff6b6b;font-size:0.7rem;font-weight:800;cursor:pointer;letter-spacing:0.3px">Cancel Bet</button>' : '') +
+            (canCancel ? '<button data-host-cancel="'+esc(t.id)+'" style="width:100%;margin-top:10px;padding:8px;background:transparent;border:1px solid #cc0000;border-radius:8px;color:#ff6b6b;font-size:0.7rem;font-weight:800;cursor:pointer;letter-spacing:0.3px">Cancel Bet</button>' : '') +
           '</div>';
         }).join('') +
       '</div>';
     }
     return '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;margin:8px 16px;overflow:hidden">' +
-      '<div data-host-group="'+key+'" style="padding:14px;cursor:pointer;display:flex;align-items:center;gap:12px;user-select:none">' +
-        '<div style="width:38px;height:38px;border-radius:50%;background:rgba(0,194,255,0.12);color:var(--cyan);display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:900;border:1.5px solid var(--cyan);flex-shrink:0">'+initials+'</div>' +
+      '<div data-host-group="'+esc(key)+'" style="padding:14px;cursor:pointer;display:flex;align-items:center;gap:12px;user-select:none">' +
+        '<div style="width:38px;height:38px;border-radius:50%;background:rgba(0,194,255,0.12);color:var(--cyan);display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:900;border:1.5px solid var(--cyan);flex-shrink:0">'+esc(initials)+'</div>' +
         '<div style="flex:1;min-width:0">' +
           '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">' +
-            '<span style="font-size:0.92rem;font-weight:900">'+g.playerName+'</span>' +
-            (g.playerReal?'<span style="font-size:0.65rem;color:var(--gray)">('+g.playerReal+')</span>':'') +
+            '<span style="font-size:0.92rem;font-weight:900">'+esc(g.playerName)+'</span>' +
+            (g.playerReal?'<span style="font-size:0.65rem;color:var(--gray)">('+esc(g.playerReal)+')</span>':'') +
           '</div>' +
-          '<div style="font-size:0.6rem;color:#666;font-family:monospace">' + (g.playerId?'ID: '+g.playerId+' · ':'') + g.bets.length+' bet'+(g.bets.length!==1?'s':'')+'</div>' +
+          '<div style="font-size:0.6rem;color:#666">'+g.bets.length+' bet'+(g.bets.length!==1?'s':'')+'</div>' +
         '</div>' +
         '<div style="text-align:right">' +
-          '<div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Exposure</div>' +
-          '<div style="font-size:0.95rem;font-weight:900;color:#ff6b6b">'+fmt$(g.exposure)+'</div>' +
+          '<div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">'+(_hostBetsTab==='active'?'Exposure':'Stake')+'</div>' +
+          '<div style="font-size:0.95rem;font-weight:900;color:'+(_hostBetsTab==='active'?'#ff6b6b':'#fff')+'">'+fmt$(_hostBetsTab==='active'?g.exposure:g.risk)+'</div>' +
         '</div>' +
         '<div style="font-size:0.85rem;color:var(--gray);transition:transform 0.15s;'+(open?'transform:rotate(90deg)':'')+'">›</div>' +
       '</div>' +
       '<div style="display:'+(open?'grid':'none')+';grid-template-columns:1fr 1fr;gap:6px;padding:0 14px 12px;font-size:0.65rem;color:#777">' +
-        '<div><span style="color:#555">Total Risk: </span><span style="color:#fff;font-weight:700">'+fmt$(g.risk)+'</span></div>' +
+        '<div><span style="color:#555">Total Stake: </span><span style="color:#fff;font-weight:700">'+fmt$(g.risk)+'</span></div>' +
         '<div><span style="color:#555">Total Payout: </span><span style="color:var(--cyan);font-weight:700">'+fmt$(g.payout)+'</span></div>' +
       '</div>' +
       betsHtml +
@@ -2264,7 +2528,6 @@ function _renderHostBetsList(active) {
   }).join('');
 
   el.innerHTML = delSection + groupsHtml;
-  // Wire collapse toggles
   Array.prototype.forEach.call(el.querySelectorAll('[data-host-group]'), function(hd) {
     hd.addEventListener('click', function() {
       var k = hd.dataset.hostGroup;
@@ -2272,8 +2535,6 @@ function _renderHostBetsList(active) {
       renderHostBets();
     });
   });
-  // Wire host cancel buttons (reuse hostApproveDelete — same canonical flow:
-  // status='canceled', refund via openRisk exclusion, version bump).
   Array.prototype.forEach.call(el.querySelectorAll('[data-host-cancel]'), function(btn) {
     btn.addEventListener('click', function(ev) {
       ev.stopPropagation();
@@ -2283,26 +2544,21 @@ function _renderHostBetsList(active) {
       renderHostBets();
     });
   });
+  Array.prototype.forEach.call(el.querySelectorAll('[data-delaction]'), function(btn) {
+    btn.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      var tid = btn.getAttribute('data-delid');
+      var act = btn.getAttribute('data-delaction');
+      if (act === 'approve') hostApproveDelete(tid);
+      else if (act === 'deny') hostDenyDelete(tid);
+    });
+  });
 }
-
-async function renderHostBets() {
-  try {
-    var data = await fetchHostDashboardData();
-    var active = mapDbTicketsToHostBets(data.activeTickets);
-    _renderHostBetsList(active);
-    console.log('[host bets] source=db active='+active.length);
-    return active;
-  } catch(e) {
-    console.warn('[host bets] DB fetch failed, using localStorage:', e.message);
-    var active = loadHostActiveBets();
-    _renderHostBetsList(active);
-    return active;
-  }
-}
-window.renderHostBets = renderHostBets;
 
 const SECTIONS=['home-content','bets-section','players-section','settlements-section','crypto-section'];
 function returnToLobby() {
+  
+  
   sessionStorage.setItem('pb-force-lobby-home', '1');
   window.location.href = 'lobby.html';
 }
@@ -2321,10 +2577,12 @@ function setBN(el,tab){
     var s=document.getElementById('bets-section');
     if(s)s.style.display='block';
     renderHostBets();
+    loadHostDashboardFromDb('bets_tab');
   } else if(tab==='players'){
     var s=document.getElementById('players-section');
     if(s)s.style.display='block';
     renderPlayersTab();
+    loadHostDashboardFromDb('players_tab');
   } else if(tab==='crypto'){
     var s=document.getElementById('crypto-section');
     if(s)s.style.display='block';
@@ -2353,7 +2611,17 @@ function setBN(el,tab){
 
 // ── MOCK PLAYER FOR TESTING ───────────────────────────────────────────────────
 (function(){
-  var existing = JSON.parse(localStorage.getItem('pb-club-players')||'[]');
+  var hasToken = false;
+  try { hasToken = !!localStorage.getItem('pb-sports-token'); } catch(_e){}
+  var existing = [];
+  try { existing = JSON.parse(localStorage.getItem('pb-club-players')||'[]'); } catch(_e){}
+  // Real host sessions must not keep the demo P1001 row — it looks like
+  // "Test Player 1" and hides the actual club roster when the DB fetch fails.
+  if (hasToken && existing.length === 1 && existing[0] && existing[0].playerId === 'P1001') {
+    try { localStorage.removeItem('pb-club-players'); } catch(_e){}
+    existing = [];
+  }
+  if (hasToken) return;
   if (!existing.length) {
     var mock = [{
       playerId:'P1001', playerName:'TestPlayer01', realName:'', notes:'',
@@ -2386,10 +2654,17 @@ function saveHostPlayerLimits(pid,limits){
   localStorage.setItem('pb-player-limits',JSON.stringify(all));
 }
 function getOpenRisk(pid){
-  var bets=JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
-  return bets.filter(function(b){return (b.status==='active'||b.status==='open')&&b.playerId===pid;}).reduce(function(s,b){return s+(b.riskAmount||0);},0);
+  var dbp = (_hostDbPlayersById && _hostDbPlayersById[String(pid)]) || null;
+  if (dbp && dbp.openRisk != null && !isNaN(Number(dbp.openRisk))) return Number(dbp.openRisk);
+  var bets = (typeof _hostBetsFromDbOrLocal === 'function') ? _hostBetsFromDbOrLocal() : [];
+  if (!bets.length) {
+    try { bets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]'); } catch(_e){ bets = []; }
+  }
+  return bets.filter(function(b){return (b.status==='active'||b.status==='open')&&String(b.playerId)===String(pid);}).reduce(function(s,b){return s+(Number(b.riskAmount)||0);},0);
 }
 function getAvailCredit(pid){
+  var dbp = (_hostDbPlayersById && _hostDbPlayersById[String(pid)]) || null;
+  if (dbp && dbp.availableBalance != null && !isNaN(Number(dbp.availableBalance))) return Number(dbp.availableBalance);
   var lim=getHostPlayerLimits(pid);
   return Math.max(0,(lim.creditLimit||0)-getOpenRisk(pid));
 }
@@ -2510,7 +2785,7 @@ function openPlayerSettings(pid, _p){
     )
   // Active bets for this player
   +(function(){
-    var pBets=JSON.parse(localStorage.getItem('hostActiveBets')||'[]').filter(function(b){return b.playerId===pid&&(b.status==='active'||b.status==='open');});
+    var pBets=(typeof _hostBetsFromDbOrLocal==='function'?_hostBetsFromDbOrLocal():[]).filter(function(b){return String(b.playerId)===String(pid)&&(b.status==='active'||b.status==='open');});
     if(!pBets.length) return '';
     return '<div style="background:#1a1a1a;border-radius:12px;padding:14px;margin-bottom:12px">'
       +'<div style="font-size:0.7rem;color:#555;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Active Bets ('+pBets.length+')</div>'
@@ -2530,45 +2805,87 @@ function openPlayerSettings(pid, _p){
 
 var _playersActiveTab = 'all';
 var _playersSearch = '';
+var _playersExpanded = {};
+
+function togglePlayerExpand(pid) {
+  pid = String(pid || '');
+  if (!pid) return;
+  _playersExpanded[pid] = !_playersExpanded[pid];
+  renderPlayersTab();
+}
 
 function renderPlayersTab(){
   var el = document.getElementById('players-section');
   if (!el) return;
-  var requests = loadJoinRequests();
-  var players  = loadClubPlayers();
+  var requests = [];
+  try { requests = loadJoinRequests(); } catch(_jr) { requests = []; }
+  var dbReady = Array.isArray(_hostDbPlayers) || !!_hostPlayersFetchDone;
+  var players  = _hostPlayersFromDbOrLocal();
 
   function getActiveBetsCount(pid){
-    return JSON.parse(localStorage.getItem('hostActiveBets')||'[]').filter(function(b){ return b.playerId===pid && (b.status==='active'||b.status==='open'); }).length;
+    return _hostBetsFromDbOrLocal().filter(function(b){ return String(b.playerId)===String(pid) && (b.status==='active'||b.status==='open'); }).length;
   }
   function getOpenRiskAmt(pid){
-    return JSON.parse(localStorage.getItem('hostActiveBets')||'[]').filter(function(b){ return b.playerId===pid && (b.status==='active'||b.status==='open'); }).reduce(function(s,b){return s+(b.potentialProfit||0);},0); // host exposure = what host owes if player wins
+    return _hostBetsFromDbOrLocal().filter(function(b){ return String(b.playerId)===String(pid) && (b.status==='active'||b.status==='open'); }).reduce(function(s,b){return s+(Number(b.riskAmount)||0);},0);
   }
   function avatarHtml(name, color){
     var abbr=(name||'?').slice(0,2).toUpperCase();
     var bg = color || '#2a2a2a';
     return '<div style="width:40px;height:40px;border-radius:50%;background:'+bg+';display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:900;color:#fff;flex-shrink:0">'+abbr+'</div>';
   }
+  function playerBetsHtml(pid) {
+    var bets = _hostBetsFromDbOrLocal().filter(function(b){
+      return String(b.playerId)===String(pid) && (b.status==='active'||b.status==='open');
+    });
+    if (!bets.length) {
+      return '<div style="padding:4px 16px 14px 68px;font-size:0.75rem;color:#666">No active bets</div>';
+    }
+    return '<div style="padding:0 16px 12px 68px">' + bets.map(function(b){
+      var sel = (b.selections||[]).map(function(s){
+        return (s && (s.pick || s.matchup || s.label)) || '';
+      }).filter(Boolean).join(', ');
+      var label = (b.type||'Bet') + (sel ? (' · '+sel) : '');
+      return '<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #1a1a1a">'
+        +'<div style="font-size:0.78rem;color:#ccc;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+label+'</div>'
+        +'<div style="font-size:0.78rem;font-weight:700;color:#ff3d57;flex-shrink:0">$'+(Number(b.riskAmount)||0).toFixed(2)+'</div>'
+      +'</div>';
+    }).join('') + '</div>';
+  }
   function playerRow(p){
-    var lim=getHostPlayerLimits(p.playerId);
-    var avail=getAvailCredit(p.playerId);
-    var openRisk=getOpenRiskAmt(p.playerId);
-    var activeBets=getActiveBetsCount(p.playerId);
+    var dbp = (_hostDbPlayersById && _hostDbPlayersById[String(p.playerId)]) || null;
+    var uname = (dbp && dbp.username) ? dbp.username : (p.username || p.playerName || p.playerId);
+    var avail = (dbp && dbp.availableBalance != null && !isNaN(dbp.availableBalance))
+      ? Number(dbp.availableBalance)
+      : (p.availableBalance != null && !isNaN(p.availableBalance) ? Number(p.availableBalance) : getAvailCredit(p.playerId));
+    var openRisk = (dbp && dbp.openRisk != null && !isNaN(dbp.openRisk))
+      ? Number(dbp.openRisk)
+      : (p.openRisk != null && !isNaN(p.openRisk) ? Number(p.openRisk) : getOpenRiskAmt(p.playerId));
+    var activeBets = (dbp && dbp.activeBetCount != null)
+      ? Number(dbp.activeBetCount)
+      : (p.activeBetCount != null ? Number(p.activeBetCount) : getActiveBetsCount(p.playerId));
+    if (isNaN(avail)) avail = 0;
+    if (isNaN(openRisk)) openRisk = 0;
+    if (isNaN(activeBets)) activeBets = 0;
+    var expanded = !!_playersExpanded[String(p.playerId)];
     var sc=p.status==='blocked'?'#ff3d57':p.status==='approved'?'#00ff88':'#f5c842';
-    return '<div data-pid="'+p.playerId+'" onclick="openPlayerProfile(this.dataset.pid)" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #1a1a1a;cursor:pointer;-webkit-tap-highlight-color:transparent">'
-      +avatarHtml(p.playerName, p.color||'#2a4a3a')
+    return '<div data-pid="'+p.playerId+'" style="border-bottom:1px solid #1a1a1a">'
+      +'<div onclick="togglePlayerExpand(this.parentNode.dataset.pid)" style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent">'
+      +avatarHtml(uname, p.color||'#2a4a3a')
       +'<div style="flex:1;min-width:0">'
         +'<div style="display:flex;align-items:center;gap:8px">'
-          +'<span style="font-size:0.88rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+p.playerName+'</span>'
-          +'<span style="font-size:0.6rem;font-weight:800;color:'+sc+';background:rgba(0,0,0,0.3);padding:2px 7px;border-radius:10px;border:1px solid '+sc+';flex-shrink:0">'+p.status.toUpperCase()+'</span>'
+          +'<span style="font-size:0.88rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+uname+'</span>'
+          +'<span style="font-size:0.6rem;font-weight:800;color:'+sc+';background:rgba(0,0,0,0.3);padding:2px 7px;border-radius:10px;border:1px solid '+sc+';flex-shrink:0">'+(p.status||'approved').toUpperCase()+'</span>'
         +'</div>'
         +(p.realName?'<div style="font-size:0.72rem;color:#aaa;margin-top:1px">'+p.realName+'</div>':'')
-        +'<div style="font-size:0.65rem;color:#444;margin-top:1px">ID: '+p.playerId+'</div>'
         +'<div style="font-size:0.68rem;color:#555;margin-top:2px">'
-          +'<span style="color:#00c2ff">$'+avail.toFixed(0)+'</span>/<span style="color:#555">$'+(lim.creditLimit||0)+'</span> credit'
-          +(activeBets?' · <span style="color:#f5c842">'+activeBets+' active bet'+(activeBets>1?'s':'')+'</span>':'')
+          +'<span style="color:#00c2ff">$'+avail.toFixed(2)+'</span> bal'
+          +' · <span style="color:#ff6b6b">$'+openRisk.toFixed(2)+' open</span>'
+          +' · <span style="color:#f5c842">'+activeBets+' active bet'+(activeBets===1?'':'s')+'</span>'
         +'</div>'
       +'</div>'
-      +'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#444" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>'
+      +'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#444" stroke-width="2.5" stroke-linecap="round" style="transform:rotate('+(expanded?90:0)+'deg);transition:transform .15s;flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>'
+      +'</div>'
+      +(expanded ? playerBetsHtml(p.playerId) : '')
     +'</div>';
   }
   function requestRow(r){
@@ -2584,23 +2901,38 @@ function renderPlayersTab(){
       +'</div>'
     +'</div>';
   }
+  function emptyOrLoadingHtml() {
+    if (!dbReady) {
+      return '<div style="margin:16px;background:#141414;border:1px solid #252525;border-radius:18px;padding:32px 20px;text-align:center">'
+        +'<div style="font-size:0.9rem;font-weight:800;margin-bottom:6px">Loading players…</div>'
+        +'<div style="font-size:0.8rem;color:#666">Fetching club roster</div>'
+      +'</div>';
+    }
+    return '<div style="margin:16px;background:#141414;border:1px solid #252525;border-radius:18px;padding:32px 20px;text-align:center">'
+      +'<div style="font-size:2.5rem;margin-bottom:12px">👥</div>'
+      +'<div style="font-size:1rem;font-weight:800;margin-bottom:6px">No players yet</div>'
+      +'<div style="font-size:0.8rem;color:#666">Share your club code to get join requests</div>'
+    +'</div>';
+  }
 
   // Filter by search + tab
   var q=(_playersSearch||'').toLowerCase();
   var filtered=players.filter(function(p){
-    if(q && !p.playerName.toLowerCase().includes(q)) return false;
+    var nm = String((p && (p.username || p.playerName)) || '');
+    var id = String((p && p.playerId) || '');
+    if(q && nm.toLowerCase().indexOf(q) === -1 && id.toLowerCase().indexOf(q) === -1) return false;
     if(_playersActiveTab==='applicants') return false;
     return true;
   });
   var filteredReqs=requests.filter(function(r){
-    if(q && !r.playerName.toLowerCase().includes(q)) return false;
+    if(q && !(r.playerName||'').toLowerCase().includes(q)) return false;
     return true;
   });
 
   var html=
     // Header
     '<div style="padding:14px 16px 0;position:sticky;top:0;background:#0a0a0a;z-index:10">'
-      +'<div style="font-size:1.1rem;font-weight:900;margin-bottom:12px">Member Management</div>'
+      +'<div style="font-size:1.1rem;font-weight:900;margin-bottom:12px">Your Players</div>'
       // Search
       +'<div style="display:flex;align-items:center;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:10px 14px;margin-bottom:10px;gap:8px">'
         +'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>'
@@ -2612,45 +2944,54 @@ function renderPlayersTab(){
       +'<div style="display:flex;gap:4px;margin-bottom:0">'
         +['all','applicants'].map(function(t){
           var isActive=t===_playersActiveTab;
-          var cnt=t==='all'?players.length:requests.length;
+          var cnt=t==='all'?(dbReady?players.length:null):requests.length;
           return '<button onclick="_playersActiveTab=\''+t+'\';renderPlayersTab()" style="flex:1;padding:8px 4px;background:'+(isActive?'#fff':'transparent')+';color:'+(isActive?'#000':'#555')+';border:none;border-radius:8px;font-size:0.78rem;font-weight:800;cursor:pointer">'+t.charAt(0).toUpperCase()+t.slice(1)+(cnt?' ('+cnt+')':'')+'</button>';
         }).join('')
       +'</div>'
     +'</div>'
-    // List
-    +'<div>';
+    // List — dedicated node so Home #player-list is not the Players-tab target
+    +'<div id="players-tab-list" class="player-list">';
 
+  var listInner = '';
   if (_playersActiveTab==='applicants') {
     if (!filteredReqs.length) {
-      html+='<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">No pending applicants</div>';
+      listInner='<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">No pending applicants</div>';
     } else {
-      html+=filteredReqs.map(requestRow).join('');
+      listInner=filteredReqs.map(requestRow).join('');
     }
   } else {
-    // Show applicants banner if any
     if (requests.length && !q) {
-      html+='<div onclick="_playersActiveTab=\'applicants\';renderPlayersTab()" style="margin:10px 16px;background:rgba(245,200,66,0.08);border:1px solid rgba(245,200,66,0.3);border-radius:12px;padding:10px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between">'
+      listInner+='<div onclick="_playersActiveTab=\'applicants\';renderPlayersTab()" style="margin:10px 16px;background:rgba(245,200,66,0.08);border:1px solid rgba(245,200,66,0.3);border-radius:12px;padding:10px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between">'
         +'<span style="font-size:0.82rem;font-weight:700;color:#f5c842">'+requests.length+' pending request'+(requests.length>1?'s':'')+'</span>'
         +'<span style="font-size:0.72rem;color:#f5c842">Review →</span>'
       +'</div>';
     }
-    if (!filtered.length) {
-      html+='<div style="margin:16px;background:#141414;border:1px solid #252525;border-radius:18px;padding:32px 20px;text-align:center">'
-        +'<div style="font-size:2.5rem;margin-bottom:12px">👥</div>'
-        +'<div style="font-size:1rem;font-weight:800;margin-bottom:6px">No players yet</div>'
-        +'<div style="font-size:0.8rem;color:#666">Share your club code to get join requests</div>'
-      +'</div>';
+    if (!dbReady || !filtered.length) {
+      listInner+=emptyOrLoadingHtml();
     } else {
-      html+=filtered.map(playerRow).join('');
+      listInner+=filtered.map(playerRow).join('');
     }
   }
-  // ══ COHOSTS / STAFF section ══
-  html += _renderClubStaffPanel();
-  html+='</div><div style="height:80px"></div>';
+  html+=listInner;
+  html+='</div>';
+  try { html += _renderClubStaffPanel(); } catch(_sp) {}
+  html+='<div style="height:80px"></div>';
   el.style.background='#0a0a0a';
   el.style.minHeight='100vh';
   el.innerHTML=html;
-  _wireClubStaffPanel(el);
+  try { _wireClubStaffPanel(el); } catch(_sw) {}
+  var listEl = document.getElementById('player-list');
+  if (listEl) {
+    if (_playersActiveTab==='applicants') {
+      listEl.innerHTML = filteredReqs.length ? filteredReqs.map(requestRow).join('') : '';
+    } else if (!dbReady) {
+      listEl.innerHTML = '<div style="text-align:center;padding:24px 12px;color:#555;font-size:0.82rem">Loading players…</div>';
+    } else if (!filtered.length) {
+      listEl.innerHTML = '<div style="text-align:center;padding:24px 12px;color:#555;font-size:0.82rem">No players yet</div>';
+    } else {
+      listEl.innerHTML = filtered.map(playerRow).join('');
+    }
+  }
 }
 
 function _renderClubStaffPanel() {
@@ -2735,6 +3076,7 @@ function _wireClubStaffPanel(scope) {
 
 
 function savePlayerProfile(pid){
+  
   // Read current input values
   var realNameInp = document.getElementById('ps-realname');
   var notesInp    = document.getElementById('ps-notes');
@@ -2744,11 +3086,13 @@ function savePlayerProfile(pid){
   var notes    = notesInp    ? notesInp.value    : '';
   var credit   = creditInp   ? parseFloat(creditInp.value)||0 : 0;
   var signal   = signalInp   ? signalInp.value.trim() : '';
+  
   // Load players from localStorage (do not use stale in-memory ref)
   var players = JSON.parse(localStorage.getItem('pb-club-players')||'[]');
   var idx = players.findIndex(function(p){ return p.playerId===pid; });
+  
   if (idx === -1) {
-    showToastHost('SAVE ERROR: PLAYER NOT FOUND\nID: '+pid);
+    showToastHost('Player not found');
     console.warn('Player not found:', pid, 'players:', players);
     return;
   }
@@ -2758,7 +3102,8 @@ function savePlayerProfile(pid){
   var lim = getHostPlayerLimits(pid);
   lim.creditLimit = credit;
   saveHostPlayerLimits(pid, lim);
-  showToastHost('PLAYER SAVED\n'+(realName||players[idx].playerName));
+  
+  showToastHost('✅ Player saved');
   var ov = document.getElementById('ps-overlay');
   if (ov) ov.remove();
   _playersActiveTab='all';
@@ -2943,12 +3288,12 @@ function copyInviteLink() {
   showToast('✅ Invite link copied!');
 }
 
-function openCreateClub() { document.getElementById('modal-create-club').style.display = 'flex'; }
+function openCreateClub() { showToast('Club creation is paused. Use Survivor Pool.'); }
 function closeCreateClub() { document.getElementById('modal-create-club').style.display = 'none'; }
 
 async function createClub() {
-  const name = document.getElementById('cc-name').value.trim();
-  if (!name) { showToast('Enter a club name'); return; }
+  showToast('Club creation is paused. Use Survivor Pool.');
+  return;
   const max_bet = parseFloat(document.getElementById('cc-maxbet').value)||500;
   const max_parlay = parseFloat(document.getElementById('cc-maxparlay').value)||1000;
   const desc = document.getElementById('cc-desc').value.trim();
@@ -3022,185 +3367,11 @@ document.addEventListener('click', function(e) {
   else if (action === 'deny') hostDenyDelete(id);
 });
 
-// ═══ BUY DIAMONDS ═══════════════════════════════════════════════════════════════════════════════
-// Diamonds are platform credits only. They cannot be withdrawn, redeemed for
-// cash, or transferred outside PocketBooks Sports. Hosts buy diamonds by
-// sending crypto to the platform wallet, then submitting the tx hash. The
-// request is reviewed by admin/master before any diamonds are credited.
-//
-// Storage keys:
-//   pb-diamonds                       — host's current diamond balance (int)
-//   pb-diamond-purchase-requests      — array of request objects
-//   pb-diamond-wallets (optional)     — admin-configurable receive addresses
-// ═══════════════════════════════════════════════════════════════════════════════
-// 1 diamond = $1 USD. Packages are presets; custom amount also supported.
-var DIAMOND_PACKAGES = [
-  { amount: 100  },
-  { amount: 500  },
-  { amount: 1000 },
-  { amount: 2500 },
-];
-function _diamondsToUsd(n) { var v = parseInt(n,10)||0; return v; } // 1:1
-var CRYPTO_METHODS = [
-  // priceUsd updated by spot-price plug; static fallback for offline dev.
-  { id: 'usdt', symbol: 'USDT', label: 'USDT', network: 'ERC-20',     icon: 'Ⓜ️', priceUsd: 1     },
-  { id: 'usdc', symbol: 'USDC', label: 'USDC', network: 'ERC-20',     icon: 'Ⓐ️', priceUsd: 1     },
-  { id: 'btc',  symbol: 'BTC',  label: 'BTC',  network: 'Bitcoin',    icon: '₿',    priceUsd: 103000 },
-  { id: 'eth',  symbol: 'ETH',  label: 'ETH',  network: 'Ethereum',   icon: 'Ξ',    priceUsd: 2329   },
-];
-// Min confirmations per network before auto-credit
-var CONFIRMATION_THRESHOLDS = { usdt: 19, usdc: 12, btc: 2, eth: 12 };
-// Pluggable scanner registry. Real impls (Etherscan/BlockCypher/NOWPayments)
-// register here later. Each fn signature:
-//   async (req) => { exists, toAddress, amountCrypto, network, confirmations }
-var DIAMOND_SCANNERS = {};
-function registerDiamondScanner(cryptoId, fn) { DIAMOND_SCANNERS[cryptoId] = fn; }
-function _amountDueCrypto(usd, cryptoId) {
-  var m = CRYPTO_METHODS.find(function(c){ return c.id===cryptoId; });
-  if (!m || !m.priceUsd) return null;
-  // formula: amountDue = usdAmount / cryptoUsdPrice
-  var v = usd / m.priceUsd;
-  // stablecoins = 2dp, BTC = 8dp, ETH = 6dp
-  var dp = (cryptoId==='btc') ? 8 : (cryptoId==='usdt'||cryptoId==='usdc') ? 2 : 6;
-  var result = Math.round(v * Math.pow(10,dp)) / Math.pow(10,dp);
-  console.log('[crypto amount calc]', {
-    diamonds: usd, usdAmount: usd, selectedCrypto: cryptoId,
-    cryptoUsdPrice: m.priceUsd, amountDue: result
-  });
-  return result;
-}
-
-// Fetch live prices from CoinGecko (free, no key). Updates CRYPTO_METHODS in place.
-// Price state
-var _cryptoPriceState = { status: 'loading', lastUpdated: null, error: null };
-
-function _fetchLiveCryptoPrices(onDone) {
-  _cryptoPriceState.status = 'loading';
-  _renderPriceStatus();
-  fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd')
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      if (d.bitcoin && d.bitcoin.usd)  { var btc = CRYPTO_METHODS.find(function(c){return c.id==='btc';}); if(btc) btc.priceUsd = d.bitcoin.usd; }
-      if (d.ethereum && d.ethereum.usd){ var eth = CRYPTO_METHODS.find(function(c){return c.id==='eth';}); if(eth) eth.priceUsd = d.ethereum.usd; }
-      _cryptoPriceState.status = 'ok';
-      _cryptoPriceState.lastUpdated = new Date();
-      _cryptoPriceState.error = null;
-      console.log('[crypto prices updated] BTC:', d.bitcoin&&d.bitcoin.usd, 'ETH:', d.ethereum&&d.ethereum.usd);
-      _renderPriceStatus();
-      if (typeof onDone === 'function') onDone();
-    })
-    .catch(function(e){
-      _cryptoPriceState.status = 'failed';
-      _cryptoPriceState.error = e.message;
-      console.warn('[crypto prices] fetch failed:', e.message);
-      _renderPriceStatus();
-      if (typeof onDone === 'function') onDone();
-    });
-}
-
-function _renderPriceStatus() {
-  var el = document.getElementById('bd-price-status');
-  if (!el) return;
-  var s = _cryptoPriceState;
-  if (s.status === 'loading') {
-    el.innerHTML = '<span style="color:#888;font-size:0.7rem">Fetching live price…</span>';
-  } else if (s.status === 'failed') {
-    el.innerHTML = '<span style="color:#ff3d57;font-size:0.7rem;font-weight:700">⚠️ Price unavailable — stale fallback</span> '
-      + '<button onclick="_fetchLiveCryptoPrices(function(){selectPayMethod&&selectPayMethod(_bdState&&_bdState.selectedPkgIdx,_bdState&&_bdState.selectedCrypto);})" style="padding:3px 8px;background:#1c1c1c;border:1px solid #555;color:#aaa;border-radius:5px;font-size:0.68rem;cursor:pointer">🔄 Retry</button>';
-    // Disable submit
-    var sub = document.getElementById('bd-submit-btn');
-    if (sub) { sub.disabled = true; sub.style.opacity = '0.4'; sub.title = 'Price unavailable — refresh first'; }
-  } else if (s.status === 'ok' && s.lastUpdated) {
-    var ago = Math.round((Date.now() - s.lastUpdated.getTime()) / 1000);
-    var agoStr = ago < 60 ? ago + 's ago' : Math.round(ago/60) + 'm ago';
-    el.innerHTML = '<span style="color:#00875a;font-size:0.7rem">✅ Live price · Updated ' + agoStr + '</span> '
-      + '<button onclick="_fetchLiveCryptoPrices(function(){var m=_bdState&&_bdState.selectedCrypto;if(m)selectPayMethod&&selectPayMethod(_bdState.selectedPkgIdx,m);})" style="padding:3px 8px;background:#1c1c1c;border:1px solid #333;color:#888;border-radius:5px;font-size:0.68rem;cursor:pointer">🔄 Refresh</button>';
-    // Re-enable submit
-    var sub = document.getElementById('bd-submit-btn');
-    if (sub) { sub.disabled = false; sub.style.opacity = ''; sub.title = ''; }
-  }
-}
-_fetchLiveCryptoPrices(); // run on load
-
-// ═══ WALLET POOL (manual rotation) ═════════════════════════════════════════════════════════════
-// Owner-managed receive addresses, NOT auto-generated. Pool is keyed by
-// network ('ERC-20' | 'BTC'); ETH/USDT-ERC20/USDC-ERC20 share the same pool.
-// Each wallet entry: { address, network, usageCount, maxUsageCount, active }.
-// At purchase-creation time we pick the first active+available address from
-// the matching network and lock it onto the request (never rotated mid-order).
-// On verified approval, usageCount is incremented; when it reaches
-// maxUsageCount the wallet is auto-deactivated.
-var DEFAULT_DIAMOND_WALLETS = [
-  { address: '0x61F74cD55bA283269eb86a2AA7a882B2e1a9225F', network: 'ERC-20', usageCount: 0, maxUsageCount: 50, active: true },
-  { address: 'bc1qu6um0h9qdy8nn6w3m2t4x3ava8lp6tm96erwc4', network: 'BTC',    usageCount: 0, maxUsageCount: 3,  active: true },
-];
-function _loadDiamondWallets() {
-  try {
-    var s = JSON.parse(localStorage.getItem('pb-diamond-wallets') || 'null');
-    if (Array.isArray(s) && s.length) return s;
-  } catch(_e) {}
-  // Seed defaults on first run
-  saveDiamondWallets(DEFAULT_DIAMOND_WALLETS.map(function(w){ return Object.assign({}, w); }));
-  return _loadDiamondWallets();
-}
-function saveDiamondWallets(arr) {
-  localStorage.setItem('pb-diamond-wallets', JSON.stringify(arr || []));
-}
-// Map a CRYPTO_METHODS.id → wallet pool network key.
-function _networkForCrypto(cryptoId) {
-  if (cryptoId === 'btc') return 'BTC';
-  // eth, usdt, usdc all use ERC-20 pool
-  return 'ERC-20';
-}
-// Pick the first active wallet on the requested network with capacity left.
-function _pickAvailableWallet(network) {
-  var pool = _loadDiamondWallets();
-  for (var i=0; i<pool.length; i++) {
-    var w = pool[i];
-    if (!w || !w.active) continue;
-    if (String(w.network) !== String(network)) continue;
-    if ((parseInt(w.usageCount,10)||0) >= (parseInt(w.maxUsageCount,10)||0)) continue;
-    return w;
-  }
-  return null;
-}
-// Increment usageCount on approval; deactivate if cap hit.
-function _incrementWalletUsage(address) {
-  var pool = _loadDiamondWallets();
-  var changed = false;
-  for (var i=0; i<pool.length; i++) {
-    if (pool[i] && pool[i].address === address) {
-      pool[i].usageCount = (parseInt(pool[i].usageCount,10)||0) + 1;
-      if (pool[i].usageCount >= (parseInt(pool[i].maxUsageCount,10)||0)) {
-        pool[i].active = false;
-      }
-      changed = true; break;
-    }
-  }
-  if (changed) saveDiamondWallets(pool);
-}
-// QR image src — uses public api.qrserver.com (no extra JS bundle). If offline
-// or blocked, the address text + copy button still work for manual entry.
-function _qrImgSrc(text, size) {
-  size = size || 200;
-  return 'https://api.qrserver.com/v1/create-qr-code/?size='+size+'x'+size+'&data='+encodeURIComponent(text||'');
-}
-function _networkWarning(cryptoId) {
-  if (cryptoId === 'btc') return 'Only send Bitcoin (BTC) to this address.';
-  return 'Only send assets on the Ethereum/ERC-20 network to this address.';
-}
-// Back-compat shim for any older code paths still calling the map version.
-function _getDiamondWallets() {
-  var pool = _loadDiamondWallets();
-  function findActive(net) {
-    var w = pool.find(function(x){ return x && x.active && x.network === net; });
-    return w ? w.address : '';
-  }
-  var ercAddr = findActive('ERC-20');
-  return { eth: ercAddr, usdt: ercAddr, usdc: ercAddr, btc: findActive('BTC') };
-}
-
+// ═══ HOST DIAMOND PILL (display) ════════════════════════════════════════════════════════════
+// Header pill prefers /api/host/diamond-usage. localStorage is cache/fallback only.
+var _diamondBalanceFromServer = null;
 function getDiamondBalance() {
+  if (_diamondBalanceFromServer != null && !isNaN(_diamondBalanceFromServer)) return _diamondBalanceFromServer;
   var v = parseInt(localStorage.getItem('pb-diamonds') || '0', 10);
   return isNaN(v) ? 0 : v;
 }
@@ -3208,517 +3379,27 @@ function setDiamondBalance(n) {
   localStorage.setItem('pb-diamonds', String(parseInt(n, 10) || 0));
   syncDiamondDisplay();
 }
+function applyServerDiamondBalance(n) {
+  var v = parseInt(n, 10);
+  if (isNaN(v)) return;
+  _diamondBalanceFromServer = v;
+  try { localStorage.setItem('pb-diamonds', String(v)); } catch(_e){}
+  syncDiamondDisplay();
+}
 function syncDiamondDisplay() {
   var el = document.getElementById('diamond-count');
   if (el) el.textContent = getDiamondBalance().toLocaleString('en-US');
 }
-// Initial sync on load
+function _hydrateHostDiamondPill() {
+  if (typeof _pbFetch !== 'function') return;
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+  var cid = club.id || club.clubId || '';
+  var url = '/api/host/diamond-usage' + (cid ? ('?clubId='+encodeURIComponent(cid)) : '');
+  _pbFetch(url).then(function(r){ return r.json(); }).then(function(d){
+    if (d && d.ok && d.balanceDiamonds != null) applyServerDiamondBalance(d.balanceDiamonds);
+  }).catch(function(){});
+}
 syncDiamondDisplay();
-
-function _resolveHost() {
-  var h = {};
-  try { h = JSON.parse(localStorage.getItem('pb-host') || 'null') || {}; } catch(_e){}
-  return {
-    id:   h.id   || h.hostId   || 'H1001',
-    name: h.name || h.username || h.hostName || 'Host',
-  };
-}
-
-function loadDiamondRequests() {
-  try { return JSON.parse(localStorage.getItem('pb-diamond-purchase-requests') || '[]'); }
-  catch(_e) { return []; }
-}
-function saveDiamondRequests(arr) {
-  localStorage.setItem('pb-diamond-purchase-requests', JSON.stringify(arr || []));
-}
-
-// Buy Diamonds page state (kept on the overlay element via dataset).
-var _bdState = {
-  selectedPackage: null, // preset amount (int) OR null when using custom
-  customAmount:    '',   // raw input string
-  selectedCrypto:  null, // id
-  txHash:          '',
-};
-
-// Track current screen so other code can branch on it.
-var currentScreen = 'host-dashboard';
-// Selectors of dashboard chrome to hide while Buy Diamonds is full-screen.
-var _BD_HIDE_SELECTORS = ['.hdr', '.club-bar', '.alert-card', '.settlement',
-  '.stats-grid', '.sec-hdr', '#sharp-alerts',
-  '#players-section', '#settlements-section', '#bets-section', '.bnav'];
-var _bdHidden = []; // [{el, prevDisplay}]
-var _bdPrevBodyOverflow = '';
-
-function _bdHideDashboard() {
-  _bdHidden = [];
-  // Hide explicit selectors
-  _BD_HIDE_SELECTORS.forEach(function(sel) {
-    var nodes = document.querySelectorAll(sel);
-    Array.prototype.forEach.call(nodes, function(el) {
-      _bdHidden.push({ el: el, prev: el.style.display });
-      el.style.display = 'none';
-    });
-  });
-  // Hide every direct child of body that isn't bd-root or a modal/script.
-  // Cheap belt-and-suspenders for any home content not in the selector list.
-  Array.prototype.forEach.call(document.body.children, function(el) {
-    if (!el || el.id === 'bd-root') return;
-    if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE') return;
-    if (el.id && /^modal-/.test(el.id)) return; // leave modals alone
-    if (_bdHidden.some(function(h){ return h.el === el; })) return;
-    if (el.style.display === 'none') return; // already hidden
-    _bdHidden.push({ el: el, prev: el.style.display });
-    el.style.display = 'none';
-  });
-  _bdPrevBodyOverflow = document.body.style.overflow;
-  // Do NOT set body.overflow:hidden — it traps the iOS scroll on the (clipped)
-  // dashboard parent. #bd-root is a fixed top-level scroll container instead.
-}
-function _bdShowDashboard() {
-  _bdHidden.forEach(function(h){ h.el.style.display = h.prev || ''; });
-  _bdHidden = [];
-  document.body.style.overflow = _bdPrevBodyOverflow || '';
-}
-
-function showBuyDiamondsPage() {
-  console.log('[buy-diamonds] open');
-  // Reset transient state every open
-  _bdState = { selectedPackage: null, customAmount: '', selectedCrypto: null, txHash: '' };
-  // Remove any prior root
-  var existing = document.getElementById('bd-root');
-  if (existing) existing.remove();
-  // Hide host dashboard structurally so this is a true page swap, not an overlay
-  _bdHideDashboard();
-  currentScreen = 'buy-diamonds';
-  // Render in-flow as a normal page section (not a fixed overlay).
-  // body has max-width:430px;margin:0 auto so this naturally fits the column.
-  var root = document.createElement('div');
-  root.id = 'bd-root';
-  root.style.cssText = 'position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;height:100dvh;max-height:none;background:#0a0a0a;color:#fff;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:240px;z-index:2147483647';
-  root.innerHTML = _bdRenderShell();
-  document.body.appendChild(root);
-  _bdWireEvents(root);
-  _bdRenderBody();
-  window.scrollTo(0, 0);
-}
-
-function closeBuyDiamondsPage() {
-  var root = document.getElementById('bd-root');
-  if (root) root.remove();
-  // Also clean up any legacy overlay if one is still around
-  var legacy = document.getElementById('bd-overlay');
-  if (legacy) legacy.remove();
-  _bdShowDashboard();
-  currentScreen = 'host-dashboard';
-}
-
-function _bdRenderShell() {
-  return ''+
-    '<div style="position:sticky;top:0;background:#0a0a0a;border-bottom:1px solid #252525;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;z-index:10">' +
-      '<button id="bd-back" style="background:#1c1c1c;border:1px solid #252525;color:#fff;width:36px;height:36px;border-radius:50%;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center" aria-label="Back">←</button>' +
-      '<div style="font-size:1rem;font-weight:900;letter-spacing:0.3px">Buy Diamonds</div>' +
-      '<div style="width:36px"></div>' +
-    '</div>' +
-    '<div id="bd-body" style="padding:16px 16px 80px"></div>';
-}
-
-function _bdWireEvents(overlay) {
-  var back = overlay.querySelector('#bd-back');
-  if (back) back.addEventListener('click', closeBuyDiamondsPage);
-}
-
-function _bdRenderBody() {
-  var body = document.getElementById('bd-body');
-  if (!body) return;
-  var bal = getDiamondBalance();
-  var requests = loadDiamondRequests();
-  var pendingCount = requests.filter(function(r){ return r.status==='pending'; }).length;
-
-  var balanceCard = ''+
-    '<div style="background:linear-gradient(135deg,rgba(0,194,255,0.12),rgba(0,194,255,0.04));border:1px solid rgba(0,194,255,0.3);border-radius:16px;padding:18px 18px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between">' +
-      '<div>' +
-        '<div style="font-size:0.7rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Current Balance</div>' +
-        '<div style="font-size:1.7rem;font-weight:900;color:#00c2ff;line-height:1">💎 ' + bal.toLocaleString('en-US') + '</div>' +
-        (pendingCount ? '<div style="font-size:0.68rem;color:#f5c842;margin-top:6px;font-weight:700">' + pendingCount + ' pending request' + (pendingCount>1?'s':'') + '</div>' : '') +
-      '</div>' +
-      '<div style="font-size:2.2rem;opacity:0.6">💎</div>' +
-    '</div>';
-
-  // Packages (1 diamond = $1; no USD subtitle per spec)
-  var pkgHtml = '<div style="font-size:0.72rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Select Package</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">' +
-    DIAMOND_PACKAGES.map(function(p) {
-      var sel = _bdState.selectedPackage === p.amount && !_bdState.customAmount;
-      return '<button data-bd-pkg="' + p.amount + '" style="text-align:center;background:' + (sel ? 'rgba(0,194,255,0.15)' : '#141414') + ';border:1.5px solid ' + (sel ? '#00c2ff' : '#252525') + ';border-radius:14px;padding:18px 14px;color:#fff;cursor:pointer;transition:all 0.15s ease">' +
-        '<div style="font-size:1.15rem;font-weight:900;color:' + (sel ? '#00c2ff' : '#fff') + '">💎 ' + p.amount.toLocaleString('en-US') + ' diamonds</div>' +
-      '</button>';
-    }).join('') +
-    '</div>' +
-    // Custom amount input
-    '<div style="font-size:0.72rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Custom Amount</div>' +
-    '<input id="bd-custom-amount" type="number" min="1" step="1" inputmode="numeric" placeholder="Enter diamonds" value="' + (_bdState.customAmount||'').toString().replace(/"/g,'&quot;') + '" style="width:100%;background:#141414;border:1.5px solid ' + (_bdState.customAmount?'#00c2ff':'#252525') + ';border-radius:14px;padding:14px;color:#fff;font-size:0.95rem;font-weight:800;outline:none;margin-bottom:22px">';
-
-  // Crypto methods
-  var methodHtml = '<div style="font-size:0.72rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Payment Method</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:22px">' +
-    CRYPTO_METHODS.map(function(m) {
-      var sel = _bdState.selectedCrypto === m.id;
-      return '<button data-bd-crypto="' + m.id + '" style="display:flex;align-items:center;gap:10px;background:' + (sel ? 'rgba(0,194,255,0.15)' : '#141414') + ';border:1.5px solid ' + (sel ? '#00c2ff' : '#252525') + ';border-radius:12px;padding:12px 14px;color:#fff;cursor:pointer;text-align:left">' +
-        '<div style="font-size:1.1rem;width:24px;text-align:center">' + m.icon + '</div>' +
-        '<div>' +
-          '<div style="font-size:0.85rem;font-weight:800">' + m.label + '</div>' +
-          '<div style="font-size:0.6rem;color:#777;font-weight:700;letter-spacing:0.3px">' + m.network + '</div>' +
-        '</div>' +
-      '</button>';
-    }).join('') +
-    '</div>';
-
-  // Wallet + tx hash (only after method picked)
-  var walletHtml = '';
-  if (_bdState.selectedCrypto) {
-    var method = CRYPTO_METHODS.find(function(m){ return m.id === _bdState.selectedCrypto; });
-    var net = _networkForCrypto(_bdState.selectedCrypto);
-    var picked = _pickAvailableWallet(net);
-    if (!picked) {
-      walletHtml = '<div style="background:rgba(255,61,87,0.08);border:1px solid rgba(255,61,87,0.3);border-radius:12px;padding:16px;color:#ff8e9c;font-size:0.85rem;font-weight:700;text-align:center;margin-bottom:14px">Payment temporarily unavailable. Please try again later.</div>';
-    } else {
-      var addr = picked.address;
-      walletHtml =
-      '<div style="font-size:0.72rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Send Payment To</div>' +
-      '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;margin-bottom:14px">' +
-        '<div style="font-size:0.65rem;color:#777;margin-bottom:8px;font-weight:700">' + (method ? method.label + ' · ' + method.network : '') + '</div>' +
-        // QR
-        '<div style="background:#fff;padding:10px;border-radius:10px;display:flex;justify-content:center;margin-bottom:12px">' +
-          '<img alt="Wallet QR" src="' + _qrImgSrc(addr, 220) + '" style="width:200px;height:200px;display:block" onerror="this.style.display=\'none\'">' +
-        '</div>' +
-        '<div style="display:flex;align-items:center;gap:8px">' +
-          '<input id="bd-wallet-addr" type="text" readonly value="' + addr.replace(/"/g,'&quot;') + '" style="flex:1;background:#0a0a0a;border:1px solid #252525;border-radius:8px;padding:10px 12px;color:#00c2ff;font-family:monospace;font-size:0.78rem;outline:none">' +
-          '<button id="bd-copy-addr" data-bd-addr="' + addr.replace(/"/g,'&quot;') + '" style="background:#00c2ff;border:none;color:#0a0a0a;padding:10px 14px;border-radius:8px;font-size:0.75rem;font-weight:900;cursor:pointer;white-space:nowrap">Copy</button>' +
-        '</div>' +
-        // Network warning
-        '<div style="margin-top:10px;font-size:0.68rem;color:#f5c842;background:rgba(245,200,66,0.08);border:1px solid rgba(245,200,66,0.25);border-radius:8px;padding:8px 10px;line-height:1.4">⚠️ ' + _networkWarning(_bdState.selectedCrypto) + '</div>' +
-        ((function(){
-          var diamonds = _effectiveDiamonds();
-          if (!diamonds) return '';
-          var usd = _diamondsToUsd(diamonds);
-          var due = _amountDueCrypto(usd, _bdState.selectedCrypto);
-          var dueStr = (due == null) ? '?' : due.toString();
-          return '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #252525">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
-              '<span style="font-size:0.7rem;color:#888;font-weight:700">Diamonds</span>' +
-              '<span style="font-size:0.85rem;font-weight:900;color:#fff">💎 ' + diamonds.toLocaleString('en-US') + '</span>' +
-            '</div>' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
-              '<span style="font-size:0.7rem;color:#888;font-weight:700">Amount Due</span>' +
-              '<span style="font-size:0.85rem;font-weight:900;color:#fff">$' + usd.toLocaleString('en-US') + '</span>' +
-            '</div>' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
-              '<span style="font-size:0.7rem;color:#888;font-weight:700">Send Exactly</span>' +
-              '<span style="font-size:0.95rem;font-weight:900;color:#00c2ff;font-family:monospace">' + dueStr + ' ' + (method?method.symbol:'') + '</span>' +
-            '</div>' +
-            '<div id="bd-price-status" style="margin-top:4px"></div>' +
-          '</div>';
-        })()) +
-      '</div>' +
-      '<div style="font-size:0.72rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin:18px 0 10px">Transaction Hash</div>' +
-      '<div style="display:flex;gap:8px;margin-bottom:14px">' +
-        '<input id="bd-tx-hash" type="text" placeholder="Paste your transaction hash here" value="' + (_bdState.txHash||'').replace(/"/g,'&quot;') + '" style="flex:1;background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;color:#fff;font-family:monospace;font-size:0.82rem;outline:none">' +
-        '<button id="bd-paste-tx" type="button" style="background:#1c1c1c;border:1px solid #252525;color:#00c2ff;padding:0 14px;border-radius:12px;font-size:0.72rem;font-weight:800;cursor:pointer;white-space:nowrap">Paste TX Hash</button>' +
-      '</div>' +
-      // ── HOW TO COMPLETE PAYMENT ──
-      '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;margin-bottom:12px">' +
-        '<div style="font-size:0.7rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">How To Complete Payment</div>' +
-        '<ol style="margin:0;padding-left:18px;color:#bbb;font-size:0.78rem;line-height:1.55">' +
-          '<li>Send the exact crypto amount shown above to the wallet address or QR code.</li>' +
-          '<li>Wait for the transaction to appear as <strong style="color:#fff">Sent</strong> or <strong style="color:#fff">Confirmed</strong> in your wallet.</li>' +
-          '<li>Open the transaction details in your wallet app.</li>' +
-          '<li>Copy the <strong style="color:#fff">Transaction Hash (TXID)</strong>.</li>' +
-          '<li>Paste the TXID into the box above.</li>' +
-          '<li>Tap <strong style="color:#fff">Submit Payment</strong>.</li>' +
-        '</ol>' +
-      '</div>' +
-      '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;margin-bottom:120px;flex-shrink:0;min-height:fit-content">' +
-        '<div style="font-size:0.7rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Where do I find the transaction hash?</div>' +
-        '<div style="color:#bbb;font-size:0.78rem;line-height:1.55;margin-bottom:8px">Most wallets label it as:</div>' +
-        '<ul style="margin:0 0 10px 18px;padding:0;color:#bbb;font-size:0.78rem;line-height:1.55">' +
-          '<li>View Transaction</li>' +
-          '<li>Explorer</li>' +
-          '<li>TXID</li>' +
-          '<li>Transaction Hash</li>' +
-        '</ul>' +
-        '<div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Example</div>' +
-        '<div style="background:#0a0a0a;border:1px solid #252525;border-radius:8px;padding:10px 12px;font-family:monospace;font-size:0.7rem;color:#00c2ff;word-break:break-all">0x7f3c91b8e4ab2d6c5f1a9e0c3b7d8a1f5e6c9b2a4d7e8f1c6a9b3e2d4f7a8c1</div>' +
-      '</div>';
-    }
-  }
-
-  // Submit button — enable when (preset OR custom>0) AND payment method picked.
-  // Note: scanner verification still requires txHash; submit button enables
-  // before tx hash to allow user to see wallet. Final submit click validates tx.
-  var canSubmit = !!(_effectiveDiamonds() && _bdState.selectedCrypto && _bdState.txHash && _bdState.txHash.trim().length >= 6);
-  var submitHtml =
-    '<button id="bd-submit" ' + (canSubmit ? '' : 'disabled') + ' style="width:100%;background:' + (canSubmit ? '#00c2ff' : '#1c1c1c') + ';border:none;color:' + (canSubmit ? '#0a0a0a' : '#555') + ';padding:16px;border-radius:14px;font-size:0.95rem;font-weight:900;cursor:' + (canSubmit ? 'pointer' : 'not-allowed') + ';margin-top:8px;letter-spacing:0.3px">Submit Payment</button>';
-
-  // Compliance copy
-  var complianceHtml =
-    '<div style="margin-top:18px;padding:12px 14px;background:rgba(245,200,66,0.06);border:1px solid rgba(245,200,66,0.2);border-radius:10px;font-size:0.7rem;color:#d4b04a;line-height:1.5">' +
-      '⚠️ Diamonds are platform credits only. Diamonds cannot be withdrawn, redeemed for cash, or transferred outside PocketBooks Sports.' +
-    '</div>';
-
-  // Recent requests history (with confirmations progress bar for confirming)
-  var historyHtml = '';
-  if (requests.length) {
-    historyHtml = '<div style="margin-top:24px">' +
-      '<div style="font-size:0.72rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Recent Requests</div>' +
-      requests.slice(0, 5).map(function(r) {
-        var sc = { approved:'#00ff88', rejected:'#ff3d57', confirming:'#00c2ff', pending:'#f5c842' };
-        var sb = { approved:'rgba(0,255,136,0.1)', rejected:'rgba(255,61,87,0.1)', confirming:'rgba(0,194,255,0.1)', pending:'rgba(245,200,66,0.1)' };
-        var statusColor = sc[r.status] || '#888';
-        var statusBg    = sb[r.status] || 'rgba(255,255,255,0.05)';
-        var d = new Date(r.createdAt);
-        var dt = isNaN(d) ? r.createdAt : d.toLocaleDateString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
-        var thresh = (typeof CONFIRMATION_THRESHOLDS!=='undefined' ? CONFIRMATION_THRESHOLDS[r.cryptoMethod||r.cryptoSymbol&&r.cryptoSymbol.toLowerCase()] : 6) || 6;
-        var confs = parseInt(r.confirmations||0,10) || 0;
-        var progressPct = Math.min(100, Math.round(confs/thresh*100));
-        var progressHtml = (r.status==='confirming') ?
-          '<div style="margin-top:8px">' +
-            '<div style="display:flex;justify-content:space-between;font-size:0.62rem;color:#888;margin-bottom:4px"><span>Confirmations</span><span style="color:#00c2ff;font-weight:800">'+confs+' / '+thresh+'</span></div>' +
-            '<div style="height:4px;background:#252525;border-radius:2px;overflow:hidden"><div style="width:'+progressPct+'%;height:100%;background:#00c2ff;transition:width 0.3s ease"></div></div>' +
-          '</div>' : '';
-        var amtDue = (r.amountDueCrypto != null) ? (' · ' + r.amountDueCrypto + ' ' + (r.cryptoSymbol || (r.cryptoMethod||'').toUpperCase())) : '';
-        return '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:12px 14px;margin-bottom:8px">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
-            '<div style="font-size:0.88rem;font-weight:900">💎 ' + ((r.diamondAmount||r.packageAmount||0)).toLocaleString('en-US') + '</div>' +
-            '<div style="font-size:0.65rem;font-weight:800;color:' + statusColor + ';background:' + statusBg + ';padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:0.4px">' + r.status + '</div>' +
-          '</div>' +
-          '<div style="font-size:0.68rem;color:#777;font-family:monospace;margin-bottom:3px">' + ((r.cryptoSymbol||r.cryptoMethod||'').toUpperCase()) + amtDue + ' · ' + dt + '</div>' +
-          (r.txHash ? '<div style="font-size:0.62rem;color:#555;font-family:monospace;word-break:break-all">' + r.txHash + '</div>' : '') +
-          progressHtml +
-          (r.rejectReason ? '<div style="font-size:0.65rem;color:#ff3d57;margin-top:4px">⚠️ ' + r.rejectReason + '</div>' : '') +
-        '</div>';
-      }).join('') +
-    '</div>';
-  }
-
-  body.innerHTML = balanceCard + pkgHtml + methodHtml + walletHtml + submitHtml + complianceHtml + historyHtml;
-
-  // Wire interactive bits
-  Array.prototype.forEach.call(body.querySelectorAll('[data-bd-pkg]'), function(btn) {
-    btn.addEventListener('click', function() {
-      _bdState.selectedPackage = parseInt(btn.dataset.bdPkg, 10);
-      _bdState.customAmount = ''; // preset clears custom
-      _bdRenderBody();
-    });
-  });
-  var customInp = body.querySelector('#bd-custom-amount');
-  if (customInp) customInp.addEventListener('input', function() {
-    _bdState.customAmount = customInp.value.replace(/[^0-9]/g,'');
-    if (_bdState.customAmount) _bdState.selectedPackage = null; // custom clears preset
-
-    customInp.value = _bdState.customAmount;
-    _bdRenderBody();
-    // restore focus + caret to end
-    var newInp = document.getElementById('bd-custom-amount');
-    if (newInp) { newInp.focus(); var v = newInp.value; newInp.value=''; newInp.value=v; }
-  });
-  Array.prototype.forEach.call(body.querySelectorAll('[data-bd-crypto]'), function(btn) {
-    btn.addEventListener('click', function() {
-      _bdState.selectedCrypto = btn.dataset.bdCrypto;
-      _bdRenderBody();
-    });
-  });
-  var copyBtn = body.querySelector('#bd-copy-addr');
-  if (copyBtn) copyBtn.addEventListener('click', function() {
-    var input = body.querySelector('#bd-wallet-addr');
-    var addr = (copyBtn.dataset && copyBtn.dataset.bdAddr) || (input && input.value) || '';
-    function flashCopied() {
-      var orig = copyBtn.textContent;
-      copyBtn.textContent = 'Copied';
-      copyBtn.style.background = '#00ff88';
-      setTimeout(function(){
-        copyBtn.textContent = orig || 'Copy';
-        copyBtn.style.background = '#00c2ff';
-      }, 1400);
-    }
-    var ok = false;
-    try { if (input) input.select(); ok = document.execCommand && document.execCommand('copy'); } catch(_e) { ok = false; }
-    if (ok) { flashCopied(); return; }
-    if (navigator.clipboard && addr) {
-      navigator.clipboard.writeText(addr).then(flashCopied, function(){ showToastHost('⚠️ Copy failed'); });
-      return;
-    }
-    showToastHost('⚠️ Copy failed — select & copy manually');
-  });
-  var pasteBtn = body.querySelector('#bd-paste-tx');
-  if (pasteBtn) pasteBtn.addEventListener('click', function() {
-    if (!navigator.clipboard || !navigator.clipboard.readText) {
-      showToastHost('Paste not supported — long-press the input to paste');
-      return;
-    }
-    navigator.clipboard.readText().then(function(text) {
-      var inp = document.getElementById('bd-tx-hash');
-      var v = (text||'').trim();
-      if (inp) inp.value = v;
-      _bdState.txHash = v;
-      _bdRenderBody();
-    }).catch(function() { showToastHost('Clipboard read denied'); });
-  });
-  var txInput = body.querySelector('#bd-tx-hash');
-  if (txInput) txInput.addEventListener('input', function() {
-    _bdState.txHash = txInput.value;
-    var submitBtn = body.querySelector('#bd-submit');
-    var ok = !!(_effectiveDiamonds() && _bdState.selectedCrypto && _bdState.txHash && _bdState.txHash.trim().length >= 6);
-    if (submitBtn) {
-      submitBtn.disabled = !ok;
-      submitBtn.style.background = ok ? '#00c2ff' : '#1c1c1c';
-      submitBtn.style.color      = ok ? '#0a0a0a' : '#555';
-      submitBtn.style.cursor     = ok ? 'pointer' : 'not-allowed';
-    }
-  });
-  var submitBtn = body.querySelector('#bd-submit');
-  if (submitBtn) submitBtn.addEventListener('click', submitDiamondPurchase);
-}
-
-// Effective diamond count: custom wins if non-empty, else preset, else 0.
-function _effectiveDiamonds() {
-  if (_bdState.customAmount) {
-    var v = parseInt(_bdState.customAmount, 10);
-    return (v > 0) ? v : 0;
-  }
-  return _bdState.selectedPackage || 0;
-}
-
-function submitDiamondPurchase() {
-  var diamonds = _effectiveDiamonds();
-  if (!diamonds) { showToastHost('Select a package or enter diamonds'); return; }
-  if (!_bdState.selectedCrypto)  { showToastHost('Select a payment method'); return; }
-  var tx = (_bdState.txHash||'').trim();
-  if (!tx || tx.length < 6) { showToastHost('Enter your transaction hash'); return; }
-
-  var host = _resolveHost();
-  var method = CRYPTO_METHODS.find(function(c){ return c.id===_bdState.selectedCrypto; });
-  var net = _networkForCrypto(_bdState.selectedCrypto);
-  var picked = _pickAvailableWallet(net);
-  if (!picked) { showToastHost('Payment temporarily unavailable. Please try again later.'); return; }
-  var fiat = _diamondsToUsd(diamonds); // 1:1
-  var req = {
-    id:               'D' + Date.now() + Math.floor(Math.random()*10000),
-    hostId:           host.id,
-    hostName:         host.name,
-    diamondAmount:    diamonds,
-    fiatPrice:        fiat,
-    cryptoSymbol:     method ? method.symbol : _bdState.selectedCrypto.toUpperCase(),
-    network:          method ? method.network : '',
-    walletAddress:    picked.address, // LOCKED at creation
-    walletNetwork:    picked.network,
-    amountDueCrypto:  _amountDueCrypto(fiat, _bdState.selectedCrypto),
-    txHash:           tx,
-    status:           'pending',
-    confirmations:    0,
-    createdAt:        new Date().toISOString(),
-    approvedAt:       null,
-    // legacy aliases
-    packageAmount:    diamonds,
-    cryptoMethod:     _bdState.selectedCrypto,
-  };
-  var arr = loadDiamondRequests();
-  arr.unshift(req);
-  saveDiamondRequests(arr);
-  console.log('[buy-diamonds] submitted', req);
-  showToastHost('✅ Payment submitted · verifying on-chain');
-  _bdState = { selectedPackage: null, customAmount: '', selectedCrypto: null, txHash: '' };
-  _bdRenderBody();
-  // Kick off async verification (non-blocking)
-  verifyDiamondPayment(req.id);
-}
-
-// Pluggable on-chain verification. If no scanner registered for the crypto,
-// the request stays 'pending' for manual admin review (preserves original UX).
-function verifyDiamondPayment(requestId) {
-  var arr = loadDiamondRequests();
-  var i = arr.findIndex(function(r){ return r.id===requestId; });
-  if (i === -1) return Promise.resolve(false);
-  var req = arr[i];
-  if (req.status === 'approved' || req.status === 'rejected') return Promise.resolve(false);
-  var scanner = DIAMOND_SCANNERS[req.cryptoMethod];
-  if (typeof scanner !== 'function') {
-    console.log('[scanner] no verifier for', req.cryptoMethod, '— leaving pending for admin');
-    return Promise.resolve(false);
-  }
-  // mark confirming while we check
-  arr[i].status = 'confirming';
-  saveDiamondRequests(arr);
-  function _apply(res) {
-    var arr2 = loadDiamondRequests();
-    var j = arr2.findIndex(function(r){ return r.id===requestId; });
-    if (j === -1) return false;
-    if (!res || !res.exists) {
-      arr2[j].status = 'rejected';
-      arr2[j].rejectReason = 'tx not found';
-      saveDiamondRequests(arr2);
-      return false;
-    }
-    var addrOk   = String(res.toAddress||'').toLowerCase() === String(arr2[j].walletAddress||'').toLowerCase();
-    var netOk    = !res.network || String(res.network) === String(arr2[j].network);
-    var amtOk    = arr2[j].amountDueCrypto == null ||
-                   (Math.abs((res.amountCrypto||0) - arr2[j].amountDueCrypto) / arr2[j].amountDueCrypto) <= 0.01; // ±1%
-    var confs    = parseInt(res.confirmations||0, 10) || 0;
-    var threshold = CONFIRMATION_THRESHOLDS[arr2[j].cryptoMethod] || 6;
-    arr2[j].confirmations = confs;
-    if (!addrOk || !netOk || !amtOk) {
-      arr2[j].status = 'rejected';
-      arr2[j].rejectReason = !addrOk ? 'wrong address' : !netOk ? 'wrong network' : 'amount mismatch';
-      saveDiamondRequests(arr2);
-      return false;
-    }
-    if (confs < threshold) {
-      arr2[j].status = 'confirming';
-      saveDiamondRequests(arr2);
-      return false;
-    }
-    // verified → approve + credit
-    arr2[j].status = 'approved';
-    arr2[j].approvedAt = new Date().toISOString();
-    saveDiamondRequests(arr2);
-    setDiamondBalance(getDiamondBalance() + (parseInt(arr2[j].diamondAmount,10) || 0));
-    _incrementWalletUsage(arr2[j].walletAddress);
-    if (typeof _bdRenderBody === 'function' && document.getElementById('bd-root')) _bdRenderBody();
-    return true;
-  }
-  try {
-    var out = scanner(req);
-    if (out && typeof out.then === 'function') {
-      return out.then(_apply).catch(function(e){ console.warn('[scanner] error', e && e.message); return false; });
-    }
-    return _apply(out);
-  } catch (e) { console.warn('[scanner] sync error', e.message); return false; }
-}
-
-// Admin/master manual approval (back-compat). Bypasses scanner; requires
-// pending or confirming status. Credits diamonds on approval.
-function approveDiamondRequest(requestId) {
-  var arr = loadDiamondRequests();
-  var i = arr.findIndex(function(r){ return r.id === requestId; });
-  if (i === -1) return false;
-  if (arr[i].status === 'approved' || arr[i].status === 'rejected') return false;
-  arr[i].status      = 'approved';
-  arr[i].approvedAt  = new Date().toISOString();
-  saveDiamondRequests(arr);
-  setDiamondBalance(getDiamondBalance() + (parseInt(arr[i].diamondAmount||arr[i].packageAmount,10) || 0));
-  _incrementWalletUsage(arr[i].walletAddress);
-  return true;
-}
-function rejectDiamondRequest(requestId, reason) {
-  var arr = loadDiamondRequests();
-  var i = arr.findIndex(function(r){ return r.id === requestId; });
-  if (i === -1) return false;
-  if (arr[i].status === 'approved' || arr[i].status === 'rejected') return false;
-  arr[i].status     = 'rejected';
-  arr[i].rejectedAt = new Date().toISOString();
-  if (reason) arr[i].rejectReason = String(reason);
-  saveDiamondRequests(arr);
-  return true;
-}
 
 // ═══ WEEKLY SETTLEMENTS ══════════════════════════════════════════════════════════════════
 // Storage:
@@ -3883,7 +3564,7 @@ function generateSignalReceipt(opts) {
   arr.unshift(receipt);
   saveSignalReceipts(arr);
   // TODO: hook real Signal bot/API here. For now, log + leave as pending.
-  console.log('[signal] receipt generated', receipt);
+  
   return receipt;
 }
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -3928,7 +3609,7 @@ function resetSettlementPayments(playerId) {
 // Use: seedMockSettlementPlayers(true) to force seed even with real data.
 function seedMockSettlementPlayers(force) {
   if (!force && localStorage.getItem('pb-mock-seed-disabled') === '1') {
-    console.log('[seedMock] disabled by pb-mock-seed-disabled flag');
+    
     return false;
   }
   var existing = loadClubPlayers();
@@ -4086,10 +3767,7 @@ function _purgeHostMockData() {
     } catch(_e){}
 
     if (summary.mkTicketsRemoved || summary.mockPlayersRemoved || summary.mockLimitsRemoved) {
-      console.log('[host mock purge]',
-        'tickets=' + summary.mkTicketsRemoved,
-        'players=' + summary.mockPlayersRemoved,
-        'limits='  + summary.mockLimitsRemoved);
+      
     }
     return summary;
   } catch (err) {
@@ -4433,6 +4111,7 @@ function _renderHostDiamondCard(container, usage) {
   if (!container) return;
   if (!usage||!usage.ok) { container.innerHTML='<div style="font-size:0.7rem;color:#666;padding:4px">Diamond data unavailable</div>'; return; }
   var balance   = usage.balanceDiamonds||0;
+  try { applyServerDiamondBalance(balance); } catch(_e){}
   var used      = usage.capacityUsed||0;
   var remaining = usage.capacityRemaining||0;
   var total     = usage.capacityTotal||0;
@@ -4492,7 +4171,10 @@ async function loadHostDiamondCard() {
   var container = document.getElementById('host-diamond-card');
   if (!container) return;
   try {
-    var r = await _pbFetch('/api/host/diamond-usage');
+    var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+    var cid = club.id || club.clubId || '';
+    var url = '/api/host/diamond-usage' + (cid ? ('?clubId='+encodeURIComponent(cid)) : '');
+    var r = await _pbFetch(url);
     var d = await r.json();
     _renderHostDiamondCard(container, d);
     // Also load weekly report below the balance card
@@ -5103,42 +4785,28 @@ var _HOST_DB_PRIMARY = false;
 // Prevents localStorage poll/events from overwriting authoritative DB values.
 function _setHostDbPrimary(active) {
   _HOST_DB_PRIMARY = active;
-  console.log('[host render authority] HOST_DB_PRIMARY_MODE =', active);
+  
 }
 
 // Canonical host stats dispatch: uses DB when primary, localStorage otherwise.
 // All callers (init, poll, storage events) must go through this.
 async function _dispatchHostStatsRefresh(trigger) {
-  if (_HOST_DB_PRIMARY) {
-    // DB is authoritative — suppress local render, use DB
-    console.log('[host render authority]',
-      '\n  source=db',
-      '\n  localSuppressed=true',
-      '\n  trigger='+trigger
-    );
-    try {
-      var r = await loadHostDashboardFromDb('dispatch:'+trigger);
-      if (r && r.source === 'db') {
-        // Confirm DOM values after DB write
-        var domHandle  = (document.getElementById('stat-handle')||{}).textContent || '?';
-        var domProfit  = (document.getElementById('stat-profit')||{}).textContent || '?';
-        var domActive  = (document.getElementById('stat-active-bets')||{}).textContent || '?';
-        console.log('[host render authority]',
-          '\n  source=db',
-          '\n  domHandle='+domHandle,
-          '\n  domProfit='+domProfit,
-          '\n  domActiveBets='+domActive,
-          '\n  localSuppressed=true'
-        );
-        return;
-      }
-    } catch(_e) {
-      console.warn('[host render authority] DB dispatch failed, falling back:', _e.message);
+  // Always try DB first. _HOST_DB_PRIMARY starts false; waiting for it to
+  // be true before fetching meant page_load never called /api/host/dashboard.
+  
+  try {
+    var r = await loadHostDashboardFromDb('dispatch:'+trigger);
+    if (r && r.source === 'db') {
+      var domHandle  = (document.getElementById('stat-handle')||{}).textContent || '?';
+      var domProfit  = (document.getElementById('stat-profit')||{}).textContent || '?';
+      var domActive  = (document.getElementById('stat-active-bets')||{}).textContent || '?';
+      
+      return;
     }
-    // DB load failed — fall through to local, but clear the primary flag
-    _HOST_DB_PRIMARY = false;
+  } catch(_e) {
+    console.warn('[host render authority] DB dispatch failed, falling back:', _e.message);
   }
-  // Local path (default or fallback)
+  _HOST_DB_PRIMARY = false;
   refreshHostDashboardStats(trigger);
 }
 
@@ -5146,6 +4814,7 @@ async function _dispatchHostStatsRefresh(trigger) {
 (function _hostDashboardInit() {
   function _doInit() {
     _dispatchHostStatsRefresh('page_load');
+    _hydrateHostDiamondPill();
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', _doInit);
@@ -5158,29 +4827,38 @@ async function _dispatchHostStatsRefresh(trigger) {
       _dispatchHostStatsRefresh('storage_event:' + e.key);
     }
   });
+  window.addEventListener('pageshow', function() {
+    _dispatchHostStatsRefresh('pageshow');
+    _hydrateHostDiamondPill();
+  });
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+      _dispatchHostStatsRefresh('visibility');
+      _hydrateHostDiamondPill();
+    }
+  });
   // Poll: use DB when primary, localStorage otherwise
   setInterval(function() { _dispatchHostStatsRefresh('poll_30s'); }, 30000);
 })();
 
 </script>
 
-<!-- BUY DIAMONDS FULL SCREEN -->
-<div id="buy-diamonds-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:99999;overflow-y:auto;max-width:430px;margin:0 auto">
-  <!-- Header -->
-  <div style="display:flex;align-items:center;padding:14px 16px;background:rgba(10,10,10,0.97);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10">
-    <button onclick="hideBuyDiamonds()" style="background:none;border:none;color:#aaa;font-size:1.1rem;cursor:pointer;padding:4px 10px 4px 0;display:flex;align-items:center">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-    </button>
-    <div style="font-size:1rem;font-weight:900">Buy Diamonds 💎</div>
-  </div>
-  <div style="padding:20px 16px 100px" id="buy-diamonds-content"></div>
+<!-- BUILD INFO (debug panel only with ?debug=1 / pb-debug=1) -->
+<div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;padding:2px 10px;display:none;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
+  <span id="build-info-label" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px">🔍 main · 9100d35 · Jun 2, 02:54 AM</span>
 </div>
-
-
-<!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
-<div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 9100d35 · Jun 2, 02:54 AM</span>
-</div>
+<script>
+(function(){
+  try {
+    if (typeof _pbsDebugEnabled === 'function' && _pbsDebugEnabled()) {
+      var bi = document.getElementById('build-info');
+      var lbl = document.getElementById('build-info-label');
+      if (bi) { bi.style.display = 'flex'; bi.style.pointerEvents = 'auto'; bi.style.background = 'rgba(0,0,0,0.7)'; }
+      if (lbl) { lbl.style.cursor = 'pointer'; lbl.onclick = function(){ openDebugPanel(); }; }
+    }
+  } catch(_e){}
+})();
+</script>
 
 <script>
 // VERSION GUARD — fetches /build.json, shows stale banner if SHA mismatch
@@ -5202,7 +4880,7 @@ async function _dispatchHostStatsRefresh(trigger) {
         if (!d || !d.sha) return;
         var latest = String(d.sha).trim(), cur = String(CURRENT_SHA).trim();
         if (latest && cur && cur !== 'unknown' && latest !== cur) _showStaleBanner(latest, d.builtAt);
-        else { var x = document.getElementById('_pbs_stale_banner'); if (x) { x.remove(); document.body.style.paddingTop = ''; } console.log('[version guard] ✅ up to date sha=' + cur); }
+        else { var x = document.getElementById('_pbs_stale_banner'); if (x) { x.remove(); document.body.style.paddingTop = ''; }  }
       }).catch(function() {});
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _check);
@@ -5639,5 +5317,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 // ────────────────────────────────────────────────────────────────────────────
 </script>
+<script src="diamonds.js"></script>
 </body>
 </html>

@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PocketBooks Test Center</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    :root{
+      --bg:#070708;--card:#111114;--card2:#18181c;--border:#2a2a32;
+      --green:#00ff88;--cyan:#00c2ff;--gold:#f5c842;--red:#ff3d57;
+      --white:#f4f4f5;--gray:#6b6b75;--light:#a1a1aa;
+    }
+    body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--white);min-height:100vh;padding:14px 14px 40px}
+    .wrap{max-width:1440px;margin:0 auto}
+    .header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+    .title{font-size:1.55rem;font-weight:900;letter-spacing:-.03em}
+    .subtitle{margin-top:4px;font-size:.88rem;color:var(--light);font-weight:500}
+    .hdr-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .sys-pill{display:flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:7px 12px;font-size:.78rem;font-weight:800}
+    .dot{width:9px;height:9px;border-radius:50%;background:#444;flex-shrink:0}
+    .dot.ok{background:var(--green);box-shadow:0 0 8px rgba(0,255,136,.45)}
+    .dot.bad{background:var(--red);box-shadow:0 0 8px rgba(255,61,87,.4)}
+    .dot.warn{background:var(--gold)}
+    .muted{color:var(--gray)}.ok{color:var(--green)}.bad{color:var(--red)}.warn{color:var(--gold)}
+    button,.btn{font-family:inherit;cursor:pointer}
+    .btn{padding:9px 12px;border-radius:10px;font-size:.8rem;font-weight:800;border:1px solid var(--border);background:var(--card2);color:var(--white)}
+    .btn:hover{border-color:#444}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .btn.primary{background:var(--cyan);border-color:var(--cyan);color:#041018}
+    .btn.green{background:rgba(0,255,136,.12);border-color:rgba(0,255,136,.4);color:var(--green)}
+    .btn.full{width:100%}
+    a.back{color:var(--cyan);font-size:.8rem;font-weight:700;text-decoration:none}
+    .grid3{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:12px;align-items:start}
+    .col{display:flex;flex-direction:column;gap:10px;min-width:0}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px 13px}
+    .card h3{font-size:.78rem;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:var(--light);margin-bottom:10px}
+    .card h3 .hint{font-weight:600;letter-spacing:0;text-transform:none;color:var(--gray);margin-left:6px}
+    .tile{text-align:left;width:100%;background:var(--card2);border:2px solid var(--border);border-radius:12px;padding:11px 12px;color:inherit;margin-bottom:8px;transition:border-color .12s}
+    .tile:last-child{margin-bottom:0}
+    .tile:hover{border-color:#3a3a44}
+    .tile.on{border-color:var(--green);background:rgba(0,255,136,.06)}
+    .tile .name{font-size:.98rem;font-weight:900;margin-bottom:6px}
+    .tile .row{display:flex;justify-content:space-between;gap:8px;font-size:.78rem;font-weight:700;color:var(--light);margin-top:3px}
+    .tile .row b{color:var(--white);font-weight:800}
+    .tile .tok{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:.72rem;font-weight:800}
+    label.fld{display:block;font-size:.7rem;font-weight:800;color:var(--light);margin:0 0 4px}
+    select,input[type=number],input[type=text]{width:100%;padding:9px 11px;background:#0c0c10;border:1px solid #2a2a32;color:var(--white);border-radius:10px;font-size:.88rem;font-family:inherit;outline:none;margin-bottom:8px}
+    select:focus,input:focus{border-color:var(--cyan)}
+    .stack{display:flex;flex-direction:column;gap:8px}
+    .btn-row{display:flex;gap:8px;flex-wrap:wrap}
+    .bet-list{max-height:220px;overflow:auto}
+    .bet-item{padding:8px 0;border-bottom:1px solid #1e1e24;font-size:.78rem}
+    .bet-item:last-child{border-bottom:0}
+    .bet-item .top{display:flex;justify-content:space-between;gap:8px;font-weight:800}
+    .bet-item .sub{color:var(--gray);margin-top:2px;font-weight:600}
+    .status-grid{display:grid;gap:8px}
+    .status-row{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.8rem;font-weight:700;padding:7px 0;border-bottom:1px solid #1e1e24}
+    .status-row:last-child{border-bottom:0}
+    .status-row .lbl{color:var(--light);display:flex;align-items:center;gap:7px}
+    .status-row .val{color:var(--white);text-align:right}
+    .grade-box{background:#0c0c10;border:1px solid #222;border-radius:10px;padding:10px;font-size:.75rem;font-weight:700;color:var(--light);max-height:140px;overflow:auto;white-space:pre-wrap}
+    .log-card{margin-top:12px}
+    #activity-log{max-height:220px;overflow:auto;font-family:ui-monospace,Menlo,monospace;font-size:.72rem}
+    .log-line{padding:5px 0;border-bottom:1px solid #1a1a1e}
+    .log-line:last-child{border-bottom:0}
+    .log-line.ok{color:var(--green)}.log-line.bad{color:var(--red)}.log-line.warn{color:var(--gold)}.log-line.info{color:var(--cyan)}
+    @media(max-width:1100px){.grid3{grid-template-columns:1fr 1fr}}
+    @media(max-width:760px){.grid3{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header class="header">
+    <div>
+      <div class="title">PocketBooks Test Center</div>
+      <div class="subtitle">One-click accounts, bets, grading, and system health — no page reloads.</div>
+    </div>
+    <div class="hdr-right">
+      <div class="sys-pill"><span class="dot" id="sys-dot"></span><span id="sys-label">Checking…</span></div>
+      <span class="muted" id="refreshed-at" style="font-size:.75rem;font-weight:700">—</span>
+      <button class="btn" type="button" id="btn-refresh-all">Refresh balances</button>
+      <button class="btn" type="button" id="btn-refresh-sys">Refresh status</button>
+      <a class="back" href="dev.html">Dev Preview</a>
+    </div>
+  </header>
+
+  <div class="grid3">
+    <!-- Column 1 — Accounts -->
+    <div class="col">
+      <div class="card">
+        <h3>Accounts <span class="hint">host + 3 players</span></h3>
+        <button class="btn primary full" type="button" id="btn-host-login" style="margin-bottom:10px">Host login (token)</button>
+        <div id="player-tiles"></div>
+      </div>
+    </div>
+
+    <!-- Column 2 — Sportsbook Actions -->
+    <div class="col">
+      <div class="card">
+        <h3>Place Bet</h3>
+        <label class="fld">Player</label>
+        <select id="bet-player">
+          <option value="p1">Test P1</option>
+          <option value="p2">Test P2</option>
+          <option value="p3">Test P3</option>
+        </select>
+        <label class="fld">Today’s live / upcoming game</label>
+        <select id="bet-game"><option value="">Loading games…</option></select>
+        <label class="fld">Pick</label>
+        <select id="bet-pick"><option value="">Select a game first</option></select>
+        <label class="fld">Stake ($)</label>
+        <input id="bet-stake" type="number" min="1" step="1" value="10">
+        <button class="btn primary full" type="button" id="btn-place">Place bet</button>
+      </div>
+      <div class="card">
+        <h3>Active Bets <span class="hint" id="active-bet-count">0</span></h3>
+        <div class="bet-list" id="active-bets">No active bets.</div>
+        <div class="btn-row" style="margin-top:10px">
+          <button class="btn green" type="button" id="btn-grade">Grade Now</button>
+        </div>
+        <div style="margin-top:10px">
+          <div class="fld" style="margin-bottom:6px">Last grade results</div>
+          <div class="grade-box" id="grade-results">No grade run yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Column 3 — System Status -->
+    <div class="col">
+      <div class="card">
+        <h3>System Status <span class="hint">auto 30s</span></h3>
+        <div class="status-grid" id="status-grid">
+          <div class="status-row"><span class="lbl"><span class="dot" id="dot-health"></span>Backend health</span><span class="val" id="val-health">—</span></div>
+          <div class="status-row"><span class="lbl"><span class="dot" id="dot-markets"></span>Markets</span><span class="val" id="val-markets">—</span></div>
+          <div class="status-row"><span class="lbl"><span class="dot" id="dot-grade"></span>Grade status</span><span class="val" id="val-grade">—</span></div>
+          <div class="status-row"><span class="lbl"><span class="dot" id="dot-odds"></span>Odds provider</span><span class="val" id="val-odds">—</span></div>
+          <div class="status-row"><span class="lbl">Git SHA</span><span class="val" id="val-sha">—</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card log-card">
+    <h3>Activity Log <span class="hint">last 20</span></h3>
+    <div id="activity-log"><div class="muted">No actions yet.</div></div>
+  </div>
+</div>
+
+<script>
+window.PBS_BUILD_SHA = 'local';
+(function () {
+  var BACKEND = 'https://pocketbooks-sports-backend-production.up.railway.app';
+  // Same-origin /api rewrite on Vercel; absolute backend for local/file preview.
+  var API = (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.protocol === 'file:')
+    ? BACKEND
+    : '';
+  var CLUB_ID = 'd616dc2a-95a6-473a-97b1-7da330878479';
+  var HOST_ID = '16';
+  var SS = 'pbs-td-accounts-v2';
+  var POLL_MS = 30000;
+  var SPORTS = ['mlb', 'nba', 'nhl', 'nfl'];
+  var PLAYERS = {
+    p1: { id: '2a3e6819-be2f-4df3-8112-54ce19d0929e', label: 'Test P1', href: 'player.html' },
+    p2: { id: '12bb68f1-bcca-4e63-8ae4-7065dbb19172', label: 'Test P2', href: 'player.html' },
+    p3: { id: 'bc767309-6fc7-4585-9077-3de7b898df13', label: 'Test P3', href: 'player.html' }
+  };
+  var PLAYER_KEYS = ['p1', 'p2', 'p3'];
+
+  var accounts = {};
+  var stats = { host: {}, p1: {}, p2: {}, p3: {} };
+  var games = [];
+  var pickMap = {};
+  var activity = [];
+  var sys = { health: null, markets: null, grade: null };
+  var lastGradeHtml = 'No grade run yet.';
+  var activeBetsCache = [];
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+  function money(n) {
+    if (n == null || n === '' || isNaN(Number(n))) return '—';
+    return '$' + Number(n).toFixed(2);
+  }
+  function nowTs() {
+    return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+  function decodeJwt(token) {
+    try {
+      var parts = String(token || '').split('.');
+      if (parts.length !== 3) return null;
+      var b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(atob(b64));
+    } catch (_e) { return null; }
+  }
+  function secondsLeft(token) {
+    var p = decodeJwt(token);
+    if (!p || !p.exp) return null;
+    return p.exp - Math.floor(Date.now() / 1000);
+  }
+  function tokenState(acct) {
+    if (!acct || !acct.token) return 'none';
+    var left = secondsLeft(acct.token);
+    if (left == null) return 'fresh';
+    if (left <= 0) return 'expired';
+    if (left < 300) return 'expiring';
+    return 'fresh';
+  }
+  function tokenLabel(st) {
+    if (st === 'fresh' || st === 'expiring') return { text: 'Token fresh', kind: 'ok' };
+    if (st === 'expired') return { text: 'Token expired', kind: 'warn' };
+    return { text: 'Not logged in', kind: '' };
+  }
+  function loadAccounts() {
+    try { accounts = JSON.parse(sessionStorage.getItem(SS) || '{}') || {}; } catch (_e) { accounts = {}; }
+  }
+  function persistAccounts() {
+    try { sessionStorage.setItem(SS, JSON.stringify(accounts)); } catch (_e) {}
+  }
+  function storeAcct(key, patch) {
+    accounts[key] = Object.assign({}, accounts[key] || {}, patch);
+    persistAccounts();
+  }
+
+  function log(action, result, tone, player) {
+    activity.unshift({
+      ts: nowTs(),
+      player: player || '—',
+      action: action,
+      result: result,
+      tone: tone === true ? 'ok' : (tone === false ? 'bad' : (tone === 'warn' ? 'warn' : 'info'))
+    });
+    if (activity.length > 20) activity = activity.slice(0, 20);
+    renderLog();
+  }
+  function renderLog() {
+    var el = $('activity-log');
+    if (!activity.length) { el.innerHTML = '<div class="muted">No actions yet.</div>'; return; }
+    el.innerHTML = activity.map(function (a) {
+      return '<div class="log-line ' + a.tone + '">[' + esc(a.ts) + '] ' + esc(a.player) + ' · ' + esc(a.action) + ' — ' + esc(a.result) + '</div>';
+    }).join('');
+  }
+
+  function headersFor(acct, extra) {
+    var h = { 'Content-Type': 'application/json', 'X-Club-Id': CLUB_ID };
+    if (acct && acct.actorId) h['X-Actor-Id'] = acct.actorId;
+    if (acct && acct.role) h['X-Actor-Role'] = acct.role;
+    if (acct && acct.token) h['Authorization'] = 'Bearer ' + acct.token;
+    if (extra) Object.keys(extra).forEach(function (k) { h[k] = extra[k]; });
+    return h;
+  }
+  function idemKey(prefix) {
+    var hex = '';
+    try {
+      var arr = new Uint8Array(8);
+      crypto.getRandomValues(arr);
+      hex = Array.from(arr).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+    } catch (_e) { hex = Math.random().toString(16).slice(2, 10); }
+    return (prefix || 'TD') + '_' + Date.now() + '_' + hex;
+  }
+  async function api(method, path, body, acct, extraHeaders) {
+    var opts = { method: method, headers: headersFor(acct, extraHeaders) };
+    if (body != null) opts.body = JSON.stringify(body);
+    var r = await fetch(API + path, opts);
+    var text = await r.text();
+    var data = null;
+    try { data = JSON.parse(text); } catch (_e) { data = { raw: text.slice(0, 400) }; }
+    return { status: r.status, ok: r.ok, data: data, path: path };
+  }
+  function friendlyError(res) {
+    var d = res.data || {};
+    var code = String(d.error || d.code || '');
+    var map = {
+      insufficient_balance: 'Insufficient balance',
+      odds_changed: 'The line changed. Try again.',
+      host_betting_disabled: 'Hosts cannot place bets.',
+      market_closed: 'Market closed',
+      unauthorized: 'Login expired'
+    };
+    if (map[code]) return map[code];
+    if (d.error) return String(d.error).replace(/_/g, ' ');
+    if (!res.ok) return 'HTTP ' + res.status;
+    return 'ok';
+  }
+
+  function seedBrowserSession(acct, kind) {
+    if (!acct || !acct.token) return;
+    try {
+      localStorage.setItem('pb-sports-token', acct.token);
+      localStorage.setItem('pb-session-token', acct.token);
+      localStorage.setItem('pb-actor-role', acct.role || (kind === 'host' ? 'host' : 'player'));
+      var rec = { id: acct.actorId, username: acct.label, name: acct.label, role: acct.role || (kind === 'host' ? 'host' : 'player') };
+      localStorage.setItem('pb-player', JSON.stringify(rec));
+      var club = { id: CLUB_ID, clubId: CLUB_ID, name: 'Test Club', role: kind === 'host' ? 'host' : 'player', status: 'approved' };
+      localStorage.setItem('pb-club', JSON.stringify(club));
+      localStorage.setItem('pb-active-club', JSON.stringify(club));
+      if (kind === 'host') localStorage.setItem('pb-host', JSON.stringify(Object.assign({}, rec, { role: 'host', hostId: acct.actorId })));
+      else try { localStorage.removeItem('pb-host'); } catch (_e) {}
+    } catch (_e) {}
+  }
+
+  async function mintToken(actorId, label) {
+    var res = await api('POST', '/api/auth/token', { actorId: String(actorId), clubId: CLUB_ID }, null);
+    if (!res.ok || !res.data || !res.data.token) return { ok: false, res: res };
+    var p = decodeJwt(res.data.token) || {};
+    return {
+      ok: true,
+      res: res,
+      acct: {
+        token: res.data.token,
+        actorId: res.data.actorId || String(actorId),
+        role: res.data.role || p.role || 'player',
+        label: label,
+        via: 'token'
+      }
+    };
+  }
+
+  async function ensureAccount(key, force) {
+    var cfg = key === 'host'
+      ? { id: HOST_ID, label: 'Host' }
+      : PLAYERS[key];
+    if (!cfg) return null;
+    var acct = accounts[key];
+    var st = tokenState(acct);
+    if (!force && acct && acct.token && (st === 'fresh' || st === 'expiring')) return acct;
+    var minted = await mintToken(cfg.id, cfg.label);
+    if (!minted.ok) {
+      log('Login', friendlyError(minted.res), false, cfg.label);
+      return null;
+    }
+    storeAcct(key, minted.acct);
+    log('Login', 'signed in', true, cfg.label);
+    return minted.acct;
+  }
+
+  function renderTiles() {
+    $('player-tiles').innerHTML = PLAYER_KEYS.map(function (k) {
+      var cfg = PLAYERS[k];
+      var s = stats[k] || {};
+      var st = tokenLabel(tokenState(accounts[k]));
+      var on = tokenState(accounts[k]) === 'fresh' || tokenState(accounts[k]) === 'expiring';
+      return '<button type="button" class="tile' + (on ? ' on' : '') + '" data-key="' + k + '">' +
+        '<div class="name">' + esc(cfg.label) + '</div>' +
+        '<div class="row"><span>Balance</span><b>' + esc(money(s.available)) + '</b></div>' +
+        '<div class="row"><span>Active bets</span><b>' + esc(s.activeCount != null ? String(s.activeCount) : '—') + '</b></div>' +
+        '<div class="tok"><span class="dot ' + st.kind + '"></span>' + esc(st.text) + '</div>' +
+      '</button>';
+    }).join('');
+    $('player-tiles').querySelectorAll('.tile').forEach(function (btn) {
+      btn.addEventListener('click', function () { loginPlayerAndOpen(btn.dataset.key); });
+    });
+  }
+
+  async function loginHost() {
+    var btn = $('btn-host-login');
+    btn.disabled = true;
+    try {
+      var acct = await ensureAccount('host', true);
+      if (!acct) return;
+      seedBrowserSession(acct, 'host');
+      await refreshOne('host');
+      renderTiles();
+      window.open('index.html', '_blank');
+      log('Host login', 'opened host dashboard', true, 'Host');
+    } finally { btn.disabled = false; }
+  }
+
+  async function loginPlayerAndOpen(key) {
+    var cfg = PLAYERS[key];
+    if (!cfg) return;
+    var acct = await ensureAccount(key, true);
+    if (!acct) { renderTiles(); return; }
+    seedBrowserSession(acct, 'player');
+    await refreshOne(key);
+    renderTiles();
+    renderActiveBets();
+    $('bet-player').value = key;
+    window.open(cfg.href, '_blank');
+    log('Player login', 'opened player dashboard', true, cfg.label);
+  }
+
+  async function refreshOne(key) {
+    if (key === 'host') {
+      var hAcct = await ensureAccount('host');
+      if (!hAcct) return;
+      var hd = await api('GET', '/api/host/dashboard?clubId=' + encodeURIComponent(CLUB_ID), null, hAcct);
+      if (!hd.ok || !hd.data) return;
+      var players = hd.data.players || [];
+      stats.host = {
+        available: (hd.data.summary && hd.data.summary.activeRisk != null) ? hd.data.summary.activeRisk : null,
+        activeCount: (hd.data.activeTickets || []).length
+      };
+      PLAYER_KEYS.forEach(function (pk) {
+        var pid = PLAYERS[pk].id;
+        var row = players.find(function (p) { return String(p.playerId || p.player_id) === pid; });
+        if (row) {
+          stats[pk] = Object.assign({}, stats[pk], {
+            available: row.availableBalance,
+            activeCount: row.activeBetCount != null ? row.activeBetCount : (stats[pk] && stats[pk].activeCount)
+          });
+        }
+      });
+      var act = hd.data.activeTickets || [];
+      activeBetsCache = act.map(function (t) {
+        return {
+          id: t.id,
+          player: t.playerUsername || t.playerName || t.playerId,
+          pick: t.pick || t.matchup || t.game || (t.type || 'Bet'),
+          stake: t.riskAmount != null ? t.riskAmount : t.risk_amount,
+          status: t.status
+        };
+      });
+      return;
+    }
+    var cfg = PLAYERS[key];
+    var acct = await ensureAccount(key);
+    if (!acct || !cfg) return;
+    var pd = await api('GET', '/api/player/dashboard?clubId=' + encodeURIComponent(CLUB_ID) + '&playerId=' + encodeURIComponent(cfg.id), null, acct);
+    if (!pd.ok || !pd.data) return;
+    var bal = pd.data.balance || {};
+    var active = (pd.data.tickets && pd.data.tickets.active) || [];
+    stats[key] = {
+      available: bal.availableBalance,
+      activeCount: active.length
+    };
+  }
+
+  async function refreshAllBalances() {
+    await ensureAccount('host');
+    await refreshOne('host');
+    for (var i = 0; i < PLAYER_KEYS.length; i++) {
+      if (accounts[PLAYER_KEYS[i]] || true) await refreshOne(PLAYER_KEYS[i]);
+    }
+    // Rebuild active bets from all player dashboards for accuracy
+    var merged = [];
+    for (var j = 0; j < PLAYER_KEYS.length; j++) {
+      var k = PLAYER_KEYS[j];
+      var cfg = PLAYERS[k];
+      var acct = accounts[k];
+      if (!acct) continue;
+      var pd = await api('GET', '/api/player/dashboard?clubId=' + encodeURIComponent(CLUB_ID) + '&playerId=' + encodeURIComponent(cfg.id), null, acct);
+      var active = (pd.data && pd.data.tickets && pd.data.tickets.active) || [];
+      active.forEach(function (t) {
+        merged.push({
+          id: t.id,
+          player: cfg.label,
+          pick: t.type || 'Bet',
+          stake: t.risk_amount,
+          status: t.status,
+          placed: t.placed_at
+        });
+      });
+    }
+    if (merged.length) activeBetsCache = merged;
+    renderTiles();
+    renderActiveBets();
+    $('refreshed-at').textContent = 'Balances ' + nowTs();
+    log('Refresh balances', 'updated all accounts', true, 'sys');
+  }
+
+  function renderActiveBets() {
+    var el = $('active-bets');
+    $('active-bet-count').textContent = String(activeBetsCache.length);
+    if (!activeBetsCache.length) { el.innerHTML = '<div class="muted">No active bets.</div>'; return; }
+    el.innerHTML = activeBetsCache.map(function (b) {
+      return '<div class="bet-item"><div class="top"><span>' + esc(b.player) + '</span><span>' + esc(money(b.stake)) + '</span></div>' +
+        '<div class="sub">' + esc(b.pick) + ' · ' + esc(b.status) + (b.id ? ' · ' + esc(String(b.id).slice(0, 18)) : '') + '</div></div>';
+    }).join('');
+  }
+
+  function toIso(v) {
+    if (!v) return null;
+    try {
+      var d = new Date(v);
+      if (isNaN(d.getTime())) return null;
+      return d.toISOString();
+    } catch (_e) { return null; }
+  }
+  function oddsStr(n) {
+    n = Number(n);
+    if (!n) return '';
+    return n > 0 ? ('+' + n) : String(n);
+  }
+  function americanToDecimal(a) {
+    a = Number(a);
+    if (!a) return 1;
+    return a > 0 ? (1 + a / 100) : (1 + 100 / Math.abs(a));
+  }
+  function ticketPayout(stake, legs) {
+    var dec = 1;
+    legs.forEach(function (l) { dec *= americanToDecimal(l.odds); });
+    return Math.round(stake * dec * 100) / 100;
+  }
+
+  function pickOptionsFor(g) {
+    var opts = [];
+    if (!g) return opts;
+    var ml = Array.isArray(g.moneyline) ? g.moneyline : [];
+    ml.forEach(function (m) {
+      if (!m || m.odds == null) return;
+      var team = m.team || m.name || '';
+      var side = (String(team).toLowerCase() === String(g.home || '').toLowerCase()) ? 'home'
+        : (String(team).toLowerCase() === String(g.away || '').toLowerCase()) ? 'away' : 'ml';
+      opts.push({
+        key: 'ml:' + side + ':' + team,
+        label: team + ' ML ' + oddsStr(m.odds),
+        pick: team,
+        market: 'moneyline',
+        odds: Number(m.odds),
+        line: null,
+        side: side
+      });
+    });
+    var totals = Array.isArray(g.totals) ? g.totals : [];
+    totals.forEach(function (t) {
+      if (!t || t.odds == null) return;
+      var name = String(t.name || '');
+      var isOver = /over/i.test(name);
+      var isUnder = /under/i.test(name);
+      if (!isOver && !isUnder) return;
+      opts.push({
+        key: (isOver ? 'over' : 'under') + ':' + t.line,
+        label: (isOver ? 'Over' : 'Under') + ' ' + t.line + ' ' + oddsStr(t.odds),
+        pick: isOver ? ('Over ' + t.line) : ('Under ' + t.line),
+        market: 'total',
+        odds: Number(t.odds),
+        line: t.line != null ? Number(t.line) : null,
+        side: isOver ? 'over' : 'under'
+      });
+    });
+    return opts;
+  }
+
+  function fillGameSelect() {
+    var sel = $('bet-game');
+    if (!games.length) {
+      sel.innerHTML = '<option value="">No live/upcoming games</option>';
+      $('bet-pick').innerHTML = '<option value="">—</option>';
+      return;
+    }
+    sel.innerHTML = games.map(function (g, i) {
+      var label = (g.sport ? String(g.sport).toUpperCase() + ' · ' : '') +
+        (g.away || '?') + ' @ ' + (g.home || '?') +
+        (g.isLive ? ' (LIVE)' : '');
+      return '<option value="' + i + '">' + esc(label) + '</option>';
+    }).join('');
+    fillPickSelect();
+  }
+  function fillPickSelect() {
+    var g = games[Number($('bet-game').value)] || games[0];
+    var opts = pickOptionsFor(g);
+    pickMap = {};
+    $('bet-pick').innerHTML = opts.map(function (o) {
+      pickMap[o.key] = o;
+      return '<option value="' + esc(o.key) + '">' + esc(o.label) + '</option>';
+    }).join('') || '<option value="">No picks</option>';
+  }
+
+  async function loadGames() {
+    var acct = accounts.host || accounts.p1;
+    if (!acct) acct = await ensureAccount('host');
+    var all = [];
+    for (var i = 0; i < SPORTS.length; i++) {
+      try {
+        var r = await api('GET', '/api/odds/' + SPORTS[i], null, acct);
+        var list = Array.isArray(r.data) ? r.data : (r.data && r.data.games) || [];
+        list.forEach(function (g) {
+          if (!g) return;
+          g.sport = g.sport || SPORTS[i].toUpperCase();
+          all.push(g);
+        });
+      } catch (_e) {}
+    }
+    var now = Date.now();
+    games = all.filter(function (g) {
+      var st = String(g.status || '').toLowerCase();
+      if (st === 'final' || st === 'canceled' || st === 'cancelled') return false;
+      var hasMl = Array.isArray(g.moneyline) && g.moneyline.length;
+      var hasTot = Array.isArray(g.totals) && g.totals.length;
+      if (!hasMl && !hasTot) return false;
+      var iso = toIso(g.scheduledStart || g.time);
+      if (st === 'live' || g.isLive) return true;
+      if (!iso) return true;
+      return new Date(iso).getTime() > now - 3 * 3600 * 1000;
+    });
+    fillGameSelect();
+    log('Games', games.length + ' loaded', games.length ? true : 'warn', 'sys');
+  }
+
+  async function placeBet() {
+    var key = $('bet-player').value || 'p1';
+    var cfg = PLAYERS[key];
+    var stake = Number($('bet-stake').value);
+    if (!stake || stake <= 0) { log('Place bet', 'invalid stake', false, cfg.label); return; }
+    var acct = await ensureAccount(key, true);
+    if (!acct) return;
+    if (!games.length) await loadGames();
+    var g = games[Number($('bet-game').value)] || games[0];
+    if (!g) { log('Place bet', 'no games', false, cfg.label); return; }
+    var pick = pickMap[$('bet-pick').value] || pickOptionsFor(g)[0];
+    if (!pick) { log('Place bet', 'no pick', false, cfg.label); return; }
+    var leg = {
+      pick: pick.pick,
+      market: pick.market,
+      odds: Number(pick.odds),
+      line: pick.line,
+      canonicalGameKey: g.canonicalGameKey || g.id,
+      scheduledStart: toIso(g.scheduledStart || g.time),
+      gameId: g.id || g.providerGameId || g.canonicalGameKey
+    };
+    var payout = ticketPayout(stake, [leg]);
+    var payload = {
+      clubId: CLUB_ID,
+      playerId: acct.actorId,
+      betType: 'Single',
+      stake: stake,
+      payout: payout,
+      potentialProfit: Math.round((payout - stake) * 100) / 100,
+      idempotencyKey: idemKey('BET'),
+      legs: [leg]
+    };
+    var res = await api('POST', '/api/bets/place', payload, acct, { 'Idempotency-Key': payload.idempotencyKey });
+    if (res.status === 409 && res.data && res.data.code === 'odds_changed' && Number.isFinite(Number(res.data.serverOdds))) {
+      payload.legs[0].odds = Number(res.data.serverOdds);
+      payload.payout = ticketPayout(stake, payload.legs);
+      payload.potentialProfit = Math.round((payload.payout - stake) * 100) / 100;
+      payload.idempotencyKey = payload.idempotencyKey + '_oa';
+      res = await api('POST', '/api/bets/place', payload, acct, { 'Idempotency-Key': payload.idempotencyKey });
+    }
+    var ok = !!(res.ok && res.data && res.data.ok !== false);
+    var tid = res.data && (res.data.ticketId || (res.data.ticket && res.data.ticket.id));
+    if (ok) log('Place bet', pick.label + ' ' + money(stake) + (tid ? ' · ' + tid : ''), true, cfg.label);
+    else log('Place bet', friendlyError(res), false, cfg.label);
+    await refreshAllBalances();
+  }
+
+  async function triggerGrade() {
+    var acct = await ensureAccount('host');
+    if (!acct) { log('Grade', 'host login failed', false, 'Host'); return; }
+    var res = await api('POST', '/api/grade/run', { clubId: CLUB_ID, daysBack: 3 }, acct, { 'Idempotency-Key': idemKey('GR') });
+    var d = res.data || {};
+    var ok = !!(res.ok && d.ok !== false);
+    var lines = [];
+    lines.push('checked=' + (d.checked != null ? d.checked : '—') +
+      ' graded=' + (d.graded != null ? d.graded : '—') +
+      ' skipped=' + (d.skipped != null ? d.skipped : '—'));
+    (d.results || []).slice(0, 12).forEach(function (r) {
+      lines.push((r.ticketId || '?') + ': ' + (r.statusBefore || '?') + ' → ' + (r.statusAfter || r.result || '?'));
+    });
+    lastGradeHtml = lines.join('\n') || (ok ? 'Grade finished (no detail rows).' : friendlyError(res));
+    $('grade-results').textContent = lastGradeHtml;
+    log('Grade Now', ok ? ((d.graded != null ? d.graded : 0) + ' graded') : friendlyError(res), ok, 'Host');
+    await refreshAllBalances();
+    await pollStatus(true);
+  }
+
+  function setDot(id, kind) { $(id).className = 'dot ' + (kind || ''); }
+
+  async function pollStatus(silent) {
+    try {
+      var h = await api('GET', '/api/health', null, null);
+      sys.health = h.data || {};
+      var online = !!(h.ok && sys.health.ok !== false);
+      setDot('dot-health', online ? 'ok' : 'bad');
+      setDot('sys-dot', online ? 'ok' : 'bad');
+      $('sys-label').textContent = online ? 'Backend online' : 'Backend offline';
+      $('val-health').textContent = online ? ('ok · ' + (sys.health.dbStatus || '')) : 'down';
+      $('val-sha').textContent = (sys.health.gitSha || sys.health.commit || '—').toString().slice(0, 12);
+    } catch (_e) {
+      setDot('dot-health', 'bad'); setDot('sys-dot', 'bad');
+      $('sys-label').textContent = 'Backend offline';
+      $('val-health').textContent = 'error';
+    }
+    try {
+      var m = await api('GET', '/api/markets/status', null, accounts.host || accounts.p1);
+      sys.markets = m.data || {};
+      var gameCount = sys.markets.gameCount != null ? sys.markets.gameCount : '—';
+      var stale = sys.markets.staleMarketCount != null ? sys.markets.staleMarketCount : '—';
+      var healthy = sys.markets.serviceOk !== false && !(Number(stale) > 0 && Number(gameCount) === 0);
+      setDot('dot-markets', healthy ? 'ok' : 'warn');
+      $('val-markets').textContent = gameCount + ' games · ' + stale + ' stale';
+      var ph = sys.markets.providerHealth || {};
+      var prov = ph.provider || (sys.health && sys.health.oddsStatus) || '—';
+      var phOk = ph.healthy !== false && String(sys.health && sys.health.oddsStatus || '').toLowerCase() !== 'unhealthy';
+      setDot('dot-odds', phOk ? 'ok' : 'bad');
+      $('val-odds').textContent = String(prov) + ' · ' + (phOk ? 'healthy' : 'unhealthy');
+    } catch (_e2) {
+      setDot('dot-markets', 'warn');
+      $('val-markets').textContent = 'unavailable';
+      setDot('dot-odds', 'warn');
+      $('val-odds').textContent = 'unknown';
+    }
+    try {
+      var g = await api('GET', '/api/grade/status', null, accounts.host);
+      sys.grade = g.data || {};
+      var last = sys.grade.lastGradedAt || sys.grade.lastGradeRunAt || 'never';
+      if (last && last !== 'never') last = String(last).slice(0, 16).replace('T', ' ');
+      var activeN = sys.grade.activeTicketCount != null ? sys.grade.activeTicketCount : '—';
+      setDot('dot-grade', sys.grade.enabled === false ? 'warn' : 'ok');
+      $('val-grade').textContent = 'last ' + last + ' · active ' + activeN;
+    } catch (_e3) {
+      setDot('dot-grade', 'warn');
+      $('val-grade').textContent = 'unavailable';
+    }
+    $('refreshed-at').textContent = 'Status ' + nowTs();
+    if (!silent) log('Status poll', 'refreshed', 'info', 'sys');
+  }
+
+  function wire() {
+    $('btn-host-login').addEventListener('click', loginHost);
+    $('btn-refresh-all').addEventListener('click', refreshAllBalances);
+    $('btn-refresh-sys').addEventListener('click', function () { pollStatus(false); });
+    $('btn-place').addEventListener('click', placeBet);
+    $('btn-grade').addEventListener('click', triggerGrade);
+    $('bet-game').addEventListener('change', fillPickSelect);
+  }
+
+  async function boot() {
+    loadAccounts();
+    wire();
+    renderTiles();
+    renderLog();
+    $('grade-results').textContent = lastGradeHtml;
+    await pollStatus(true);
+    await loadGames();
+    await refreshAllBalances();
+    setInterval(function () { pollStatus(true); }, POLL_MS);
+  }
+  boot();
+})();
+</script>
+</body>
+</html>

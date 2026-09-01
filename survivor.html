@@ -1,0 +1,1605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Survivor Pool — Pocketbooks Sports</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--green:#00ff88;--red:#ff3d57;--cyan:#00c2ff;--gold:#f5c842;--card:#111;--bg:#0a0a0a}
+body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(--bg);color:#fff;max-width:430px;margin:0 auto;min-height:100vh;padding-bottom:40px}
+.topnav{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;position:sticky;top:0;z-index:20;background:rgba(10,10,10,0.94);backdrop-filter:blur(12px);border-bottom:1px solid #1a1a1a}
+.topnav-brand{display:flex;align-items:center;gap:8px;text-decoration:none;color:#fff;min-width:0}
+.topnav-logo{width:32px;height:32px;border-radius:50%;overflow:hidden;border:1.5px solid rgba(0,255,136,0.3);flex-shrink:0;background:#111}
+.topnav-logo img{width:100%;height:100%;object-fit:cover}
+.topnav-name{font-size:0.7rem;font-weight:800;line-height:1.2;letter-spacing:-0.2px}
+.topnav-name span{color:var(--cyan)}
+.topnav-links{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.topnav-link{font-size:0.65rem;font-weight:800;color:#888;text-decoration:none;padding:6px 8px;border-radius:8px;white-space:nowrap}
+.topnav-link.active{color:var(--green);background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.3)}
+.topnav-prof{width:32px;height:32px;border-radius:50%;background:#1c1c1c;border:1px solid #252525;color:#fff;font-size:0.62rem;font-weight:900;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:inherit}
+.topnav-out{background:transparent;color:#888;border:1px solid #252525;border-radius:8px;padding:6px 8px;font-size:0.62rem;font-weight:800;cursor:pointer;font-family:inherit}
+.hdr-sub{font-size:0.68rem;color:#555;margin:0 0 12px}
+.wrap{padding:16px}
+.card{background:var(--card);border:1px solid #1c1c1c;border-radius:16px;padding:16px;margin-bottom:12px}
+.row-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+.btn{width:100%;padding:14px;border:none;border-radius:12px;font-size:0.92rem;font-weight:900;cursor:pointer;font-family:inherit}
+.btn-green{background:var(--green);color:#000}
+.btn-cyan{background:transparent;color:var(--cyan);border:1px solid rgba(0,194,255,0.4)}
+.btn-ghost{background:transparent;color:#888;border:1px solid #252525}
+.btn:disabled{opacity:0.45;cursor:not-allowed}
+.sec-lbl{font-size:0.72rem;font-weight:800;color:#666;text-transform:uppercase;letter-spacing:0.6px;margin:4px 0 10px}
+.pool-row{background:#111;border:1px solid #1c1c1c;border-radius:14px;padding:14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer}
+.pool-row:active{border-color:#00ff88}
+.pool-ico{width:40px;height:40px;border-radius:12px;background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.25);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0}
+.pool-name{font-size:0.95rem;font-weight:800}
+.pool-meta{font-size:0.68rem;color:#666;margin-top:3px}
+.pill{display:inline-block;font-size:0.58rem;font-weight:800;padding:2px 7px;border-radius:6px;text-transform:uppercase;margin-left:6px}
+.pill-alive{background:rgba(0,255,136,0.12);color:var(--green);border:1px solid rgba(0,255,136,0.3)}
+.pill-elim{background:rgba(255,61,87,0.12);color:var(--red);border:1px solid rgba(255,61,87,0.3)}
+.pill-host{background:rgba(245,200,66,0.12);color:var(--gold);border:1px solid rgba(245,200,66,0.3)}
+.empty{text-align:center;padding:28px 12px;color:#555;font-size:0.82rem}
+.err{color:var(--red);font-size:0.78rem;padding:10px 12px;background:rgba(255,61,87,0.08);border:1px solid rgba(255,61,87,0.2);border-radius:10px;margin-bottom:12px;display:none}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:200;align-items:flex-end;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:#141414;border-radius:20px 20px 0 0;width:100%;max-width:430px;padding:24px}
+.modal-title{font-size:1.1rem;font-weight:900;margin-bottom:4px}
+.modal-sub{font-size:0.78rem;color:#555;margin-bottom:16px}
+.inp,select.inp{width:100%;padding:14px 16px;background:#1c1c1c;border:1.5px solid #252525;border-radius:12px;color:#fff;font-size:0.95rem;outline:none;margin-bottom:10px;font-family:inherit}
+.inp:focus,select.inp:focus{border-color:var(--green)}
+.join-code{font-size:1.6rem;font-weight:900;letter-spacing:4px;color:var(--green);text-align:center;padding:14px;background:rgba(0,255,136,0.08);border:1px solid rgba(0,255,136,0.25);border-radius:12px;margin:10px 0}
+.hidden{display:none}
+.stat-row{display:flex;gap:8px;margin-bottom:14px}
+.stat{flex:1;background:#111;border:1px solid #1c1c1c;border-radius:12px;padding:12px;text-align:center}
+.stat-n{font-size:1.15rem;font-weight:900;color:var(--green)}
+.stat-l{font-size:0.62rem;color:#666;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;margin-top:2px}
+.player{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #1a1a1a}
+.player:last-child{border-bottom:none}
+.p-name{font-size:0.88rem;font-weight:700}
+.p-alive{color:var(--green)}
+.p-elim{color:#555}
+select.inp option:disabled{color:#444}
+.used-note{font-size:0.68rem;color:#555;margin:-4px 0 10px}
+.code-chip{font-family:monospace;font-size:0.78rem;color:var(--cyan);background:rgba(0,194,255,0.08);border:1px solid rgba(0,194,255,0.25);padding:4px 8px;border-radius:8px}
+.toast{position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#1c1c1c;border:1px solid #333;color:#fff;padding:12px 20px;border-radius:12px;font-size:0.85rem;font-weight:600;z-index:999;white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,0.5)}
+.mu-card{background:#111;border:1px solid #222;border-radius:16px;padding:14px;margin-bottom:10px;position:relative}
+.mu-row{display:flex;align-items:stretch;gap:8px}
+.mu-team{flex:1;background:#0c0c0c;border:1.5px solid #222;border-radius:12px;padding:14px 8px 12px;text-align:center;cursor:pointer;position:relative;transition:border-color .15s,background .15s,box-shadow .15s;min-width:0}
+.mu-team.sel{border-color:#00ff88;background:rgba(0,255,136,0.08);box-shadow:0 0 18px rgba(0,255,136,0.2)}
+.mu-team.used{opacity:0.4;border-color:#333;cursor:not-allowed}
+.mu-team.lost{cursor:not-allowed}
+.mu-logo{width:52px;height:52px;object-fit:contain;margin:0 auto 8px;display:block}
+.mu-logo-fb{display:flex;align-items:center;justify-content:center;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;font-weight:900;color:#ccc;font-size:0.72rem;letter-spacing:0.3px;flex-shrink:0}
+.mu-logo.mu-logo-fb{width:52px;height:52px;margin:0 auto 8px}
+.your-pick .mu-logo-fb{width:36px;height:36px;font-size:0.58rem;border-radius:8px}
+.pick-confirm-logo.mu-logo-fb{width:80px;height:80px;margin:0 auto 14px;font-size:1.05rem;border-radius:14px}
+.mu-name{font-size:0.78rem;font-weight:800;line-height:1.2}
+.mu-rec{font-size:0.58rem;color:#666;margin-top:3px}
+.mu-ml{font-size:0.8rem;font-weight:800;color:#ccc;margin-top:6px}
+.mu-at{width:22px;display:flex;align-items:center;justify-content:center;font-size:0.62rem;color:#555;font-weight:900}
+.mu-time{text-align:center;font-size:0.68rem;color:#666;margin-top:10px}
+.used-badge{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:900;letter-spacing:0.4px;text-transform:uppercase;color:#bbb;background:rgba(10,10,10,0.55);border-radius:12px;text-align:center;padding:6px;line-height:1.25}
+.lost-x{position:absolute;top:6px;right:8px;color:#ff3d57;font-size:1.15rem;font-weight:900;line-height:1}
+.your-pick{display:flex;align-items:center;gap:10px;background:rgba(0,255,136,0.08);border:1px solid rgba(0,255,136,0.35);border-radius:12px;padding:12px;margin-bottom:12px}
+.your-pick img{width:36px;height:36px;object-fit:contain}
+.your-pick-name{font-size:0.92rem;font-weight:800;color:var(--green)}
+.your-pick-ok{margin-left:auto;color:var(--green);font-size:1.1rem;font-weight:900}
+.confirm-wrap{margin-top:4px}
+.modal-bg.center{align-items:center;padding:24px}
+.modal-pick{background:#111;border:1px solid #222;border-radius:20px;width:100%;max-width:340px;padding:28px 22px 20px;text-align:center;box-shadow:0 16px 48px rgba(0,0,0,0.55)}
+.pick-confirm-logo{width:80px;height:80px;object-fit:contain;margin:0 auto 14px;display:block}
+.pick-confirm-name{font-size:1.28rem;font-weight:900;letter-spacing:-0.3px;margin-bottom:6px}
+.pick-confirm-vs{font-size:0.9rem;color:#888;font-weight:700;margin-bottom:4px}
+.pick-confirm-time{font-size:0.72rem;color:#666;margin-bottom:14px}
+.pick-confirm-warn{font-size:0.75rem;font-weight:800;color:var(--gold);margin-bottom:16px}
+.pick-confirm-used{font-size:0.75rem;font-weight:800;color:var(--red);margin-bottom:16px}
+.modal-pick .btn-green{margin-bottom:8px}
+.offseason{text-align:center;padding:28px 16px;color:#888;font-size:0.84rem;line-height:1.55}
+.week-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.week-arrow{width:36px;height:36px;border-radius:10px;background:#111;border:1px solid #222;color:#fff;font-size:1.15rem;font-weight:900;cursor:pointer;font-family:inherit}
+.week-arrow:disabled{opacity:0.3;cursor:not-allowed}
+.week-label{font-size:0.88rem;font-weight:900;letter-spacing:0.2px}
+.pick-banner{background:#111;border:1px solid #222;border-radius:12px;padding:10px 12px;font-size:0.78rem;font-weight:700;margin-bottom:12px;text-align:center;line-height:1.45;color:#ccc}
+.pick-banner.warn{border-color:rgba(245,200,66,0.45);background:rgba(245,200,66,0.08);color:var(--gold)}
+.pick-banner.locked{border-color:rgba(255,61,87,0.4);background:rgba(255,61,87,0.08);color:#ff8a96}
+.pick-countdown{font-variant-numeric:tabular-nums;font-size:0.82rem;font-weight:900;color:var(--gold);text-align:center;margin:-4px 0 12px}
+.your-pick.locked{border-color:#444;background:rgba(255,255,255,0.04)}
+.your-pick.locked .your-pick-name{color:#ccc}
+.mu-card.picks-locked .mu-team{cursor:default;pointer-events:none}
+.picks-locked-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,10,10,0.62);font-size:0.78rem;font-weight:900;letter-spacing:0.5px;text-transform:uppercase;color:#fff;border-radius:16px;z-index:3;text-align:center;padding:8px}
+.mu-card.locked .mu-team{cursor:default}
+.mu-lock{position:absolute;top:8px;right:10px;font-size:0.8rem;opacity:0.45;z-index:2}
+.detail-tabs{display:flex;gap:6px;margin:0 0 12px}
+.detail-tab{flex:1;padding:10px 8px;border-radius:10px;background:#111;border:1px solid #222;color:#888;font-size:0.72rem;font-weight:800;cursor:pointer;font-family:inherit;text-transform:uppercase;letter-spacing:0.4px}
+.detail-tab.active{background:rgba(0,255,136,0.12);border-color:rgba(0,255,136,0.4);color:var(--green)}
+.badge{display:inline-block;min-width:16px;padding:1px 6px;margin-left:4px;border-radius:8px;background:var(--gold);color:#000;font-size:0.58rem;font-weight:900}
+.entry-tabs{display:flex;gap:6px;margin-bottom:12px}
+.entry-tab{flex:1;padding:10px 6px;border-radius:10px;background:#0c0c0c;border:1.5px solid #222;color:#888;font-size:0.72rem;font-weight:800;cursor:pointer;font-family:inherit}
+.entry-tab.active{border-color:var(--green);background:rgba(0,255,136,0.1);color:var(--green);box-shadow:0 0 14px rgba(0,255,136,0.18)}
+.entry-tab.elim{opacity:0.7;border-color:#442222;color:#ff8a96}
+.pending-box{text-align:center;padding:28px 14px;color:#ccc;font-size:0.88rem;line-height:1.5}
+.req-row{background:#0c0c0c;border:1px solid #222;border-radius:12px;padding:12px;margin-bottom:8px}
+.req-name{font-size:0.9rem;font-weight:800}
+.req-meta{font-size:0.68rem;color:#666;margin-top:3px}
+.req-actions{display:flex;gap:6px;margin-top:10px}
+.entry-choice{display:flex;gap:8px;margin:12px 0 16px}
+.entry-choice button{flex:1;padding:14px;border-radius:12px;background:#1c1c1c;border:1.5px solid #333;color:#fff;font-size:1rem;font-weight:900;cursor:pointer;font-family:inherit}
+.entry-choice button.sel{border-color:var(--green);background:rgba(0,255,136,0.12);color:var(--green)}
+.pill-pending{background:rgba(245,200,66,0.12);color:var(--gold);border:1px solid rgba(245,200,66,0.3)}
+
+/* ═══ MOBILE (≤480px / iPhone 375) — layout only, no redesign ═══ */
+@media (max-width:480px){
+  html,body{overflow-x:hidden;max-width:100%}
+  .topnav{flex-wrap:wrap;gap:6px;padding:10px 12px}
+  .topnav-brand,.topnav-links{min-width:0}
+  .topnav-links{flex-wrap:wrap;justify-content:flex-end}
+  .topnav-link,.topnav-out{
+    min-height:44px;display:inline-flex;align-items:center;padding:8px 10px
+  }
+  .topnav-prof{width:44px;height:44px;min-width:44px}
+  .wrap{padding:12px}
+  .btn,.detail-tab,.entry-tab,.entry-choice button{min-height:44px}
+  .week-arrow{width:44px;height:44px;min-width:44px}
+  .pool-row{min-width:0}
+  .pool-row > div{min-width:0;flex:1}
+  .pool-name,.pool-meta,.p-name{overflow-wrap:anywhere;word-break:break-word}
+  .mu-card{padding:10px;max-width:100%;overflow:hidden}
+  .mu-row{min-width:0}
+  .mu-team{min-width:0;padding:12px 6px 10px}
+  .mu-name{overflow:hidden;text-overflow:ellipsis}
+  .player{gap:8px;min-width:0}
+  .toast{max-width:calc(100vw - 24px);white-space:normal;text-align:center}
+  .modal-bg{align-items:flex-end}
+  .modal{
+    max-height:100dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom,0px))
+  }
+  .modal-bg.center{padding:12px;align-items:center}
+  .modal-pick{
+    max-width:100%;max-height:100dvh;overflow-y:auto;
+    padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom,0px))
+  }
+  .join-code{letter-spacing:2px;overflow-wrap:anywhere}
+  .stat-row{min-width:0}
+  .stat{min-width:0}
+  .req-actions .btn{min-height:44px}
+}
+
+@media (max-width:400px){
+  .topnav-links{width:100%;justify-content:flex-start}
+  .mu-row{flex-direction:column}
+  .mu-team{width:100%}
+  .entry-choice{flex-direction:column}
+  .modal,.modal-pick{max-width:100vw;width:100%;box-sizing:border-box}
+}
+</style>
+</head>
+<body>
+
+<div class="topnav">
+  <a class="topnav-brand" href="survivor.html" aria-label="PocketBooks Sports">
+    <div class="topnav-logo"><img src="./logo.jpg" alt="" onerror="this.style.display='none'"></div>
+    <div class="topnav-name">PocketBooks<br><span>Sports</span></div>
+  </a>
+  <div class="topnav-links">
+    <a class="topnav-link active" href="survivor.html">Survivor Pool</a>
+    <a class="topnav-link" id="nav-dashboard" href="index.html" style="display:none">Dashboard</a>
+    <button type="button" class="topnav-prof" id="nav-profile" onclick="openProfileModal()" title="Profile" aria-label="Profile">P</button>
+    <button type="button" class="topnav-out" onclick="signOut()">Sign out</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="hdr-sub" id="hdr-sub">Pick one NFL team each week. Lose and you’re out.</div>
+  <div class="err" id="err"></div>
+
+  <div id="view-home">
+    <div class="row-btns">
+      <button class="btn btn-green" onclick="openModal('modal-create')">Create Pool</button>
+      <button class="btn btn-cyan" onclick="openModal('modal-join')">Request to Join</button>
+    </div>
+    <div class="sec-lbl">My Pools</div>
+    <div id="my-pools"><div class="empty">Loading…</div></div>
+  </div>
+
+  <div id="view-detail" class="hidden">
+    <button class="btn btn-ghost" style="margin-bottom:12px" onclick="showHome()">← All pools</button>
+    <div class="card" id="detail-head"></div>
+    <div class="stat-row" id="detail-stats"></div>
+    <div class="detail-tabs" id="detail-tabs"></div>
+
+    <div id="tab-picks">
+      <div class="card" id="pick-card">
+        <div class="sec-lbl">Make Your Pick</div>
+        <div id="entry-tabs"></div>
+        <div id="pick-body"></div>
+      </div>
+    </div>
+
+    <div id="tab-standings" class="hidden">
+      <div class="card">
+        <div class="sec-lbl">Standings</div>
+        <div id="standings-body"></div>
+      </div>
+      <div class="card">
+        <div class="sec-lbl">This Week’s Picks</div>
+        <div id="week-picks-body"></div>
+      </div>
+    </div>
+
+    <div id="tab-requests" class="hidden">
+      <div class="card">
+        <div class="sec-lbl">Join Requests</div>
+        <div id="requests-body"></div>
+      </div>
+    </div>
+
+    <div id="host-actions" class="hidden">
+      <button class="btn btn-cyan" id="grade-btn" onclick="gradeWeek()">Grade this week</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-profile" onclick="if(event.target===this)closeModals()">
+  <div class="modal">
+    <div class="modal-title">Profile</div>
+    <div class="modal-sub" id="profile-username">Signed in</div>
+    <div style="background:#111;border:1px solid #222;border-radius:12px;padding:14px;margin-bottom:12px">
+      <div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">Username</div>
+      <div id="profile-name" style="font-size:0.95rem;font-weight:800">—</div>
+    </div>
+    <div style="background:#111;border:1px solid #222;border-radius:12px;padding:14px;margin-bottom:16px">
+      <div style="font-size:0.62rem;color:#666;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">Email</div>
+      <div id="profile-email" style="font-size:0.88rem;font-weight:700;color:#aaa">—</div>
+    </div>
+    <button class="btn btn-ghost" onclick="closeModals()">Close</button>
+    <button class="btn btn-ghost" style="color:#ff3d57;border-color:#ff3d57;margin-top:8px" onclick="signOut()">Sign out</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-create" onclick="if(event.target===this)closeModals()">
+  <div class="modal">
+    <div class="modal-title">Create Pool</div>
+    <div class="modal-sub">Share the join code with your group. No entry fee.</div>
+    <div id="create-form">
+      <input class="inp" id="create-name" placeholder="Pool name" maxlength="60">
+      <button class="btn btn-green" onclick="createPool()">Create</button>
+      <button class="btn btn-ghost" onclick="closeModals()">Cancel</button>
+    </div>
+    <div id="create-done" class="hidden">
+      <div class="modal-sub">Share this code:</div>
+      <div class="join-code" id="created-code"></div>
+      <button class="btn btn-green" onclick="copyCreatedCode()">Copy code</button>
+      <button class="btn btn-ghost" onclick="closeModals()">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-join" onclick="if(event.target===this)closeModals()">
+  <div class="modal">
+    <div class="modal-title">Request to Join</div>
+    <div class="modal-sub">Enter the 6-character join code. The pool runner will approve you and set how many entries you get.</div>
+    <input class="inp" id="join-code" placeholder="ABC123" maxlength="8" style="text-transform:uppercase;letter-spacing:2px">
+    <button class="btn btn-green" onclick="joinPool()">Send Request</button>
+    <button class="btn btn-ghost" onclick="closeModals()">Cancel</button>
+  </div>
+</div>
+
+<div class="modal-bg" id="modal-approve" onclick="if(event.target===this)closeModals()">
+  <div class="modal">
+    <div class="modal-title">Approve Player</div>
+    <div class="modal-sub" id="approve-sub">How many entries should they get?</div>
+    <div class="entry-choice">
+      <button type="button" id="grant-1" onclick="selectGrant(1)">1</button>
+      <button type="button" id="grant-2" onclick="selectGrant(2)">2</button>
+      <button type="button" id="grant-3" onclick="selectGrant(3)">3</button>
+    </div>
+    <button class="btn btn-green" onclick="confirmApprove()">Approve</button>
+    <button class="btn btn-ghost" onclick="closeModals()">Cancel</button>
+  </div>
+</div>
+
+<div class="modal-bg center" id="modal-pick" onclick="if(event.target===this)cancelPickConfirm()">
+  <div class="modal-pick">
+    <img class="pick-confirm-logo" id="pick-confirm-logo" alt="" referrerpolicy="no-referrer">
+    <div class="pick-confirm-logo mu-logo-fb" id="pick-confirm-logo-fb" style="display:none" aria-hidden="true"></div>
+    <div class="pick-confirm-name" id="pick-confirm-name"></div>
+    <div class="pick-confirm-vs" id="pick-confirm-vs"></div>
+    <div class="pick-confirm-time" id="pick-confirm-time"></div>
+    <div class="pick-confirm-warn hidden" id="pick-confirm-warn">⚠️ Preseason test mode</div>
+    <div class="pick-confirm-used hidden" id="pick-confirm-used"></div>
+    <button class="btn btn-green" id="submit-pick" onclick="submitPick()">Lock In Pick</button>
+    <button class="btn btn-ghost" onclick="cancelPickConfirm()">Cancel</button>
+  </div>
+</div>
+
+<script>
+const API = 'https://pocketbooks-sports-backend-production.up.railway.app';
+let TOKEN = localStorage.getItem('pb-sports-token') || '';
+var _TOKEN_SKEW_MS = 5 * 60 * 1000;
+var _tokenRefreshInFlight = null;
+
+function _decodeJwtPayload(token) {
+  try {
+    var parts = String(token || '').split('.');
+    if (parts.length !== 3) return null;
+    return JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+  } catch (_e) { return null; }
+}
+function _tokenExpMs(token) {
+  var p = _decodeJwtPayload(token);
+  return (p && p.exp) ? (p.exp * 1000) : 0;
+}
+function _isClubSessionToken(token) {
+  var p = _decodeJwtPayload(token);
+  return !!(p && (p.jti || p.actorId || p.sub));
+}
+function _storeAuthToken(token, expiresInSec) {
+  if (!token) return;
+  TOKEN = token;
+  try {
+    localStorage.setItem('pb-sports-token', token);
+    var expMs = expiresInSec ? (Date.now() + Number(expiresInSec) * 1000) : _tokenExpMs(token);
+    if (!expMs) expMs = Date.now() + 86400 * 1000;
+    localStorage.setItem('pb-token-expires', String(expMs));
+  } catch (_e) {}
+}
+function _redirectToSignIn() {
+  window.location.href = 'lobby.html?screen=signin&msg=' + encodeURIComponent('Your session expired — please sign in again');
+}
+function _storedActorClub() {
+  var pl = null, club = null;
+  try { pl = JSON.parse(localStorage.getItem('pb-player') || 'null'); } catch (_e) {}
+  try { club = JSON.parse(localStorage.getItem('pb-club') || 'null') || JSON.parse(localStorage.getItem('pb-active-club') || 'null'); } catch (_e) {}
+  var actorId = pl && (pl.id != null ? String(pl.id) : (pl.username || ''));
+  var clubId = club && (club.id != null ? String(club.id) : (club.clubId || ''));
+  if (actorId && clubId) return { actorId: actorId, clubId: clubId };
+  return null;
+}
+function _isAuthApiPath(path) {
+  return /^\/api\/auth\/(token|refresh|login|signup|logout|verify)\b/.test(path || '');
+}
+function _isExpiredAuth(status, data) {
+  if (status === 401) return true;
+  var err = String((data && (data.error || data.message)) || '');
+  return status === 403 && (err === 'expired_token' || /expired token/i.test(err));
+}
+async function _doRefreshAuthToken() {
+  var ids = _storedActorClub();
+  if (ids) {
+    try {
+      var r = await fetch(API + '/api/auth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actorId: ids.actorId, clubId: ids.clubId })
+      });
+      var data = await r.json();
+      if (data && data.token) {
+        _storeAuthToken(data.token, data.expiresIn);
+        return true;
+      }
+    } catch (_e) {}
+  }
+  var current = TOKEN || localStorage.getItem('pb-sports-token') || '';
+  if (current && _isClubSessionToken(current) && _tokenExpMs(current) > Date.now()) {
+    try {
+      var r2 = await fetch(API + '/api/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + current }
+      });
+      var data2 = await r2.json();
+      if (data2 && data2.token) {
+        _storeAuthToken(data2.token, data2.expiresIn);
+        return true;
+      }
+    } catch (_e) {}
+  }
+  return false;
+}
+function _refreshAuthToken() {
+  if (_tokenRefreshInFlight) return _tokenRefreshInFlight;
+  var p = _doRefreshAuthToken();
+  _tokenRefreshInFlight = p;
+  p.then(function () {}, function () {}).then(function () {
+    if (_tokenRefreshInFlight === p) _tokenRefreshInFlight = null;
+  });
+  return p;
+}
+async function _ensureFreshToken() {
+  var token = TOKEN || localStorage.getItem('pb-sports-token') || '';
+  if (!token) return;
+  var exp = parseInt(localStorage.getItem('pb-token-expires') || '0', 10) || _tokenExpMs(token);
+  if (exp) {
+    try { localStorage.setItem('pb-token-expires', String(exp)); } catch (_e) {}
+  }
+  if (!exp || Date.now() < (exp - _TOKEN_SKEW_MS)) return;
+  if (!_isClubSessionToken(token) && !_storedActorClub()) return;
+  await _refreshAuthToken();
+}
+
+// ESPN abbrevs for https://a.espncdn.com/i/teamlogos/nfl/500/{abbrev}.png
+var NFL_TEAM_LOGOS = {
+  'Arizona Cardinals': 'ari', 'Atlanta Falcons': 'atl', 'Baltimore Ravens': 'bal',
+  'Buffalo Bills': 'buf', 'Carolina Panthers': 'car', 'Chicago Bears': 'chi',
+  'Cincinnati Bengals': 'cin', 'Cleveland Browns': 'cle', 'Dallas Cowboys': 'dal',
+  'Denver Broncos': 'den', 'Detroit Lions': 'det', 'Green Bay Packers': 'gb',
+  'Houston Texans': 'hou', 'Indianapolis Colts': 'ind', 'Jacksonville Jaguars': 'jax',
+  'Kansas City Chiefs': 'kc', 'Las Vegas Raiders': 'lv', 'Los Angeles Chargers': 'lac',
+  'Los Angeles Rams': 'lar', 'Miami Dolphins': 'mia', 'Minnesota Vikings': 'min',
+  'New England Patriots': 'ne', 'New Orleans Saints': 'no', 'New York Giants': 'nyg',
+  'New York Jets': 'nyj', 'Philadelphia Eagles': 'phi', 'Pittsburgh Steelers': 'pit',
+  'San Francisco 49ers': 'sf', 'Seattle Seahawks': 'sea', 'Tampa Bay Buccaneers': 'tb',
+  'Tennessee Titans': 'ten', 'Washington Commanders': 'wsh'
+};
+// Pro-Football-Reference abbrevs for ssref fallback CDN (different from ESPN).
+var NFL_PFR_ABBREV = {
+  ari:'crd', atl:'atl', bal:'rav', buf:'buf', car:'car', chi:'chi',
+  cin:'cin', cle:'cle', dal:'dal', den:'den', det:'det', gb:'gnb',
+  hou:'htx', ind:'clt', jax:'jax', kc:'kan', lv:'rai', lac:'sdg',
+  lar:'ram', mia:'mia', min:'min', ne:'nwe', no:'nor', nyg:'nyg',
+  nyj:'nyj', phi:'phi', pit:'pit', sf:'sfo', sea:'sea', tb:'tam',
+  ten:'oti', wsh:'was'
+};
+// Short / alternate names → canonical full name (substring match misses many of these).
+var NFL_NAME_ALIASES = {
+  'ARI':'Arizona Cardinals','ATL':'Atlanta Falcons','BAL':'Baltimore Ravens',
+  'BUF':'Buffalo Bills','CAR':'Carolina Panthers','CHI':'Chicago Bears',
+  'CIN':'Cincinnati Bengals','CLE':'Cleveland Browns','DAL':'Dallas Cowboys',
+  'DEN':'Denver Broncos','DET':'Detroit Lions','GB':'Green Bay Packers',
+  'HOU':'Houston Texans','IND':'Indianapolis Colts','JAX':'Jacksonville Jaguars',
+  'JAC':'Jacksonville Jaguars','KC':'Kansas City Chiefs','LV':'Las Vegas Raiders',
+  'LAC':'Los Angeles Chargers','LAR':'Los Angeles Rams','MIA':'Miami Dolphins',
+  'MIN':'Minnesota Vikings','NE':'New England Patriots','NO':'New Orleans Saints',
+  'NYG':'New York Giants','NYJ':'New York Jets','PHI':'Philadelphia Eagles',
+  'PIT':'Pittsburgh Steelers','SF':'San Francisco 49ers','SEA':'Seattle Seahawks',
+  'TB':'Tampa Bay Buccaneers','TEN':'Tennessee Titans','WSH':'Washington Commanders',
+  'WAS':'Washington Commanders',
+  'LA Rams':'Los Angeles Rams','LA Chargers':'Los Angeles Chargers',
+  'NY Giants':'New York Giants','NY Jets':'New York Jets',
+  'KC Chiefs':'Kansas City Chiefs','NE Patriots':'New England Patriots',
+  'NO Saints':'New Orleans Saints','SF 49ers':'San Francisco 49ers',
+  'TB Buccaneers':'Tampa Bay Buccaneers','GB Packers':'Green Bay Packers',
+  'LV Raiders':'Las Vegas Raiders','WSH Commanders':'Washington Commanders',
+  'WAS Commanders':'Washington Commanders',
+  'Washington Football Team':'Washington Commanders'
+};
+
+let currentPoolId = null;
+let currentDetail = null;
+let createdJoinCode = '';
+let nflGames = [];
+let pendingPick = null;
+let pickLoadId = 0;
+let savedPickTeam = null;
+let browseWeek = 1;
+let picksOpen = false;
+let scheduleLocked = true;
+let oddsGames = [];
+let espnCache = {};
+let week1OpenLabel = '';
+let currentEntryNumber = 1;
+let detailTab = 'picks';
+let pendingRequests = [];
+let approvePlayerId = '';
+let approvePlayerName = '';
+let grantCount = 1;
+let deadlineCountdownId = 0;
+
+function showErr(msg){
+  var el = document.getElementById('err');
+  if (!msg) { el.style.display='none'; el.textContent=''; return; }
+  el.textContent = msg; el.style.display='block';
+}
+function toast(msg){
+  var t=document.createElement('div'); t.className='toast'; t.textContent=msg;
+  document.body.appendChild(t); setTimeout(function(){ t.remove(); }, 2200);
+}
+function openModal(id){
+  document.getElementById(id).classList.add('open');
+  if (id==='modal-create'){
+    document.getElementById('create-form').classList.remove('hidden');
+    document.getElementById('create-done').classList.add('hidden');
+    document.getElementById('create-name').value='';
+  }
+}
+function closeModals(){
+  document.querySelectorAll('.modal-bg').forEach(function(m){ m.classList.remove('open'); });
+}
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+  });
+}
+
+async function api(method, path, body, _retried){
+  if (!_isAuthApiPath(path)) {
+    try { await _ensureFreshToken(); } catch (_e) {}
+  }
+  var token = TOKEN || localStorage.getItem('pb-sports-token') || '';
+  var r = await fetch(API+path, {
+    method: method,
+    headers: Object.assign(
+      {'Content-Type':'application/json'},
+      token ? {'Authorization':'Bearer '+token} : {}
+    ),
+    body: body ? JSON.stringify(body) : undefined
+  });
+  var data = {};
+  try { data = await r.json(); } catch(_e){}
+  if (!r.ok && !data.error) data.error = 'request_failed';
+  data._status = r.status;
+  if (_isExpiredAuth(r.status, data) && !_retried && !_isAuthApiPath(path)) {
+    var ok = await _refreshAuthToken();
+    if (ok) return api(method, path, body, true);
+    _redirectToSignIn();
+    data.error = 'expired_token';
+  }
+  return data;
+}
+
+function displayName(row){
+  return row.entryLabel || row.entry_label || row.playerUsername || row.player_username || row.playerId || row.player_id || 'Player';
+}
+
+function teamMatches(a, b){
+  var na = String(a||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  var nb = String(b||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  if (!na || !nb) return false;
+  return na === nb || na.indexOf(nb) >= 0 || nb.indexOf(na) >= 0;
+}
+function canonicalTeam(name){
+  if (!name) return '';
+  if (NFL_TEAM_LOGOS[name]) return name;
+  var alias = NFL_NAME_ALIASES[name] || NFL_NAME_ALIASES[String(name).toUpperCase()];
+  if (alias && NFL_TEAM_LOGOS[alias]) return alias;
+  var keys = Object.keys(NFL_TEAM_LOGOS);
+  for (var i=0;i<keys.length;i++){ if (teamMatches(keys[i], name)) return keys[i]; }
+  return name || '';
+}
+function teamLogoUrl(name, source){
+  var key = canonicalTeam(name);
+  var ab = NFL_TEAM_LOGOS[key];
+  if (!ab) return '';
+  if (source === 'pfr') {
+    var pfr = NFL_PFR_ABBREV[ab] || ab;
+    return 'https://cdn.ssref.net/req/202408161/tlogo/pfr/'+pfr+'.png';
+  }
+  return 'https://a.espncdn.com/i/teamlogos/nfl/500/'+ab+'.png';
+}
+function teamAbbrev(name){
+  var key = canonicalTeam(name);
+  var ab = NFL_TEAM_LOGOS[key];
+  if (ab) return ab.toUpperCase();
+  var parts = String(name||'').trim().split(/\s+/);
+  return (parts[parts.length-1] || '?').slice(0,3).toUpperCase();
+}
+function logoFallback(img){
+  if (!img) return;
+  var step = parseInt(img.getAttribute('data-logo-step')||'0', 10);
+  var pfr = img.getAttribute('data-pfr') || '';
+  var ab = img.getAttribute('data-ab') || '?';
+  if (step === 0 && pfr) {
+    img.setAttribute('data-logo-step', '1');
+    img.src = pfr;
+    return;
+  }
+  if (img.id === 'pick-confirm-logo') {
+    img.style.display = 'none';
+    var fb = document.getElementById('pick-confirm-logo-fb');
+    if (fb) { fb.textContent = ab; fb.style.display = 'flex'; }
+    return;
+  }
+  var cls = ((img.className || '') + ' mu-logo-fb').trim();
+  img.outerHTML = '<div class="'+esc(cls)+'" aria-hidden="true">'+esc(ab)+'</div>';
+}
+function teamLogoImg(team, cls){
+  var c = (typeof cls === 'string') ? cls : 'mu-logo';
+  var espn = teamLogoUrl(team);
+  var pfr = teamLogoUrl(team, 'pfr');
+  var ab = teamAbbrev(team);
+  var clsAttr = (c + ' ').trim();
+  if (!espn) {
+    return '<div class="'+esc((clsAttr+' mu-logo-fb').trim())+'" aria-hidden="true">'+esc(ab)+'</div>';
+  }
+  return '<img'+(clsAttr ? ' class="'+esc(clsAttr)+'"' : '')
+    + ' src="'+esc(espn)+'" alt="'+esc(team)+'"'
+    + ' referrerpolicy="no-referrer" data-logo-step="0"'
+    + ' data-pfr="'+esc(pfr)+'" data-ab="'+esc(ab)+'"'
+    + ' onerror="logoFallback(this)">';
+}
+function shortTeam(name){
+  var n = canonicalTeam(name);
+  var parts = String(n).split(' ');
+  return parts[parts.length-1] || n;
+}
+function fmtOdds(n){
+  if (n == null || n === '') return '';
+  var x = Number(n);
+  if (isNaN(x)) return '';
+  return (x > 0 ? '+' : '') + x;
+}
+function fmtGameTime(iso){
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleString('en-US', {
+      timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric',
+      hour: 'numeric', minute: '2-digit'
+    }) + ' ET';
+  } catch(_e){ return ''; }
+}
+function mlFor(game, team){
+  var list = game && Array.isArray(game.moneyline) ? game.moneyline : [];
+  var hit = list.find(function(m){ return teamMatches(m.team, team); });
+  return hit ? hit.odds : null;
+}
+function recFor(game, side, team){
+  var rec = (game && (game[side+'Record'] || game[side+'_record'] || game[side+'record'])) || '';
+  if (!rec && game && game.records) rec = game.records[team] || game.records[side] || '';
+  return rec || '';
+}
+function teamLost(game, team){
+  if (!game) return false;
+  var final = game.isFinal || game.status === 'final' || game.completed;
+  var hs = game.homeScore != null ? game.homeScore : game.home_score;
+  var as = game.awayScore != null ? game.awayScore : game.away_score;
+  if (!final || hs == null || as == null) return false;
+  var home = game.home || game.home_team;
+  var away = game.away || game.away_team;
+  if (teamMatches(team, home)) return Number(hs) < Number(as);
+  if (teamMatches(team, away)) return Number(as) < Number(hs);
+  return false;
+}
+
+function showHome(){
+  currentPoolId = null;
+  currentDetail = null;
+  pendingPick = null;
+  savedPickTeam = null;
+  nflGames = [];
+  browseWeek = 1;
+  picksOpen = false;
+  scheduleLocked = true;
+  oddsGames = [];
+  currentEntryNumber = 1;
+  detailTab = 'picks';
+  pendingRequests = [];
+  stopDeadlineCountdown();
+  document.getElementById('view-detail').classList.add('hidden');
+  document.getElementById('view-home').classList.remove('hidden');
+  document.getElementById('hdr-sub').textContent = 'Pick one NFL team each week. Lose and you’re out.';
+  loadMyPools();
+}
+
+async function loadMyPools(){
+  var el = document.getElementById('my-pools');
+  var data = await api('GET', '/api/survivor/my-pools');
+  if (data._status === 401 || data.error === 'expired_token') {
+    var err = new Error('expired_token');
+    err.status = data._status || 401;
+    err.error = 'expired_token';
+    throw err;
+  }
+  if (data.error) { el.innerHTML = '<div class="empty">Could not load pools.</div>'; showErr(data.error); return; }
+  showErr('');
+  var pools = data.pools || [];
+  if (!pools.length){
+    el.innerHTML = '<div class="empty">You’re not in any pools yet. Create one or request to join with a code.</div>';
+    return;
+  }
+  el.innerHTML = pools.map(function(p){
+    var host = p.isHost ? '<span class="pill pill-host">Runner</span>' : '';
+    var meta;
+    if (p.pendingRequest && !(p.entries||[]).length) {
+      meta = '<span class="pill pill-pending">Request pending</span>';
+    } else {
+      var entries = p.entries || [];
+      if (!entries.length) {
+        var st = p.myStatus === 'eliminated' ? '<span class="pill pill-elim">Eliminated W'+(p.eliminatedWeek||'')+'</span>' : '<span class="pill pill-alive">Alive</span>';
+        meta = 'Season '+esc(p.season)+' · Week '+esc(p.currentWeek)+' '+st;
+      } else {
+        var bits = entries.map(function(e){
+          if (e.status === 'eliminated') return 'Entry #'+e.entryNumber+' ❌ out Week '+(e.eliminatedWeek||'?');
+          return 'Entry #'+e.entryNumber+' ✅ alive';
+        });
+        meta = entries.length+' entr'+(entries.length===1?'y':'ies')+' ('+bits.join(', ')+')';
+      }
+    }
+    if (p.isHost && p.pendingRequestCount) {
+      meta += ' · '+p.pendingRequestCount+' request'+(p.pendingRequestCount===1?'':'s');
+    }
+    return '<div class="pool-row" onclick="openPool(\''+esc(p.poolId)+'\')">'
+      + '<div class="pool-ico">🛡️</div>'
+      + '<div><div class="pool-name">'+esc(p.name)+host+'</div>'
+      + '<div class="pool-meta">'+meta+'</div></div></div>';
+  }).join('');
+}
+
+async function createPool(){
+  var name = (document.getElementById('create-name').value||'').trim();
+  if (!name) { toast('Enter a pool name'); return; }
+  var data = await api('POST', '/api/survivor/create', { name: name, season: 2026 });
+  if (!data.ok) { toast(data.error || 'Create failed'); return; }
+  createdJoinCode = data.joinCode || '';
+  document.getElementById('created-code').textContent = createdJoinCode;
+  document.getElementById('create-form').classList.add('hidden');
+  document.getElementById('create-done').classList.remove('hidden');
+  loadMyPools();
+}
+
+function copyCreatedCode(){
+  if (!createdJoinCode) return;
+  if (navigator.clipboard) navigator.clipboard.writeText(createdJoinCode).catch(function(){});
+  toast('Copied '+createdJoinCode);
+}
+
+async function joinPool(){
+  var code = (document.getElementById('join-code').value||'').trim().toUpperCase();
+  if (!code) { toast('Enter a join code'); return; }
+  var data = await api('POST', '/api/survivor/request-join', { joinCode: code });
+  if (!data.ok && data.error !== 'already_requested' && data.error !== 'already_member' && data.error !== 'already_joined') {
+    toast(data.error || 'Request failed'); return;
+  }
+  closeModals();
+  if (data.error === 'already_member' || data.error === 'already_joined') {
+    toast(data.poolName ? ('Already in '+data.poolName) : 'Already a member');
+    if (data.poolId) openPool(data.poolId);
+    else loadMyPools();
+    return;
+  }
+  toast(data.message || '⏳ Request pending — waiting for pool runner approval');
+  loadMyPools();
+  if (data.poolId) openPool(data.poolId);
+}
+
+async function openPool(poolId){
+  currentPoolId = poolId;
+  document.getElementById('view-home').classList.add('hidden');
+  document.getElementById('view-detail').classList.remove('hidden');
+  document.getElementById('detail-head').innerHTML = '<div class="empty">Loading…</div>';
+  var detail = await api('GET', '/api/survivor/'+encodeURIComponent(poolId));
+  if (!detail.ok) { showErr(detail.error||'Could not load pool'); showHome(); return; }
+  currentDetail = detail;
+  var myEntries = detail.myEntries || (detail.myEntry ? [detail.myEntry] : []);
+  if (!myEntries.some(function(e){ return e.entryNumber === currentEntryNumber; })) {
+    currentEntryNumber = myEntries.length ? myEntries[0].entryNumber : 1;
+  }
+  var standings = await api('GET', '/api/survivor/'+encodeURIComponent(poolId)+'/standings');
+  pendingRequests = [];
+  if (detail.isHost) {
+    var reqs = await api('GET', '/api/survivor/'+encodeURIComponent(poolId)+'/requests');
+    pendingRequests = reqs.requests || [];
+  }
+  renderDetail(detail, standings);
+}
+
+function renderDetail(detail, standings){
+  var pool = detail.pool || {};
+  document.getElementById('hdr-sub').textContent = (pool.name||'Pool')+' · Week '+(pool.currentWeek||1);
+  var host = detail.isHost ? '<span class="pill pill-host">Runner</span>' : '';
+  document.getElementById('detail-head').innerHTML =
+    '<div class="pool-name">'+esc(pool.name)+host+'</div>'
+    + '<div class="pool-meta" style="margin-top:6px">Season '+esc(pool.season)
+    + ' · Week '+esc(pool.currentWeek)
+    + ' · Status '+esc(pool.status)
+    + '</div>'
+    + '<div style="margin-top:10px">Join code <span class="code-chip" onclick="copyCode(\''+esc(pool.joinCode)+'\')">'+esc(pool.joinCode)+'</span></div>';
+
+  var alive = (standings.alive||[]).length;
+  var elim = (standings.eliminated||[]).length;
+  document.getElementById('detail-stats').innerHTML =
+    '<div class="stat"><div class="stat-n">'+alive+'</div><div class="stat-l">Alive</div></div>'
+    + '<div class="stat"><div class="stat-n" style="color:#888">'+elim+'</div><div class="stat-l">Eliminated</div></div>'
+    + '<div class="stat"><div class="stat-n" style="color:var(--cyan)">W'+esc(pool.currentWeek)+'</div><div class="stat-l">Current week</div></div>';
+
+  renderDetailTabs(detail);
+  setDetailTab(detailTab);
+  renderEntryTabs(detail);
+  renderPick(detail);
+  renderStandings(standings);
+  renderWeekPicks(standings, detail);
+  renderRequests(detail);
+  document.getElementById('host-actions').classList.toggle('hidden', !detail.isHost || pool.status!=='active');
+}
+
+function renderDetailTabs(detail){
+  var n = pendingRequests.length || detail.pendingRequestCount || 0;
+  var html = '<button class="detail-tab'+(detailTab==='picks'?' active':'')+'" onclick="setDetailTab(\'picks\')">Picks</button>'
+    + '<button class="detail-tab'+(detailTab==='standings'?' active':'')+'" onclick="setDetailTab(\'standings\')">Standings</button>';
+  if (detail.isHost) {
+    html += '<button class="detail-tab'+(detailTab==='requests'?' active':'')+'" onclick="setDetailTab(\'requests\')">Requests'
+      + (n ? '<span class="badge">'+n+'</span>' : '') + '</button>';
+  }
+  document.getElementById('detail-tabs').innerHTML = html;
+}
+
+function setDetailTab(tab){
+  if (tab === 'requests' && !(currentDetail && currentDetail.isHost)) tab = 'picks';
+  detailTab = tab;
+  document.getElementById('tab-picks').classList.toggle('hidden', tab!=='picks');
+  document.getElementById('tab-standings').classList.toggle('hidden', tab!=='standings');
+  document.getElementById('tab-requests').classList.toggle('hidden', tab!=='requests');
+  document.querySelectorAll('.detail-tab').forEach(function(b){ b.classList.remove('active'); });
+  var labels = { picks:0, standings:1, requests:2 };
+  var tabs = document.querySelectorAll('.detail-tab');
+  if (tabs[labels[tab]]) tabs[labels[tab]].classList.add('active');
+}
+
+function myEntriesOf(detail){
+  return (detail && (detail.myEntries || (detail.myEntry ? [detail.myEntry] : []))) || [];
+}
+
+function currentEntryOf(detail){
+  var list = myEntriesOf(detail);
+  return list.find(function(e){ return e.entryNumber === currentEntryNumber; }) || list[0] || null;
+}
+
+function renderEntryTabs(detail){
+  var el = document.getElementById('entry-tabs');
+  var list = myEntriesOf(detail);
+  if (list.length < 2) { el.innerHTML = ''; return; }
+  el.innerHTML = list.map(function(e){
+    var elim = e.status === 'eliminated';
+    return '<button class="entry-tab'+(e.entryNumber===currentEntryNumber?' active':'')+(elim?' elim':'')+'" onclick="selectEntry('+e.entryNumber+')">'
+      + (elim ? '❌ ' : '') + 'Entry #'+e.entryNumber+'</button>';
+  }).join('');
+}
+
+function selectEntry(n){
+  currentEntryNumber = n;
+  pendingPick = null;
+  savedPickTeam = null;
+  if (!currentDetail) return;
+  renderEntryTabs(currentDetail);
+  renderPick(currentDetail);
+}
+
+function copyCode(code){
+  if (navigator.clipboard) navigator.clipboard.writeText(code).catch(function(){});
+  toast('Copied '+code);
+}
+
+function parseEspnDate(s){
+  if (!s) return '';
+  if (/T\d{2}:\d{2}Z$/.test(s)) return s.replace(/Z$/, ':00Z');
+  return s;
+}
+function parseEspnScoreboard(data){
+  var events = (data && data.events) || [];
+  return events.map(function(e){
+    var c = (e.competitions || [])[0] || {};
+    var home='', away='', homeRec='', awayRec='';
+    var homeScore=null, awayScore=null;
+    var st = (c.status && c.status.type) || {};
+    var completed = !!(st.completed || st.name === 'STATUS_FINAL');
+    (c.competitors || []).forEach(function(x){
+      var t = (x.team && (x.team.displayName || x.team.name)) || '';
+      var rec = ((x.records || [])[0] || {}).summary || '';
+      var score = (x.score !== '' && x.score != null) ? parseInt(x.score, 10) : null;
+      if (x.homeAway === 'home'){ home=t; homeRec=rec; homeScore=score; }
+      else { away=t; awayRec=rec; awayScore=score; }
+    });
+    return {
+      id: e.id, home: home, away: away,
+      time: parseEspnDate(c.date || e.date),
+      homeRecord: homeRec, awayRecord: awayRec,
+      homeScore: homeScore, awayScore: awayScore,
+      isFinal: completed, moneyline: []
+    };
+  }).sort(function(a,b){ return new Date(a.time) - new Date(b.time); });
+}
+async function fetchEspnWeek(week){
+  var w = Math.max(1, Math.min(18, parseInt(week,10)||1));
+  if (espnCache[w] && espnCache[w].games) return espnCache[w];
+  var url = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&week='+w;
+  var r = await fetch(url);
+  if (!r.ok) throw new Error('espn_'+r.status);
+  var data = await r.json();
+  var parsed = { week: (data.week && data.week.number) || w, games: parseEspnScoreboard(data) };
+  espnCache[w] = parsed;
+  return parsed;
+}
+async function ensureWeek1OpenLabel(){
+  if (week1OpenLabel) return week1OpenLabel;
+  try {
+    var w1 = await fetchEspnWeek(1);
+    var first = (w1.games || [])[0];
+    if (first && first.time){
+      week1OpenLabel = new Date(first.time).toLocaleString('en-US', {
+        timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric'
+      });
+    }
+  } catch(_e){}
+  if (!week1OpenLabel) week1OpenLabel = 'Sep 10';
+  return week1OpenLabel;
+}
+function mergeEspnRecords(oddsList, espnList){
+  return (oddsList || []).map(function(g){
+    var e = (espnList || []).find(function(x){
+      return teamMatches(x.home, g.home || g.home_team) && teamMatches(x.away, g.away || g.away_team);
+    });
+    if (!e) return g;
+    return Object.assign({}, g, {
+      homeRecord: g.homeRecord || e.homeRecord,
+      awayRecord: g.awayRecord || e.awayRecord,
+      time: g.time || g.scheduledStart || e.time
+    });
+  });
+}
+function isPreseasonTestMode(){
+  return !oddsGames.length;
+}
+async function loadBrowseWeekGames(){
+  var poolWeek = currentDetail && currentDetail.pool && currentDetail.pool.currentWeek;
+  var espn = { games: [] };
+  try { espn = await fetchEspnWeek(browseWeek); } catch(_e){ espn = { games: [] }; }
+  var onPoolWeek = browseWeek === poolWeek;
+  if (onPoolWeek && picksOpen && oddsGames.length){
+    nflGames = mergeEspnRecords(oddsGames, espn.games);
+    scheduleLocked = false;
+  } else if (onPoolWeek) {
+    // Preseason / offseason: ESPN regular-season slate is pickable for testing.
+    nflGames = espn.games || [];
+    scheduleLocked = false;
+  } else {
+    nflGames = espn.games || [];
+    scheduleLocked = true;
+  }
+}
+async function shiftBrowseWeek(delta){
+  var next = Math.max(1, Math.min(22, browseWeek + delta));
+  if (next === browseWeek || !currentDetail) return;
+  browseWeek = next;
+  var body = document.getElementById('pick-body');
+  if (body) body.innerHTML = weekNavHtml() + '<div class="empty">Loading week '+browseWeek+'…</div>';
+  await loadBrowseWeekGames();
+  paintMatchups(currentDetail);
+}
+function survivorPhase(week){
+  return (parseInt(week,10)||0) <= 18 ? 'regular' : 'playoffs';
+}
+function weekTitle(w){
+  if (w === 19) return 'Wild Card';
+  if (w === 20) return 'Divisional';
+  if (w === 21) return 'Championship';
+  if (w === 22) return 'Super Bowl';
+  return 'Week '+w;
+}
+function usedListForEntry(detail, entryNumber){
+  var n = entryNumber || currentEntryNumber || 1;
+  var byEntry = (detail && detail.usedTeamsByEntry) || {};
+  var list = null;
+  if (Object.prototype.hasOwnProperty.call(byEntry, n) || Object.prototype.hasOwnProperty.call(byEntry, String(n))) {
+    list = byEntry[n] || byEntry[String(n)] || [];
+  } else if (n === 1 && Array.isArray(detail && detail.usedTeams)) {
+    list = detail.usedTeams;
+  } else {
+    list = [];
+    var phase = survivorPhase((detail && detail.pool && detail.pool.currentWeek) || browseWeek || 1);
+    (detail && detail.myPicks || []).forEach(function(p){
+      var pn = p.entryNumber || p.entry_number || 1;
+      if (pn !== n) return;
+      if (survivorPhase(p.week) !== phase) return;
+      list.push({ team: p.team, week: p.week });
+    });
+  }
+  return (list || []).map(function(item){
+    if (item && typeof item === 'object') {
+      return { team: canonicalTeam(item.team), week: parseInt(item.week, 10) || 0 };
+    }
+    return { team: canonicalTeam(item), week: 0 };
+  }).filter(function(x){ return x.team; });
+}
+function usedMapForWeek(detail, week){
+  var used = {};
+  var n = currentEntryNumber || 1;
+  var phase = survivorPhase(week);
+  var fromApi = usedListForEntry(detail, n);
+  if (fromApi.length) {
+    fromApi.forEach(function(u){
+      if (u.week && survivorPhase(u.week) === phase && u.week !== week) used[u.team] = u.week;
+    });
+  } else {
+    (detail.myPicks||[]).forEach(function(p){
+      var pn = p.entryNumber || p.entry_number || 1;
+      if (pn !== n) return;
+      if (survivorPhase(p.week) === phase && p.week !== week) used[canonicalTeam(p.team)] = p.week;
+    });
+  }
+  if (savedPickTeam && detail.pool && week === detail.pool.currentWeek) used[savedPickTeam] = false;
+  return used;
+}
+function usedMessage(team, week){
+  return 'You already picked the '+shortTeam(team)+' in Week '+week;
+}
+function weekNavHtml(){
+  return '<div class="week-nav">'
+    + '<button class="week-arrow" onclick="shiftBrowseWeek(-1)" '+(browseWeek<=1?'disabled':'')+'>‹</button>'
+    + '<div class="week-label">'+esc(weekTitle(browseWeek))+'</div>'
+    + '<button class="week-arrow" onclick="shiftBrowseWeek(1)" '+(browseWeek>=22?'disabled':'')+'>›</button>'
+    + '</div>';
+}
+function pickDeadlineIso(detail){
+  var d = detail || currentDetail;
+  if (d && d.pickDeadline) return d.pickDeadline;
+  if (d && d.pool && d.pool.pickDeadline) return d.pool.pickDeadline;
+  return localSunday1pmEtIso();
+}
+function localSunday1pmEtIso(){
+  try {
+    var fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false
+    });
+    var parts = fmt.formatToParts(new Date());
+    var get = function(t){ return (parts.find(function(p){ return p.type===t; })||{}).value; };
+    var wd = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
+    var dow = wd[get('weekday')];
+    var y = parseInt(get('year'),10), mo = parseInt(get('month'),10), d = parseInt(get('day'),10);
+    var delta = dow >= 4 ? (7 - dow) : -dow;
+    var noon = Date.UTC(y, mo-1, d, 16, 0) + delta * 86400000;
+    var sun = fmt.formatToParts(new Date(noon));
+    var get2 = function(t){ return (sun.find(function(p){ return p.type===t; })||{}).value; };
+    var sy = parseInt(get2('year'),10), smo = parseInt(get2('month'),10), sd = parseInt(get2('day'),10);
+    var edt = Date.UTC(sy, smo-1, sd, 17, 0);
+    var edtParts = fmt.formatToParts(new Date(edt));
+    var get3 = function(t){ return (edtParts.find(function(p){ return p.type===t; })||{}).value; };
+    if (parseInt(get3('hour'),10) === 13 && parseInt(get3('day'),10) === sd) return new Date(edt).toISOString();
+    return new Date(Date.UTC(sy, smo-1, sd, 18, 0)).toISOString();
+  } catch(_e) { return null; }
+}
+function picksAreLocked(detail){
+  var d = detail || currentDetail;
+  if (!d) return false;
+  if (d.deadlinePassed) return true;
+  var iso = pickDeadlineIso(d);
+  if (iso && Date.now() >= new Date(iso).getTime()) return true;
+  return false;
+}
+function fmtCountdown(msLeft){
+  if (msLeft <= 0) return '0:00:00';
+  var s = Math.floor(msLeft/1000);
+  var days = Math.floor(s/86400); s -= days*86400;
+  var h = Math.floor(s/3600); s -= h*3600;
+  var m = Math.floor(s/60); s -= m*60;
+  var pad = function(n){ return (n<10?'0':'')+n; };
+  if (days > 0) return days+'d '+pad(h)+':'+pad(m)+':'+pad(s);
+  return pad(h)+':'+pad(m)+':'+pad(s);
+}
+function stopDeadlineCountdown(){
+  if (deadlineCountdownId) { clearInterval(deadlineCountdownId); deadlineCountdownId = 0; }
+}
+function startDeadlineCountdown(iso){
+  stopDeadlineCountdown();
+  if (!iso) return;
+  var end = new Date(iso).getTime();
+  function tick(){
+    var el = document.getElementById('pick-countdown');
+    var left = end - Date.now();
+    if (left <= 0) {
+      stopDeadlineCountdown();
+      if (currentDetail) {
+        currentDetail.deadlinePassed = true;
+        paintMatchups(currentDetail);
+      }
+      return;
+    }
+    if (el) el.textContent = 'Locks in '+fmtCountdown(left);
+  }
+  tick();
+  deadlineCountdownId = setInterval(tick, 1000);
+}
+function pickBannerHtml(){
+  var html = '';
+  if (browseWeek > 18){
+    html += '<div class="pick-banner">🏆 Playoffs — All teams available again</div>';
+  }
+  var onPoolWeek = !!(currentDetail && currentDetail.pool && browseWeek === currentDetail.pool.currentWeek);
+  var deadlineLocked = onPoolWeek && picksAreLocked(currentDetail);
+  if (deadlineLocked){
+    html += '<div class="pick-banner locked">Picks are locked — waiting for games to finish</div>';
+  } else if (!scheduleLocked && onPoolWeek){
+    html += '<div class="pick-banner">'+esc(weekTitle(browseWeek))+' — Pick deadline: Sunday 1:00 PM ET</div>';
+    html += '<div class="pick-countdown" id="pick-countdown">Locks in …</div>';
+    if (isPreseasonTestMode()){
+      html += '<div class="pick-banner warn">⚠️ Preseason test mode — picks are for testing only</div>';
+    }
+  } else if (!scheduleLocked && isPreseasonTestMode()){
+    html += '<div class="pick-banner warn">⚠️ Preseason test mode — picks are for testing only</div>';
+  } else {
+    var when = week1OpenLabel || 'Sep 10';
+    html += '<div class="pick-banner">🏈 '+esc(weekTitle(browseWeek))+' Preview — Picks open '+esc(when)+'</div>';
+  }
+  return html;
+}
+
+async function renderPick(detail){
+  var body = document.getElementById('pick-body');
+  var pool = detail.pool || {};
+  var entry = currentEntryOf(detail);
+  var req = detail.myJoinRequest;
+  if (!entry){
+    if (req && req.status === 'pending') {
+      body.innerHTML = '<div class="pending-box">⏳ Request pending — waiting for pool runner approval</div>';
+      return;
+    }
+    if (req && req.status === 'denied') {
+      body.innerHTML = '<div class="empty">Your request was denied.</div>';
+      return;
+    }
+    body.innerHTML = '<div class="empty">You’re not in this pool yet. Request to join from the home screen.</div>';
+    return;
+  }
+  if (entry.status !== 'alive'){
+    body.innerHTML = weekNavHtml() + '<div class="empty">Entry #'+entry.entryNumber+' eliminated in week '
+      +(entry.eliminatedWeek||entry.eliminated_week||'?')+'. You can still view this entry.</div>';
+    return;
+  }
+  if (pool.status !== 'active'){
+    body.innerHTML = '<div class="empty">This pool is '+esc(pool.status)+'.</div>';
+    return;
+  }
+  var myWeek = (detail.myPicks||[]).find(function(p){
+    return p.week === pool.currentWeek && (p.entryNumber || p.entry_number || 1) === currentEntryNumber;
+  });
+  savedPickTeam = myWeek ? canonicalTeam(myWeek.team) : null;
+  pendingPick = savedPickTeam ? { team: savedPickTeam, gameId: myWeek && (myWeek.gameId || myWeek.game_id), saved: true } : null;
+  body.innerHTML = '<div class="empty">Loading matchups…</div>';
+  var reqId = ++pickLoadId;
+  var oddsP = api('GET', '/api/odds/nfl');
+  var scoresP = api('GET', '/api/scores/nfl');
+  var odds = await oddsP;
+  var scores = await scoresP;
+  if (reqId !== pickLoadId) return;
+  var games = Array.isArray(odds) ? odds : (odds && Array.isArray(odds.games) ? odds.games : []);
+  var scoreList = Array.isArray(scores) ? scores : [];
+  oddsGames = games.map(function(g){
+    var s = scoreList.find(function(x){
+      return (g.id && x.id === g.id)
+        || (teamMatches(x.home, g.home || g.home_team) && teamMatches(x.away, g.away || g.away_team));
+    });
+    if (!s) return g;
+    return Object.assign({}, g, {
+      completed: s.completed,
+      isFinal: !!(s.completed || g.isFinal),
+      home_score: s.home_score, away_score: s.away_score,
+      homeScore: s.home_score, awayScore: s.away_score
+    });
+  });
+  picksOpen = oddsGames.length > 0;
+  browseWeek = pool.currentWeek || 1;
+  await ensureWeek1OpenLabel();
+  if (reqId !== pickLoadId) return;
+  await loadBrowseWeekGames();
+  if (reqId !== pickLoadId) return;
+  paintMatchups(detail);
+}
+
+function paintMatchups(detail){
+  var body = document.getElementById('pick-body');
+  if (!body || !detail) return;
+  var used = usedMapForWeek(detail, browseWeek);
+  var onPoolWeek = browseWeek === ((detail.pool||{}).currentWeek);
+  var deadlineLocked = onPoolWeek && picksAreLocked(detail);
+  var locked = scheduleLocked || deadlineLocked;
+
+  var html = weekNavHtml() + pickBannerHtml();
+  if (savedPickTeam && pendingPick && pendingPick.saved){
+    html += '<div class="your-pick'+(deadlineLocked?' locked':'')+'">'
+      + teamLogoImg(savedPickTeam, '')
+      + '<div>Entry #'+(currentEntryNumber||1)+' pick: <span class="your-pick-name">'+esc(savedPickTeam)+'</span></div>'
+      + '<div class="your-pick-ok">'+(deadlineLocked?'🔒':'✓')+'</div></div>';
+  }
+  if (!locked){
+    html += browseWeek > 18
+      ? '<div class="used-note">Playoff picks reset — you can reuse regular-season teams. Teams already picked this postseason stay marked used.</div>'
+      : '<div class="used-note">Tap a team to lock in your pick. Used teams are per entry — Entry #'+(currentEntryNumber||1)+' cannot reuse a team until the playoffs.</div>';
+  }
+
+  if (!nflGames.length){
+    html += '<div class="offseason">Schedule unavailable for this week. Try another week.</div>';
+    body.innerHTML = html;
+    if (onPoolWeek && !deadlineLocked) startDeadlineCountdown(pickDeadlineIso(detail));
+    else stopDeadlineCountdown();
+    return;
+  }
+
+  nflGames.forEach(function(g, gi){
+    var away = canonicalTeam(g.away || g.away_team);
+    var home = canonicalTeam(g.home || g.home_team);
+    var gameId = g.id || g.providerGameId || '';
+    html += '<div class="mu-card'+(locked?' locked':'')+(deadlineLocked?' picks-locked':'')+'">'
+      + (deadlineLocked ? '<div class="picks-locked-overlay">Picks Locked</div>' : (scheduleLocked ? '<div class="mu-lock">🔒</div>' : ''))
+      + '<div class="mu-row">'
+      + teamCellHtml(g, away, 'away', used, gameId, gi, locked)
+      + '<div class="mu-at">@</div>'
+      + teamCellHtml(g, home, 'home', used, gameId, gi, locked)
+      + '</div>'
+      + '<div class="mu-time">'+esc(fmtGameTime(g.time || g.scheduledStart || g.commence_time))+'</div>'
+      + '</div>';
+  });
+
+  body.innerHTML = html;
+  if (onPoolWeek && !deadlineLocked) startDeadlineCountdown(pickDeadlineIso(detail));
+  else stopDeadlineCountdown();
+}
+
+function teamCellHtml(game, team, side, used, gameId, gi, locked){
+  var usedWeek = !locked && used[team];
+  var isUsed = !!usedWeek;
+  var lost = !locked && teamLost(game, team);
+  var selected = !locked && pendingPick && teamMatches(pendingPick.team, team);
+  var cls = 'mu-team' + (selected?' sel':'') + (isUsed?' used':'') + (lost?' lost':'');
+  var rec = recFor(game, side, team);
+  var ml = locked ? '' : fmtOdds(mlFor(game, team));
+  var overlay = isUsed ? '<div class="used-badge">Used Wk '+esc(String(usedWeek))+'</div>' : '';
+  var x = lost && !isUsed ? '<div class="lost-x">✕</div>' : '';
+  var click = locked ? '' : 'onclick="selectMatchupTeam('+gi+',\''+side+'\')"';
+  return '<div class="'+cls+'" '+click+'>'
+    + x + overlay
+    + teamLogoImg(team, 'mu-logo')
+    + '<div class="mu-name">'+esc(shortTeam(team))+'</div>'
+    + (rec ? '<div class="mu-rec">'+esc(rec)+'</div>' : '')
+    + (ml ? '<div class="mu-ml">'+esc(ml)+'</div>' : '')
+    + '</div>';
+}
+
+function selectMatchupTeam(gi, side){
+  if (scheduleLocked || picksAreLocked(currentDetail)) return;
+  var g = nflGames[gi];
+  if (!g) return;
+  var team = canonicalTeam(side === 'home' ? (g.home || g.home_team) : (g.away || g.away_team));
+  if (!team || !currentDetail) return;
+  var used = usedMapForWeek(currentDetail, currentDetail.pool.currentWeek);
+  if (used[team]) {
+    toast(usedMessage(team, used[team]));
+    return;
+  }
+  if (teamLost(g, team)) return;
+  if (savedPickTeam && teamMatches(savedPickTeam, team)) {
+    pendingPick = {
+      team: team,
+      gameId: g.id || g.providerGameId || null,
+      saved: true
+    };
+    paintMatchups(currentDetail);
+    return;
+  }
+  pendingPick = {
+    team: team,
+    gameId: g.id || g.providerGameId || null,
+    saved: false
+  };
+  paintMatchups(currentDetail);
+  openPickConfirm(g, team, side);
+}
+
+function openPickConfirm(game, team, side){
+  var opponent = canonicalTeam(side === 'home'
+    ? (game.away || game.away_team)
+    : (game.home || game.home_team));
+  var logo = teamLogoUrl(team);
+  var logoEl = document.getElementById('pick-confirm-logo');
+  var logoFb = document.getElementById('pick-confirm-logo-fb');
+  if (logoFb) { logoFb.style.display = 'none'; logoFb.textContent = ''; }
+  if (logoEl) {
+    logoEl.onerror = function(){ logoFallback(logoEl); };
+    logoEl.setAttribute('data-logo-step', '0');
+    logoEl.setAttribute('data-pfr', teamLogoUrl(team, 'pfr'));
+    logoEl.setAttribute('data-ab', teamAbbrev(team));
+    logoEl.referrerPolicy = 'no-referrer';
+    if (logo) {
+      logoEl.src = logo;
+      logoEl.alt = team;
+      logoEl.style.display = 'block';
+    } else {
+      logoEl.removeAttribute('src');
+      logoEl.style.display = 'none';
+      if (logoFb) { logoFb.textContent = teamAbbrev(team); logoFb.style.display = 'flex'; }
+    }
+  }
+  document.getElementById('pick-confirm-name').textContent = team;
+  document.getElementById('pick-confirm-vs').textContent = opponent ? ('vs ' + opponent) : '';
+  document.getElementById('pick-confirm-time').textContent = fmtGameTime(game.time || game.scheduledStart || game.commence_time) || '';
+  document.getElementById('pick-confirm-warn').classList.toggle('hidden', !isPreseasonTestMode());
+  var used = currentDetail ? usedMapForWeek(currentDetail, currentDetail.pool.currentWeek) : {};
+  var usedWeek = used[canonicalTeam(team)];
+  var usedEl = document.getElementById('pick-confirm-used');
+  if (usedWeek) {
+    usedEl.textContent = usedMessage(team, usedWeek);
+    usedEl.classList.remove('hidden');
+  } else {
+    usedEl.textContent = '';
+    usedEl.classList.add('hidden');
+  }
+  var btn = document.getElementById('submit-pick');
+  if (btn) {
+    btn.disabled = !!usedWeek;
+    btn.textContent = 'Lock In Pick';
+  }
+  openModal('modal-pick');
+}
+
+function cancelPickConfirm(){
+  closeModals();
+  if (savedPickTeam) {
+    var saved = ((currentDetail && currentDetail.myPicks) || []).find(function(p){
+      return p.week === currentDetail.pool.currentWeek
+        && (p.entryNumber || p.entry_number || 1) === (currentEntryNumber || 1);
+    });
+    pendingPick = {
+      team: savedPickTeam,
+      gameId: saved && (saved.gameId || saved.game_id) || null,
+      saved: true
+    };
+  } else {
+    pendingPick = null;
+  }
+  if (currentDetail) paintMatchups(currentDetail);
+}
+
+function renderStandings(standings){
+  var alive = standings.alive || [];
+  var elim = standings.eliminated || [];
+  var html = '';
+  if (!alive.length && !elim.length) html = '<div class="empty">No players yet.</div>';
+  else {
+    html += alive.map(function(p){
+      return '<div class="player"><span class="p-name p-alive">'+esc(displayName(p))+'</span><span class="pill pill-alive">Alive</span></div>';
+    }).join('');
+    html += elim.map(function(p){
+      return '<div class="player"><span class="p-name p-elim">'+esc(displayName(p))+'</span><span class="pill pill-elim">Out W'+esc(p.eliminatedWeek)+'</span></div>';
+    }).join('');
+  }
+  document.getElementById('standings-body').innerHTML = html;
+}
+
+function renderRequests(detail){
+  var el = document.getElementById('requests-body');
+  if (!detail.isHost) { el.innerHTML = ''; return; }
+  if (!pendingRequests.length) {
+    el.innerHTML = '<div class="empty">No pending requests.</div>';
+    return;
+  }
+  el.innerHTML = pendingRequests.map(function(r){
+    var when = r.requestedAt ? new Date(r.requestedAt).toLocaleString() : '';
+    var pid = String(r.playerId||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    var pname = String(r.playerUsername||'Player').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return '<div class="req-row">'
+      + '<div class="req-name">'+esc(r.playerUsername||'Player')+'</div>'
+      + '<div class="req-meta">Requested '+esc(when)+'</div>'
+      + '<div class="req-actions">'
+      + '<button class="btn btn-green" style="padding:10px" onclick="openApprove(\''+pid+'\',\''+pname+'\')">Approve</button>'
+      + '<button class="btn btn-ghost" style="padding:10px;color:#ff3d57;border-color:#ff3d57" onclick="denyRequest(\''+pid+'\')">Deny</button>'
+      + '</div></div>';
+  }).join('');
+}
+
+function selectGrant(n){
+  grantCount = n;
+  [1,2,3].forEach(function(i){
+    document.getElementById('grant-'+i).classList.toggle('sel', i===n);
+  });
+}
+
+function openApprove(playerId, name){
+  approvePlayerId = playerId;
+  approvePlayerName = name || 'Player';
+  grantCount = 1;
+  document.getElementById('approve-sub').textContent = 'How many entries should '+approvePlayerName+' get?';
+  selectGrant(1);
+  openModal('modal-approve');
+}
+
+async function confirmApprove(){
+  if (!currentPoolId || !approvePlayerId) return;
+  var data = await api('POST', '/api/survivor/'+encodeURIComponent(currentPoolId)+'/approve', {
+    playerId: approvePlayerId, entriesGranted: grantCount
+  });
+  if (!data.ok) { toast(data.error || 'Approve failed'); return; }
+  closeModals();
+  toast('Approved — '+data.entriesCreated+' entr'+(data.entriesCreated===1?'y':'ies')+' created');
+  openPool(currentPoolId);
+}
+
+async function denyRequest(playerId){
+  if (!currentPoolId || !playerId) return;
+  var data = await api('POST', '/api/survivor/'+encodeURIComponent(currentPoolId)+'/deny', { playerId: playerId });
+  if (!data.ok) { toast(data.error || 'Deny failed'); return; }
+  toast('Request denied');
+  openPool(currentPoolId);
+}
+
+function renderWeekPicks(standings, detail){
+  var el = document.getElementById('week-picks-body');
+  var revealed = !!(standings && standings.picksRevealed);
+  if (!revealed){
+    var count = (standings.thisWeekPicks||[]).length;
+    el.innerHTML = '<div class="empty">Picks stay hidden until the Sunday 1:00 PM ET deadline (or after grading). '
+      + count + ' pick'+(count===1?'':'s')+' in so far.</div>';
+    return;
+  }
+  var rows = standings.thisWeekPicks || [];
+  if (!rows.length){
+    el.innerHTML = '<div class="empty">No picks this week.</div>';
+    return;
+  }
+  el.innerHTML = rows.map(function(p){
+    var res = p.result === 'won' ? '<span class="pill pill-alive">Won</span>'
+            : p.result === 'lost' ? '<span class="pill pill-elim">Lost</span>'
+            : '<span class="pill" style="color:#888;border:1px solid #333">Pending</span>';
+    return '<div class="player"><span class="p-name">'+esc(displayName(p))+'</span>'
+      + '<span>'+esc(p.team||'—')+' '+res+'</span></div>';
+  }).join('');
+}
+
+async function submitPick(){
+  if (scheduleLocked || picksAreLocked(currentDetail)) {
+    toast('Picks are locked — waiting for games to finish');
+    return;
+  }
+  if (!currentPoolId || !currentDetail) return;
+  var team = pendingPick && pendingPick.team;
+  if (!team) { toast('Select a team'); return; }
+  var used = usedMapForWeek(currentDetail, currentDetail.pool.currentWeek);
+  if (used[canonicalTeam(team)]) {
+    toast(usedMessage(team, used[canonicalTeam(team)]));
+    return;
+  }
+  var week = currentDetail.pool.currentWeek;
+  var btn = document.getElementById('submit-pick');
+  if (btn) { btn.disabled = true; btn.textContent = 'Locking in…'; }
+  var data = await api('POST', '/api/survivor/'+encodeURIComponent(currentPoolId)+'/pick', {
+    week: week, team: team, gameId: pendingPick.gameId || undefined, entryNumber: currentEntryNumber || 1
+  });
+  if (!data.ok) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Lock In Pick'; }
+    if (data.error === 'picks_locked') {
+      closeModals();
+      if (currentDetail) {
+        currentDetail.deadlinePassed = true;
+        if (data.deadline) {
+          currentDetail.pickDeadline = data.deadline;
+          if (currentDetail.pool) currentDetail.pool.pickDeadline = data.deadline;
+        }
+        paintMatchups(currentDetail);
+      }
+      toast('Picks are locked — waiting for games to finish');
+      return;
+    }
+    toast(data.error || 'Pick failed');
+    return;
+  }
+  closeModals();
+  toast('Pick saved: '+team);
+  openPool(currentPoolId);
+}
+
+async function gradeWeek(){
+  if (!currentPoolId || !currentDetail) return;
+  var btn = document.getElementById('grade-btn');
+  btn.disabled = true;
+  var data = await api('POST', '/api/survivor/'+encodeURIComponent(currentPoolId)+'/grade', { week: currentDetail.pool.currentWeek });
+  btn.disabled = false;
+  if (!data.ok) { toast(data.error || 'Grade failed'); return; }
+  var msg = (data.eliminated||[]).length + ' eliminated, ' + (data.survivors||[]).length + ' still alive';
+  if (data.scoresError) msg += ' (scores: '+data.scoresError+')';
+  toast(msg);
+  openPool(currentPoolId);
+}
+
+function _sessionPlayer() {
+  try { return JSON.parse(localStorage.getItem('pb-player') || 'null') || {}; } catch (_e) { return {}; }
+}
+function _isSurvivorHostRole(r) {
+  var n = String(r || '').toLowerCase().trim();
+  return n === 'host' || n === 'admin' || n === 'master_admin' || n === 'owner' || n === 'creator' || n === 'full_admin'
+    || n === 'cohost' || n === 'staff' || n === 'settlement_manager'
+    || n.indexOf('cohost_') === 0 || n.indexOf('staff_') === 0;
+}
+function _survivorHostSession() {
+  var p = _sessionPlayer();
+  if (_isSurvivorHostRole(p.role)) return true;
+  try {
+    var h = JSON.parse(localStorage.getItem('pb-host') || 'null');
+    if (h && (h.id || h.username || h.hostId || _isSurvivorHostRole(h.role))) return true;
+  } catch (_e) {}
+  try {
+    var ar = localStorage.getItem('pb-actor-role');
+    if (_isSurvivorHostRole(ar)) return true;
+  } catch (_e) {}
+  try {
+    var tok = TOKEN || localStorage.getItem('pb-sports-token') || '';
+    var parts = String(tok).split('.');
+    if (parts.length === 3) {
+      var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (payload && _isSurvivorHostRole(payload.role)) return true;
+    }
+  } catch (_e) {}
+  try {
+    var clubs = JSON.parse(localStorage.getItem('pb-clubs') || '[]');
+    if (Array.isArray(clubs) && clubs.some(function (c) { return _isSurvivorHostRole(c.role); })) return true;
+  } catch (_e) {}
+  try {
+    var ac = JSON.parse(localStorage.getItem('pb-active-club') || localStorage.getItem('pb-club') || 'null');
+    if (ac && _isSurvivorHostRole(ac.role)) return true;
+  } catch (_e) {}
+  return false;
+}
+function _profileInitials() {
+  var p = _sessionPlayer();
+  var name = p.username || p.name || (p.email ? String(p.email).split('@')[0] : '') || 'P';
+  var parts = String(name).replace(/[^A-Za-z0-9 ]/g, ' ').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return 'P';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+function setupSurvivorNav() {
+  var btn = document.getElementById('nav-profile');
+  if (btn) {
+    btn.textContent = _profileInitials();
+    var p = _sessionPlayer();
+    btn.title = p.username || p.name || p.email || 'Profile';
+  }
+  var dash = document.getElementById('nav-dashboard');
+  if (dash && _survivorHostSession()) dash.style.display = '';
+  // Durable escape hatch: JWT role is often `user` even for hosts. If we
+  // cannot confirm locally, probe hosted clubs and reveal Dashboard.
+  if (dash && dash.style.display === 'none' && TOKEN) {
+    api('GET', '/api/clubs').then(function (rows) {
+      if (!Array.isArray(rows) || !rows.length) return;
+      try {
+        var p = _sessionPlayer();
+        localStorage.setItem('pb-host', JSON.stringify({
+          id: p.id || null,
+          username: p.username || p.name || '',
+          email: p.email || '',
+          role: 'host'
+        }));
+      } catch (_e) {}
+      dash.style.display = '';
+    }).catch(function () {});
+  }
+}
+function openProfileModal() {
+  var p = _sessionPlayer();
+  var name = p.username || p.name || 'Player';
+  var email = p.email || localStorage.getItem('pb-player-email') || localStorage.getItem('pb-dev-email') || '';
+  var nameEl = document.getElementById('profile-name');
+  var emailEl = document.getElementById('profile-email');
+  var subEl = document.getElementById('profile-username');
+  if (nameEl) nameEl.textContent = name;
+  if (emailEl) emailEl.textContent = email || 'No email on file';
+  if (subEl) subEl.textContent = name;
+  openModal('modal-profile');
+}
+function signOut() {
+  try {
+    ['pb-sports-token','pb-token-expires','pb-player-email','pb-session-token','pb-test-user',
+     'pb-dev-email','pb-dev-pass','pb-player','pb-host',
+     'pb-active-club','pb-clubs','pb-club','pb-user-clubs']
+      .forEach(function(k){ localStorage.removeItem(k); });
+  } catch (_e) {}
+  TOKEN = '';
+  window.location.href = 'lobby.html';
+}
+window.signOut = signOut;
+
+(function init(){
+  if (!TOKEN) { window.location.href = 'lobby.html'; return; }
+  setupSurvivorNav();
+  try { JSON.parse(localStorage.getItem('pb-club') || 'null'); } catch(_e){}
+  var q = new URLSearchParams(window.location.search).get('pool');
+  loadMyPools().then(function(){
+    if (q) openPool(q);
+  }).catch(function (e) {
+    var status = e && (e.status || e._status);
+    var err = String((e && (e.error || e.message)) || '');
+    if (status === 401 || err === 'expired_token' || /expired token/i.test(err)) {
+      _redirectToSignIn();
+    }
+  });
+})();
+</script>
+</body>
+</html>

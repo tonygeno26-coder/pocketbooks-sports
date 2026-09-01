@@ -272,6 +272,75 @@ test('valid response → no fallback', function() {
   assert(!r.fallback, 'valid → no fallback');
 });
 
+// ── Host dashboard index.html: render ALL tickets and ALL DB players ──────────
+console.log('\n── Host dashboard list rendering (index.html) ──');
+
+var fs = require('fs');
+var path = require('path');
+var hostHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+
+test('does not pin Bets tab to activeTickets[0]', function() {
+  assert(!/_hostDbActiveTickets\s*=\s*(data\.)?activeTickets\[0\]/.test(hostHtml), 'no activeTickets[0] assignment');
+  assert(
+    hostHtml.indexOf('_hostDbActiveTickets = active.map(_normalizeHostTicket)') !== -1
+    || hostHtml.indexOf('var active = ((data && data.activeTickets) || []).map(_normalizeHostTicket)') !== -1,
+    'maps ALL active tickets'
+  );
+});
+
+test('Bets tab expands all player groups by default', function() {
+  assert(hostHtml.indexOf('window._hostBetsExpanded[key] === undefined') !== -1, 'default-expand guard present');
+  assert(hostHtml.indexOf('_hostBetsExpanded[key] = true') !== -1, 'groups start expanded');
+});
+
+test('Players tab is DB-first via _hostPlayersFromDbOrLocal', function() {
+  assert(hostHtml.indexOf('function _hostPlayersFromDbOrLocal') !== -1, '_hostPlayersFromDbOrLocal defined');
+  assert(hostHtml.indexOf('var players  = _hostPlayersFromDbOrLocal()') !== -1, 'renderPlayersTab reads DB roster');
+  assert(hostHtml.indexOf('id="home-content"') !== -1, 'home-content wrapper exists so Players tab can hide home');
+  assert(hostHtml.indexOf("loadHostDashboardFromDb('players_tab')") !== -1, 'Players tab refetches dashboard');
+});
+
+test('Your Players list is filled from the same rows as the Players tab', function() {
+  assert(hostHtml.indexOf("getElementById('player-list')") !== -1, 'renderPlayersTab writes #player-list');
+  assert(hostHtml.indexOf('id="players-tab-list"') !== -1, 'Players tab has dedicated #players-tab-list');
+  assert(hostHtml.indexOf('Your Players') !== -1, 'Your Players heading present');
+});
+
+test('Players tab does not show empty state before dashboard fetch completes', function() {
+  assert(hostHtml.indexOf('_hostPlayersFetchDone') !== -1, 'fetch-done flag present');
+  assert(hostHtml.indexOf('Loading players') !== -1, 'loading state present');
+  assert(hostHtml.indexOf('Array.isArray(data.players)') !== -1, 'applies players only when array is present');
+});
+
+test('clicking a player expands their active bets', function() {
+  assert(hostHtml.indexOf('function togglePlayerExpand') !== -1, 'togglePlayerExpand defined');
+  assert(hostHtml.indexOf('function playerBetsHtml') !== -1, 'playerBetsHtml defined');
+});
+
+test('applyHostDashboardPlayers caches club roster', function() {
+  assert(hostHtml.indexOf("localStorage.setItem('pb-club-players'") !== -1, 'DB players cached to pb-club-players');
+});
+
+test('getAvailCredit and getOpenRisk prefer dashboard player rows', function() {
+  assert(hostHtml.indexOf('_hostDbPlayersById[String(pid)]') !== -1, 'credit helpers look up DB player');
+  assert(hostHtml.indexOf('dbp.availableBalance') !== -1, 'availableBalance from DB preferred');
+  assert(hostHtml.indexOf('dbp.openRisk') !== -1, 'openRisk from DB preferred');
+});
+
+test('player profile active bets read DB tickets, not hostActiveBets localStorage first', function() {
+  assert(hostHtml.indexOf('_hostBetsFromDbOrLocal()') !== -1, 'profile bets use DB-or-local helper');
+  assert(!/JSON\.parse\(localStorage\.getItem\('hostActiveBets'\)\|\|'\[\]'\)\.filter\(function\(b\)\{return b\.playerId===pid/.test(hostHtml),
+    'profile no longer reads hostActiveBets directly');
+});
+
+test('diamond pill hydrates from /api/host/diamond-usage', function() {
+  assert(hostHtml.indexOf('function applyServerDiamondBalance') !== -1, 'applyServerDiamondBalance defined');
+  assert(hostHtml.indexOf('function _hydrateHostDiamondPill') !== -1, '_hydrateHostDiamondPill defined');
+  assert(hostHtml.indexOf("/api/host/diamond-usage'") !== -1 || hostHtml.indexOf('/api/host/diamond-usage') !== -1, 'pill fetches diamond-usage');
+  assert(hostHtml.indexOf("'?clubId='+encodeURIComponent(cid)") !== -1, 'diamond hydrate passes clubId');
+  assert(hostHtml.indexOf('applyServerDiamondBalance(balance)') !== -1, 'diamond card writes pill from server');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('\n' + '─'.repeat(54));
 console.log('Host DB read tests: ' + _pass + ' passed, ' + _fail + ' failed');

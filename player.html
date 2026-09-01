@@ -21,6 +21,8 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .deposit-btn{background:transparent;border:1.5px solid #00ff88;color:#00ff88;padding:8px 18px;border-radius:24px;font-size:0.8rem;font-weight:800;cursor:pointer;box-shadow:0 0 12px rgba(0,255,136,0.25);letter-spacing:0.3px}
 .icon-btn{font-size:1.2rem;cursor:pointer;color:#888;transition:color 0.2s}
 .icon-btn:hover{color:var(--green)}
+.buy-diamonds-nav-btn{background:transparent;border:1.5px solid rgba(0,255,136,0.45);color:#00ff88;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.05rem;cursor:pointer;padding:0;line-height:1;box-shadow:0 0 10px rgba(0,255,136,0.18)}
+.buy-diamonds-nav-btn:hover{border-color:#00ff88;background:rgba(0,255,136,0.08)}
 
 /* TOP TABS */
 .top-tabs{display:flex;gap:0;padding:4px 16px 0;border-bottom:1px solid var(--border)}
@@ -476,9 +478,121 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
 }
 
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* My Bets — overflow menu on active ticket cards */
+.bet-menu-wrap{position:relative;flex-shrink:0}
+.bet-menu-btn{background:none;border:none;color:#999;font-size:1.15rem;line-height:1;padding:2px 6px;cursor:pointer;letter-spacing:1px;border-radius:6px}
+.bet-menu-btn:hover{color:#666;background:#f5f5f5}
+.bet-menu-dropdown{display:none;position:absolute;right:0;top:100%;margin-top:4px;background:#1a1a1a;border:1px solid #333;border-radius:8px;min-width:140px;z-index:80;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.35)}
+.bet-menu-wrap.open .bet-menu-dropdown{display:block}
+.bet-menu-item{display:block;width:100%;background:none;border:none;color:#e57373;font-size:0.78rem;font-weight:700;text-align:left;padding:10px 14px;cursor:pointer}
+.bet-menu-item:hover{background:#222}
+
+/* ═══ MOBILE (≤480px / iPhone 375) — layout only, no redesign ═══ */
+@media (max-width:480px){
+  html,body{overflow-x:hidden;max-width:100%}
+  .header{padding:10px 12px;gap:8px}
+  .h-left,.h-right{min-width:0;gap:8px}
+  .h-right{flex-shrink:1}
+  .buy-diamonds-nav-btn,.icon-btn{
+    min-width:44px;min-height:44px;
+    display:inline-flex;align-items:center;justify-content:center
+  }
+  .deposit-btn{min-height:44px;padding:10px 14px}
+  .top-tab{min-height:44px;display:inline-flex;align-items:center}
+  .sport-tab{min-height:44px;padding:10px 6px 10px}
+  .pill{min-height:44px;display:inline-flex;align-items:center}
+  .bn{min-height:44px}
+  .bnav{padding-bottom:env(safe-area-inset-bottom,0px)}
+  .bet-menu-btn{min-width:44px;min-height:44px;padding:10px}
+  .bet-menu-item{min-height:44px}
+  .dkslip,.dkslip.open{
+    width:100%;max-width:100%;
+    height:min(85vh,100dvh);max-height:100dvh;
+    overflow:hidden
+  }
+  .dkslip-scroll,.dkslip-confirm-scroll{
+    min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch
+  }
+  .dkslip-tab,.bs-tab,.stype{min-height:44px;display:flex;align-items:center;justify-content:center}
+  .dkslip-close,.bs-close{width:44px;height:44px;min-width:44px}
+  .dkslip-clear{min-height:44px;padding:10px 8px}
+  .dkslip-qa,.single-qa,.qa{min-height:44px;display:flex;align-items:center;justify-content:center}
+  .dkslip-place-btn,.place-btn{min-height:44px}
+  .qamts{grid-template-columns:repeat(3,1fr);gap:8px}
+  .dkslip-quick,.single-quick{flex-wrap:wrap}
+  .modal{max-height:100dvh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .bs-drawer{max-height:100dvh;overflow:hidden}
+  .bs-drawer.open{display:flex;flex-direction:column}
+  #mybets-section{overflow-x:hidden;max-width:100%}
+  #mybets-section .mc-team,#mybets-section .mc-name{
+    min-width:0;overflow:hidden;text-overflow:ellipsis
+  }
+  table{max-width:100%}
+  .table-scroll,[style*="overflow-x:auto"]{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+}
+
+/* ═══ 390px phones — odds remain tappable, slips stay on-screen ═══ */
+@media (max-width:400px){
+  .market-card{margin:0 8px 10px;max-width:calc(100vw - 16px)}
+  .market-card .mc-cols,
+  .market-card .mc-team-row{
+    grid-template-columns: minmax(0,1fr) minmax(0,72px) minmax(0,72px) minmax(0,72px);
+    gap:4px;
+    padding:0 8px;
+  }
+  .market-card .odds-box,
+  .market-card .mkt-odds-box{
+    min-height:44px;min-width:0;padding:4px 2px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center
+  }
+  .market-card .mc-jersey{width:36px;height:36px}
+  .dkslip,.dkslip.open,.bs-drawer,.modal{
+    max-width:100vw;width:100%;box-sizing:border-box
+  }
+  #mybets-section [style*="grid-template-columns:1fr 1fr 1fr"]{
+    grid-template-columns:1fr 1fr!important
+  }
+  #mybets-section .mc-name,.ticket-card,.leg{
+    overflow-wrap:anywhere;word-break:break-word
+  }
+}
 </style>
 
 <script>
+(function(){
+  try {
+    if (new URLSearchParams(location.search).get('preview') === '1') return;
+    if (!localStorage.getItem('pb-sports-token')) {
+      location.replace('lobby.html');
+      return;
+    }
+    function _nr(r){ return String(r||'').toLowerCase().trim(); }
+    function _isHost(r){
+      var n = _nr(r);
+      return n==='host'||n==='admin'||n==='master_admin'||n==='owner'||n==='creator'||n==='full_admin'
+        || n==='cohost'||n==='staff'||n==='settlement_manager'
+        || n.indexOf('cohost_')===0||n.indexOf('staff_')===0;
+    }
+    var role = '';
+    try { var p = JSON.parse(localStorage.getItem('pb-player')||'null'); if (p && p.role) role = p.role; } catch(_e){}
+    try { var h = JSON.parse(localStorage.getItem('pb-host')||'null'); if (h && _isHost(h.role)) role = h.role; } catch(_e){}
+    var hostRec = false;
+    try { var hr = JSON.parse(localStorage.getItem('pb-host')||'null'); if (hr && (hr.id || hr.username || hr.hostId || hr.role)) hostRec = true; } catch(_e){}
+    try {
+      var clubs = JSON.parse(localStorage.getItem('pb-clubs')||'[]');
+      if (Array.isArray(clubs) && clubs.some(function(c){ return _isHost(c.role); })) hostRec = true;
+    } catch(_e){}
+    try {
+      var ac = JSON.parse(localStorage.getItem('pb-active-club')||localStorage.getItem('pb-club')||'null');
+      if (ac && _isHost(ac.role)) hostRec = true;
+    } catch(_e){}
+    // JWT `user` is the default for real hosts — do not bounce them.
+    if (!_isHost(role) && !hostRec && String(role||'').toLowerCase() === 'player') {
+      location.replace('survivor.html');
+    }
+  } catch(_e){}
+})();
 (function(){
   // GLOBAL LIGHT APPLY
 try {
@@ -489,8 +603,16 @@ try {
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',syncBody); else syncBody();
 })();
 
-// ═══ DEBUG / AUDIT ACCESS PANEL ═══════════════════════════════════════════════
+// ═══ DEBUG / AUDIT ACCESS PANEL (opt-in only: ?debug=1 or localStorage pb-debug=1) ═══
+function _pbsDebugEnabled() {
+  try {
+    if (new URLSearchParams(location.search).get('debug') === '1') return true;
+    if (localStorage.getItem('pb-debug') === '1') return true;
+  } catch (_e) {}
+  return false;
+}
 function openDebugPanel() {
+  if (!_pbsDebugEnabled()) return;
   var existing = document.getElementById('_debug_panel');
   if (existing) { existing.remove(); return; }
 
@@ -601,6 +723,7 @@ function _debugClearTickets() {
   </div>
   <div class="h-right">
     <div style="display:flex;flex-direction:column;align-items:flex-end;line-height:1.2"><div style="font-size:0.52rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px">Balance</div><div id="player-balance-display" style="font-size:0.92rem;font-weight:900;color:#fff;text-shadow:0 0 8px rgba(255,255,255,0.25)">...</div></div>
+    <button type="button" class="buy-diamonds-nav-btn" id="buy-diamonds-btn" onclick="openBuyDiamondsModal()" aria-label="Buy Diamonds" title="Buy Diamonds">💎</button>
     <span class="icon-btn">🔔</span>
     <span class="icon-btn" id="open-profile-btn" style="cursor:pointer" onclick="showPlayerSettings()">👤</span>
   </div>
@@ -619,6 +742,22 @@ function _debugClearTickets() {
   <div class="sport-tab" id="st-tennis" onclick="setSport(this,'tennis')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12c3-4 6-5 9-4"/><path d="M21 12c-3 4-6 5-9 4"/></svg>Tennis</div>
   <div class="sport-tab" id="st-soccer" onclick="setSport(this,'soccer')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><polygon points="12,6 15,10 13,14 11,14 9,10"/><line x1="9" y1="10" x2="4.5" y2="8"/><line x1="15" y1="10" x2="19.5" y2="8"/><line x1="13" y1="14" x2="14.5" y2="19"/><line x1="11" y1="14" x2="9.5" y2="19"/></svg>Soccer</div>
   <div class="sport-tab" id="st-golf" onclick="setSport(this,'golf')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="2" x2="12" y2="18"/><path d="M12 2l6 4-6 4"/><circle cx="12" cy="20" r="2"/><line x1="8" y1="22" x2="16" y2="22"/></svg>Golf</div>
+  <div class="sport-tab" id="st-wnba" onclick="setSport(this,'wnba')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3c2 2.5 3 5.5 3 9s-1 6.5-3 9"/><path d="M12 3c-2 2.5-3 5.5-3 9s1 6.5 3 9"/><path d="M5 7.5Q8.5 9 12 9q3.5 0 7-1.5"/><path d="M5 16.5Q8.5 15 12 15q3.5 0 7 1.5"/></svg>WNBA</div>
+  <div class="sport-tab" id="st-ncaabaseball" onclick="setSport(this,'ncaabaseball')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3c1.5 2 2.5 5 2.5 9s-1 7-2.5 9"/><path d="M12 3c-1.5 2-2.5 5-2.5 9s1 7 2.5 9"/><line x1="3" y1="12" x2="21" y2="12"/></svg>College Baseball</div>
+  <div class="sport-tab" id="st-mma" onclick="setSport(this,'mma')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="8,3 16,3 21,8 21,16 16,21 8,21 3,16 3,8"/></svg>MMA</div>
+  <div class="sport-tab" id="st-boxing" onclick="setSport(this,'boxing')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="10" rx="6" ry="6.5"/><path d="M9 16h6v4a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z"/></svg>Boxing</div>
+  <div class="sport-tab" id="st-nascar" onclick="setSport(this,'nascar')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="5" y1="3" x2="5" y2="21"/><path d="M5 3h14l-3.5 5L19 13H5"/></svg>NASCAR</div>
+  <div class="sport-tab" id="st-f1" onclick="setSport(this,'f1')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 15h18l-2-5H10L8 7H5z"/><circle cx="8" cy="17" r="2"/><circle cx="16" cy="17" r="2"/></svg>Formula 1</div>
+  <div class="sport-tab" id="st-cricket" onclick="setSport(this,'cricket')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="6" y1="20" x2="15" y2="3"/><line x1="4" y1="16" x2="11" y2="18"/><circle cx="18" cy="17" r="3"/></svg>Cricket</div>
+  <div class="sport-tab" id="st-rugby" onclick="setSport(this,'rugby')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="12" rx="9" ry="5" transform="rotate(-35 12 12)"/><line x1="8" y1="8" x2="16" y2="16"/></svg>Rugby</div>
+  <div class="sport-tab" id="st-rugby-league" onclick="setSport(this,'rugby_league')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="12" rx="9" ry="5" transform="rotate(-35 12 12)"/><line x1="8" y1="8" x2="16" y2="16"/><line x1="10" y1="7" x2="17" y2="14"/></svg>Rugby League</div>
+  <div class="sport-tab" id="st-afl" onclick="setSport(this,'afl')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="12" rx="9" ry="5" transform="rotate(-20 12 12)"/><line x1="7" y1="10" x2="17" y2="14"/></svg>AFL</div>
+  <div class="sport-tab" id="st-table-tennis" onclick="setSport(this,'table_tennis')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="4"/><line x1="11" y1="11" x2="18" y2="20"/><path d="M16 18l5 1-2 4"/></svg>Table Tennis</div>
+  <div class="sport-tab" id="st-cs2" onclick="setSport(this,'cs2')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="8" width="18" height="10" rx="5"/><circle cx="9" cy="13" r="1.2"/><circle cx="15" cy="13" r="1.2"/><path d="M8 13h2M9 12v2"/></svg>CS2</div>
+  <div class="sport-tab" id="st-valorant" onclick="setSport(this,'valorant')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="8" width="18" height="10" rx="5"/><circle cx="9" cy="13" r="1.2"/><circle cx="15" cy="13" r="1.2"/><path d="M8 13h2M9 12v2"/></svg>Valorant</div>
+  <div class="sport-tab" id="st-lol" onclick="setSport(this,'lol')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="8" width="18" height="10" rx="5"/><circle cx="9" cy="13" r="1.2"/><circle cx="15" cy="13" r="1.2"/><path d="M8 13h2M9 12v2"/></svg>LoL</div>
+  <div class="sport-tab" id="st-dota2" onclick="setSport(this,'dota2')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="8" width="18" height="10" rx="5"/><circle cx="9" cy="13" r="1.2"/><circle cx="15" cy="13" r="1.2"/><path d="M8 13h2M9 12v2"/></svg>Dota 2</div>
+  <div class="sport-tab" id="st-rocketleague" onclick="setSport(this,'rocketleague')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 15h18l-2-5H10L8 7H5z"/><circle cx="8" cy="17" r="2"/><circle cx="16" cy="17" r="2"/></svg>Rocket League</div>
 </div>
 
 <!-- MARKET FILTER PILLS -->
@@ -772,7 +911,7 @@ function _validatePlayerSession() {
   if (tokenExpired) {
     _sessionValid = false;
     console.warn('[session-gate] INVALID reason=token_expired');
-    return { ok:false, missing:[], reason:'token_expired' };
+    return { ok:false, missing:[], reason:'token_expired', canRecover: !!(pid && cid) };
   }
 
   // Auto-repair club mismatch at load time (same logic as confirmBet)
@@ -784,6 +923,7 @@ function _validatePlayerSession() {
   }
 
   _sessionValid = true;
+  
   return { ok:true };
 }
 
@@ -818,6 +958,7 @@ function _showSessionExpiredModal(result) {
 
 // Run immediately at script boot
 (function _runSessionGate() {
+  
   var _sgResult;
   try { _sgResult = _validatePlayerSession(); }
   catch(_sgErr) {
@@ -825,9 +966,14 @@ function _showSessionExpiredModal(result) {
     _sessionValid = true;
     return;
   }
+  
   if (!_sgResult.ok) {
     // ── Token recovery: if player+club state exists but token is missing, try to reissue ──
-    if (_sgResult.canRecover && _sgResult.missing && _sgResult.missing.indexOf('token') !== -1) {
+    if (_sgResult.canRecover && (
+      (_sgResult.missing && _sgResult.missing.indexOf('token') !== -1) ||
+      _sgResult.reason === 'token_expired'
+    )) {
+      
       var _rPl   = null; try { _rPl   = JSON.parse(localStorage.getItem('pb-player')||'null'); } catch(_){}
       var _rClub = null; try { _rClub = JSON.parse(localStorage.getItem('pb-club')||'null');   } catch(_){}
       var _rPid  = _rPl   && (_rPl.id   != null ? String(_rPl.id)    : _rPl.username) || null;
@@ -844,8 +990,13 @@ function _showSessionExpiredModal(result) {
         if (data.token) {
           TOKEN = data.token;
           localStorage.setItem('pb-sports-token', data.token);
+          localStorage.setItem('pb-session-token', data.token);
+          var _expIn = data.expiresIn || 86400;
+          localStorage.setItem('pb-token-expires', String(Date.now() + (_expIn * 1000)));
+          
           var _recheck = _validatePlayerSession();
           if (_recheck.ok) {
+            
             // Remove any already-shown modal
             var _m = document.getElementById('session-expired-modal');
             if (_m) _m.remove();
@@ -879,19 +1030,118 @@ function _showSessionExpiredModal(result) {
 window.PBS_BUILD_SHA = '9100d35';
 window.PBS_BUILD_DATE = '2026-06-02T09:54:15.131Z';
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
-// Sync balance on page load immediately
-(function(){
-  try {
-    var _t = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
-    var _open = _t.filter(function(t){return t.status==='active'||t.status==='open';});
-    var _start = parseFloat(localStorage.getItem('pb-balance-start')) || 1000;
-    var _risk = _open.reduce(function(s,t){return s+(parseFloat(t.riskAmount)||0);},0);
-    var _avail = Math.round((_start - _risk)*100)/100;
-    var _el = document.getElementById('player-balance-display');
-    if (_el) _el.textContent = '$'+_avail.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  } catch(e){ console.error('balance init error', e); }
-})();
+// dbgBanner must be defined FIRST — called by balance engine before any other function
+function dbgBanner(msg, color) {}
+// Do not paint a localStorage-derived balance before the dashboard hydrates.
+// HTML already shows "..." on #player-balance-display. If a session token
+// exists, wait for loadPlayerDashboardFromDb(); otherwise leave the placeholder.
 let TOKEN=localStorage.getItem('pb-sports-token')||'';
+var _TOKEN_SKEW_MS = 5 * 60 * 1000;
+var _tokenRefreshInFlight = null;
+function _decodeJwtPayload(token) {
+  try {
+    var parts = String(token || '').split('.');
+    if (parts.length !== 3) return null;
+    return JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+  } catch (_e) { return null; }
+}
+function _tokenExpMs(token) {
+  var p = _decodeJwtPayload(token);
+  return (p && p.exp) ? (p.exp * 1000) : 0;
+}
+function _isClubSessionToken(token) {
+  var p = _decodeJwtPayload(token);
+  return !!(p && (p.jti || p.actorId || p.sub));
+}
+function _storeAuthToken(token, expiresInSec) {
+  if (!token) return;
+  TOKEN = token;
+  try {
+    localStorage.setItem('pb-sports-token', token);
+    localStorage.setItem('pb-session-token', token);
+    var expMs = expiresInSec ? (Date.now() + Number(expiresInSec) * 1000) : _tokenExpMs(token);
+    if (!expMs) expMs = Date.now() + 86400 * 1000;
+    localStorage.setItem('pb-token-expires', String(expMs));
+  } catch (_e) {}
+}
+function _redirectToSignIn() {
+  window.location.href = 'lobby.html?screen=signin&msg=' + encodeURIComponent('Your session expired — please sign in again');
+}
+function _storedActorClub() {
+  var pl = null, club = null;
+  try { pl = JSON.parse(localStorage.getItem('pb-player') || 'null'); } catch (_e) {}
+  try { club = JSON.parse(localStorage.getItem('pb-club') || 'null') || JSON.parse(localStorage.getItem('pb-active-club') || 'null'); } catch (_e) {}
+  var actorId = pl && (pl.id != null ? String(pl.id) : (pl.username || ''));
+  var clubId = club && (club.id != null ? String(club.id) : (club.clubId || ''));
+  if (actorId && clubId) return { actorId: actorId, clubId: clubId };
+  return null;
+}
+function _pathFromUrl(url) {
+  try {
+    if (String(url).indexOf('http') === 0) return new URL(url).pathname;
+  } catch (_e) {}
+  return String(url || '').split('?')[0];
+}
+function _isAuthApiPath(path) {
+  return /^\/api\/auth\/(token|refresh|login|signup|logout|verify)\b/.test(path || '');
+}
+function _isExpiredAuth(status, data) {
+  if (status === 401) return true;
+  var err = String((data && (data.error || data.message)) || '');
+  return status === 403 && (err === 'expired_token' || /expired token/i.test(err));
+}
+async function _doRefreshAuthToken() {
+  var tu = '';
+  try { tu = new URLSearchParams(window.location.search).get('testUser') || localStorage.getItem('pb-test-user') || ''; } catch (_e) {}
+  var ids = _storedActorClub();
+  if (tu && typeof _TEST_USER_CONFIGS !== 'undefined' && _TEST_USER_CONFIGS[tu]) {
+    var tc = _TEST_USER_CONFIGS[tu];
+    ids = { actorId: tc.pid, clubId: (typeof REAL_CLUB_ID !== 'undefined' ? REAL_CLUB_ID : (ids && ids.clubId) || '') };
+  }
+  if (ids && ids.actorId && ids.clubId) {
+    try {
+      var base = (typeof API !== 'undefined' && API) || (window._PBS_BACKEND) || 'https://pocketbooks-sports-backend-production.up.railway.app';
+      var r = await fetch(base + '/api/auth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actorId: ids.actorId, clubId: ids.clubId })
+      });
+      var data = await r.json();
+      if (data && data.token) { _storeAuthToken(data.token, data.expiresIn); return true; }
+    } catch (_e) {}
+  }
+  var current = TOKEN || localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token') || '';
+  if (current && _isClubSessionToken(current) && _tokenExpMs(current) > Date.now()) {
+    try {
+      var base2 = (typeof API !== 'undefined' && API) || (window._PBS_BACKEND) || 'https://pocketbooks-sports-backend-production.up.railway.app';
+      var r2 = await fetch(base2 + '/api/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + current }
+      });
+      var data2 = await r2.json();
+      if (data2 && data2.token) { _storeAuthToken(data2.token, data2.expiresIn); return true; }
+    } catch (_e) {}
+  }
+  return false;
+}
+function _refreshAuthToken() {
+  if (_tokenRefreshInFlight) return _tokenRefreshInFlight;
+  var p = _doRefreshAuthToken();
+  _tokenRefreshInFlight = p;
+  p.then(function () {}, function () {}).then(function () {
+    if (_tokenRefreshInFlight === p) _tokenRefreshInFlight = null;
+  });
+  return p;
+}
+async function _ensureFreshToken() {
+  var token = TOKEN || localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token') || '';
+  if (!token) return;
+  var exp = parseInt(localStorage.getItem('pb-token-expires') || '0', 10) || _tokenExpMs(token);
+  if (exp) { try { localStorage.setItem('pb-token-expires', String(exp)); } catch (_e) {} }
+  if (!exp || Date.now() < (exp - _TOKEN_SKEW_MS)) return;
+  if (!_isClubSessionToken(token) && !_storedActorClub()) return;
+  await _refreshAuthToken();
+}
 // ── DB primary flag — safe declaration; true by default (server-authoritative architecture) ──
 // Conditionally set to false in dev/offline mode at line ~10285. Never a bare reference.
 var _DB_PRIMARY_READS_ENABLED = (function(){
@@ -900,6 +1150,9 @@ var _DB_PRIMARY_READS_ENABLED = (function(){
 })();
 // Balance + tickets
 var betTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
+// True after a successful /api/player/dashboard hydrate. renderMyBets must
+// not clobber that in-memory list with stale pb-tickets.
+var _playerTicketsFromDb = false;
 function saveTickets(){
   localStorage.setItem('pb-tickets', JSON.stringify(betTickets));
   // Bump shared version so other player tabs / host actions can detect changes
@@ -996,14 +1249,15 @@ window._recoverTicketsFromHostMirror = _recoverTicketsFromHostMirror;
 // derivation — so the rest of player.html sees the canonical merged set.
 try {
   var _recoveryResult = _recoverTicketsFromHostMirror();
-  console.log('[ticket recovery] ' + JSON.stringify(_recoveryResult));
+  
 } catch(_e) {
   console.warn('[ticket recovery] failed:', _e && _e.message || _e);
 }
 
 // ═══ CENTRALIZED BALANCE ENGINE ══════════════════════════════════════════════
 // availableBalance = startingBalance - openRisk + settledWinnings + refunds
-// Source of truth: localStorage['pb-balance-start'] + localStorage['pb-tickets']
+// Display authority: /api/player/dashboard (availableBalance / balanceAfter).
+// localStorage['pb-balance-start'] + ['pb-tickets'] is fallback only.
 var _BASE_BALANCE = 1000; // default starting balance
 // Migrate: if old pb-balance exists and no pb-balance-start, use it as starting balance
 (function(){
@@ -1088,30 +1342,11 @@ function calcAvailableBalance() {
     } else {
       reason = 'canceled-or-push-zero-impact';
     }
-    console.log('[balance derivation audit]',
-      '\n  ticketId:              ', t.id || '?',
-      '\n  rawStatus:             ', (t.status||'?'),
-      '\n  displayStatus:         ', es,
-      '\n  risk:                  $'+risk.toFixed(2),
-      '\n  toWin:                 $'+profit.toFixed(2),
-      '\n  payout:                $'+((parseFloat(t.estimatedPayout)||0).toFixed(2)),
-      '\n  includedAsOpenRisk:    ', inOpenRisk,
-      '\n  includedAsSettledGain: ', inGain,
-      '\n  includedAsSettledLoss: ', inLoss,
-      '\n  includedAsRefund:      ', false,
-      '\n  balanceContribution:   $'+contrib.toFixed(2),
-      '\n  reason:                ', reason
-    );
+    
   });
   var refunds = 0;
   var available = Math.round((starting - openRisk - settledLosses + settledGains) * 100) / 100;
-  console.log('[balance derivation audit]',
-    '\n  startingBalance:       $'+starting.toFixed(2),
-    '\n  openRisk:              $'+openRisk.toFixed(2),
-    '\n  settledGains:          $'+settledGains.toFixed(2),
-    '\n  settledLosses:         $'+settledLosses.toFixed(2),
-    '\n  finalAvailableBalance: $'+available.toFixed(2)
-  );
+  
   return {
     starting:      starting,
     openRisk:      openRisk,
@@ -1121,24 +1356,45 @@ function calcAvailableBalance() {
     available:     available
   };
 }
-function _applyBalanceToUI(availableBalance) {
-  var bal = parseFloat(availableBalance);
-  if (isNaN(bal)) bal = 0;
-  window.playerBalance = bal;
-  var balText = '$' + bal.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+var _balanceFromServer = false;
+function _liveAvailableBalance() {
+  if (_balanceFromServer && typeof playerBalance === 'number' && !isNaN(playerBalance)) {
+    return playerBalance;
+  }
+  return calcAvailableBalance().available;
+}
+function applyDisplayedBalance(amount) {
+  var n = Number(amount);
+  if (isNaN(n)) return false;
+  playerBalance = n;
+  window.playerBalance = n;
+  var bal = '$' + n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   ['player-balance-display','header-balance','pb-balance-header'].forEach(function(id){
-    var el = document.getElementById(id); if (el) el.textContent = balText;
+    var el = document.getElementById(id); if (el) el.textContent = bal;
   });
-  return bal;
+  return true;
 }
 function syncBalanceDisplays() {
+  // Server value wins. localStorage (pb-balance-start) is fallback only.
+  if (_balanceFromServer && typeof playerBalance === 'number' && !isNaN(playerBalance)) {
+    applyDisplayedBalance(playerBalance);
+    return { available: playerBalance, starting: playerBalance, openRisk: 0, settledGains: 0, settledLosses: 0, refunds: 0 };
+  }
   var s = calcAvailableBalance();
-  _applyBalanceToUI(s.available);
+  applyDisplayedBalance(s.available);
+  dbgBanner('BALANCE RECALCULATED\nStarting: $'+s.starting.toFixed(2)+'\nOpen Risk: $'+s.openRisk.toFixed(2)+'\nAvailable: $'+s.available.toFixed(2), '#005');
+  
   return s;
 }
 var playerBalance = calcAvailableBalance().available;
-// Sync display as soon as functions are defined
-document.addEventListener('DOMContentLoaded', function(){ syncBalanceDisplays(); });
+// Signed-in sessions wait for /api/player/dashboard. Do not flash localStorage.
+document.addEventListener('DOMContentLoaded', function(){
+  if (_balanceFromServer) return;
+  var tok = '';
+  try { tok = localStorage.getItem('pb-sports-token') || localStorage.getItem('pb-session-token') || ''; } catch(_e){}
+  if (tok) return;
+  syncBalanceDisplays();
+});
 // ══ PLAYER SETTINGS (Signal / theme / display currency) ═════════════════════════════════════
 var CURRENCY_RATES = { USD:1, EUR:0.92, GBP:0.79, CAD:1.36, AUD:1.51, MXN:17.20 };
 var CURRENCY_SYMBOLS = { USD:'$', EUR:'€', GBP:'£', CAD:'CA$', AUD:'A$', MXN:'MX$' };
@@ -1172,9 +1428,12 @@ try {
   }
 } catch(_e) {}
 // ═══════════════════════════════════════════════════════════════════════════════
-function fmtBalance(){ return _fmtCurrency(calcAvailableBalance().available); }
+function fmtBalance(){
+  return _fmtCurrency(_liveAvailableBalance());
+}
 
 function showPlayerSettings() {
+  
   var existing = document.getElementById('ps-overlay'); if (existing) existing.remove();
   var s = loadPlayerSettings();
   var ov = document.createElement('div');
@@ -1223,6 +1482,7 @@ function showPlayerSettings() {
     '</div>' +
   '</div>';
   (document.documentElement || document.body).appendChild(ov);
+  
   ov.addEventListener('click', function(e){ if (e.target===ov) ov.remove(); });
   ov.querySelector('#ps-close').addEventListener('click', function(){ ov.remove(); });
   // chip wiring
@@ -1247,13 +1507,20 @@ function showPlayerSettings() {
       if (newEmail) localStorage.setItem('pb-dev-email', newEmail);
     } catch(_e){}
     applyPlayerTheme();
-    if (typeof syncBalanceDisplays === 'function') syncBalanceDisplays();
+    if (_balanceFromServer) applyDisplayedBalance(playerBalance);
+    else if (typeof syncBalanceDisplays === 'function') syncBalanceDisplays();
     showToast('Settings saved', 'success');
     ov.remove();
   });
 }
 function saveBalance(){ /* no-op: balance is derived, not stored directly */ }
-function loadBalance(){ var s = syncBalanceDisplays(); playerBalance = s.available; return playerBalance; }
+function loadBalance(){
+  if (_balanceFromServer && typeof playerBalance === 'number' && !isNaN(playerBalance)) {
+    applyDisplayedBalance(playerBalance);
+    return playerBalance;
+  }
+  var s = syncBalanceDisplays(); playerBalance = s.available; return playerBalance;
+}
 function addLedgerEntry(entry) {
   // 1. Write to localStorage (source of truth, Phase A)
   var ledger = JSON.parse(localStorage.getItem('pb-ledger')||'[]');
@@ -1275,9 +1542,21 @@ function applyBalanceChange(type, amount, ticketId, meta) {
 // ═════════════════════════════════════════════════════════════════════════════
 let slip=[],sType='straight',tPts=6,rrSz=2;
 
-async function api(method,path,body){
-  const r=await fetch(API+path,{method,headers:{'Content-Type':'application/json',...(TOKEN?{'Authorization':'Bearer '+TOKEN}:{})},body:body?JSON.stringify(body):undefined});
-  return r.json();
+async function api(method,path,body,_retried){
+  if (!_isAuthApiPath(path)) {
+    try { await _ensureFreshToken(); } catch (_e) {}
+  }
+  var token = TOKEN || localStorage.getItem('pb-sports-token') || localStorage.getItem('pb-session-token') || '';
+  const r=await fetch(API+path,{method,headers:{'Content-Type':'application/json',...(token?{'Authorization':'Bearer '+token}:{})},body:body?JSON.stringify(body):undefined});
+  var data = {};
+  try { data = await r.json(); } catch (_e) { data = {}; }
+  if (_isExpiredAuth(r.status, data) && !_retried && !_isAuthApiPath(path)) {
+    var ok = await _refreshAuthToken();
+    if (ok) return api(method, path, body, true);
+    _redirectToSignIn();
+    data.error = data.error || 'expired_token';
+  }
+  return data;
 }
 
 // TEAM LOGO MAP - ESPN CDN
@@ -1528,8 +1807,13 @@ async function loadGames(sport, opts){
     var _rawSport = sport || 'mlb';
     var _sportLc  = String(_rawSport).toLowerCase();
     var _isMlb    = (_sportLc === 'mlb' || _sportLc === 'baseball_mlb');
-    const _sport  = _isMlb ? 'mlb' : _sportLc;
+    var _sportApi = { baseball_mlb:'mlb', golf:'golf_pga' };
+    const _sport  = _sportApi[_sportLc] || (_isMlb ? 'mlb' : _sportLc);
     const _url = API + '/api/odds/' + _sport;
+    if (_isMlb && !_liveOnly) {
+      
+    }
+    
     let _res;
     try {
       _res = await fetch(_url);
@@ -1537,6 +1821,7 @@ async function loadGames(sport, opts){
       console.error('[sportsbook fetch failed] network error url=' + _url + ' err=' + fetchErr.message);
       throw new Error('Backend unreachable: '+fetchErr.message);
     }
+    
     if(!_res.ok) {
       let _errBody = {};
       try { _errBody = await _res.json(); } catch(e){}
@@ -1553,10 +1838,13 @@ async function loadGames(sport, opts){
     const _xCache = (_res.headers && _res.headers.get) ? (_res.headers.get('X-Cache') || '') : '';
     const _xCount = (_res.headers && _res.headers.get) ? (_res.headers.get('X-Games-Count') || '') : '';
     const _raw = await _res.text();
+    
     let games;
     try { games = JSON.parse(_raw); } catch(parseErr) { throw new Error('Bad JSON: '+parseErr.message); }
     if(!Array.isArray(games)) throw new Error('Expected array, got: '+typeof games);
     if (_sport === 'mlb' && !_liveOnly) {
+      var _src = _xCache === 'HIT' ? 'cache' : (_xCache === 'STALE' ? 'stale' : 'live');
+      
       // Non-blocking "using cached lines" badge when payload is stale.
       try {
         var _badgeHost = document.getElementById('games-list');
@@ -1572,6 +1860,30 @@ async function loadGames(sport, opts){
         }
       } catch(_be){}
     }
+    
+    // Safe debug signal for production troubleshooting. Reads response
+    // headers populated by the new Owls-aware backend (X-Provider /
+    // X-Source-Status / X-Games-Count); falls back to '-' when absent so
+    // legacy responses don't crash the log.
+    try {
+      var _provHdr = (_res.headers && _res.headers.get) ? (_res.headers.get('X-Provider') || '-') : '-';
+      var _ssHdr   = (_res.headers && _res.headers.get) ? (_res.headers.get('X-Source-Status') || '-') : '-';
+      var _mktCnt  = 0;
+      for (var _gi = 0; _gi < games.length; _gi++) {
+        var _g = games[_gi];
+        _mktCnt += (Array.isArray(_g.moneyline) ? _g.moneyline.length : 0);
+        _mktCnt += (Array.isArray(_g.spreads)   ? _g.spreads.length   : 0);
+        _mktCnt += (Array.isArray(_g.totals)    ? _g.totals.length    : 0);
+      }
+      
+      // Tagged diagnostics requested for the sport catalog rollout. Each tag
+      // prints on its own line so grepping production console output is
+      // trivial (e.g. "[games count] sport=nhl n=12").
+      
+      
+      
+    } catch (_dbg) {}
+    
     if(!games.length){
       if (_liveOnly) {
         el.innerHTML='<div class="empty" style="padding:60px 20px;text-align:center;color:#888">No live games right now.</div>';
@@ -1598,7 +1910,7 @@ async function loadGames(sport, opts){
       const cnt = document.getElementById('live-count');
       if (cnt) cnt.textContent = games.length + (games.length===1?' game':' games');
     }
-    const icons={MLB:'⚾',NBA:'🏀',NHL:'🏒',UFL:'🏈',NFL:'🏈',SOCCER:'⚽',TENNIS:'🎾',GOLF:'⛳'};
+    const icons={MLB:'⚾',NBA:'🏀',WNBA:'🏀',NHL:'🏒',UFL:'🏈',NFL:'🏈',NCAAF:'🏈',NCAAB:'🏀',SOCCER:'⚽',TENNIS:'🎾',GOLF:'⛳','COLLEGE BASEBALL':'⚾',MMA:'🥊',BOXING:'🥊',NASCAR:'🏁','FORMULA 1':'🏎',F1:'🏎',CRICKET:'🏏',RUGBY:'🏉','RUGBY LEAGUE':'🏉',AFL:'🏉','TABLE TENNIS':'🏓',CS2:'🎮',VALORANT:'🎮',LOL:'🎮','DOTA 2':'🎮','ROCKET LEAGUE':'🚗'};
     window.gamesCache = window.gamesCache || {};
     el.innerHTML=games.map(g=>{
       window.gamesCache[g.id]=g;
@@ -1630,7 +1942,9 @@ async function loadGames(sport, opts){
         const f=(odds>0?'+':'')+odds;
         const safeGame=(aw+' vs '+hw).replace(/"/g,'').replace(/'/g,'');
         const safeTime=g.time||'';
-        const safeMkt=(marketType||'Market').replace(/"/g,'').replace(/'/g,'');
+        const isoStart=String(g.scheduledStart||g.time||g.commence_time||'').replace(/"/g,'');
+        const safeMkt=_normalizeSlipMarket(marketType||'moneyline').replace(/"/g,'').replace(/'/g,'');
+        const safeGameId=String(g.id||g.providerGameId||'').replace(/"/g,'');
         // Build clean pick label: always include full team name
         var pickLabel = teamPick || top || f;
         // Never allow bare line like "-1.5" without team
@@ -1638,8 +1952,10 @@ async function loadGames(sport, opts){
         const safePick=(pickLabel||'Unknown Selection').replace(/"/g,'').replace(/'/g,'');
         return`<div class="odds-box odds-cell" id="c-${id}"
           data-id="${id}"
+          data-game-id="${safeGameId}"
           data-game="${safeGame}"
           data-time="${safeTime}"
+          data-start="${isoStart}"
           data-market="${safeMkt}"
           data-pick="${safePick}"
           data-odds="${odds}"
@@ -1657,14 +1973,14 @@ async function loadGames(sport, opts){
           <div class="mc-team">${teamAvatar(aw)}<div><div class="mc-city">${awC}</div><div class="mc-name">${awN}</div></div></div>
           ${cell(g.id+'-sp-aw',awSp?(awSp.line>0?'+':'')+awSp.line:null,awSp?awSp.odds:null,'Run Line',aw+' '+(awSp?(awSp.line>0?'+':'')+awSp.line:''),aw)}
           ${cell(g.id+'-ov',ov?'O '+ov.line:null,ov?ov.odds:null,'Total',ov?'Over '+ov.line:null)}
-          ${cell(g.id+'-ml-aw',null,awML?awML.odds:null,'Moneyline',aw+' To Win')}
+          ${cell(g.id+'-ml-aw',null,awML?awML.odds:null,'Moneyline',aw)}
         </div>
         <div class="mc-divider"></div>
         <div class="mc-team-row">
           <div class="mc-team">${teamAvatar(hw)}<div><div class="mc-city">${hwC}</div><div class="mc-name">${hwN}</div></div></div>
           ${cell(g.id+'-sp-hw',hwSp?(hwSp.line>0?'+':'')+hwSp.line:null,hwSp?hwSp.odds:null,'Run Line',hw+' '+(hwSp?(hwSp.line>0?'+':'')+hwSp.line:''),hw)}
           ${cell(g.id+'-un',un?'U '+un.line:null,un?un.odds:null,'Total',un?'Under '+un.line:null)}
-          ${cell(g.id+'-ml-hw',null,hwML?hwML.odds:null,'Moneyline',hw+' To Win')}
+          ${cell(g.id+'-ml-hw',null,hwML?hwML.odds:null,'Moneyline',hw)}
         </div>
         <div class="mc-footer"><span class="mc-time">${time}</span></div>
       </div>`;
@@ -1680,6 +1996,7 @@ async function loadGames(sport, opts){
         return '';
       }
     }).filter(function(s){ return s; }).join('');
+    
     _pbFlashLineMovements();
     _pbApplyLiveFreshnessState();
     // Re-sync highlights after DOM update
@@ -1688,6 +2005,7 @@ async function loadGames(sport, opts){
         var c=document.getElementById('c-'+b.cellId);
         if(c){
           c.classList.add('selected');
+          
         }
       });
     },50);
@@ -1862,14 +2180,7 @@ function _checkPlayerSportAccess(sport) {
   var cid  = club.id || club.clubId || '?';
   var limits = (JSON.parse(localStorage.getItem('pb-player-limits')||'{}'))[pid] || null;
   var hasLimits = !!(limits && limits.sportsAccess);
-  console.log('[player sport access gate]',
-    '\n  playerId:     ', pid,
-    '\n  clubId:       ', cid,
-    '\n  sport:        ', (sport||'').toUpperCase(),
-    '\n  allowed:      ', allowed,
-    '\n  source:       ', hasLimits ? 'host_limits' : 'default_open',
-    '\n  blockedReason:', allowed ? null : 'host_disabled_sport'
-  );
+  
   return { allowed: allowed, sport: (sport||'').toUpperCase(), playerId: pid, clubId: cid,
            source: hasLimits ? 'host_limits' : 'default_open',
            blockedReason: allowed ? null : 'host_disabled_sport',
@@ -1891,11 +2202,29 @@ function _checkTicketSportAccess(legs) {
 // asynchronously by _loadSportsCatalog below) when present; if it's missing,
 // every hardcoded tab stays visible (legacy behavior).
 function _updateSportTabs() {
-  var tabMap = { mlb:'st-mlb', nba:'st-nba', nhl:'st-nhl', nfl:'st-nfl',
-                 soccer:'st-soccer', ufl:'st-ufl', tennis:'st-tennis', golf:'st-golf' };
+  // Hardcoded Owls lobby tabs (must stay in sync with .sport-tab ids).
+  // Keys are Owls short keys; catalog aliases (soccer_epl, golf_pga, …)
+  // roll up to the parent tab so league/tour feeds still count as games.
+  var tabMap = {
+    mlb:'st-mlb', nba:'st-nba', nhl:'st-nhl', nfl:'st-nfl',
+    ncaaf:'st-ncaaf', ncaab:'st-ncaab',
+    tennis:'st-tennis', soccer:'st-soccer', golf:'st-golf',
+    wnba:'st-wnba', ncaabaseball:'st-ncaabaseball',
+    mma:'st-mma', boxing:'st-boxing',
+    nascar:'st-nascar', f1:'st-f1',
+    cricket:'st-cricket', rugby:'st-rugby', rugby_league:'st-rugby-league', afl:'st-afl',
+    table_tennis:'st-table-tennis',
+    cs2:'st-cs2', valorant:'st-valorant', lol:'st-lol', dota2:'st-dota2',
+    rocketleague:'st-rocketleague'
+  };
+  var catalogAliases = {
+    soccer:  ['soccer_epl','soccer_ucl','soccer_mls','soccer_worldcup','soccer_euros','soccer_laliga','soccer_seriea','soccer_bundesliga','soccer_ligue1'],
+    tennis:  ['tennis_atp','tennis_wta'],
+    golf:    ['golf_pga','golf_liv','golf_european'],
+    cricket: ['cricket_ipl','cricket_t20']
+  };
   // Build a quick lookup: which sports does the backend currently know about?
   // catalog === null  -> endpoint not yet polled / unreachable -> show all (legacy)
-  // catalog === {…}   -> hide tabs missing from catalog, keep those present
   var catalog = window._sportsCatalog;
   var sportsByKey = null;
   if (catalog && Array.isArray(catalog.sports)) {
@@ -1905,23 +2234,28 @@ function _updateSportTabs() {
       if (s && s.key) sportsByKey[String(s.key).toLowerCase()] = s;
     }
   }
+  function catalogEntry(sport) {
+    if (!sportsByKey) return null;
+    if (sportsByKey[sport]) return sportsByKey[sport];
+    var als = catalogAliases[sport] || [];
+    var games = 0, found = false;
+    for (var a = 0; a < als.length; a++) {
+      var e = sportsByKey[als[a]];
+      if (e) { found = true; games += (e.games || 0); }
+    }
+    return found ? { games: games } : null;
+  }
   // Counters for the post-apply diagnostic line.
   var _vis = 0, _hidden = 0, _dim = 0;
   Object.keys(tabMap).forEach(function(sport) {
     var tab = document.getElementById(tabMap[sport]);
     if (!tab) return;
     var blocked = isSportBlocked(sport);
-    // Catalog-driven visibility:
-    //   no catalog yet            -> show every hardcoded tab (legacy)
-    //   catalog present + missing -> hide the tab entirely (provider truly
-    //                                doesn't support this sport, e.g. golf)
-    //   catalog present + 0 games -> dim + tooltip (provider supports it,
-    //                                no live slate right now)
-    //   catalog present + games   -> full color, no tooltip
-    var inCatalog = !sportsByKey || !!sportsByKey[sport];
-    var entry     = sportsByKey ? sportsByKey[sport] : null;
-    var hasGames  = !sportsByKey || (entry && entry.games > 0);
-    if (!inCatalog) { tab.style.display = 'none'; _hidden++; return; }
+    // Owls-supported tabs stay visible (dimmed when the slate is empty).
+    // We do not hide them just because production currently enables a
+    // subset — the tab still filters /api/odds/{key} when clicked.
+    var entry    = catalogEntry(sport);
+    var hasGames = !sportsByKey || (entry && entry.games > 0);
     tab.style.display = '';
     tab.style.opacity = blocked ? '0.35' : (hasGames ? '' : '0.55');
     tab.style.pointerEvents = blocked ? 'none' : '';
@@ -1931,8 +2265,7 @@ function _updateSportTabs() {
     if (!hasGames) _dim++; else _vis++;
   });
   // Always log so we can debug catalog drift in production.
-  console.log('[sport catalog] applied tabs visible='+_vis+' dim='+_dim+' hidden='+_hidden
-    +' catalogLoaded='+!!sportsByKey);
+  
 }
 
 // Fetch the backend's sport catalog so tab visibility can adapt to whatever
@@ -1948,11 +2281,7 @@ async function _loadSportsCatalog() {
       window._sportsCatalog = data;
       // Detailed catalog dump: tag + per-sport games count so a single
       // grep -F '[sports catalog]' surfaces full provider state.
-      console.log('[sports catalog] provider='+(data.provider||'?')
-        +' sourceStatus='+(data.sourceStatus||'?')
-        +' updatedAt='+(data.updatedAt||'?')
-        +' count='+data.sports.length
-        +' sports='+data.sports.map(function(s){ return s.key+':'+s.games; }).join(','));
+      
       try { _updateSportTabs(); } catch(e) { console.warn('[sports catalog] _updateSportTabs after refresh failed:', e && e.message || e); }
     }
   } catch (e) {
@@ -1985,6 +2314,7 @@ function setSport(el,sport){
 }
 // setFilter removed — replaced by setMarketFilter
 function setBNav(el,tab){
+  
   _pbActiveTab = (tab==='home'||tab==='sportsbook'||tab==='sports') ? 'sportsbook' : tab;
   document.querySelectorAll('.bn').forEach(function(n){ n.classList.remove('active'); });
   el.classList.add('active');
@@ -2027,6 +2357,8 @@ function setBNav(el,tab){
     if (typeof renderPlayerResults === 'function') renderPlayerResults();
   } else if(tab==='sportsbook_legacy'){
   } else if(tab==='mybets'||tab==='trades'){
+    
+    dbgBanner('MY BETS CLICKED\nTickets: '+betTickets.length+' stored', '#004');
     const sec=document.getElementById('mybets-section');
     if(sec) sec.style.display='block';
     if(ss) ss.style.display='none';
@@ -2034,6 +2366,12 @@ function setBNav(el,tab){
     // Also hide place-bet-wrap
     var pbw=document.getElementById('place-bet-wrap'); if(pbw) pbw.style.display='none';
     renderMyBets();
+    if (_DB_PRIMARY_READS_ENABLED) {
+      try {
+        loadPlayerDashboardFromDb().then(function(){ try { renderMyBets(); } catch(_){} }).catch(function(){});
+      } catch(_){}
+    }
+    dbgBanner('MY BETS SCREEN RENDERED: '+betTickets.length+' tickets', '#004');
   } else {
     const sec=document.getElementById('sportsbook-section');
     if(sec) sec.style.display='block';
@@ -2152,10 +2490,11 @@ async function _installDevSession() {
       if (_data.ok && _data.token) {
         var _role = _data.role || 'player';
         TOKEN = _data.token;
-        // Store as both pb-session-token (for _getActorHeaders Bearer) and
-        // pb-sports-token (for _getClubScope token decode)
-        localStorage.setItem('pb-session-token', _data.token);
-        localStorage.setItem('pb-sports-token',  _data.token);
+        _storeAuthToken(_data.token, _data.expiresIn);
+        try { localStorage.setItem('pb-test-user', _tu); } catch (_e) {}
+        if (_tc.email) {
+          try { localStorage.setItem('pb-player-email', _tc.email); } catch (_e) {}
+        }
         localStorage.setItem('pb-actor-role', _role);
         localStorage.setItem('pb-player', JSON.stringify({
           id: _tc.pid, username: _tc.pid, name: _tc.name, role: _role, email: _tc.email
@@ -2168,6 +2507,8 @@ async function _installDevSession() {
         }));
         localStorage.setItem('pb-balance-start', '1000');
         localStorage.setItem('pb-balance-start:' + _tc.pid, '1000');
+        
+        try { dbgBanner('TEST SESSION: ' + _tc.name + ' @ Dev Club', '#024'); } catch(_) {}
         return;
       }
       console.warn('[devSession] token rejected:', JSON.stringify(_data));
@@ -2199,6 +2540,8 @@ async function _installDevSession() {
   localStorage.setItem('pb-balance-start', '1000');
   localStorage.setItem('pb-balance-start:'+_devPid, '1000');
   try { localStorage.removeItem('pb-session-token'); } catch(_){}
+  
+  try { dbgBanner('DEV SESSION: '+_devName+' ('+_devPid+') @ '+_devCid, '#240'); } catch(_){}
 }
 if (_pDev) { _installDevSession().catch(console.error); }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2217,6 +2560,19 @@ if (_pPreview) {
 
 // ═══ RETURN TO LOBBY ══════════════════════════════════════════════════════════
 function returnToLobby() {
+  
+  var state = {
+    player:      localStorage.getItem('pb-player'),
+    host:        localStorage.getItem('pb-host'),
+    activeClub:  localStorage.getItem('pb-active-club'),
+    clubs:       localStorage.getItem('pb-clubs'),
+    club:        localStorage.getItem('pb-club'),
+    clubPlayers: localStorage.getItem('pb-club-players'),
+    tickets:     localStorage.getItem('pb-tickets'),
+    balance:     localStorage.getItem('pb-balance-start'),
+    token:       localStorage.getItem('pb-sports-token')
+  };
+  
   sessionStorage.setItem('pb-force-lobby-home', '1');
   window.location.href = 'lobby.html';
 }
@@ -2262,6 +2618,7 @@ function _checkSessionScope() {
 function _handleScopeFailure(scope, source) {
   // In dev/preview mode, scope failures are expected and non-fatal
   if (_pDev || _pPreview) {
+    
     return;
   }
   var banner = 'SESSION_SCOPE_INVALID'
@@ -2272,6 +2629,7 @@ function _handleScopeFailure(scope, source) {
     + ' playerId='      + (scope.playerId     || '(none)')
     + ' reason='        + (scope.reason       || '?');
   console.warn(banner);
+  try { dbgBanner(banner, '#800'); } catch(_){}
   // Hard-wipe stale credentials on mismatch or missing token
   localStorage.removeItem('pb-sports-token');
   localStorage.removeItem('pb-active-club');
@@ -2298,10 +2656,12 @@ if (!_sessionValid) {
   var _glEl = document.getElementById('games-list');
   if (_glEl) _glEl.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#666;font-size:0.85rem">Sign in to view games.</div>';
 } else {
+  
   try { _currentSport = 'mlb'; } catch(e) { console.error('[PBS init] set _currentSport failed:', e && e.message || e); }
   try { _updateTeaserTab(); }  catch(e) { console.error('[PBS init] _updateTeaserTab failed (continuing):', e && e.message || e); }
   try { _updateSportTabs(); }  catch(e) { console.error('[PBS init] _updateSportTabs failed (continuing):', e && e.message || e); }
   try { loadGames('mlb'); }    catch(e) { console.error('[PBS fetch failed]', e); }
+  
 }
 
 try { startAutoGradeDaemon(); } catch(e) { console.error('[auto grade daemon] failed to start:', e.message); }
@@ -2310,6 +2670,8 @@ try { revertFutureGrades(); }   catch(e) { console.error('[revertFutureGrades] s
 try {
   _maybeAutoEnableDbPrimaryReads().then(function(){
     return loadPlayerDashboardFromDb();
+  }).then(function(){
+    try { renderMyBets(); } catch(_e){}
   }).catch(function(e){ console.warn('[db primary read] init error:', e.message); });
 } catch(e) { console.warn('[db primary read] sync error:', e.message); }
 
@@ -2416,7 +2778,7 @@ function renderMarkets(tab) {
     // Moneyline
     if (g.moneyline && g.moneyline.length) {
       groups.push({ title: 'Moneyline', rows: g.moneyline.map(function(m){
-        return { name: m.team, id: g.id+'-ml-'+m.team.split(' ').pop(), odds: m.odds, market: 'To Win', pick: m.team+' ML', game: g.away+' vs '+g.home, time: g.time };
+        return { name: m.team, id: g.id+'-ml-'+m.team.split(' ').pop(), odds: m.odds, market: 'Moneyline', pick: m.team, game: g.away+' vs '+g.home, time: g.time };
       })});
     }
     // Spreads
@@ -2472,6 +2834,7 @@ function renderMarkets(tab) {
           '<span class="mkt-pick-name">'+row.name+'</span>' +
           '<div class="mkt-odds-box odds-cell'+(isSelected?' selected':'')+'" id="c-'+row.id+'" '+
           'data-id="'+row.id+'" data-game="'+row.game.replace(/"/g,'')+'" data-time="'+(row.time||'')+'" '+
+          'data-start="'+((currentGame&&(currentGame.scheduledStart||currentGame.time||currentGame.commence_time))||row.time||'')+'" '+
           'data-market="'+row.market+'" data-pick="'+row.pick.replace(/"/g,'')+'" data-odds="'+row.odds+'" data-sport="'+(currentGame.sport||'')+'">' +
           '<span class="mkt-odds-num'+posClass+'">'+fmtO+'</span>' +
           '</div></div>';
@@ -2574,6 +2937,7 @@ function fmtOdds(o){ var n=parseInt(String(o).replace('+','')); return isNaN(n)?
 function fmtDollar(n){ var v=parseFloat(n); if(isNaN(v)) return '--'; return _fmtCurrency(v); }
 
 function bsSetType(t) {
+  
   if (t === 'rr' && betSlip.length < 3) { showToast('Need 3+ picks for Round Robin', 'warning'); return; }
   if (t === 'teaser' && getTeaserLegs().length < 2) { showToast('Need 2+ spread/total picks for Teaser', 'warning'); return; }
   bsType = t;
@@ -3002,6 +3366,7 @@ function bsRenderLegs() {
   } else legs = bsType === 'parlay' ?
     // Parlay: compute combined odds first, then render all legs
     (function(){
+      
       var validLegs = betSlip.filter(function(b){ return b.odds && !isNaN(b.odds); });
       // Detect same-game legs
       var gameCount = {};
@@ -3160,23 +3525,30 @@ window.bsPlaceBet = function bsPlaceBet() {
   if (_fallback > 0 && Object.keys(bsStakes).length === 0 && bsType === 'straight') {
     betSlip.forEach(function(b){ bsStakes[b.cellId] = _fallback; });
     bsStake = _fallback;
+    
   }
   // Recompute effective stake (Singles uses bsStakes map, others use bsStake)
   if (bsType === 'straight') {
     bsStake = Object.values(bsStakes).reduce(function(s,v){ return s+(parseFloat(v)||0); }, 0);
   }
+  
+  dbgBanner('STEP 1: bsPlaceBet started\npicks:'+betSlip.length+' stake:'+bsStake+' type:'+bsType, '#020');
+  
   try {
     var err = document.getElementById('bs-err');
     if (!betSlip.length) {
+      dbgBanner('ERROR: no picks', '#800');
       if (err) { err.style.display='block'; err.textContent='Add at least one selection'; }
       setTimeout(function(){ if(err) err.style.display='none'; }, 2500);
       return;
     }
     if (!bsStake || bsStake <= 0) {
+      dbgBanner('ERROR: no amount entered\nbsStake='+bsStake+' bsStakes='+JSON.stringify(bsStakes), '#800');
       if (err) { err.style.display='block'; err.textContent='Enter a valid amount'; }
       setTimeout(function(){ if(err) err.style.display='none'; }, 2500);
       return;
     }
+    dbgBanner('STEP 2: validation passed\nSTEP 3: opening modal...', '#040');
     // Host validation
     var _pid = (JSON.parse(localStorage.getItem('pb-player')||'null')||{}).id || TOKEN || null;
     if (_pid) {
@@ -3184,10 +3556,12 @@ window.bsPlaceBet = function bsPlaceBet() {
       var _me = _players.find(function(p){ return p.playerId === _pid; });
       if (_me) {
         if (_me.status === 'blocked') {
+          dbgBanner('BET BLOCKED\nBlocked by host', '#800');
           showToast('Bet blocked by host settings', 'error'); return;
         }
         var _avail = getClientAvailCredit(_pid);
         if (bsStake > _avail) {
+          dbgBanner('EXCEEDS CREDIT\nAvailable: $'+_avail.toFixed(2), '#800');
           showToast('Exceeds available credit ($'+_avail.toFixed(2)+' available)', 'error'); return;
         }
         var _lim = getPlayerLimitsClient(_pid);
@@ -3201,18 +3575,22 @@ window.bsPlaceBet = function bsPlaceBet() {
           if (!_blockedSport && isSportBlocked(b.sport)) _blockedSport = b.sport;
         });
         if (_blockedSport) {
+          dbgBanner('BET BLOCKED: blocked sport '+_blockedSport, '#800');
           showToast('This bet includes '+_blockedSport+', which is blocked by host settings', 'error');
           return;
         }
       }
     }
     openBetConfirm();
+    dbgBanner('STEP 4: modal rendered', '#006');
   } catch(e) {
+    dbgBanner('ERROR in bsPlaceBet:\n'+e.message, '#800');
     console.error('bsPlaceBet error:', e);
   }
 }
 
 function openBetConfirm() {
+  
   try {
   // ── SPORTSBOOK MATH ──────────────────────────────────────────────────────
   // risk   = amount wagered (never double-counted)
@@ -3224,6 +3602,8 @@ function openBetConfirm() {
     risk   = betSlip.reduce(function(s,b){ return s+(bsStakes[b.cellId]||0); }, 0);
     payout = betSlip.reduce(function(s,b){ var st=bsStakes[b.cellId]||0; return s+st*amToDecimal(b.odds); }, 0);
     toWin  = payout - risk;
+    
+    dbgBanner('SINGLE CONFIRM | Risk: $'+risk.toFixed(2)+' | To Win: $'+toWin.toFixed(2)+' | Payout: $'+payout.toFixed(2), '#004');
   } else if (bsType === 'teaser') {
     risk   = bsStake;
     payout = calcPayout(bsStake, betSlip, bsType);
@@ -3246,14 +3626,7 @@ function openBetConfirm() {
     // Parlay math audit log
     var _decOdds = betSlip.map(function(b){ return amToDecimal(b.odds); });
     var _combined = _decOdds.reduce(function(p,d){ return p*d; }, 1);
-    console.log('[parlay math audit]',
-      '\n  stake:          $'+risk.toFixed(2),
-      '\n  legs:           '+betSlip.map(function(b){ return b.odds; }).join(', '),
-      '\n  decimalOdds:    '+_decOdds.map(function(d){ return d.toFixed(4); }).join(' × '),
-      '\n  combinedDecimal:'+_combined.toFixed(4),
-      '\n  toWin:          $'+toWin.toFixed(2),
-      '\n  totalPayout:    $'+payout.toFixed(2)
-    );
+    
   }
   // Sync bsStake to computed risk (prevents double-count)
   bsStake = risk;
@@ -3296,6 +3669,7 @@ function openBetConfirm() {
     profit:      toWin,
     capturedAt:  new Date().toISOString(),
   });
+  
   // ══════════════════════════════════════════════════════════════════════════════
 
   // Build DK-style light modal content
@@ -3321,8 +3695,7 @@ function openBetConfirm() {
     '</div>';
   }).join('');
 
-  var _avBal = calcAvailableBalance().available;
-  playerBalance = _avBal;
+  var _avBal = _liveAvailableBalance();
   var insufficient = _avBal < bsStake;
   var confirmLabel = insufficient ? 'Insufficient Balance'
     : (bsType==='straight' && betSlip.length > 1 ? 'Confirm '+betSlip.length+' Bets' : 'Confirm Bet');
@@ -3385,11 +3758,8 @@ function openBetConfirm() {
   var _cancelBtns = sheet.querySelectorAll('[data-action="cancel"]');
   if (_confirmBtn) _confirmBtn.addEventListener('click', function(){
     // ── DIAGNOSTIC: trace every confirm click — catches "button does nothing" reports
-    console.log('CONFIRM_BET_CLICKED bsType='+bsType
-      +' _pendingRisk='+_pendingRisk
-      +' slipLegs='+(Array.isArray(betSlip)?betSlip.length:0)
-      +' snapshot='+(_pendingSnapshot ? 'set' : 'NULL')
-      +' disabled='+!!_confirmBtn.disabled);
+    
+    try { dbgBanner('CONFIRM_BET_CLICKED', '#024'); } catch(_dbg){}
     try {
       confirmBet();
     } catch (_clickErr) {
@@ -3401,10 +3771,11 @@ function openBetConfirm() {
   _cancelBtns.forEach(function(btn){
     btn.addEventListener('click', function(e){
       e.stopPropagation();
+      
       closeBetConfirm();
     });
   });
-  } catch(e) { console.error(e); }
+  } catch(e) { dbgBanner('ERROR in openBetConfirm:\n'+e.message,'#800'); console.error(e); }
 }
 
 function closeBetConfirm() {
@@ -3415,6 +3786,7 @@ function closeBetConfirm() {
   if (ov) ov.remove();
   // Invalidate snapshot so a stale confirm cannot fire after close.
   _pendingSnapshot = null;
+  
 }
 // Alias for user-facing requests
 var closeConfirmBet = closeBetConfirm;
@@ -3424,6 +3796,7 @@ document.addEventListener('click', function(e) {
   if (e.target.closest('[data-close-confirm-bet]') || e.target.closest('[data-action="cancel"]')) {
     // Only close if the confirm overlay is currently open
     if (document.getElementById('bc-modal-overlay')) {
+      
       closeBetConfirm();
     }
   }
@@ -3511,74 +3884,263 @@ function evaluateCancelEligibility(t, now) {
 window.evaluateCancelEligibility = evaluateCancelEligibility;
 var CANCEL_DISABLED_LABEL = 'Cancel unavailable — game started';
 
+// Lobby cells used to label moneylines as "Miami Marlins To Win". Snapshot
+// lookup keys are the team name only. Strip the suffix everywhere a pick
+// enters the slip or the place-bet payload.
+function _stripMoneylinePickSuffix(pick) {
+  return String(pick || '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+to\s+win\s*$/i, '')
+    .replace(/\s+ml\s*$/i, '')
+    .trim();
+}
+function _isoDateFromValue(v) {
+  if (v == null || v === '') return '';
+  var s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  var ms = new Date(s).getTime();
+  if (!isNaN(ms)) return new Date(ms).toISOString().slice(0, 10);
+  return '';
+}
+function _fillEmptyGameKeyDate(cKey, dateStr) {
+  if (!cKey || !dateStr) return cKey;
+  var parts = String(cKey).split('|');
+  if (parts.length < 4) return String(cKey);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(parts[parts.length - 1] || '')) return String(cKey);
+  parts[parts.length - 1] = dateStr;
+  return parts.join('|');
+}
+function _owlsSportKey(sport) {
+  var s = String(sport || 'mlb').toLowerCase();
+  var map = { mlb:'baseball_mlb', nba:'basketball_nba', nfl:'americanfootball_nfl', nhl:'icehockey_nhl', wnba:'basketball_wnba' };
+  if (map[s]) return map[s];
+  if (s.indexOf('baseball') === 0) return 'baseball_mlb';
+  return s;
+}
+function _titleCaseTeamName(name) {
+  return String(name || '').replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
+    .replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+}
+function _extractSlipPointLine(pick, line) {
+  if (line != null && line !== '') {
+    var n = Number(line);
+    if (Number.isFinite(n)) return n;
+  }
+  var m = String(pick || '').match(/(?:^|\s)([+-]?\d+(?:\.\d+)?)(?:\s|$)/);
+  return m ? Number(m[1]) : null;
+}
+function _isoScheduledStart(v, dateHint, allowDisplay) {
+  if (v == null || v === '') return null;
+  var s = String(v).trim();
+  if (!s || /^tbd$/i.test(s)) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    var ms0 = new Date(s).getTime();
+    if (!isNaN(ms0)) return new Date(ms0).toISOString();
+  }
+  var ms = new Date(s).getTime();
+  if (!isNaN(ms) && /T\d{2}:/.test(s)) return new Date(ms).toISOString();
+  if (!allowDisplay) {
+    if (!isNaN(ms) && /^\d{4}/.test(s)) return new Date(ms).toISOString();
+    return null;
+  }
+  var dateStr = _isoDateFromValue(dateHint);
+  if (!dateStr && dateHint) {
+    var hintParts = String(dateHint).split('|');
+    var last = hintParts[hintParts.length - 1] || '';
+    if (/^\d{4}-\d{2}-\d{2}/.test(last)) dateStr = last.slice(0, 10);
+  }
+  var tm = s.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (tm && dateStr) {
+    var hour = parseInt(tm[1], 10);
+    var min = parseInt(tm[2], 10);
+    var ap = String(tm[3] || '').toUpperCase();
+    if (ap === 'PM' && hour !== 12) hour += 12;
+    if (ap === 'AM' && hour === 12) hour = 0;
+    var hh = (hour < 10 ? '0' : '') + hour;
+    var mm = (min < 10 ? '0' : '') + min;
+    var builtMs = new Date(dateStr + 'T' + hh + ':' + mm + ':00').getTime();
+    if (!isNaN(builtMs)) return new Date(builtMs).toISOString();
+  }
+  if (!isNaN(ms)) return new Date(ms).toISOString();
+  return null;
+}
+function _stripCellGameId(cellId) {
+  var s = String(cellId || '');
+  if (!s) return '';
+  s = s.replace(/-(sp-aw|sp-hw|ml-aw|ml-hw|ov|un)$/i, '');
+  s = s.replace(/-(tot|atot|pp)-.*$/i, '');
+  return s;
+}
+function _lookupCachedGame(cellId, canonicalGameKey, away, home) {
+  var cache = (typeof window !== 'undefined' && window.gamesCache) ? window.gamesCache : {};
+  var id = String(cellId || '');
+  if (id && cache[id]) return cache[id];
+  var stripped = _stripCellGameId(id);
+  if (stripped && cache[stripped]) return cache[stripped];
+  var keys = Object.keys(cache);
+  var best = null, bestLen = 0, i, k, g;
+  for (i = 0; i < keys.length; i++) {
+    k = keys[i];
+    if (k && id.indexOf(k) === 0 && k.length > bestLen) {
+      best = cache[k];
+      bestLen = k.length;
+    }
+  }
+  if (best) return best;
+  if (canonicalGameKey) {
+    for (i = 0; i < keys.length; i++) {
+      g = cache[keys[i]];
+      if (g && g.canonicalGameKey && g.canonicalGameKey === canonicalGameKey) return g;
+    }
+  }
+  var a = String(away || '').toLowerCase();
+  var h = String(home || '').toLowerCase();
+  if (a && h) {
+    for (i = 0; i < keys.length; i++) {
+      g = cache[keys[i]];
+      if (!g) continue;
+      var ga = String(g.away || g.away_team || '').toLowerCase();
+      var gh = String(g.home || g.home_team || '').toLowerCase();
+      if (ga === a && gh === h) return g;
+    }
+  }
+  return null;
+}
+function _resolveScheduledStart(obj, cachedGame) {
+  obj = obj || {};
+  var dateHint = obj.canonicalGameKey || obj.canonical_game_key
+    || (cachedGame && cachedGame.canonicalGameKey) || null;
+  var list = [
+    obj.scheduledStart, obj.scheduled_start, obj.commenceTime, obj.commence_time,
+    obj.time, obj.start,
+    cachedGame && cachedGame.scheduledStart,
+    cachedGame && cachedGame.scheduled_start,
+    cachedGame && cachedGame.time,
+    cachedGame && cachedGame.commence_time,
+    cachedGame && cachedGame.commenceTime
+  ];
+  var i, iso;
+  for (i = 0; i < list.length; i++) {
+    iso = _isoScheduledStart(list[i], dateHint || list[i], false);
+    if (iso) return iso;
+  }
+  for (i = 0; i < list.length; i++) {
+    iso = _isoScheduledStart(list[i], dateHint || list[i], true);
+    if (iso) return iso;
+  }
+  var cellId = obj.cellId || obj.gameId || obj.providerGameId;
+  if (cellId && typeof document !== 'undefined' && document.getElementById) {
+    var el = document.getElementById('c-' + cellId) || document.getElementById('cell-' + cellId);
+    if (el) {
+      var elStart = el.getAttribute('data-start') || (el.dataset && el.dataset.start) || el.getAttribute('data-time');
+      iso = _isoScheduledStart(elStart, dateHint, false)
+        || _isoScheduledStart(elStart, dateHint, true);
+      if (iso) return iso;
+    }
+  }
+  return null;
+}
+// Always emit Owls snapshot format: baseball_mlb|Miami Marlins|Washington Nationals|YYYY-MM-DD
+function _normalizeGameKeyToOwls(existingKey, away, home, sport, isoTime) {
+  var dateStr = _isoDateFromValue(isoTime);
+  var parts = String(existingKey || '').split('|');
+  var sportPart = _owlsSportKey(parts[0] || sport);
+  var awayPart = _titleCaseTeamName(parts[1] || away);
+  var homePart = _titleCaseTeamName(parts[2] || home);
+  var last = parts[parts.length - 1] || '';
+  var datePart = /^\d{4}-\d{2}-\d{2}$/.test(last) ? last : dateStr;
+  return [sportPart, awayPart, homePart, datePart].join('|');
+}
+function _normalizeSlipMarket(market) {
+  var m = String(market || '').trim().toLowerCase();
+  if (!m) return 'moneyline';
+  if (m === 'to win' || m === 'win' || m === 'h2h' || m.indexOf('moneyline') >= 0) return 'moneyline';
+  if (m.indexOf('total') >= 0 || m === 'over' || m === 'under') return 'total';
+  if (m.indexOf('spread') >= 0 || m.indexOf('run line') >= 0 || m.indexOf('puck line') >= 0
+      || m.indexOf('runline') >= 0 || m.indexOf('handicap') >= 0) return 'spread';
+  return m;
+}
+function _resolveGameId(obj, cachedGame) {
+  obj = obj || {};
+  cachedGame = cachedGame || {};
+  var id = obj.gameId || obj.providerGameId || obj.provider_game_id
+    || cachedGame.id || cachedGame.providerGameId || cachedGame.gameId
+    || _stripCellGameId(obj.cellId || '');
+  return id ? String(id) : null;
+}
+function _buildContractPlaceLeg(leg) {
+  leg = leg || {};
+  var teams2 = String(leg.game || leg.matchup || '').split(' vs ');
+  var awayTeam = String(leg.awayTeam || teams2[0] || '').trim();
+  var homeTeam = String(leg.homeTeam || teams2[1] || '').trim();
+  var cachedGame = _lookupCachedGame(
+    leg.cellId || leg.gameId || leg.providerGameId,
+    leg.canonicalGameKey || leg.canonical_game_key,
+    awayTeam, homeTeam
+  );
+  if (!awayTeam && cachedGame) awayTeam = cachedGame.away || cachedGame.away_team || '';
+  if (!homeTeam && cachedGame) homeTeam = cachedGame.home || cachedGame.home_team || '';
+  var iso = _resolveScheduledStart(leg, cachedGame);
+  var pick = _stripMoneylinePickSuffix(leg.pick || '');
+  var market = _normalizeSlipMarket(leg.market);
+  var line = _extractSlipPointLine(pick, leg.line);
+  if (market === 'moneyline') line = null;
+  else if (line != null && Number.isFinite(Number(line))) line = Number(line);
+  else line = null;
+  var gameId = _resolveGameId(leg, cachedGame);
+  var canonicalGameKey = _normalizeGameKeyToOwls(
+    leg.canonicalGameKey || leg.canonical_game_key || '',
+    awayTeam, homeTeam,
+    leg.sport || _currentSport || 'mlb',
+    iso
+  );
+  var oddsNum = typeof leg.odds === 'number' ? leg.odds : parseInt(String(leg.odds || '').replace('+', ''), 10);
+  return {
+    pick: pick,
+    market: market,
+    odds: Number.isFinite(oddsNum) ? oddsNum : leg.odds,
+    line: line,
+    canonicalGameKey: canonicalGameKey,
+    scheduledStart: iso,
+    gameId: gameId
+  };
+}
+
 function _makeSelection(b) {
-  // Parse 'Away Team vs Home Team' into structured pieces.
+  var contract = _buildContractPlaceLeg(b);
   var teams2 = (b.game||'').split(' vs ');
-  var awayTeam = (teams2[0] || '').trim();
-  var homeTeam = (teams2[1] || '').trim();
-  var pck = (b.pick||'').toLowerCase();
+  var awayTeam = (b.awayTeam || teams2[0] || '').trim();
+  var homeTeam = (b.homeTeam || teams2[1] || '').trim();
+  var pck = String(contract.pick || '').toLowerCase();
   var homeLower = homeTeam.toLowerCase();
   var side = pck.includes('over') ? 'over' : pck.includes('under') ? 'under' :
     (homeLower && pck.includes(homeLower.split(' ').pop())) ? 'home' : 'away';
   var now = new Date();
   var placedDate = now.toISOString().slice(0,10);
-  // commenceTime: prefer raw ISO from betSlip entry (set at add-to-slip time)
-  var commenceTime = (b.time != null && b.time !== '') ? b.time : null;
-  // Provider game ID: strip the market suffix from cellId (e.g. 'abc123-sp-aw' -> 'abc123')
-  var oddsApiGameId = b.cellId ? b.cellId.split('-').slice(0,4).join('-') : null;
-  // Pull full game object from render-time cache for richer identity
-  var cachedGame = (window.gamesCache && oddsApiGameId) ? window.gamesCache[oddsApiGameId] : null;
-  // Prefer commenceTime from the cached game object if betSlip entry lacks it
-  if (!commenceTime && cachedGame) {
-    commenceTime = cachedGame.time || cachedGame.commence_time || null;
-  }
+  var cachedGame = _lookupCachedGame(b.cellId, contract.canonicalGameKey, awayTeam, homeTeam);
   if (!awayTeam && cachedGame)  awayTeam  = cachedGame.away || cachedGame.away_team  || '';
   if (!homeTeam && cachedGame)  homeTeam  = cachedGame.home || cachedGame.home_team  || '';
-  // canonicalGameKey: must match Owls normalizer format stored in odds_snapshots.
-  // Owls stores: sport_key (lowercase) + raw team names (no hyphens) + YYYY-MM-DD
-  // e.g. "baseball_mlb|Toronto Blue Jays|Baltimore Orioles|2026-05-31"
-  var gameDate = '';
-  if (commenceTime) {
-    try { gameDate = new Date(commenceTime).toISOString().slice(0,10); } catch(_e){}
-  }
-  // Prefer canonicalGameKey already set on the slip entry (built at click time with correct format)
-  var canonicalGameKey = b.canonicalGameKey || [
-    (b.sport||'mlb').toLowerCase(),
-    awayTeam,
-    homeTeam,
-    gameDate
-  ].join('|');
-  var legId = 'LEG-' + (oddsApiGameId||'?') + '-' + (b.market||'mkt').replace(/\s+/g,'').slice(0,8) + '-' + now.getTime();
-  console.log('[game identity audit]',
-    '\n  legId:            ', legId,
-    '\n  providerName:     ', 'odds-api',
-    '\n  providerGameId:   ', oddsApiGameId || '?',
-    '\n  canonicalGameKey: ', canonicalGameKey,
-    '\n  ticketCommenceTime:', commenceTime || '(not set)',
-    '\n  ticketTeams:      ', awayTeam + ' @ ' + homeTeam,
-    '\n  sport:            ', b.sport || '?',
-    '\n  market:           ', b.market || '?',
-    '\n  pick:             ', b.pick || '?',
-    '\n  odds:             ', b.odds
-  );
+  var legId = 'LEG-' + (contract.gameId||'?') + '-' + (contract.market||'mkt').replace(/\s+/g,'').slice(0,8) + '-' + now.getTime();
+  
   return {
-    // ── GAME IDENTITY (permanent, used for grading match) ──
+    // Snapshot contract (every place-bet leg, singles and parlays)
+    pick:              contract.pick,
+    market:            contract.market,
+    odds:              contract.odds,
+    line:              contract.line,
+    canonicalGameKey:  contract.canonicalGameKey,
+    scheduledStart:    contract.scheduledStart,
+    gameId:            contract.gameId,
+    // Extra identity / grading aliases (not required by the contract)
     legId:             legId,
     providerName:      'odds-api',
-    providerGameId:    oddsApiGameId,
-    canonicalGameKey:  canonicalGameKey,
-    scheduledStart:    commenceTime,   // canonical field name for grading
-    commenceTime:      commenceTime,   // keep for backward compat
+    providerGameId:    contract.gameId,
+    commenceTime:      contract.scheduledStart,
     sport:             b.sport || '',
     homeTeam:          homeTeam,
     awayTeam:          awayTeam,
-    // ── MARKET IDENTITY ──
-    market:            b.market || '',
-    pick:              b.pick   || '',
-    odds:              b.odds,
     side:              side,
-    // ── LEGACY COMPAT ──
-    gameId:            oddsApiGameId,
+    cellId:            b.cellId || null,
     matchup:           b.game || '',
     placedDate:        placedDate
   };
@@ -3603,10 +4165,7 @@ async function confirmBet() {
   var _cbRespStatus = null;
   var _cbRespText   = null;  // raw response body for JSON-parse-fail diagnosis
 
-  function _cbLog(tag, extra) {
-    var msg = '[confirmBet] ' + tag + (extra ? ' ' + extra : '');
-    console.log(msg);
-  }
+  function _cbLog(tag, extra) {}
   function _cbErr(tag, err, extra) {
     var stack = (err && err.stack) ? '\n  stack: ' + err.stack.split('\n').slice(0,4).join(' | ') : '';
     var msg = '[confirmBet] ' + tag
@@ -3615,7 +4174,7 @@ async function confirmBet() {
       + (extra ? ' ' + extra : '')
       + (err ? ' err=' + (err.message || String(err)) : '')
       + stack;
-    console.warn(msg);
+    console.error(msg);
   }
   function _confirmBetHasLiveLeg(snapObj) {
     var legs = snapObj && Array.isArray(snapObj.legs) ? snapObj.legs : [];
@@ -3714,7 +4273,7 @@ async function confirmBet() {
   var _pgLegs = (snap.legs || []).map(function(b) {
     return { cellId:b.cellId, pick:b.pick, market:b.market,
       canonicalGameKey:b.canonicalGameKey||null,
-      scheduledStart:b.scheduledStart||b.commenceTime||b.time||null,
+      scheduledStart:_resolveScheduledStart(b, _lookupCachedGame(b.cellId, b.canonicalGameKey, b.awayTeam, b.homeTeam)),
       gameStatus:b.gameStatus||'' };
   });
   var _pg = _checkTicketPlacementGate(_pgLegs, Date.now());
@@ -3727,8 +4286,7 @@ async function confirmBet() {
 
   // ── Balance check ─────────────────────────────────────────────────────────
   _cbStep = 'BALANCE_CHECK';
-  var _avail = calcAvailableBalance().available;
-  playerBalance = _avail;
+  var _avail = _liveAvailableBalance();
   var riskAmount = snap.risk;
   bsStake = riskAmount;
   if (_avail < riskAmount) {
@@ -3811,11 +4369,14 @@ async function confirmBet() {
     if (_pDev && !_pp.get('testUser')) {
       _pid = 'dev-player';
       _cid = 'dev-club';
+      
+    } else if (_tokenRole) {
+      
     }
-
     var _activeClubRaw = localStorage.getItem('pb-active-club');
     var _activeClubId  = null;
     try { _activeClubId = _activeClubRaw ? JSON.parse(_activeClubRaw) : null; } catch(_) { _activeClubId = _activeClubRaw; }
+    
 
     // ── Stale club recovery ───────────────────────────────────────────────
     // If tokenClubId is set and differs from pb-club, the stored club is stale.
@@ -3841,6 +4402,8 @@ async function confirmBet() {
       _cid = _tokenClubId;
     }
 
+    
+
     var _iKey = 'BET_'+(_pid||'?')+'_'+now.replace(/[^0-9]/g,'').slice(0,14);
     var _dbPayload = {
       clubId:_cid, playerId:_pid, playerUsername:_lspl.username||_pid,
@@ -3851,13 +4414,17 @@ async function confirmBet() {
       // undefined for Single/Parlay/Teaser so it is omitted from the JSON body.
       rrStakes: snap.type === 'rr' ? snap.rrStakes : undefined,
       legs:(_t0.selections||snap.legs||[]).map(function(leg){
-        return { legId:leg.legId, pick:leg.pick, market:leg.market, odds:leg.odds,
-          line:leg.line||null, side:leg.side||null,
-          canonicalGameKey:leg.canonicalGameKey||leg.canonical_game_key||'',
+        var _c = _buildContractPlaceLeg(leg);
+        return {
+          pick:_c.pick, market:_c.market, odds:_c.odds, line:_c.line,
+          canonicalGameKey:_c.canonicalGameKey, scheduledStart:_c.scheduledStart, gameId:_c.gameId,
+          // aliases kept as fallbacks; contract fields above are canonical
+          scheduled_start:_c.scheduledStart, commenceTime:_c.scheduledStart,
+          providerGameId:_c.gameId, providerName:leg.providerName||'odds-api',
+          legId:leg.legId, side:leg.side||null,
           sport:leg.sport||_currentSport||'mlb',
-          homeTeam:leg.homeTeam||'', awayTeam:leg.awayTeam||'',
-          scheduledStart:leg.scheduledStart||leg.commenceTime||null,
-          providerGameId:leg.providerGameId||null, providerName:leg.providerName||'odds-api' };
+          homeTeam:leg.homeTeam||'', awayTeam:leg.awayTeam||''
+        };
       })
     };
 
@@ -3962,7 +4529,12 @@ async function confirmBet() {
 
         _cbStep = 'BALANCE_SYNC';
         _cbLog('CONFIRM_BET_BALANCE_SYNC');
-        try { syncBalanceDisplays(); } catch(_) {}
+        try {
+          if (_dbData.balanceAfter != null && !isNaN(Number(_dbData.balanceAfter))) {
+            applyDisplayedBalance(Number(_dbData.balanceAfter));
+            _balanceFromServer = true;
+          }
+        } catch(_) {}
 
         _cbStep = 'MODAL_CLOSE';
         _cbLog('CONFIRM_BET_MODAL_CLOSE');
@@ -3970,7 +4542,9 @@ async function confirmBet() {
         try { closeBetSlip();   } catch(_) {}
         try { clearSlip();      } catch(_) {}
 
-        // Render My Bets immediately with the locally-saved ticket
+        // Keep the just-placed ticket in-memory so renderMyBets does not
+        // reload an empty/stale pb-tickets list before the DB refetch lands.
+        _playerTicketsFromDb = true;
         try { renderMyBets(); } catch(_) {}
         if (_isRrResp) {
           showToast('\u2705 Round Robin placed \xb7 ' + _dbData.comboCount + ' combo ticket' + (_dbData.comboCount !== 1 ? 's' : '') + '!', 'success');
@@ -3978,14 +4552,11 @@ async function confirmBet() {
           showToast('\u2705 Bet placed!', 'success');
         }
 
-        // Dashboard refresh is deferred 400ms — backend propagation lag means
-        // immediate /api/player/dashboard may not yet include the new ticket,
-        // and a count-based gate in loadPlayerDashboardFromDb would refuse to
-        // overwrite local storage, leaving the displayed balance stale.
+        // Refetch dashboard after a short delay (propagation lag). keepPending
+        // merges any in-memory ticket the response has not yet included.
         setTimeout(function(){
-          try { loadPlayerDashboardFromDb().then(function(){
+          try { loadPlayerDashboardFromDb({ keepPending: true }).then(function(){
             try { renderMyBets(); } catch(_) {}
-            try { syncBalanceDisplays(); } catch(_) {}
           }).catch(function(){}); } catch(_) {}
         }, 400);
 
@@ -4026,7 +4597,16 @@ async function confirmBet() {
           try {
             var _r2=await _pbFetch('/api/bets/place',{method:'POST',body:JSON.stringify(_rp)});
             var _rt=await _r2.text(); var _rd2; try{ _rd2=JSON.parse(_rt); }catch(_){ _rd2={}; }
-            if (_rd2.ok) { showToast('\u2705 Bet placed at new odds','success'); try{loadPlayerDashboardFromDb();}catch(_){} try{renderMyBets();}catch(_){} }
+            if (_rd2.ok) {
+              showToast('\u2705 Bet placed at new odds','success');
+              try {
+                if (_rd2.balanceAfter != null && !isNaN(Number(_rd2.balanceAfter))) {
+                  applyDisplayedBalance(Number(_rd2.balanceAfter));
+                  _balanceFromServer = true;
+                }
+              } catch(_){}
+              try{ loadPlayerDashboardFromDb({ keepPending: true }).then(function(){ try{renderMyBets();}catch(_){} }); }catch(_){ try{renderMyBets();}catch(_){} }
+            }
             else { showToast((_rd2.code||_rd2.error||'placement failed').replace(/_/g,' '),'error'); }
           } catch(_e2){ showToast('Network error \u2014 try again','error'); }
         };
@@ -4181,6 +4761,7 @@ async function confirmBet() {
   try { clearSlip();      } catch(_) {}
   try { syncBalanceDisplays(); } catch(_) {}
   try { renderMyBets(); } catch(_) {}
+  try { dbgBanner('CONFIRMED: '+newTickets.length+' ticket(s)\nRisk: $'+riskAmount.toFixed(2),'#020'); } catch(_){}
   showToast('\u2705 '+newTickets.length+' bet'+(newTickets.length>1?'s':'')+' placed \xb7 Balance: '+fmtBalance());
   _cbLog('CONFIRM_BET_COMPLETE', 'path=localStorage tickets='+newTickets.length);
   _cbBtnReady();
@@ -4192,6 +4773,7 @@ document.addEventListener('click', function(e) {
   var btn = e.target.closest('[data-action="place-bet"]');
   if (!btn) return;
   if (btn.dataset.disabled === 'true') return; // not ready
+  
   window.bsPlaceBet();
 }, true);
 
@@ -4251,9 +4833,14 @@ async function submitDeleteRequest(ticketId) {
       });
       var data = await resp.json();
       if (data.ok) {
-        console.log('[cancel bet] DB success ticketId='+ticketId+' refund=$'+data.refundAmount);
+        
         showToast('✅ Bet canceled — $'+((data.refundAmount||0).toFixed(2))+' refunded', 'success');
-        // Hydrate from DB
+        try {
+          if (data.balanceAfter != null && !isNaN(Number(data.balanceAfter))) {
+            applyDisplayedBalance(Number(data.balanceAfter));
+            _balanceFromServer = true;
+          }
+        } catch(_e){}
         try { await loadPlayerDashboardFromDb(); } catch(_e){}
         try { renderMyBets(); } catch(_e){}
         return; // DO NOT fall through to localStorage path
@@ -4300,13 +4887,39 @@ async function submitDeleteRequest(ticketId) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 
+function closeAllBetMenus(exceptId) {
+  document.querySelectorAll('.bet-menu-wrap.open').forEach(function(el) {
+    if (exceptId && el.id === 'bet-menu-' + exceptId) return;
+    el.classList.remove('open');
+  });
+}
+
 // Request delete button delegation (player) — useCapture:true fires before stopPropagation
 document.addEventListener('click', function(e) {
   var btn = e.target.closest ? e.target.closest('[data-reqdelete]') : null;
   if (!btn) return;
   e.stopPropagation();
+  closeAllBetMenus();
   requestBetDelete(btn.dataset.reqdelete, e);
 }, true);
+
+// Active-ticket ⋯ menu: toggle one at a time; close on outside click.
+document.addEventListener('click', function(e) {
+  var menuBtn = e.target.closest ? e.target.closest('[data-bet-menu]') : null;
+  if (menuBtn) {
+    e.stopPropagation();
+    var id = menuBtn.getAttribute('data-bet-menu');
+    var wrap = document.getElementById('bet-menu-' + id);
+    if (!wrap) return;
+    var wasOpen = wrap.classList.contains('open');
+    closeAllBetMenus();
+    if (!wasOpen) wrap.classList.add('open');
+    return;
+  }
+  if (!(e.target.closest && e.target.closest('.bet-menu-wrap'))) {
+    closeAllBetMenus();
+  }
+});
 
 // ═══ TICKET-VERSION REFRESH (BUG #2) ═════════════════════════════════════════
 // Host actions (approve/deny/cancel) mutate pb-tickets + pb-tickets-version.
@@ -4315,20 +4928,35 @@ document.addEventListener('click', function(e) {
 // visible. The poll is cheap: read one int from localStorage every 3s.
 var _lastTicketsVersion = parseInt(localStorage.getItem('pb-tickets-version') || '0', 10) || 0;
 function _refreshFromStorage(reason) {
-  try { betTickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]'); } catch(ex) {}
-  syncBalanceDisplays();
+  if (!_playerTicketsFromDb) {
+    try { betTickets = JSON.parse(localStorage.getItem('pb-tickets') || '[]'); } catch(ex) {}
+  }
+  if (typeof loadPlayerDashboardFromDb === 'function') {
+    try {
+      loadPlayerDashboardFromDb().then(function(){
+        var sec = document.getElementById('mybets-section');
+        if (sec && sec.style.display !== 'none') {
+          try { renderMyBets(); } catch(_e){}
+        }
+      }).catch(function(){ syncBalanceDisplays(); });
+    } catch(_e) { syncBalanceDisplays(); }
+  } else {
+    syncBalanceDisplays();
+  }
   var sec = document.getElementById('mybets-section');
   if (sec && sec.style.display !== 'none') {
     renderMyBets();
   }
-  console.log('[tickets] refresh (' + reason + '): ' + betTickets.length + ' tickets, balance ' + playerBalance);
+  
 }
 window.addEventListener('storage', function(e) {
-  if (e.key === 'pb-balance') {
-    // Legacy key — still listen so any straggler writers don't desync displays.
-    loadBalance();
-    syncBalanceDisplays();
-    console.log('[balance] legacy pb-balance storage event:', playerBalance);
+  if (e.key === 'pb-balance' || e.key === 'pb-balance-start') {
+    if (typeof loadPlayerDashboardFromDb === 'function') {
+      try { loadPlayerDashboardFromDb(); } catch(_e) { loadBalance(); }
+    } else {
+      loadBalance();
+      syncBalanceDisplays();
+    }
   }
   if (e.key === 'pb-tickets' || e.key === 'pb-tickets-version') {
     var v = parseInt(localStorage.getItem('pb-tickets-version') || '0', 10) || 0;
@@ -4526,35 +5154,9 @@ function _gradeTicket(ticket, resultsMap, normalizedGames) {
       var nearest = _closestGameDiagnostic(sel, games);
       var selHomeTla2 = _tlaForName(sel.homeTeam);
       var selAwayTla2 = _tlaForName(sel.awayTeam);
-      console.log('[active ticket final check]\n' +
-        '  ticketId:     ' + (ticket.id || '?') + '\n' +
-        '  selection:    ' + (sel.pick || '-') + '\n' +
-        '  matchup:      ' + (sel.matchup || sel.game || '-') + '\n' +
-        '  gameId:       ' + (sel.gameId  || '-') + '\n' +
-        '  selHome:      ' + (sel.homeTeam || '-') + ' (TLA=' + (selHomeTla2 || '?') + ')\n' +
-        '  selAway:      ' + (sel.awayTeam || '-') + ' (TLA=' + (selAwayTla2 || '?') + ')\n' +
-        '  matchedGame:  ' + (nearest ? (nearest.away + ' @ ' + nearest.home) : 'none') + '\n' +
-        '  matched:      no\n' +
-        '  gameStatus:   ' + (nearest ? (nearest.status || '-') : '-') + '\n' +
-        '  homeScore:    ' + (nearest && nearest.home_score != null ? nearest.home_score : '-') + '\n' +
-        '  awayScore:    ' + (nearest && nearest.away_score != null ? nearest.away_score : '-') + '\n' +
-        '  skipReason:   ' + (
-          !games.length         ? 'no_completed_games_in_window' :
-          (!selHomeTla2 || !selAwayTla2) ? 'team_tla_unresolved (extend MLB_TEAM_ALIASES)' :
-          nearest               ? 'tla_pair_mismatch_with_nearest' :
-          'no_candidate_in_window'
-        ));
+      
       // Tony-spec mirror log so the skip path matches the requested shape.
-      console.log('[grade skipped]\n' +
-        '  reason:     ' + (
-          !games.length         ? 'no_completed_games_in_window' :
-          (!selHomeTla2 || !selAwayTla2) ? 'team_tla_unresolved' :
-          nearest               ? 'tla_pair_mismatch_with_nearest' :
-          'no_candidate_in_window'
-        ) + '\n' +
-        '  ticketId:   ' + (ticket.id || '?') + '\n' +
-        '  pick:       ' + (sel.pick || '-') + '\n' +
-        '  gameStatus: ' + (nearest ? (nearest.status || '-') : '-'));
+      
       return null;
     }
     // Normalize team aliases on BOTH sides before handing to the grading
@@ -4573,37 +5175,12 @@ function _gradeTicket(ticket, resultsMap, normalizedGames) {
              : __as > __hs ? prepared.game.away
              : 'push')
           : 'pending';
-      console.log('[grade candidate]\n' +
-        '  ticketId:       ' + (ticket.id || '?') + '\n' +
-        '  legIndex:       ' + i + '\n' +
-        '  pick:           ' + (sel.pick || '-') + '\n' +
-        '  normalizedPick: ' + (prepared.sel.pick || '-') + '\n' +
-        '  matchedGameId:  ' + (gameResult.id || '-') + '\n' +
-        '  homeTeam:       ' + (prepared.game.home || '-') + '\n' +
-        '  awayTeam:       ' + (prepared.game.away || '-') + '\n' +
-        '  status:         ' + (gameResult.status || '-') + '\n' +
-        '  winner:         ' + __winner);
+      
     } catch(_e){}
     var legResult = _gradeSingleLeg(prepared.sel, prepared.game);
     if (!legResult) {
-      console.log('[active ticket final check]\n' +
-        '  ticketId:     ' + (ticket.id || '?') + '\n' +
-        '  selection:    ' + (sel.pick || '-') + '\n' +
-        '  matchup:      ' + (sel.matchup || sel.game || '-') + '\n' +
-        '  gameId:       ' + (sel.gameId  || '-') + '\n' +
-        '  selHome:      ' + (sel.homeTeam || '-') + '\n' +
-        '  selAway:      ' + (sel.awayTeam || '-') + '\n' +
-        '  matchedGame:  ' + (gameResult.away || '?') + ' @ ' + (gameResult.home || '?') + '\n' +
-        '  matched:      yes\n' +
-        '  gameStatus:   ' + (gameResult.status || '-') + '\n' +
-        '  homeScore:    ' + (gameResult.home_score != null ? gameResult.home_score : '-') + '\n' +
-        '  awayScore:    ' + (gameResult.away_score != null ? gameResult.away_score : '-') + '\n' +
-        '  skipReason:   leg_unable_to_grade (market=' + (sel.market||'-') + ' pick="' + (sel.pick||'-') + '")');
-      console.log('[grade skipped]\n' +
-        '  reason:     leg_unable_to_grade\n' +
-        '  ticketId:   ' + (ticket.id || '?') + '\n' +
-        '  pick:       ' + (sel.pick || '-') + '\n' +
-        '  gameStatus: ' + (gameResult.status || '-'));
+      
+      
       return null;
     }
     legResults.push(legResult);
@@ -4891,7 +5468,7 @@ function _findGameForSelection(sel, normalizedGames, resultsMap) {
   // SAFETY GATE: future game never gradeable
   var selMs = _selCommenceMs(sel);
   if (selMs > 0 && selMs > Date.now()) {
-    console.log('[grade skipped]\n  reason:     future_game_not_gradeable\n  ticketId:   '+(sel._ticketId||'?')+'\n  commenceTime: '+new Date(selMs).toISOString());
+    
     return null;
   }
 
@@ -4954,19 +5531,10 @@ function _findGameForSelection(sel, normalizedGames, resultsMap) {
   }
 
   // ── Audit log ──────────────────────────────────────────────────────────
-  console.log('[grading match audit]',
-    '\n  ticketId:       ', ticketId,
-    '\n  legId:          ', legId,
-    '\n  providerGameId: ', provId || '(none)',
-    '\n  canonicalKey:   ', cKey || '(none)',
-    '\n  matchMethod:    ', method,
-    '\n  candidateCount: ', result ? 1 : (candidates.length || candidateCount),
-    '\n  matchedGame:    ', result ? (result.away+' @ '+result.home+' ['+result.id+']') : '(none)',
-    '\n  reason:         ', reason || (result ? 'matched' : 'no_match_found')
-  );
+  
 
   if (!result && reason) {
-    console.log('[grade skipped]\n  reason:     '+reason+'\n  ticketId:   '+ticketId+'\n  method:     '+method+'\n  candidates: '+candidateCount);
+    
   }
 
   return result || null;
@@ -4991,7 +5559,7 @@ function repairTicketGameIdentity(ticket) {
   });
   var repaired = repairedCount > 0;
   if (repaired) {
-    console.log('[repair ticket identity] ticketId:', ticket.id, 'selectionsRepaired:', repairedCount);
+    
     // Persist
     try {
       var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
@@ -5010,7 +5578,7 @@ function repairAllTicketIdentities() {
   var active = tickets.filter(function(t){ var s=(t.status||'').toLowerCase(); return s==='active'||s==='open'; });
   var total = 0;
   active.forEach(function(t){ var r = repairTicketGameIdentity(t); if(r.repaired) total += r.selectionsRepaired; });
-  console.log('[repair all tickets] repaired', total, 'leg identities across', active.length, 'active tickets');
+  
   return { ticketsChecked: active.length, legsRepaired: total };
 }
 window.repairAllTicketIdentities = repairAllTicketIdentities;
@@ -5028,7 +5596,7 @@ async function runServerGrade(opts) {
   var pid  = _safeId(pl.id != null ? pl.id : pl.username);
   var cid  = _safeId(club.id != null ? club.id : club.clubId);
 
-  console.log('[server grade] starting — playerId:', pid, 'clubId:', cid);
+  
   try {
     var body = { daysBack: opts.daysBack || 3 };
     if (pid) body.playerId = pid;
@@ -5048,20 +5616,13 @@ async function runServerGrade(opts) {
     if (data.devBypass || data.skipped) { return data; }
     _serverGradeLastResult = data;
 
-    console.log('[server grade] done:',
-      '\n  checked:', data.checked,
-      '\n  graded:',  data.graded,
-      '\n  skipped:', data.skipped,
-      '\n  errors:',  data.errors && data.errors.length || 0,
-      '\n  devBypass:', data.devBypass || false
-    );
+    
 
     if (data.graded > 0) {
       // Hydrate My Bets from DB after server grading
       var hydrateResult = await loadPlayerDashboardFromDb();
-      if (hydrateResult && hydrateResult.sourceUsed === 'db') {
-        console.log('[server grade] hydrated betTickets from DB after grading');
-        syncBalanceDisplays();
+      if (hydrateResult && (hydrateResult.sourceUsed === 'db' || hydrateResult.source === 'db' || hydrateResult.ok)) {
+        
         try { renderMyBets(); } catch(_e){}
         try { showToast('✅ Server graded ' + data.graded + ' ticket(s)', 'success'); } catch(_e){}
       }
@@ -5079,12 +5640,7 @@ async function runServerGrade(opts) {
 async function checkServerGradeStatus() {
   try {
     var r = await fetch('/api/grade/status').then(function(r){ return r.json(); });
-    console.log('[server grade status]',
-      '\n  enabled:', r.enabled,
-      '\n  activeTicketCount:', r.activeTicketCount,
-      '\n  lastGradedAt:', r.lastGradedAt || '(never)',
-      '\n  recentGrades:', (r.recentGrades||[]).length
-    );
+    
     return r;
   } catch(e) {
     console.warn('[server grade status] error:', e.message);
@@ -5190,28 +5746,6 @@ function _prepareGradingInputs(sel, gameResult) {
   var awayOut = (raw.AwayTeam && MLB_TEAM_BY_TLA[raw.AwayTeam.toUpperCase()])
     ? MLB_TEAM_BY_TLA[raw.AwayTeam.toUpperCase()]
     : _canonicalizeTeamString(gameResult.away);
-
-  // TEMP DEBUG — prove the rewrite is what we expect.
-  try {
-    var hs = gameResult.home_score;
-    var as = gameResult.away_score;
-    var winnerRaw = (hs != null && as != null)
-      ? (hs > as ? String(gameResult.home || '').toLowerCase()
-                 : (as > hs ? String(gameResult.away || '').toLowerCase() : 'push'))
-      : 'pending';
-    var winnerCanon = (hs != null && as != null)
-      ? (hs > as ? homeOut.toLowerCase()
-                 : (as > hs ? awayOut.toLowerCase() : 'push'))
-      : 'pending';
-    console.log('[grade normalize]\n' +
-      '  ticketSel:        ' + (sel.matchup || sel.game || '-') + '\n' +
-      '  originalPick:     ' + pickIn + '\n' +
-      '  normalizedPick:   ' + pickOut + '\n' +
-      '  winner:           ' + winnerRaw + '\n' +
-      '  normalizedWinner: ' + winnerCanon + '\n' +
-      '  gameHomeRaw:      ' + (gameResult.home || '-') + ' -> ' + homeOut + '\n' +
-      '  gameAwayRaw:      ' + (gameResult.away || '-') + ' -> ' + awayOut);
-  } catch(_e){}
 
   // Clone shallowly; only override the fields _gradeSingleLeg reads.
   var selOut = {};
@@ -5358,7 +5892,7 @@ function _logSportsDataIOFinals(scores) {
                ' | status=' + (g.status || '-') +
                ' | gameId=' + (g.id || '-'));
   }
-  console.log(lines.join('\n'));
+  
 }
 window._logSportsDataIOFinals = _logSportsDataIOFinals;
 
@@ -5570,17 +6104,17 @@ function runBalanceReconciliation() {
     ? { expectedSum: _round(sumPlayer), liveAvailableMinusStarting: liveDeltaFromStarting }
     : null;
 
-  console.log('[balance reconciliation]');
-  console.log('  pbTickets:        ' + pbTickets.length);
-  console.log('  hostActiveBets:   ' + hostActiveBets.length);
-  console.log('  ledger rows:      ' + ledger.length);
-  console.log('  settlements:      ' + settlements.length);
-  console.log('  mismatches:       ' + mismatches.length);
-  console.log('  hostMirror orphans (in host, not in pb-tickets): ' + orphans.length);
-  console.log('  sum playerDeltaExpected: ' + _round(sumPlayer));
-  console.log('  sum hostDeltaExpected:   ' + _round(sumHost));
+  
+  
+  
+  
+  
+  
+  
+  
+  
   if (liveDeltaFromStarting != null) {
-    console.log('  live (available - starting): ' + liveDeltaFromStarting);
+    
   }
   if (aggregateDrift) {
     console.warn('  AGGREGATE DRIFT: per-ticket sum (' + aggregateDrift.expectedSum +
@@ -5606,10 +6140,10 @@ function runBalanceReconciliation() {
         };
       }));
     } else {
-      rows.forEach(function(r){ console.log(JSON.stringify(r)); });
+      rows.forEach(function(r){  });
     }
   } catch(_e) {
-    rows.forEach(function(r){ console.log(JSON.stringify(r)); });
+    rows.forEach(function(r){  });
   }
 
   if (mismatches.length) {
@@ -5618,7 +6152,7 @@ function runBalanceReconciliation() {
       console.warn('  ' + r.ticketId + ' (' + r.sport + ', ' + r.status + ') -> ' + r.issue);
     });
   } else {
-    console.log('[balance reconciliation] all rows consistent.');
+    
   }
   if (orphans.length) {
     console.warn('[balance reconciliation] ' + orphans.length + ' host orphan ticket(s) not in pb-tickets:');
@@ -5776,28 +6310,28 @@ function runSinglePlayerBetAudit(playerId) {
     match:                issues.length === 0
   };
 
-  console.log('[player audit] ' + playerId);
-  console.log('  startingBalance:       $' + report.startingBalance.toFixed(2));
-  console.log('  activeRisk:            $' + report.activeRisk.toFixed(2));
-  console.log('  settledWins (profit):  $' + report.settledWins.toFixed(2));
-  console.log('  settledLosses (risk):  $' + report.settledLosses.toFixed(2));
-  console.log('  pushVoidRisk:          $' + report.pushVoidRisk.toFixed(2));
-  console.log('  balanceExpected:       $' + report.balanceExpected.toFixed(2));
+  
+  
+  
+  
+  
+  
+  
   if (report.balanceDisplayed != null) {
-    console.log('  balanceDisplayed:      $' + report.balanceDisplayed.toFixed(2) + (report.isCurrentPlayer ? '' : ' (not current player)'));
+    
   } else {
-    console.log('  balanceDisplayed:      (not current player — cannot compare to live)');
+    
   }
-  console.log('  hostAtRiskFromPlayer:  $' + report.hostAtRiskFromPlayer.toFixed(2));
-  console.log('  hostPnlFromPlayer:     ' + (report.hostPnlFromPlayer >= 0 ? '+$' : '-$') + Math.abs(report.hostPnlFromPlayer).toFixed(2));
-  console.log('  ticketCount (pb):      ' + report.ticketCount);
-  console.log('  ticketCount (host):    ' + report.hostTicketCount);
-  console.log('  sports:                ' + (Object.keys(sports).length ? JSON.stringify(sports) : '(none)'));
+  
+  
+  
+  
+  
   if (issues.length) {
     console.warn('  issues:');
     issues.forEach(function(x){ console.warn('    - ' + x); });
   } else {
-    console.log('  match:                 true');
+    
   }
   return report;
 }
@@ -5831,13 +6365,13 @@ function runMultiPlayerBetAudit() {
   var unownedPb   = pbTickets.filter(function(t){ return t && !t.playerId; }).length;
   var unownedHost = hostActiveBets.filter(function(t){ return t && !t.playerId; }).length;
 
-  console.log('[multi-player audit]');
-  console.log('  distinctPlayerIds:    ' + pids.length + ' (' + (pids.join(', ') || 'none') + ')');
-  console.log('  pbTicketsTotal:       ' + pbTickets.length);
-  console.log('  hostActiveBetsTotal:  ' + hostActiveBets.length);
-  console.log('  unowned pb (no pid):  ' + unownedPb);
-  console.log('  unowned host (no pid):' + unownedHost);
-  console.log('  duplicate ticket ids: ' + duplicateIds.length + (duplicateIds.length ? ' (' + duplicateIds.join(', ') + ')' : ''));
+  
+  
+  
+  
+  
+  
+  
 
   var rows = [];
   pids.forEach(function(pid){
@@ -5858,9 +6392,9 @@ function runMultiPlayerBetAudit() {
 
   try {
     if (typeof console.table === 'function') console.table(rows);
-    else rows.forEach(function(r){ console.log(JSON.stringify(r)); });
+    else rows.forEach(function(r){  });
   } catch (_e) {
-    rows.forEach(function(r){ console.log(JSON.stringify(r)); });
+    rows.forEach(function(r){  });
   }
 
   // Cross-player ID bleed check
@@ -5921,31 +6455,31 @@ function dumpTicketById(ticketId) {
   var host = hostMirror.find(function(t){ return t && t.id === ticketId; }) || null;
   var rows = ledger.filter(function(L){ return L && L.ticketId === ticketId; });
 
-  console.log('[dumpTicketById] ' + ticketId);
+  
   if (pb) {
-    console.log('--- pb-tickets entry ---');
-    console.log(JSON.stringify(pb, null, 2));
+    
+    
     var legs = Array.isArray(pb.selections) ? pb.selections : (Array.isArray(pb.legs) ? pb.legs : []);
-    console.log('--- legs (' + legs.length + ') ---');
+    
     legs.forEach(function(s, i){
       var keys = (s && typeof s === 'object') ? Object.keys(s) : [];
-      console.log('  leg[' + i + '] keys: ' + (keys.length ? keys.join(', ') : '(none)'));
-      console.log('  leg[' + i + '] json: ' + JSON.stringify(s));
+      
+      
     });
   } else {
     console.warn('--- not found in pb-tickets ---');
   }
   if (host) {
-    console.log('--- hostActiveBets mirror entry ---');
-    console.log(JSON.stringify(host, null, 2));
+    
+    
   } else {
-    console.log('--- no hostActiveBets mirror entry ---');
+    
   }
   if (rows.length) {
-    console.log('--- pb-ledger rows for this ticket (' + rows.length + ') ---');
-    rows.forEach(function(L, i){ console.log('  [' + i + '] ' + JSON.stringify(L)); });
+    
+    rows.forEach(function(L, i){  });
   } else {
-    console.log('--- no pb-ledger rows for this ticket ---');
+    
   }
   return { pb: pb, host: host, ledger: rows };
 }
@@ -5957,7 +6491,7 @@ window.dumpTicketById = dumpTicketById;
 // is hard-coded per push so it changes commit-over-commit.
 // ---------------------------------------------------------------------------
 try {
-  console.log('[my bets bundle] commit=9ab4da5+display — ticketCard supports {label,name,game} legs; dumpTicketById available');
+  
 } catch(_e){}
 
 // Main grading entry point — called by Check Results button
@@ -5992,7 +6526,7 @@ window._ticketSportKey         = _ticketSportKey;
 window._isSupportedForGrading  = _isSupportedForGrading;
 
 async function checkOpenTickets() {
-  console.log('[grading start] checking active tickets');
+  
   var btn = document.getElementById('check-results-btn');
   if (btn) { btn.textContent = '⏳ Checking…'; btn.disabled = true; }
 
@@ -6011,12 +6545,9 @@ async function checkOpenTickets() {
       var summary = skippedUnsupported.map(function(t){
         return '    - ' + (t.id || '?') + ' sport=' + (_ticketSportKey(t) || '(empty)');
       }).join('\n');
-      console.log('[grading skipped unsupported sport]\n' +
-        '  count: ' + skippedUnsupported.length + '\n' +
-        '  supportedSports: ' + JSON.stringify(GRADER_SUPPORTED_SPORTS) + '\n' +
-        '  tickets:\n' + summary);
+      
     }
-    console.log('[grading start] active tickets (after sport allowlist):', activeTickets.length);
+    
 
     if (!activeTickets.length) {
       showToast('No active bets to grade');
@@ -6031,13 +6562,7 @@ async function checkOpenTickets() {
       throw new Error('Scores unavailable: ' + scores.error);
     }
     _logSportsDataIOFinals(scores);
-    console.log('[auto finalize pass]\n' +
-      '  source:         sportsdataio\n' +
-      '  datesFetched:   ' + (scores.datesFetched || []).join(', ') + '\n' +
-      '  gamesByDate:    ' + JSON.stringify(scores.gamesByDate || {}) + '\n' +
-      '  totalGames:     ' + scores.games.length + '\n' +
-      '  completedGames: ' + scores.completedCount + '\n' +
-      '  activeTickets:  ' + activeTickets.length);
+    
 
     var gradedCount = 0;
     var totalPayout = 0;
@@ -6045,7 +6570,7 @@ async function checkOpenTickets() {
     activeTickets.forEach(function(ticket) {
       var gradeResult = _gradeTicket(ticket, scores.resultsMap, scores.completedGames);
       if (!gradeResult) {
-        console.log('[ticket graded] NOT YET COMPLETE:', ticket.id);
+        
         return;
       }
 
@@ -6111,15 +6636,7 @@ async function checkOpenTickets() {
       ticket.grading.fullPayoutAdded = result === 'won'  ? payout : (result === 'push' ? ticket.riskAmount : 0);
       totalPayout += payout;
 
-      console.log('[balance grading audit]',
-        '\n  ticketId:        ', ticket.id,
-        '\n  result:          ', result.toUpperCase(),
-        '\n  risk:            $' + (ticket.riskAmount||0).toFixed(2),
-        '\n  payout:          $' + payout.toFixed(2),
-        '\n  balanceBeforeGrade: $' + balBefore.toFixed(2),
-        '\n  balanceChange:   $' + balChange.toFixed(2),
-        '\n  balanceAfterGrade:  $' + balAfter.toFixed(2)
-      );
+      
 
       addLedgerEntry({
         id: 'G'+Date.now()+Math.random().toString(36).slice(2,6),
@@ -6136,13 +6653,7 @@ async function checkOpenTickets() {
         finalScoreObj: finalScoreObj   // structured for the host-side grader
       });
 
-      console.log('[auto graded ticket]',
-        '\n  ticketId:    ', ticket.id,
-        '\n  result:      ', result.toUpperCase(),
-        '\n  finalScore:  ', legacyScore,
-        '\n  finalScoreObj:', JSON.stringify(finalScoreObj),
-        '\n  source:      sportsdataio (Check Results)'
-      );
+      
       gradedCount++;
     });
 
@@ -6168,13 +6679,10 @@ async function checkOpenTickets() {
       }
     });
     localStorage.setItem('hostActiveBets', JSON.stringify(hostBets));
-    console.log('[host balance graded]\n' +
-      '  hostActiveBets total:    ' + hostBets.length + '\n' +
-      '  hostActiveBets updated:  ' + hostUpdated + '\n' +
-      '  source:                  Check Results');
+    
 
     syncBalanceDisplays();
-    console.log('[balance updated] after grading', gradedCount, 'tickets');
+    
 
     // Update last graded timestamp
     localStorage.setItem('pb-last-graded', new Date().toISOString());
@@ -6242,13 +6750,7 @@ function revertFutureGrades() {
     var check = _canGradeTicket(t, nowMs);
     if (check.canGrade) return;
     var prevStatus = t.status;
-    console.log('[future-game-block]',
-      '\n  ticketId:     ', t.id || '?',
-      '\n  commenceTime: ', check.commenceTime,
-      '\n  now:          ', check.now,
-      '\n  blockedReason:', check.reason,
-      '\n  prevStatus:   ', prevStatus
-    );
+    
     t.status          = 'active';
     t.gradedAt        = null;
     t.grading         = null;
@@ -6276,7 +6778,7 @@ function revertFutureGrades() {
     try { betTickets = tickets; } catch(_e) {}
     try { syncBalanceDisplays(); } catch(_e) {}
     try { renderMyBets(); } catch(_e) {}
-    console.log('[future-game-block] reverted', reverted.length, 'ticket(s) to active:', reverted.join(', '));
+    
     try { showToast && showToast('⚠️ ' + reverted.length + ' future-game grade(s) reverted → Active'); } catch(_e) {}
   }
   return { reverted: reverted };
@@ -6284,35 +6786,131 @@ function revertFutureGrades() {
 window.revertFutureGrades = revertFutureGrades;
 
 // ── PLAYER DASHBOARD DB READ (Phase C) ──────────────────────────────────────────────────
-async function loadPlayerDashboardFromDb() {
+function _normalizeDbTicket(t) {
+  if (!t || typeof t !== 'object') return t;
+  var rawLegs = [];
+  if (Array.isArray(t.selections) && t.selections.length) rawLegs = t.selections;
+  else if (Array.isArray(t.legs) && t.legs.length) rawLegs = t.legs;
+  var selections = rawLegs.map(function(s) {
+    if (!s || typeof s !== 'object') return s;
+    var home = s.homeTeam || s.home_team || '';
+    var away = s.awayTeam || s.away_team || '';
+    return Object.assign({}, s, {
+      pick:      s.pick || s.label || s.name || '',
+      market:    s.market || '',
+      odds:      s.odds,
+      homeTeam:  home,
+      awayTeam:  away,
+      matchup:   s.matchup || s.game || (away && home ? away + ' @ ' + home : ''),
+      sport:     s.sport,
+      line:      s.line,
+      side:      s.side
+    });
+  });
+  return Object.assign({}, t, {
+    id:              t.id,
+    type:            t.type || 'Single',
+    status:          t.status || 'active',
+    riskAmount:      t.riskAmount != null ? Number(t.riskAmount) : Number(t.risk_amount),
+    potentialProfit: t.potentialProfit != null ? Number(t.potentialProfit) : Number(t.potential_profit),
+    estimatedPayout: t.estimatedPayout != null ? Number(t.estimatedPayout) : Number(t.estimated_payout),
+    placedAt:        t.placedAt || t.placed_at,
+    gradedAt:        t.gradedAt || t.graded_at,
+    rrGroupId:       t.rrGroupId || t.rr_group_id,
+    selections:      selections,
+    source:          t.source || 'db'
+  });
+}
+
+function _applyDashboardTickets(data, opts) {
+  opts = opts || {};
+  var tix = (data && data.tickets) || {};
+  var allTix = []
+    .concat(tix.active || [])
+    .concat(tix.settled || [])
+    .concat(tix.canceled || [])
+    .map(_normalizeDbTicket);
+  if (opts.keepPending) {
+    var seen = {};
+    var seenGroups = {};
+    allTix.forEach(function(t) {
+      if (t && t.id) seen[String(t.id)] = true;
+      var g = t && (t.rrGroupId || t.rr_group_id);
+      if (g) seenGroups[String(g)] = true;
+    });
+    (Array.isArray(betTickets) ? betTickets : []).forEach(function(t) {
+      if (!t || !t.id || t.source === 'db-grouped' || seen[String(t.id)]) return;
+      var g = t.rrGroupId || t.rr_group_id;
+      if (g && seenGroups[String(g)]) return;
+      seen[String(t.id)] = true;
+      allTix.unshift(t);
+    });
+  }
+  betTickets = allTix;
+  _playerTicketsFromDb = true;
+  try { localStorage.setItem('pb-tickets', JSON.stringify(allTix)); } catch(_e) {}
+}
+
+async function loadPlayerDashboardFromDb(opts) {
+  opts = opts || {};
   var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
   var pid  = _safeId(pl.id != null ? pl.id : pl.username);
   var cid  = _safeId(club.id != null ? club.id : club.clubId);
-  if (!pid) return { ok:false, fallbackReason:'no_player_id' };
+  if (!pid) {
+    _balanceFromServer = false;
+    try { syncBalanceDisplays(); } catch(_e){}
+    return { ok:false, fallbackReason:'no_player_id' };
+  }
   try {
     var qs   = '?playerId='+encodeURIComponent(pid)+(cid?'&clubId='+encodeURIComponent(cid):'');
-    var resp = await fetch('/api/player/dashboard'+qs);
+    var resp = await (typeof _pbFetch === 'function' ? _pbFetch('/api/player/dashboard'+qs) : fetch('/api/player/dashboard'+qs));
     var data = await resp.json();
-    if (!data.ok || !data.balance) throw new Error(data.error||'missing balance');
-    var b = data.balance;
-    if (isNaN(b.availableBalance)) throw new Error('NaN balance from DB');
-    if (b.openRisk < 0) throw new Error('negative openRisk from DB');
-    // Hydrate betTickets from DB-derived active tickets
-    var allTix = (data.tickets.active||[]).concat(data.tickets.settled||[]).concat(data.tickets.canceled||[]);
-    if (allTix.length > 0) {
-      // DB is authoritative — always overwrite local cache when DB has tickets.
-      // Exception: if DB returns 0 tickets, keep local cache (propagation lag).
-      try { localStorage.setItem('pb-tickets', JSON.stringify(allTix)); betTickets = allTix; } catch(_e){}
+    if (!data.ok) throw new Error(data.error||'dashboard not ok');
+    if (data.tickets) {
+      try {
+        var _fetcher = typeof _pbFetch === 'function' ? _pbFetch : fetch;
+        var lr = await _fetcher('/api/mirror/tickets-with-legs'+qs);
+        var ld = await lr.json();
+        if (ld && Array.isArray(ld.legs) && ld.legs.length) {
+          var byId = {};
+          ld.legs.forEach(function(l) {
+            if (!l || !l.ticket_id) return;
+            if (!byId[l.ticket_id]) byId[l.ticket_id] = [];
+            byId[l.ticket_id].push(l);
+          });
+          ['active','settled','canceled'].forEach(function(k) {
+            (data.tickets[k] || []).forEach(function(t) {
+              if (t && t.id && byId[t.id] && !(t.selections && t.selections.length) && !(t.legs && t.legs.length)) {
+                t.legs = byId[t.id].slice().sort(function(a,b){ return (a.leg_index||0)-(b.leg_index||0); });
+              }
+            });
+          });
+        }
+      } catch(_le) {}
+      _applyDashboardTickets(data, opts);
     }
-    _applyBalanceToUI(b.availableBalance);
+    var b = data.balance;
+    if (b) {
+      if (b.availableBalance != null && isNaN(b.availableBalance)) throw new Error('NaN balance from DB');
+      if (b.openRisk < 0) throw new Error('negative openRisk from DB');
+    }
+    if (b && b.availableBalance != null && !isNaN(Number(b.availableBalance))) {
+      applyDisplayedBalance(Number(b.availableBalance));
+      _balanceFromServer = true;
+    } else {
+      _balanceFromServer = false;
+      syncBalanceDisplays();
+    }
     _updatePlayerSourceBadge('db');
-    console.log('[player dashboard db] playerId='+pid+' available=$'+b.availableBalance+' openRisk=$'+b.openRisk+' active='+data.tickets.active.length);
+    var _activeN = (data.tickets && data.tickets.active) ? data.tickets.active.length : 0;
+    
     return data;
   } catch(e) {
     console.warn('[player dashboard db] fallback to localStorage:', e.message);
+    _balanceFromServer = false;
+    try { syncBalanceDisplays(); } catch(_e){}
     _updatePlayerSourceBadge('localStorage');
-    try { syncBalanceDisplays(); } catch(_e) {}
     return { ok:false, fallbackReason:e.message };
   }
 }
@@ -6334,7 +6932,7 @@ function _updatePlayerSourceBadge(source) {
 }
 
 async function runPlayerDashboardDbAudit() {
-  console.log('[player dashboard db audit] ─── START ───');
+  
   var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
   var pid  = _safeId(pl.id != null ? pl.id : pl.username);
@@ -6351,19 +6949,7 @@ async function runPlayerDashboardDbAudit() {
   } catch(e) { fallbackReason = e.message; }
   var db = dbData && dbData.balance;
   var delta = db ? Math.abs((db.availableBalance||0) - localBal.available) : null;
-  console.log('[player dashboard db audit]',
-    '\n  playerId:         ', pid||'(none)',
-    '\n  clubId:           ', cid||'(none)',
-    '\n  localAvailable:   $', localBal.available,
-    '\n  dbAvailable:      ', db ? '$'+db.availableBalance : 'n/a',
-    '\n  localOpenRisk:    $', localBal.openRisk,
-    '\n  dbOpenRisk:       ', db ? '$'+db.openRisk : 'n/a',
-    '\n  delta:            ', delta !== null ? '$'+delta.toFixed(2)+(delta < 0.02 ? ' ✅' : ' ⚠️') : 'n/a',
-    '\n  dbActive:         ', dbData && dbData.tickets ? dbData.tickets.active.length : 'n/a',
-    '\n  dbWeek:           ', dbData && dbData.weekly ? dbData.weekly.currentWeek+' net=$'+dbData.weekly.settledNet : 'n/a',
-    '\n  fallbackReason:   ', fallbackReason||'none',
-    '\n  status:           ', !fallbackReason && delta<0.02 ? '✅ in_sync' : '⚠️ gap'
-  );
+  
   return dbData;
 }
 window.loadPlayerDashboardFromDb  = loadPlayerDashboardFromDb;
@@ -6379,11 +6965,11 @@ window.runPlayerDashboardDbAudit  = runPlayerDashboardDbAudit;
 async function gradeTodaysActiveTickets() {
   // Guard: browser grading blocked in server-authoritative mode
   if (_GRADING_MODE !== 'browser_fallback_dev') {
-    console.log('[browser grade blocked] server authoritative mode active — use runServerGrade()');
-    console.log('[browser grade blocked] to enable browser grading: enableBrowserGradeFallbackForSession()');
+    
+    
     return { blocked:true, reason:'server_authoritative', graded:0, skipped:0 };
   }
-  console.log('[live grading audit] ─── START (browser fallback mode) ───');
+  
   var nowMs = Date.now();
 
   // Step 1: Load canonical tickets
@@ -6396,10 +6982,10 @@ async function gradeTodaysActiveTickets() {
   hostBets.forEach(function(t){ if(t&&t.id&&!seen[t.id]){ tickets.push(t); seen[t.id]=true; } });
 
   var active = tickets.filter(function(t){ var s=(t.status||'').toLowerCase(); return (s==='active'||s==='open') && !t.gradedAt; });
-  console.log('[live grading audit] active tickets:', active.length, '| total:', tickets.length);
+  
 
   if (!active.length) {
-    console.log('[live grading audit] nothing to grade');
+    
     try { showToast('No active tickets to grade', 'info'); } catch(_e){}
     return { graded: 0, skipped: 0, results: [] };
   }
@@ -6414,14 +7000,14 @@ async function gradeTodaysActiveTickets() {
     return { graded: 0, skipped: 0, error: e.message };
   }
   if (scores.error) {
-    console.log('[live grading audit] scores unavailable:', scores.error);
+    
     try { showToast('Scores unavailable: ' + scores.error, 'warning'); } catch(_e){}
     return { graded: 0, skipped: 0, error: scores.error };
   }
 
   var resultsMap     = scores.resultsMap;
   var completedGames = scores.completedGames || [];
-  console.log('[live grading audit] completed games:', completedGames.length);
+  
 
   var auditRows = [];
   var gradedCount = 0, skippedCount = 0;
@@ -6596,29 +7182,12 @@ async function gradeTodaysActiveTickets() {
     try { showToast('No tickets graded — check console for details', 'info'); } catch(_e) {}
   }
 
-  console.log('[live grading audit] ─── DONE ─── graded=' + gradedCount + ' skipped=' + skippedCount);
+  
   return { graded: gradedCount, skipped: skippedCount, results: auditRows };
 }
 
 function _logAuditRow(row) {
-  console.log('[live grading audit]',
-    '\n  ticketId:           ', row.ticketId,
-    '\n  type:               ', row.type,
-    '\n  legs:               ', row.legs,
-    '\n  canonicalGameKey:   ', row.canonicalGameKey,
-    '\n  commenceTime:       ', row.commenceTime,
-    '\n  matchedGame:        ', row.matchedGame || '(none)',
-    '\n  gameStatus:         ', row.gameStatus  || '(none)',
-    '\n  finalScore:         ', row.finalScore  || '(none)',
-    '\n  legResult:          ', row.legResult   || '(none)',
-    '\n  ticketResult:       ', row.ticketResult || '(none)',
-    '\n  playerBalanceBefore:', row.playerBalanceBefore != null ? ('$'+row.playerBalanceBefore.toFixed(2)) : 'n/a',
-    '\n  playerBalanceAfter: ', row.playerBalanceAfter  != null ? ('$'+row.playerBalanceAfter.toFixed(2))  : 'n/a',
-    '\n  hostExposureBefore: ', '$'+(row.hostExposureBefore||0).toFixed(2),
-    '\n  hostExposureAfter:  ', row.hostExposureAfter != null ? ('$'+row.hostExposureAfter.toFixed(2)) : 'n/a',
-    '\n  hostProfitDelta:    ', row.hostProfitDelta  != null ? ((row.hostProfitDelta>=0?'+':'')+row.hostProfitDelta.toFixed(2)) : 'n/a',
-    '\n  reason:             ', row.reason || ''
-  );
+  
 }
 
 window.gradeTodaysActiveTickets = gradeTodaysActiveTickets;
@@ -6630,7 +7199,7 @@ var _autoGradeRunning  = false;
 async function _autoGradePoll() {
   // Guard: in server-authoritative mode this function must never run
   if (_GRADING_MODE !== 'browser_fallback_dev') {
-    console.log('[browser grade blocked] _autoGradePoll suppressed — server authoritative mode');
+    
     return;
   }
   if (_autoGradeRunning) return;
@@ -6655,11 +7224,7 @@ async function _autoGradePoll() {
       var summaryAuto = skippedUnsupportedAuto.map(function(t){
         return '    - ' + (t.id || '?') + ' sport=' + (_ticketSportKey(t) || '(empty)');
       }).join('\n');
-      console.log('[grading skipped unsupported sport]\n' +
-        '  source: auto-poll\n' +
-        '  count:  ' + skippedUnsupportedAuto.length + '\n' +
-        '  supportedSports: ' + JSON.stringify(GRADER_SUPPORTED_SPORTS) + '\n' +
-        '  tickets:\n' + summaryAuto);
+      
     }
 
     if (!activeMLB.length) {
@@ -6670,7 +7235,7 @@ async function _autoGradePoll() {
     // SportsDataIO ONLY — grading never reads from any live odds provider.
     var scores = await _fetchAndNormalizeScores({ daysBack: 2 });
     if (scores.error) {
-      console.log('[auto grade poll] scores unavailable:', scores.error);
+      
       _autoGradeRunning = false;
       return;
     }
@@ -6679,13 +7244,7 @@ async function _autoGradePoll() {
     var completedGames = scores.completedGames || [];
 
     _logSportsDataIOFinals(scores);
-    console.log('[auto finalize pass]\n' +
-      '  source:         sportsdataio\n' +
-      '  datesFetched:   ' + (scores.datesFetched || []).join(', ') + '\n' +
-      '  gamesByDate:    ' + JSON.stringify(scores.gamesByDate || {}) + '\n' +
-      '  totalGames:     ' + scores.games.length + '\n' +
-      '  completedGames: ' + completedGames.length + '\n' +
-      '  activeTickets:  ' + activeMLB.length);
+    
 
     var ticketsGraded = 0;
 
@@ -6697,11 +7256,7 @@ async function _autoGradePoll() {
         // HARD GATE: never grade a ticket whose game hasn't started yet
         var _gateCheck = _canGradeTicket(ticket, Date.now());
         if (!_gateCheck.canGrade) {
-          console.log('[future-game-block]',
-            '\n  ticketId:     ', ticket.id,
-            '\n  commenceTime: ', _gateCheck.commenceTime,
-            '\n  now:          ', _gateCheck.now,
-            '\n  blockedReason:', _gateCheck.reason);
+          
           return; // skip — leave ticket active
         }
 
@@ -6743,22 +7298,8 @@ async function _autoGradePoll() {
         ticket.grading.balanceAfter  = balAfter;
         ticket.grading.balanceChange = balChange;
 
-        console.log('[balance grading audit]',
-          '\n  ticketId:           ', ticket.id,
-          '\n  result:             ', result.toUpperCase(),
-          '\n  risk:               $' + (parseFloat(ticket.riskAmount)||0).toFixed(2),
-          '\n  payout:             $' + payout.toFixed(2),
-          '\n  balanceBeforeGrade: $' + balBefore.toFixed(2),
-          '\n  balanceChange:      ' + (balChange >= 0 ? '+$' : '-$') + Math.abs(balChange).toFixed(2),
-          '\n  balanceAfterGrade:  $' + balAfter.toFixed(2)
-        );
-        console.log('[auto graded ticket]',
-          '\n  ticketId:    ', ticket.id,
-          '\n  game:        ', legacyScore,
-          '\n  result:      ', result.toUpperCase(),
-          '\n  finalScoreObj:', JSON.stringify(finalScoreObj),
-          '\n  source:      sportsdataio (auto-poll)'
-        );
+        
+        
 
         addLedgerEntry({
           id: 'AG' + Date.now() + Math.random().toString(36).slice(2, 6),
@@ -6783,12 +7324,7 @@ async function _autoGradePoll() {
       }
     });
 
-    console.log('[auto grade tick]',
-      '\n  gamesChecked:   ', completedGames.length,
-      '\n  ticketsChecked: ', activeMLB.length,
-      '\n  ticketsGraded:  ', ticketsGraded,
-      '\n  timestamp:      ', ts
-    );
+    
 
     if (ticketsGraded > 0) {
       // Persist all changes
@@ -6816,10 +7352,7 @@ async function _autoGradePoll() {
           }
         });
         localStorage.setItem('hostActiveBets', JSON.stringify(hostBets));
-        console.log('[host balance graded]\n' +
-          '  hostActiveBets total:    ' + hostBets.length + '\n' +
-          '  hostActiveBets updated:  ' + hostUpdated + '\n' +
-          '  source:                  auto-poll');
+        
       } catch(e) {
         console.error('[host balance graded] mirror failed:', e && e.message || e);
       }
@@ -6854,7 +7387,7 @@ function _getActorHeaders() {
   try { if (localStorage.getItem('pb-actor-role')) role = localStorage.getItem('pb-actor-role'); } catch(_e){}
   // Phase C: include signed session token if available (server will trust token over raw headers)
   var token = null;
-  try { token = localStorage.getItem('pb-session-token'); } catch(_e){}
+  try { token = localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token') || TOKEN; } catch(_e){}
   var headers = {
     'Content-Type': 'application/json',
     'X-Actor-Id':   pid || 'anonymous',
@@ -6887,6 +7420,11 @@ function _generateIdemKey(prefix) {
 // _pbFetch: wraps fetch() with auth headers + idempotency key for money actions
 async function _pbFetch(url, opts) {
   opts = opts || {};
+  var path = _pathFromUrl(url);
+  var retried = !!opts._retried;
+  if (!retried && !_isAuthApiPath(path)) {
+    try { await _ensureFreshToken(); } catch (_e) {}
+  }
   var headers = Object.assign(_getActorHeaders(), opts.headers || {});
   // Auto-inject Idempotency-Key for money POST endpoints
   if (opts.method === 'POST' && _MONEY_ENDPOINTS.has(url.replace(/\?.*$/,''))) {
@@ -6900,10 +7438,24 @@ async function _pbFetch(url, opts) {
       headers['Idempotency-Key'] = existingKey;
     }
   }
-  var resp = fetch(url, Object.assign({}, opts, { headers }));
-  // Clear pending key after request completes
-  resp.then(function() { delete _pendingIdemKeys[url]; })
-      .catch(function() { delete _pendingIdemKeys[url]; });
+  var fetchOpts = Object.assign({}, opts, { headers: headers });
+  delete fetchOpts._retried;
+  var resp = await fetch(url, fetchOpts);
+  if (!retried && !_isAuthApiPath(path)) {
+    var expired = resp.status === 401;
+    if (!expired && resp.status === 403) {
+      try {
+        var peek = await resp.clone().json();
+        expired = peek && (peek.error === 'expired_token' || /expired token/i.test(String(peek.error || peek.message || '')));
+      } catch (_e) {}
+    }
+    if (expired) {
+      var refreshed = await _refreshAuthToken();
+      if (refreshed) return _pbFetch(url, Object.assign({}, opts, { _retried: true }));
+      _redirectToSignIn();
+    }
+  }
+  delete _pendingIdemKeys[url];
   return resp;
 }
 
@@ -6921,8 +7473,9 @@ async function _acquireSessionToken(actorId, clubId, roleHintDevOnly) {
     });
     var data = await resp.json();
     if (data.ok && data.token) {
-      localStorage.setItem('pb-session-token', data.token);
+      _storeAuthToken(data.token, data.expiresIn);
       localStorage.setItem('pb-actor-role', data.role);
+      
       return data;
     } else {
       console.warn('[auth] token acquisition denied:', data.error);
@@ -6941,10 +7494,10 @@ var _evPollTimer = null;
 var _evPolling   = false;
 
 var _EV_ACTIONS = {
-  ticket_graded:     function() { try{ loadPlayerDashboardFromDb(); }catch(_e){} try{ renderMyBets(); }catch(_e){} syncBalanceDisplays(); },
-  balance_changed:   function() { try{ loadPlayerDashboardFromDb(); }catch(_e){} syncBalanceDisplays(); },
-  ticket_placed:     function() { try{ renderMyBets(); }catch(_e){} syncBalanceDisplays(); },
-  ticket_canceled:   function() { try{ renderMyBets(); }catch(_e){} syncBalanceDisplays(); },
+  ticket_graded:     function() { try{ loadPlayerDashboardFromDb().then(function(){ try{ renderMyBets(); }catch(_e){} }); }catch(_e){ try{ renderMyBets(); }catch(_e2){} try{ if(!_balanceFromServer) syncBalanceDisplays(); }catch(_e3){} } },
+  balance_changed:   function() { try{ loadPlayerDashboardFromDb(); }catch(_e){} },
+  ticket_placed:     function() { try{ loadPlayerDashboardFromDb({ keepPending: true }).then(function(){ try{ renderMyBets(); }catch(_e){} }); }catch(_e){ try{ renderMyBets(); }catch(_e2){} try{ if(!_balanceFromServer) syncBalanceDisplays(); }catch(_e3){} } },
+  ticket_canceled:   function() { try{ loadPlayerDashboardFromDb().then(function(){ try{ renderMyBets(); }catch(_e){} }); }catch(_e){ try{ renderMyBets(); }catch(_e2){} try{ if(!_balanceFromServer) syncBalanceDisplays(); }catch(_e3){} } },
   odds_refreshed:    function() { try{ _checkMarketStatus&&_checkMarketStatus(); }catch(_e){} },
   payment_confirmed: function() { /* settlement panel refresh handled by host */ },
   payment_voided:    function() { /* settlement panel refresh handled by host */ },
@@ -6975,7 +7528,6 @@ async function _pollEvents() {
     actionSet.forEach(function(type) {
       try { _EV_ACTIONS[type](data.events.filter(function(e){ return e.type===type; })); } catch(_e){}
     });
-    if (data.events.length) console.log('[events] received', data.events.length, 'events, cursor='+_evCursor);
   } catch(_e) { /* fail silently — never block UI */ } finally { _evPolling=false; }
 }
 
@@ -6985,7 +7537,14 @@ function _startEventPoller() {
   // Pause when tab hidden
   document.addEventListener('visibilitychange', function() {
     if (document.hidden) { clearInterval(_evPollTimer); _evPollTimer=null; }
-    else { _evPollTimer=setInterval(_pollEvents,12000); _pollEvents(); }
+    else {
+      _evPollTimer=setInterval(_pollEvents,12000);
+      _pollEvents();
+      try { loadPlayerDashboardFromDb(); } catch(_e){}
+    }
+  });
+  window.addEventListener('pageshow', function() {
+    try { loadPlayerDashboardFromDb(); } catch(_e){}
   });
   _pollEvents(); // immediate
 }
@@ -6995,13 +7554,13 @@ window._pollEvents       = _pollEvents;
 
 // _verifyOrRefreshSession: called on boot + before sensitive actions
 // - If token present: verify via /api/auth/verify
-// - If near expiry (<30min): rotate via /api/auth/refresh
-// - If revoked/invalid: clear token, force dev flow
-var _SESSION_REFRESH_THRESHOLD_SEC = 30 * 60; // refresh if <30min left
+// - If near expiry (<5min): rotate via /api/auth/refresh or reissue via /api/auth/token
+// - If revoked/invalid: clear token
+var _SESSION_REFRESH_THRESHOLD_SEC = 5 * 60; // refresh if <5min left
 
 async function _verifyOrRefreshSession() {
   var token = null;
-  try { token = localStorage.getItem('pb-session-token'); } catch(_e){}
+  try { token = localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token'); } catch(_e){}
   if (!token) return { ok:false, reason:'no_token' };
 
   try {
@@ -7029,7 +7588,7 @@ async function _verifyOrRefreshSession() {
         var pl = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
         var secsLeft = pl.exp - Math.floor(Date.now()/1000);
         if (secsLeft > 0 && secsLeft < _SESSION_REFRESH_THRESHOLD_SEC) {
-          console.log('[session] near expiry ('+secsLeft+'s left) — refreshing');
+          
           return _refreshSession();
         }
       }
@@ -7042,19 +7601,13 @@ async function _verifyOrRefreshSession() {
 }
 
 async function _refreshSession() {
-  try {
-    var resp = await _pbFetch('/api/auth/refresh', { method:'POST' });
-    var data = await resp.json();
-    if (data.ok && data.token) {
-      localStorage.setItem('pb-session-token', data.token);
-      console.log('[session] refreshed newJti='+data.jti);
-      return { ok:true, refreshed:true, jti:data.jti };
-    }
-    console.warn('[session] refresh failed:', data.error);
-    return { ok:false, reason:data.error };
-  } catch(_e) {
-    return { ok:false, reason:'network_error' };
+  var ok = await _refreshAuthToken();
+  if (ok) {
+    
+    return { ok:true, refreshed:true };
   }
+  console.warn('[session] refresh failed');
+  return { ok:false, reason:'refresh_failed' };
 }
 
 async function _logout() {
@@ -7062,7 +7615,12 @@ async function _logout() {
     await _pbFetch('/api/auth/logout', { method:'POST' });
   } catch(_e){}
   try { localStorage.removeItem('pb-session-token'); } catch(_e){}
+  try { localStorage.removeItem('pb-sports-token'); } catch(_e){}
+  try { localStorage.removeItem('pb-token-expires'); } catch(_e){}
+  try { localStorage.removeItem('pb-player-email'); } catch(_e){}
+  try { localStorage.removeItem('pb-test-user'); } catch(_e){}
   try { localStorage.removeItem('pb-actor-role'); } catch(_e){}
+  
   return { ok:true };
 }
 
@@ -7075,14 +7633,14 @@ function enableBrowserGradeFallbackForSession() {
   _GRADING_MODE = 'browser_fallback_dev';
   sessionStorage.setItem('pb-grading-mode', 'browser_fallback_dev');
   _updateGradingSourceBadge('BrowserFallback DEV');
-  console.log('[grading authority] BROWSER FALLBACK ENABLED for this session — dev use only');
+  
   return 'Browser grading enabled (dev). Use disableBrowserGradeFallbackForSession() to restore.';
 }
 function disableBrowserGradeFallbackForSession() {
   _GRADING_MODE = 'server_authoritative';
   sessionStorage.removeItem('pb-grading-mode');
   _updateGradingSourceBadge('Server');
-  console.log('[grading authority] server authoritative mode restored');
+  
   return 'Server authoritative mode restored.';
 }
 function checkGradingAuthorityStatus() {
@@ -7099,21 +7657,21 @@ window.checkGradingAuthorityStatus           = checkGradingAuthorityStatus;
 
 function startAutoGradeDaemon() {
   if (_autoGradeInterval) return;
-  console.log('[auto grade daemon] started — 60s poll — mode:', _GRADING_MODE);
+  
   _dispatchGradePoll(); // immediate
   _autoGradeInterval = setInterval(_dispatchGradePoll, 60000);
 }
 
 function stopAutoGradeDaemon() {
   if (_autoGradeInterval) { clearInterval(_autoGradeInterval); _autoGradeInterval = null; }
-  console.log('[auto grade daemon] stopped');
+  
 }
 
 // Dispatch: server grade in normal mode, browser grade only in dev fallback
 function _dispatchGradePoll() {
   // Dev bypass: grading has no data to work with — skip silently
   if (_pDev) {
-    console.log('[auto grade daemon] DEV mode — skipping grade poll');
+    
     return;
   }
   if (_GRADING_MODE === 'server_authoritative') {
@@ -7125,7 +7683,7 @@ function _dispatchGradePoll() {
     }
   } else {
     // Dev fallback: browser grading allowed
-    console.log('[auto grade daemon] browser fallback mode — running browser grade');
+    
     if (typeof _autoGradePoll === 'function') _autoGradePoll();
   }
 }
@@ -7135,13 +7693,16 @@ function renderMyBets() {
   try {
     var el = document.getElementById('mybets-section');
     if (!el) { console.warn('[renderMyBets] mybets-section element not found in DOM'); return; }
-    // Always reload from localStorage to get latest
-    var _rawTickets = localStorage.getItem('pb-tickets') || '[]';
-    var _parseErr = null;
-    try { betTickets = JSON.parse(_rawTickets); }
-    catch(e){ _parseErr = e; betTickets = Array.isArray(betTickets) ? betTickets : []; }
+    // DB hydrate is authoritative. Only fall back to pb-tickets if we have
+    // not successfully loaded from /api/player/dashboard this session.
+    if (!_playerTicketsFromDb) {
+      var _rawTickets = localStorage.getItem('pb-tickets') || '[]';
+      var _parseErr = null;
+      try { betTickets = JSON.parse(_rawTickets); }
+      catch(e){ _parseErr = e; betTickets = Array.isArray(betTickets) ? betTickets : []; }
+      if (_parseErr) console.error('[renderMyBets] pb-tickets JSON parse failed — falling back to []', _parseErr);
+    }
     if (!Array.isArray(betTickets)) betTickets = [];
-    if (_parseErr) console.error('[renderMyBets] pb-tickets JSON parse failed — falling back to []', _parseErr);
 
     // ── RR grouping: collapse per-combo Parlay tickets into a single slip card ─
     // After loadPlayerDashboardFromDb(), betTickets may contain N Parlay tickets
@@ -7313,7 +7874,13 @@ function renderMyBets() {
                   'nba':'NBA','basketball_nba':'NBA',
                   'nhl':'NHL','icehockey_nhl':'NHL',
                   'ncaaf':'NCAAF','ncaab':'NCAAB',
-                  'soccer':'Soccer','tennis':'Tennis','golf':'Golf' };
+                  'soccer':'Soccer','tennis':'Tennis','golf':'Golf','golf_pga':'Golf',
+                  'wnba':'WNBA','ncaabaseball':'College Baseball',
+                  'mma':'MMA','boxing':'Boxing','nascar':'NASCAR','f1':'Formula 1',
+                  'cricket':'Cricket','rugby':'Rugby','rugby_league':'Rugby League','afl':'AFL',
+                  'table_tennis':'Table Tennis',
+                  'cs2':'CS2','valorant':'Valorant','lol':'LoL','dota2':'Dota 2',
+                  'rocketleague':'Rocket League' };
       return map[v.toLowerCase()] || v.toUpperCase();
     }
     // Derive WHICH team the user picked (so we can show that team's logo
@@ -7435,19 +8002,6 @@ function renderMyBets() {
       ? '<span style="font-size:0.6rem;font-weight:800;letter-spacing:0.4px;color:#0064c8;background:#eef4ff;border:1px solid #cfe0ff;border-radius:6px;padding:1px 6px;margin-right:6px;text-transform:uppercase">'+ticketSport+'</span>'
       : '';
 
-    // TEMP DEBUG — spec'd log block. One per ticket render.
-    try {
-      var __rawFields = Object.keys(__firstLeg).filter(function(k){
-        var v = __firstLeg[k]; return v != null && v !== '';
-      }).map(function(k){ return k+'='+String(__firstLeg[k]).slice(0,40); }).join(' | ');
-      console.log('[ticket render resolved]\n' +
-        '  ticketId:         ' + (t.id || '-') + '\n' +
-        '  rawFields:        ' + (__rawFields || '(empty leg)') + '\n' +
-        '  renderedMatchup:  ' + (_legMatchupText(__firstLeg) || '(omitted)') + '\n' +
-        '  renderedPick:     ' + _legPickText(__firstLeg) + '\n' +
-        '  renderedMarket:   ' + (_legMarketText(__firstLeg) || '(omitted)') + '\n' +
-        '  renderedSport:    ' + (ticketSport || '(omitted)'));
-    } catch(_e){}
     var isDeletePending = t.deleteRequestStatus === 'pending';
     var isDeleteDenied  = t.deleteRequestStatus === 'denied';
     var isVoided        = displayStatus === 'voided' || displayStatus === 'deleted' || displayStatus === 'canceled';
@@ -7473,15 +8027,24 @@ function renderMyBets() {
       && _cancelElig.reason === 'game_started'
       && (displayStatus==='active'||displayStatus==='open')
       && !isDeletePending && !isVoided;
-    var deleteBtn = canRequestDelete
-      ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;text-align:right"><button data-reqdelete="'+t.id+'" onclick="event.stopPropagation();requestBetDelete(\''+t.id+'\',event)" style="font-size:0.72rem;font-weight:700;color:#cc0000;background:none;border:1.5px solid #cc0000;border-radius:20px;padding:5px 14px;cursor:pointer;pointer-events:auto;position:relative;z-index:50">✕ Request Cancel</button></div>'
-      : cancelDisabledByGame
-        ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;text-align:right"><span title="Once a game starts, the ticket is no longer eligible for Request Cancel." style="font-size:0.72rem;font-weight:700;color:#888;background:#f5f5f5;border:1.5px solid #ddd;border-radius:20px;padding:5px 14px;cursor:not-allowed;display:inline-block">✕ '+CANCEL_DISABLED_LABEL+'</span></div>'
-      : isDeletePending
+    var deleteBtn = isDeletePending
         ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;font-size:0.72rem;color:#f59e0b;font-weight:700;text-align:center">⏳ Waiting for host approval…</div>'
         : isDeleteDenied
           ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;font-size:0.72rem;color:#cc0000;font-weight:700;text-align:center">❌ Delete request denied</div>'
           : '';
+    // Overflow menu (⋯) lives in the header on active tickets only.
+    // Cancel Bet reuses data-reqdelete → requestBetDelete (existing flow).
+    var showBetMenu = (displayStatus==='active'||displayStatus==='open') && !isVoided;
+    var overflowMenu = showBetMenu
+      ? '<div class="bet-menu-wrap" id="bet-menu-'+t.id+'">' +
+          '<button type="button" class="bet-menu-btn" data-bet-menu="'+t.id+'" aria-label="Bet options" aria-haspopup="true">⋯</button>' +
+          '<div class="bet-menu-dropdown" role="menu">' +
+            (cancelDisabledByGame
+              ? '<button type="button" class="bet-menu-item" role="menuitem" disabled style="opacity:0.45;cursor:not-allowed" title="Once a game starts, the ticket is no longer eligible for Request Cancel.">Cancel Bet</button>'
+              : '<button type="button" class="bet-menu-item" role="menuitem" data-reqdelete="'+t.id+'">Cancel Bet</button>') +
+          '</div>' +
+        '</div>'
+      : '';
     // Ticket type label fallback chain so we never paint 'undefined' at
     // the top of a card. Modern tickets have t.type ('Straight' /
     // 'Parlay' / etc.); older shapes may only have bet_type or imply
@@ -7533,7 +8096,10 @@ function renderMyBets() {
           '<div style="font-size:0.88rem;font-weight:900;color:#111">' + sportBadge + typeLabel+'</div>' +
           '<div style="font-size:0.62rem;color:#aaa;margin-top:2px">'+dateStr+'</div>' +
         '</div>' +
-        statusBadge +
+        '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
+          statusBadge +
+          overflowMenu +
+        '</div>' +
       '</div>' +
       '<div style="margin-bottom:10px">' + picks + morePicks + '</div>' +
       '<div style="font-size:0.6rem;color:#ccc;margin-bottom:10px">Ticket: '+t.id+'</div>' +
@@ -7605,13 +8171,7 @@ function renderMyBets() {
   var hiddenSettledCount = settledAll.length - settled.length;
   // One-shot debug so we can verify the cutoff is doing the right thing.
   try {
-    console.log('[mybets lifecycle]\n' +
-      '  totalTickets:        ' + betTickets.length + '\n' +
-      '  active:              ' + active.length + '\n' +
-      '  settledAll:          ' + settledAll.length + '\n' +
-      '  settledShown:        ' + settled.length + ' (within 12h of gradedAt)\n' +
-      '  settledHidden:       ' + hiddenSettledCount + ' (older than 12h, still in pb-tickets, visible in Results)\n' +
-      '  ttlHours:            12');
+    
   } catch(_e){}
   // [render source] — explicit attribution so we never again wonder
   // 'is My Bets rendering from somewhere other than pb-tickets?'.
@@ -7620,62 +8180,6 @@ function renderMyBets() {
   // reload. Any ticket appearing in the UI MUST have an id that exists
   // in pb-tickets at this moment. No mock seeder, no in-memory fixture,
   // no host-mirror direct rendering.
-  try {
-    function _firstId(arr) { return (Array.isArray(arr) && arr[0] && arr[0].id) ? String(arr[0].id) : '—'; }
-    console.log('[render source]\n' +
-      '  section:        active\n' +
-      '  sourceName:     pb-tickets (via betTickets, reloaded in renderMyBets body)\n' +
-      '  ticketCount:    ' + active.length + '\n' +
-      '  firstTicketId:  ' + _firstId(active));
-    console.log('[render source]\n' +
-      '  section:        settled\n' +
-      '  sourceName:     pb-tickets (via betTickets, reloaded in renderMyBets body)\n' +
-      '  ticketCount:    ' + settled.length + '\n' +
-      '  firstTicketId:  ' + _firstId(settled));
-  } catch(_e){}
-  // TEMP DEBUG — dump real persisted schema for one active + one settled
-  // ticket so we can see EXACTLY what confirmBet/saveTickets writes,
-  // independent of any defensive rendering helpers. Strip after the
-  // display regression is verified closed.
-  try {
-    if (active.length)  console.log('[raw ticket object] ACTIVE\n'  + JSON.stringify(active[0],  null, 2));
-    if (settled.length) console.log('[raw ticket object] SETTLED\n' + JSON.stringify(settled[0], null, 2));
-  } catch(_e){
-    console.warn('[raw ticket object] dump failed', _e && _e.message || _e);
-  }
-  // TEMP DEBUG — ticket source audit. Confirms which localStorage key the
-  // renderer is reading from versus what other code is reading/writing.
-  // pb-tickets is the canonical player ticket source for ALL paths in
-  // player.html (confirmBet -> saveTickets -> renderMyBets / grader /
-  // auto-poll / calcAvailableBalance / simulateGrade). hostActiveBets is
-  // a host-side MIRROR (read by index.html). pb-settlements is host-only
-  // weekly settlement history, never written by player code.
-  try {
-    var _ptRaw = localStorage.getItem('pb-tickets');
-    var _ptArr = null;
-    try { _ptArr = _ptRaw ? JSON.parse(_ptRaw) : null; } catch(_e){ _ptArr = null; }
-    var _habRaw = localStorage.getItem('hostActiveBets');
-    var _habArr = null;
-    try { _habArr = _habRaw ? JSON.parse(_habRaw) : null; } catch(_e){ _habArr = null; }
-    var _allKeys = [];
-    try {
-      for (var __i = 0; __i < localStorage.length; __i++) {
-        var __k = localStorage.key(__i);
-        if (__k && __k.indexOf('pb-') === 0) _allKeys.push(__k);
-        if (__k === 'hostActiveBets') _allKeys.push(__k);
-      }
-    } catch(_e){}
-    console.log('[ticket source audit]\n' +
-      '  renderMyBets source:       pb-tickets\n' +
-      '  grading source:            pb-tickets (checkOpenTickets + _autoGradePoll)\n' +
-      '  confirmBet write target:   pb-tickets (via saveTickets) + hostActiveBets mirror\n' +
-      '  pb-tickets present:        ' + (_ptRaw === null ? 'no (key missing)' : (Array.isArray(_ptArr) ? ('yes ['+_ptArr.length+' entries]') : 'yes (not array, len='+_ptRaw.length+')')) + '\n' +
-      '  hostActiveBets present:    ' + (_habRaw === null ? 'no (key missing)' : (Array.isArray(_habArr) ? ('yes ['+_habArr.length+' entries]') : 'yes (not array, len='+_habRaw.length+')')) + '\n' +
-      '  betTickets in-memory:      ' + (Array.isArray(betTickets) ? betTickets.length : 'not array') + '\n' +
-      '  pb-* keys in localStorage: ' + _allKeys.join(', '));
-  } catch(_e){
-    console.warn('[ticket source audit] failed:', _e && _e.message || _e);
-  }
   var html =
     '<div style="padding:16px 14px 8px;display:flex;justify-content:space-between;align-items:center">' +
       '<span style="font-size:1rem;font-weight:900;color:#111">My Bets</span>' +
@@ -7782,7 +8286,7 @@ function bsSingleInput(el) {
   el.value = val;
   var cellId = el.dataset.cid;
   var amt = parseFloat(val) || 0;
-  console.log('input value changed', amt, cellId);
+  
   bsStakes[cellId] = amt;
   bsStake = Object.values(bsStakes).reduce(function(s,v){ return s+(v||0); }, 0);
   bsSyncPlaceBtn();
@@ -7808,14 +8312,14 @@ function bsParlayInput(el) {
     bsSyncPlaceBtn();
     return;
   }
-  console.log('parlay amount changed', amt);
+  
   bsStake = amt;
   // For singles: fan stake into each bsStakes[cellId] so payout calc works
   if (bsType === 'straight') {
     betSlip.forEach(function(b) { bsStakes[b.cellId] = amt; });
   }
   var valid = betSlip.length >= (bsType==='parlay'?2:1) && amt > 0;
-  console.log('parlay button enabled', valid);
+  
   bsSyncPlaceBtn();
 }
 
@@ -7886,7 +8390,7 @@ function bsAddStake(a) {
     bsStake = (bsStake || 0) + a;
     var inp = document.getElementById('bs-stake-inp');
     if (inp) { inp.value = bsStake; }
-    console.log('parlay amount changed', bsStake);
+    
     bsSyncPlaceBtn();
     return;
   }
@@ -7904,6 +8408,7 @@ function bsAddStake(a) {
       payEl.textContent = _b ? 'Payout: '+fmtDollar(bsStake * amToDecimal(_b.odds)) : '';
     }
   });
+  
   bsSyncPlaceBtn();
   // Sync visual selection state across all rendered cells
   document.querySelectorAll('.odds-cell').forEach(function(el) {
@@ -7936,7 +8441,7 @@ function bsAddStake(a) {
     if (!teaserOk && typeof bsType !== 'undefined' && bsType === 'teaser') {
       try {
         var fallback = (betSlip.length >= 2) ? 'parlay' : 'straight';
-        console.log('[bet slip] teaser auto-switch → ' + fallback + ' (slip became teaser-ineligible)');
+        
         bsSetType(fallback);
       } catch (_e) { /* swallow — leg sync must not break */ }
     }
@@ -7985,7 +8490,7 @@ function numpadKey(k) {
   if (parts[1] && parts[1].length > 2) numpadStr = parts[0] + '.' + parts[1].slice(0,2);
   document.getElementById('numpad-display').textContent = numpadStr;
   var val = parseFloat(numpadStr) || 0;
-  console.log('amount input changed', val);
+  
   if (!numpadTarget) return;
   if (numpadTarget.type === 'all') {
     bsSetStakeAll(val);
@@ -8001,9 +8506,11 @@ function numpadKey(k) {
       payEl.textContent = val > 0 && _b ? 'Payout: '+fmtDollar(val * amToDecimal(_b.odds)) : '';
     }
     bsSyncPlaceBtn();
+    
   } else {
     bsStake = val;
     bsSetStake(val);
+    
   }
 }
 
@@ -8249,15 +8756,7 @@ function bsSyncPlaceBtn() {
       if (_combinedDec <= 1)      _combinedAmer = '--';
       else if (_combinedDec >= 2) _combinedAmer = '+' + Math.round((_combinedDec - 1) * 100);
       else                        _combinedAmer = '' + Math.round(-100 / (_combinedDec - 1));
-      console.log('PARLAY_FOOTER_STATE'
-        + ' bsType=' + bsType
-        + ' legs=' + (Array.isArray(betSlip) ? betSlip.length : 0)
-        + ' stakeRaw=' + JSON.stringify(_stakeInpRaw)
-        + ' stakeNum=' + _stakeInpNum
-        + ' bsStake=' + bsStake
-        + ' combinedOdds=' + _combinedAmer
-        + ' payout=' + (totalPay > 0 ? totalPay.toFixed(2) : '--')
-        + ' disabled=' + (!valid));
+      
     } catch (_dbg) { /* never let the diagnostic break the sync */ }
   }
 }
@@ -8292,7 +8791,7 @@ function bsRemove(i) {
 }
 
 function clearSlip() {
-  console.log('clear all clicked');
+  
   bsStakes = {}; bsStake = 0; rrStakes = {}; _pendingRisk = 0; _pendingPayout = 0; _pendingProfit = 0; _pendingSnapshot = null;
   // Clear footer stake input DOM immediately
   var inp = document.getElementById('bs-stake-inp');
@@ -8311,7 +8810,7 @@ function clearSlip() {
     el.removeAttribute('aria-selected');
     el.dataset.selected = 'false';
   });
-  console.log('selections after clear', betSlip);
+  
   bsUpdate();
 }
 
@@ -8360,8 +8859,8 @@ document.addEventListener('click', function(e) {
   var id      = cell.dataset.id || '';
   var game    = cell.dataset.game || 'Unknown Game';
   var time    = cell.dataset.time || '';
-  var market  = cell.dataset.market || 'Market';
-  var pick    = cell.dataset.pick || '';
+  var market  = _normalizeSlipMarket(cell.dataset.market || 'Market');
+  var pick    = _stripMoneylinePickSuffix(cell.dataset.pick || '');
   var odds    = parseInt(cell.dataset.odds) || 0;
   var sp      = cell.dataset.sport || '';
   var gameStatus = cell.dataset.status || '';
@@ -8369,7 +8868,7 @@ document.addEventListener('click', function(e) {
 
   if (!odds) return; // ignore cells with no valid odds
 
-  console.log('odds clicked:', { id, game, market, pick, odds, gameKey, gameStatus });
+  
 
   // Check if this cell is already selected
   var existingIdx = betSlip.findIndex(function(b) { return b.cellId === id; });
@@ -8434,21 +8933,22 @@ document.addEventListener('click', function(e) {
       return;
     }
 
-    // Build canonicalGameKey for this cell
-    // IMPORTANT: `time` from data-time is a display string ("Sun 7:10 PM") not ISO.
-    // Use the raw ISO commence_time from gamesCache when available.
+    // Build canonicalGameKey for this cell.
+    // Prefer Owls ISO from gamesCache / data-start. data-time may be ISO or a
+    // lobby display string ("Sun 7:10 PM") — convert only with a date hint.
     var _teams = game.split(' vs ');
     var _away = (_teams[0]||'').trim(), _home = (_teams[1]||'').trim();
-    var _oddsGameId = id ? id.split('-').slice(0,4).join('-') : null;
-    var _cachedG = (window.gamesCache && _oddsGameId) ? window.gamesCache[_oddsGameId] : null;
-    var _rawTime = (_cachedG && (_cachedG.time || _cachedG.commence_time)) || null;
-    var _gameDate = '';
-    if (_rawTime) { try { _gameDate = new Date(_rawTime).toISOString().slice(0,10); } catch(_e){} }
-    // Key format must match the Owls normalizer: sport lowercase, teams raw (no hyphens).
-    // Owls stores: "baseball_mlb|Toronto Blue Jays|Baltimore Orioles|2026-05-31"
-    var _cKey = [(sp||'mlb').toLowerCase(), _away, _home, _gameDate].join('|');
-    // Also grab raw ISO time for placement gate / ticket leg
-    var _isoTime = _rawTime || null;
+    var _cachedG = _lookupCachedGame(id, '', _away, _home);
+    var _dataStart = cell.getAttribute('data-start') || (cell.dataset && cell.dataset.start) || '';
+    var _isoTime = _resolveScheduledStart({
+      scheduledStart: _dataStart,
+      time: time,
+      canonicalGameKey: (_cachedG && _cachedG.canonicalGameKey) || ''
+    }, _cachedG);
+    var _cKey = _normalizeGameKeyToOwls(
+      (_cachedG && _cachedG.canonicalGameKey) || '',
+      _away, _home, sp || _currentSport || 'mlb', _isoTime
+    );
 
     // Placement gate: block started/final games (use ISO time, not display string)
     var _pgResult = _checkPlacementGate({ cellId: id, canonicalGameKey: _cKey, scheduledStart: _isoTime, gameStatus: gameStatus, market: market, pick: pick }, Date.now());
@@ -8459,25 +8959,29 @@ document.addEventListener('click', function(e) {
 
     // Conflict check with audit log
     var _cfResult = _checkBetConflict({ cellId: id, canonicalGameKey: _cKey, pick: pick, market: market });
-    console.log('[conflict check]',
-      '\n  newLegKey:     ', _cKey,
-      '\n  newPick:       ', pick,
-      '\n  blocked:       ', _cfResult.conflict,
-      '\n  reason:        ', _cfResult.reason || 'none'
-    );
+    
     if (_cfResult.conflict) {
       showToast(_cfResult.message, 'warning');
       return;
     }
 
-    // Add new valid selection
+    var _gameId = _resolveGameId({
+      cellId: id,
+      gameId: cell.getAttribute('data-game-id') || (cell.dataset && cell.dataset.gameId) || ''
+    }, _cachedG);
+    var _line = market === 'moneyline' ? null : _extractSlipPointLine(pick, null);
+
+    // Add new valid selection — contract fields always present
     betSlip.push({
       cellId: id, game: game, time: time, market: market,
       pick: pick, odds: odds, sport: sp, gameKey: gameKey,
-      canonicalGameKey: _cKey, scheduledStart: _isoTime,  // ISO, not display string
+      canonicalGameKey: _cKey, scheduledStart: _isoTime,
+      line: _line, gameId: _gameId, providerGameId: _gameId,
       homeTeam: _home, awayTeam: _away, gameStatus: gameStatus
     });
+    
     cell.classList.add('selected');
+    
 
     // Same-game parlay: allowed if different markets
   }
@@ -8507,10 +9011,7 @@ function _checkPlacementGate(leg, nowMs) {
   if (_isGameFinal(officialStatus)) {
     var r1 = { allowed: false, blockedReason: 'game_already_final', officialStatus: officialStatus,
                message: 'Bet unavailable: this game has already started or finalized.' };
-    console.log('[bet placement gate]', '\n  attemptId:', attemptId, '\n  canonicalGameKey:', (leg.canonicalGameKey||'?'),
-      '\n  commenceTime:', (ct||'?'), '\n  now:', new Date(nowMs).toISOString(),
-      '\n  officialStatus:', officialStatus, '\n  market:', (leg.market||'?'),
-      '\n  allowed:', false, '\n  blockedReason:', r1.blockedReason);
+    
     return r1;
   }
   // Gate 2: commenceTime in the past (game already started)
@@ -8518,13 +9019,10 @@ function _checkPlacementGate(leg, nowMs) {
     var r2 = { allowed: false, blockedReason: 'game_already_started', commenceTime: ct,
                now: new Date(nowMs).toISOString(),
                message: 'Bet unavailable: this game has already started or finalized.' };
-    console.log('[bet placement gate]', '\n  attemptId:', attemptId, '\n  canonicalGameKey:', (leg.canonicalGameKey||'?'),
-      '\n  commenceTime:', ct, '\n  now:', r2.now,
-      '\n  officialStatus:', (officialStatus||'(none)'), '\n  market:', (leg.market||'?'),
-      '\n  allowed:', false, '\n  blockedReason:', r2.blockedReason);
+    
     return r2;
   }
-  console.log('[bet placement gate] allowed legKey=' + (leg.canonicalGameKey||'?') + ' commenceTime=' + (ct||'?'));
+  
   return { allowed: true };
 }
 function _checkTicketPlacementGate(legs, nowMs) {
@@ -8634,15 +9132,7 @@ function _checkBetConflict(newLeg) {
     if (ex.cellId === newLeg.cellId) continue;
     var exToken = _pickConflictToken(ex);
     var sameGame = !!(newLeg.canonicalGameKey && ex.canonicalGameKey && newLeg.canonicalGameKey === ex.canonicalGameKey);
-    console.log('[conflict check]',
-      '\n  newLegKey:     ', newLeg.canonicalGameKey || '(none)',
-      '\n  existingLegKey:', ex.canonicalGameKey || '(none)',
-      '\n  sameGame:      ', sameGame,
-      '\n  existingPick:  ', ex.pick,
-      '\n  newPick:       ', newLeg.pick,
-      '\n  blocked:       ', exToken === newToken,
-      '\n  reason:        ', exToken === newToken ? 'slip_conflict' : 'no_conflict'
-    );
+    
     if (exToken && exToken === newToken) {
       return { conflict: true, reason: 'slip_conflict',
                message: 'Conflicting bet: you already have action on the opposite side of this game.' };
@@ -8660,15 +9150,7 @@ function _checkBetConflict(newLeg) {
     for (var k = 0; k < sels.length; k++) {
       var selToken = _pickConflictToken(sels[k]);
       if (selToken && selToken === newToken) {
-        console.log('[conflict check]',
-          '\n  newLegKey:     ', newLeg.canonicalGameKey || '(none)',
-          '\n  existingLegKey:', sels[k].canonicalGameKey || '(none)',
-          '\n  sameGame:      ', newLeg.canonicalGameKey === sels[k].canonicalGameKey,
-          '\n  existingPick:  ', sels[k].pick,
-          '\n  newPick:       ', newLeg.pick,
-          '\n  blocked:       ', true,
-          '\n  reason:        ', 'active_ticket_conflict ticketId=' + t.id
-        );
+        
         return { conflict: true, reason: 'active_ticket_conflict', ticketId: t.id,
                  message: 'Conflicting bet: you already have active action on the opposite side of this game.' };
       }
@@ -8686,10 +9168,10 @@ function bsNormalize(cellId, game, time, market, pick, odds) {
     cellId: cellId,
     game: game || 'Unknown Game',
     time: time || '',
-    market: market || 'Market',
-    pick: pick || 'Selection',
+    market: _normalizeSlipMarket(market),
+    pick: _stripMoneylinePickSuffix(pick) || 'Selection',
     odds: oddsNum,
-    gameKey: (game||'') + '|' + (market||'')
+    gameKey: (game||'') + '|' + _normalizeSlipMarket(market)
   };
 }
 
@@ -8697,25 +9179,51 @@ function bsToggle(cellId, game, time, market, pick, odds) {
   var sel = bsNormalize(cellId, game, time, market, pick, odds);
   if (!sel.odds) { console.warn('bsToggle: invalid odds', odds); return; }
 
-  // Attach canonicalGameKey from gamesCache so conflict engine can use it
-  var oddsApiGameId = cellId ? cellId.split('-').slice(0,4).join('-') : null;
-  var cachedGame = (window.gamesCache && oddsApiGameId) ? window.gamesCache[oddsApiGameId] : null;
+  var teams2 = (game||'').split(' vs ');
+  var awayT = (teams2[0]||'').trim(), homeT = (teams2[1]||'').trim();
+  var cachedGame = _lookupCachedGame(cellId, '', awayT, homeT);
+  var cellEl0 = document.getElementById('c-' + cellId) || document.getElementById('cell-' + cellId);
+  var dataStart = cellEl0
+    ? (cellEl0.getAttribute('data-start') || (cellEl0.dataset && cellEl0.dataset.start) || '')
+    : '';
+  sel.scheduledStart = _resolveScheduledStart({
+    scheduledStart: dataStart,
+    time: time,
+    canonicalGameKey: (cachedGame && cachedGame.canonicalGameKey) || ''
+  }, cachedGame);
+  sel.line = _extractSlipPointLine(sel.pick, sel.line);
   if (cachedGame) {
-    var teams2 = (game||'').split(' vs ');
-    var awayT = (teams2[0]||'').trim(), homeT = (teams2[1]||'').trim();
-    var ctRaw = time || cachedGame.time || cachedGame.commence_time || null;
-    var gameDate = '';
-    if (ctRaw) { try { gameDate = new Date(ctRaw).toISOString().slice(0,10); } catch(_e){} }
-    sel.canonicalGameKey = [(_currentSport||'mlb').toUpperCase(),
-      (awayT||cachedGame.away||'').toLowerCase().replace(/\s+/g,'-'),
-      (homeT||cachedGame.home||'').toLowerCase().replace(/\s+/g,'-'),
-      gameDate].join('|');
+    sel.canonicalGameKey = _normalizeGameKeyToOwls(
+      cachedGame.canonicalGameKey || '',
+      awayT || cachedGame.away || '',
+      homeT || cachedGame.home || '',
+      sel.sport || _currentSport || cachedGame.sport || 'mlb',
+      sel.scheduledStart
+    );
     sel.homeTeam = homeT || cachedGame.home || '';
     sel.awayTeam = awayT || cachedGame.away || '';
-    sel.scheduledStart = ctRaw;
+  } else if (awayT && homeT) {
+    sel.canonicalGameKey = _normalizeGameKeyToOwls(
+      sel.canonicalGameKey || '', awayT, homeT,
+      sel.sport || _currentSport || 'mlb', sel.scheduledStart
+    );
+    sel.homeTeam = homeT;
+    sel.awayTeam = awayT;
   }
+  var _cellGameId = cellEl0
+    ? (cellEl0.getAttribute('data-game-id') || (cellEl0.dataset && cellEl0.dataset.gameId) || '')
+    : '';
+  var _c = _buildContractPlaceLeg(Object.assign({}, sel, { gameId: _cellGameId || sel.gameId }));
+  sel.pick = _c.pick;
+  sel.market = _c.market;
+  sel.odds = _c.odds;
+  sel.line = _c.line;
+  sel.canonicalGameKey = _c.canonicalGameKey;
+  sel.scheduledStart = _c.scheduledStart;
+  sel.gameId = _c.gameId;
+  sel.providerGameId = _c.gameId;
 
-  console.log('selected bet:', sel);
+  
 
   // Replace same game+market
   betSlip = betSlip.filter(function(b) {
@@ -8745,7 +9253,7 @@ function bsToggle(cellId, game, time, market, pick, odds) {
     var conflict = _checkBetConflict(sel);
     if (conflict.conflict) {
       showToast(conflict.message, 'warning');
-      console.log('[conflict] blocked pick="' + pick + '" reason=' + conflict.reason + (conflict.ticketId ? ' ticketId=' + conflict.ticketId : ''));
+      
       return; // do not add — leave slip unchanged
     }
     betSlip.push(sel);
@@ -8753,6 +9261,10 @@ function bsToggle(cellId, game, time, market, pick, odds) {
   }
   bsUpdate();
 }
+
+// dbgBanner kept as a no-op so legacy call sites stay safe.
+function dbgBanner(msg, color) {}
+function runPlaceBetHitTest() { /* removed: production hit-test / pointer-events mutation */ }
 
 // ═══ PLAYER RESULTS PAGE ═══════════════════════════════════════════════════
 // Mirrors host Settlements UX: week selector + big net + Mon-Sun chart +
@@ -8937,7 +9449,7 @@ function _purgeMockTickets(){
         localStorage.setItem('pb-tickets-version', String(_v + 1));
       } catch(_e){}
       try { betTickets = cleaned; } catch(_e){}
-      console.log('[mock purge] removed ' + purged + ' MOCK-* ticket(s) from pb-tickets');
+      
     }
     return { purged: purged, before: before, after: cleaned.length };
   } catch(err) {
@@ -9064,24 +9576,7 @@ function _resWeekAggregates(weekStart, weekEnd){
       netContrib = 0; inNet = false; inPending = true;
       reason = 'active-pending-no-net';
     }
-    console.log('[results aggregate audit]',
-      '\n  ticketId:               ', t.id || '?',
-      '\n  status (raw):           ', rawStatus,
-      '\n  status (displayStatus): ', s,
-      '\n  hiddenBy12h:            ', hidden12h,
-      '\n  includedInVisibleResults:', true,
-      '\n  includedInWeeklyNet:    ', inNet,
-      '\n  includedInWagered:      ', (s !== 'canceled' && s !== 'voided' && s !== 'deleted'),
-      '\n  includedInWon:          ', (s === 'won'),
-      '\n  includedInLost:         ', (s === 'lost'),
-      '\n  includedInRecord:       ', (s === 'won' || s === 'lost' || s === 'push' || s === 'pushed'),
-      '\n  includedInPending:      ', inPending,
-      '\n  includedInCanceled:     ', inCanceled,
-      '\n  risk:                   $'+(risk.toFixed(2)),
-      '\n  toWin:                  $'+(profit.toFixed(2)),
-      '\n  netContribution:        $'+(netContrib.toFixed(2)),
-      '\n  reason:                 ', reason
-    );
+    
   });
   return {
     totalBets:    totalBets,
@@ -9122,23 +9617,7 @@ function renderPlayerResults(){
   var _excluded = _allTix.length - _weekTix.length;
   var _sampleIncluded = _weekTix.slice(0,2).map(function(t){ return (t.id||'?')+':'+((typeof _displayStatus==='function')?_displayStatus(t):(t.status||'?')); }).join(', ') || 'none';
   var _sampleExcluded = _hidden12h.slice(0,2).map(function(t){ return (t.id||'?')+':hidden-12h-'+(t.status||'?'); }).join(', ') || 'none';
-  console.log('[results aggregate audit summary]',
-    '\n  buildSha:               ', window.PBS_BUILD_SHA || 'unknown',
-    '\n  ticketsTotal:           ', _allTix.length,
-    '\n  ticketsInWeekWindow:    ', _allWeekTix.length,
-    '\n  ticketsUsedForWeeklyKpis:', _weekTix.length,
-    '\n  ticketsHiddenBy12h:     ', _hidden12h.length,
-    '\n  ticketsExcluded:        ', _excluded,
-    '\n  weeklyNet:              ', net,
-    '\n  wagered:                ', agg.totalWagered,
-    '\n  won:                    ', agg.totalWon,
-    '\n  lost:                   ', agg.totalLost,
-    '\n  pending:                ', agg.pendingCount,
-    '\n  settled:                ', agg.settledCount,
-    '\n  canceled:               ', agg.canceledCount,
-    '\n  sampleIncluded:         ', _sampleIncluded,
-    '\n  sampleExcluded:         ', _sampleExcluded
-  );
+  
   // ─────────────────────────────────────────────────────────────────────────
 
   var bigColor = net > 0 ? 'var(--green)' : net < 0 ? 'var(--red)' : '#fff';
@@ -9431,7 +9910,7 @@ function _wireResultsButtons(el){
       // circuit breaker is open.
       if (typeof _isScoresGradingSuspended === 'function' && _isScoresGradingSuspended()) {
         try { showToast && showToast('Scores unavailable — grading suspended'); } catch(_e){}
-        console.log('[scores unavailable — grading suspended]\n  simulateGradeResults refused');
+        
         return;
       }
       var raw = localStorage.getItem('pb-tickets') || '[]';
@@ -9439,7 +9918,7 @@ function _wireResultsButtons(el){
       try { tickets = JSON.parse(raw); } catch(_e) { tickets = []; }
       if (!Array.isArray(tickets) || !tickets.length) {
         try { showToast && showToast('No tickets to grade'); } catch(_e){}
-        console.log('[simulate grade] no tickets');
+        
         return;
       }
       var graded = 0;
@@ -9509,14 +9988,7 @@ function _wireResultsButtons(el){
         }
 
         var oddsStr = t.odds || (legs[0] && legs[0].odds) || '';
-        console.log('[ticket graded]\n' +
-                    '  player: '         + (t.playerName || t.playerUsername || '?') + '\n' +
-                    '  wager: $'         + risk.toFixed(2) + '\n' +
-                    '  odds: '           + oddsStr + '\n' +
-                    '  result: '         + nextStatus.toUpperCase() + '\n' +
-                    '  payout: $'        + ticketPayout.toFixed(2) + '\n' +
-                    '  balanceBefore: $' + rowBefore.toFixed(2) + '\n' +
-                    '  balanceAfter: $'  + runningBalance.toFixed(2));
+        
         graded++;
       });
 
@@ -9526,9 +9998,7 @@ function _wireResultsButtons(el){
               String((parseInt(localStorage.getItem('pb-tickets-version')||'0',10)||0) + 1)); } catch(_e){}
       var bsAfter = (typeof calcAvailableBalance === 'function') ? calcAvailableBalance() : null;
       var balanceAfter = bsAfter ? bsAfter.available : null;
-      console.log('[simulate grade] graded ' + graded + ' ticket(s) | balanceBefore: ' +
-                  (balanceBefore != null ? '$'+balanceBefore.toFixed(2) : '(unknown)') +
-                  ' | balanceAfter: ' + (balanceAfter != null ? '$'+balanceAfter.toFixed(2) : '(unknown)'));
+      
 
       // Append a per-flip ledger entry for the math test trail
       tickets.filter(function(t){ return t.simulated && t.gradedAt && t.status !== 'active' && t.status !== 'open'; }).forEach(function(t){
@@ -9901,7 +10371,7 @@ function _isScoresGradingSuspended(){
   if (!_SCORES_GRADING_SUSPENDED) return false;
   if (Date.now() - _SCORES_SUSPENSION_AT > _scoresBackoffMs()) {
     _SCORES_GRADING_SUSPENDED = false;
-    console.log('[scores grading resumed] backoff window elapsed; next failure will re-suspend with a longer window');
+    
     return false;
   }
   return true;
@@ -10017,18 +10487,7 @@ function _logSettledDisplayGuard(t){
       else if (typeof t.finalScore === 'object') fsShape = 'object';
       else fsShape = typeof t.finalScore;
     }
-    console.log('[settled display guard]\n' +
-                '  ticketId:         ' + (t.id || '?') + '\n' +
-                '  teams:            ' + (teams || '-') + '\n' +
-                '  storedStatus:     ' + (stored || '-') + '\n' +
-                '  gradedAt:         ' + (t.gradedAt || '-') + '\n' +
-                '  gradingSource:    ' + (t.gradingSource || '-') + '\n' +
-                '  finalScoreShape:  ' + fsShape + '\n' +
-                '  hasFinalScore:    ' + (_hasFinalScore(t) ? 'yes' : 'no') + '\n' +
-                '  sourceGameStatus: ' + (src || '-') + '\n' +
-                '  reason:           ' + reason + '\n' +
-                '  advisoryNotes:    ' + (advisory || 'none') + '\n' +
-                '  displayStatus:    ' + display + (stored !== display ? ' (FORCED ACTIVE because ' + reason + ')' : ''));
+    
   } catch(_e){}
 }
 window._hasFinalScore     = _hasFinalScore;
@@ -10090,7 +10549,7 @@ function _backfillLegacySettledMetadata() {
     }
     if (changed) {
       localStorage.setItem('pb-tickets', JSON.stringify(tickets));
-      console.log('[settled backfill] back-filled metadata on ' + changed + ' settled ticket(s)');
+      
     }
   } catch(_e) {
     console.warn('[settled backfill] error:', _e && _e.message || _e);
@@ -10136,7 +10595,7 @@ try { _backfillLegacySettledMetadata(); } catch(_e){}
       throw err;
     });
   };
-  console.log('[scores fetch guard] installed');
+  
 })();
 
 // =============================================================================
@@ -10226,14 +10685,14 @@ function loadLiveGamesFromSportsDataIO(){
       'Scores unavailable — grading suspended.<br>' +
       '<span style="font-size:0.72rem;color:#555">' + (_SCORES_SUSPENSION_REASON || 'upstream error') +
       '<br>Tickets remain ACTIVE; live feed will return when service recovers.</span></div>';
-    console.log('[scores unavailable — grading suspended]\n  loadLiveGamesFromSportsDataIO short-circuited');
+    
     return;
   }
   el.innerHTML = '<div class="empty">Loading…</div>';
   _liveFetchToday().then(function(games){
     games = Array.isArray(games) ? games : [];
     var live = games.filter(function(g){ return g && _liveIsLiveStatus(g.Status); });
-    console.log('[live sportsdataio]\n  gamesChecked: ' + games.length + '\n  liveGamesShown: ' + live.length);
+    
     var cnt = document.getElementById('live-count');
     if (cnt) cnt.textContent = live.length + (live.length === 1 ? ' game' : ' games');
     if (!live.length) {
@@ -10315,7 +10774,7 @@ function gradeTicketByScores(ticketId, legScores) {
   // Refuse to grade when scores provider is currently unavailable. Tickets
   // stay ACTIVE; no balance settlement.
   if (typeof _isScoresGradingSuspended === 'function' && _isScoresGradingSuspended()) {
-    console.log('[scores unavailable — grading suspended]\n  gradeTicketByScores refused for ticketId=' + ticketId);
+    
     return 'scores unavailable — grading suspended';
   }
   var tickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]');
@@ -10388,16 +10847,7 @@ function gradeTicketByScores(ticketId, legScores) {
     }
   } catch(_e){}
 
-  console.log('[ticket graded]\n' +
-              '  player: '         + (t.playerName || t.playerUsername || '?') + '\n' +
-              '  wager: $'         + risk.toFixed(2) + '\n' +
-              '  odds: '           + (t.odds || (legs[0] && legs[0].odds) || '') + '\n' +
-              '  result: '         + nextStatus.toUpperCase() + '\n' +
-              '  payout: $'        + ticketPayout.toFixed(2) + '\n' +
-              '  balanceBefore: $' + (balanceBefore != null ? balanceBefore.toFixed(2) : '?') + '\n' +
-              '  balanceAfter: $'  + (balanceAfter  != null ? balanceAfter.toFixed(2)  : '?') + '\n' +
-              '  source: manual\n' +
-              '  finalScore: '     + legScores.map(function(s,i){ return (legs[i]&&legs[i].awayTeam||'A')+' '+s.away+' · '+(legs[i]&&legs[i].homeTeam||'H')+' '+s.home+(s.status&&s.status!=='final'?(' ('+s.status+')'):''); }).join(' | '));
+  
 
   // Refresh UI
   try { betTickets = JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(_e){}
@@ -10726,10 +11176,22 @@ window.openGradingConsole = openGradingConsole;
 </div>
 
 
-<!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
-<div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 9100d35 · Jun 2, 02:54 AM</span>
+<!-- BUILD INFO (debug panel only with ?debug=1 / pb-debug=1) -->
+<div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;padding:2px 10px;display:none;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
+  <span id="build-info-label" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px">🔍 main · 9100d35 · Jun 2, 02:54 AM</span>
 </div>
+<script>
+(function(){
+  try {
+    if (typeof _pbsDebugEnabled === 'function' && _pbsDebugEnabled()) {
+      var bi = document.getElementById('build-info');
+      var lbl = document.getElementById('build-info-label');
+      if (bi) { bi.style.display = 'flex'; bi.style.pointerEvents = 'auto'; bi.style.background = 'rgba(0,0,0,0.7)'; }
+      if (lbl) { lbl.style.cursor = 'pointer'; lbl.onclick = function(){ openDebugPanel(); }; }
+    }
+  } catch(_e){}
+})();
+</script>
 
 <!-- Orphan IIFE closer removed (was rendering as a literal IIFE close
      between the build-info footer and the version-guard script block). -->
@@ -10754,7 +11216,7 @@ window.openGradingConsole = openGradingConsole;
         if (!d || !d.sha) return;
         var latest = String(d.sha).trim(), cur = String(CURRENT_SHA).trim();
         if (latest && cur && cur !== 'unknown' && latest !== cur) _showStaleBanner(latest, d.builtAt);
-        else { var x = document.getElementById('_pbs_stale_banner'); if (x) { x.remove(); document.body.style.paddingTop = ''; } console.log('[version guard] ✅ up to date sha=' + cur); }
+        else { var x = document.getElementById('_pbs_stale_banner'); if (x) { x.remove(); document.body.style.paddingTop = ''; }  }
       }).catch(function() {});
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _check);
@@ -10763,10 +11225,9 @@ window.openGradingConsole = openGradingConsole;
   window._checkBuildVersion = _check;
 })();
 
-// ── DB SOURCE DEBUG BADGE ────────────────────────────────────────────────────────────────────────────
+// ── DB SOURCE DEBUG BADGE (opt-in debug only) ────────────────────────────────
 function _updateDbSourceBadge(source, localCount, dbCount, fallbackReason) {
-  // Only shown when DB primary reads are enabled (dev mode)
-  if (!_DB_PRIMARY_READS_ENABLED) {
+  if (typeof _pbsDebugEnabled !== 'function' || !_pbsDebugEnabled()) {
     var old = document.getElementById('_db_source_badge'); if (old) old.remove(); return;
   }
   var badge = document.getElementById('_db_source_badge');
@@ -10787,18 +11248,18 @@ function _updateDbSourceBadge(source, localCount, dbCount, fallbackReason) {
 
 // Phase B read validation helper — runs a full sequence of checks
 async function runPhaseBReadValidation() {
-  console.log('[Phase B Read Validation] ─── START ───');
+  
   var results = {};
 
   // 1. Check feature flag
   results.flagEnabled = _DB_PRIMARY_READS_ENABLED;
-  console.log('[Phase B] 1. feature flag:', results.flagEnabled ? '✅ enabled' : '❌ disabled (call enableDbPrimaryReadsForSession())');
+  
 
   // 2. Check backend env
   try {
     var envR = await fetch('/api/env-check').then(function(r){ return r.json(); });
     results.backendHasSupabase = envR.hasSupabaseUrl && envR.hasSupabaseServiceKey;
-    console.log('[Phase B] 2. backend Supabase env:', results.backendHasSupabase ? '✅ configured' : '❌ MISSING — add vars to pocketbooks-sports-backend Railway service');
+    
   } catch(e) { results.backendHasSupabase = false; console.warn('[Phase B] 2. env-check failed:', e.message); }
 
   // 3. Run DB primary read trial
@@ -10811,18 +11272,18 @@ async function runPhaseBReadValidation() {
   if (!results.dbRead) {
     results.dbRead = { sourceUsed:'localStorage', fallbackReason:'missing_validation_result', hydrated:false, cacheUpdated:false, localCount:0, dbCount:0 };
   }
-  console.log('[Phase B] 3. DB read trial: sourceUsed='+results.dbRead.sourceUsed, 'fallback='+(results.dbRead.fallbackReason||'none'));
+  
 
   // 4. Check for duplicate tickets in current betTickets
   var ids = betTickets.map(function(t){ return t.id; });
   var dupes = ids.filter(function(id,i){ return ids.indexOf(id) !== i; });
   results.duplicateTickets = dupes.length;
-  console.log('[Phase B] 4. duplicate tickets in render set:', dupes.length === 0 ? '✅ none' : '❌ DUPES: '+dupes.join(','));
+  
 
   // 5. Balance unchanged
   var bal = calcAvailableBalance();
   results.balance = bal.available;
-  console.log('[Phase B] 5. available balance: $'+bal.available.toFixed(2), '| openRisk: $'+bal.openRisk.toFixed(2));
+  
 
   // 6. Full persistence audit
   results.persistence = await runFullPersistenceAudit();
@@ -10833,9 +11294,9 @@ async function runPhaseBReadValidation() {
   var pass = results.flagEnabled && results.backendHasSupabase &&
     results.dbRead.sourceUsed === 'db' && !results.duplicateTickets && persistenceOk;
   if (results.persistence && results.persistence.warnings && results.persistence.warnings.length) {
-    console.log('[Phase B] ⚠️ warnings (non-blocking):', results.persistence.warnings.join('; '));
+    
   }
-  console.log('[Phase B] ─── RESULT:', pass ? '✅ DB-PRIMARY READS VALIDATED' : '⚠️ VALIDATION INCOMPLETE — check items above');
+  
   return results;
 }
 window.runPhaseBReadValidation = runPhaseBReadValidation;
@@ -10867,11 +11328,13 @@ async function _maybeAutoEnableDbPrimaryReads() {
     if (!env.hasSupabaseUrl || !env.hasSupabaseServiceKey) return;
     // Supabase is ready and this is a dev identity — auto-enable
     _DB_PRIMARY_READS_ENABLED = true;
+    
   } catch(_e) { /* network error — stay on localStorage */ }
 }
 
 // Multi-device persistence check: logs all state needed to verify cross-device consistency
 async function runMultiDevicePersistenceCheck() {
+  
   var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
   // String() coercion: id/username may be numeric or null
@@ -10889,6 +11352,8 @@ async function runMultiDevicePersistenceCheck() {
 
   // Balance
   var bal = calcAvailableBalance();
+
+  
 
   return { playerId:pid, clubId:cid, sourceUsed, localCount:localTickets.length, dbCount, lastTicketId, cacheHydrated, balance:bal.available };
 }
@@ -10967,9 +11432,9 @@ window.runMultiDevicePersistenceCheck = runMultiDevicePersistenceCheck;
       var r = await fetch('/api/markets/live');
       var d = await r.json();
       console.group('[live cache] audit');
-      console.log('status:', d.sourceStatus, '| games:', d.gameCount, '| markets:', d.marketCount);
-      console.log('updatedAt:', d.updatedAt, '| cacheAge:', d.cacheAgeMs!=null?Math.round(d.cacheAgeMs/1000)+'s':'n/a');
-      console.log('suspended:', d.suspendedMarkets && d.suspendedMarkets.length);
+      
+      
+      
       if (d.warnings && d.warnings.length) console.warn('warnings:', d.warnings.join(', '));
       console.groupEnd();
       return d;
@@ -10979,7 +11444,7 @@ window.runMultiDevicePersistenceCheck = runMultiDevicePersistenceCheck;
     try {
       var r = await fetch('/api/markets/health');
       var d = await r.json();
-      console.log('[live cache health]', JSON.stringify(d));
+      
       return d;
     } catch(e) { console.error('[checkLiveCacheHealth] error:', e.message); }
   };
@@ -10987,7 +11452,7 @@ window.runMultiDevicePersistenceCheck = runMultiDevicePersistenceCheck;
     try {
       var r = await _pbFetch('/api/markets/refresh', { method:'POST' });
       var d = await r.json();
-      console.log('[live cache] forced refresh:', JSON.stringify(d));
+      
       return d;
     } catch(e) { console.error('[forceLiveOddsRefresh] error:', e.message); }
   };
@@ -10995,15 +11460,18 @@ window.runMultiDevicePersistenceCheck = runMultiDevicePersistenceCheck;
   // devHealth — one-call health summary
   window.devHealth = async function() {
     var sha = window.PBS_BUILD_SHA || 'unknown';
+    
     var result = { version: sha };
     try { result.dbPrimary       = checkDbPrimaryReadStatus ? checkDbPrimaryReadStatus() : null; } catch(_e) {}
     try { result.gradingAuthority = checkGradingAuthorityStatus ? checkGradingAuthorityStatus() : null; } catch(_e) {}
     try { result.persistence      = await runFullPersistenceAudit(); } catch(_e) { result.persistence = { error: _e.message }; }
     try { result.multiDevice      = await runMultiDevicePersistenceCheck(); } catch(_e) { result.multiDevice = { error: _e.message }; }
     try { result.grading          = await checkServerGradeStatus(); } catch(_e) { result.grading = { error: _e.message }; }
+    
     return result;
   };
 
+  
 })();
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -11049,10 +11517,10 @@ window._checkMarketStatus = _checkMarketStatus;
 // Initialize grading authority badge + verify session on page load
 document.addEventListener('DOMContentLoaded', function() {
   _updateGradingSourceBadge(_GRADING_MODE === 'server_authoritative' ? 'Server' : 'BrowserFallback DEV');
-  console.log('[grading authority] init mode:', _GRADING_MODE);
+  
   // Verify session if token stored
   try {
-    if (localStorage.getItem('pb-session-token')) {
+    if (localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token')) {
       _verifyOrRefreshSession().then(function(r) {
         if (r.cleared) console.warn('[session] token was revoked/invalid — re-auth required');
       }).catch(function(_e){});
@@ -11066,5 +11534,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 </script>
+<script src="diamonds.js"></script>
 </body>
 </html>

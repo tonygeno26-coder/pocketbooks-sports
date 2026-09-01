@@ -23,7 +23,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:#0a0
 .auth-tab{flex:1;padding:10px;text-align:center;border-radius:10px;font-size:0.85rem;font-weight:700;cursor:pointer;color:#555;transition:all 0.2s;pointer-events:auto;user-select:none}
 .auth-tab.active{background:rgba(0,255,136,0.15);color:var(--green);border:1px solid rgba(0,255,136,0.25)}
 .auth-card{background:#141414;border:1px solid #222;border-radius:20px;padding:24px;width:100%;max-width:380px}
-.auth-inp{width:100%;padding:14px 16px;background:#1c1c1c;border:1.5px solid #252525;border-radius:12px;color:#fff;font-size:0.95rem;outline:none;margin-bottom:10px;transition:border-color 0.2s}
+.auth-inp{width:100%;padding:14px 16px;background:#1c1c1c;border:1.5px solid #252525;border-radius:12px;color:#fff;font-size:0.95rem;outline:none;margin-bottom:10px;transition:border-color 0.2s;pointer-events:auto;position:relative;z-index:2}
 .auth-inp:focus{border-color:var(--green)}
 .auth-inp::placeholder{color:#444}
 .auth-check{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;cursor:pointer}
@@ -34,13 +34,15 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:#0a0
 .auth-submit:disabled{opacity:0.5;cursor:not-allowed}
 .auth-error{color:var(--red);font-size:0.78rem;margin-bottom:10px;padding:10px 14px;background:rgba(255,61,87,0.08);border:1px solid rgba(255,61,87,0.2);border-radius:10px;display:none}
 .auth-footer{margin-top:16px;text-align:center;font-size:0.72rem;color:#444}
+.auth-card form{margin:0;padding:0;border:0}
 /* BG */
 .bg-scene{position:fixed;inset:0;z-index:0;overflow:hidden;background:linear-gradient(180deg,#03061a 0%,#060d1f 30%,#080e14 60%,#050a05 100%)}
 .bg-layer1{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 20%,rgba(0,30,80,0.6) 0%,transparent 60%)}
 .bg-layer2{position:absolute;inset:0;background:radial-gradient(ellipse at 80% 60%,rgba(0,60,20,0.2) 0%,transparent 50%)}
-.moon{position:absolute;top:12%;left:50%;transform:translateX(-50%);width:130px;height:130px;background:radial-gradient(circle at 40% 40%,#f0e8d0,#c8c0a0);border-radius:50%;box-shadow:0 0 40px rgba(240,232,208,0.35),0 0 100px rgba(240,232,208,0.12),0 0 200px rgba(240,232,208,0.05);animation:moonFloat 8s ease-in-out infinite}
+.moon{position:absolute;top:12%;left:50%;transform:translateX(-50%);width:130px;height:130px;background:radial-gradient(circle at 40% 40%,#f0e8d0,#c8c0a0);border-radius:50%;box-shadow:0 0 40px rgba(240,232,208,0.35),0 0 100px rgba(240,232,208,0.12),0 0 200px rgba(240,232,208,0.05);animation:moonFloat 8s ease-in-out infinite;pointer-events:none}
+.bg-layer1,.bg-layer2{pointer-events:none}
 @keyframes moonFloat{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-8px)}}
-.stars{position:absolute;inset:0}
+.stars{position:absolute;inset:0;pointer-events:none}
 .star{position:absolute;background:#fff;border-radius:50%;animation:twinkle 3s infinite}
 @keyframes twinkle{0%,100%{opacity:0.2;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}
 @keyframes floatUp{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
@@ -53,7 +55,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:#0a0
 .particles{position:absolute;inset:0;pointer-events:none}
 .particle{position:absolute;width:2px;height:2px;background:rgba(0,255,136,0.4);border-radius:50%;animation:drift linear infinite}
 @keyframes drift{0%{transform:translateY(100vh) translateX(0);opacity:0}10%{opacity:1}90%{opacity:0.5}100%{transform:translateY(-10vh) translateX(20px);opacity:0}}
-.trees{position:absolute;bottom:28%;left:0;right:0;height:90px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 430 90'%3E%3Cpolygon points='0,90 30,20 60,90' fill='%23030a03'/%3E%3Cpolygon points='40,90 70,12 100,90' fill='%23040c04'/%3E%3Cpolygon points='90,90 115,22 140,90' fill='%23030a03'/%3E%3Cpolygon points='130,90 160,8 190,90' fill='%23040c04'/%3E%3Cpolygon points='180,90 210,18 240,90' fill='%23030a03'/%3E%3Cpolygon points='230,90 255,28 280,90' fill='%23040c04'/%3E%3Cpolygon points='270,90 300,14 330,90' fill='%23030a03'/%3E%3Cpolygon points='320,90 350,20 380,90' fill='%23040c04'/%3E%3Cpolygon points='370,90 400,16 430,90' fill='%23030a03'/%3E%3C/svg%3E") repeat-x bottom;filter:blur(0.5px);animation:treeSway 12s ease-in-out infinite alternate}
+.trees{position:absolute;bottom:28%;left:0;right:0;height:90px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 430 90'%3E%3Cpolygon points='0,90 30,20 60,90' fill='%23030a03'/%3E%3Cpolygon points='40,90 70,12 100,90' fill='%23040c04'/%3E%3Cpolygon points='90,90 115,22 140,90' fill='%23030a03'/%3E%3Cpolygon points='130,90 160,8 190,90' fill='%23040c04'/%3E%3Cpolygon points='180,90 210,18 240,90' fill='%23030a03'/%3E%3Cpolygon points='230,90 255,28 280,90' fill='%23040c04'/%3E%3Cpolygon points='270,90 300,14 330,90' fill='%23030a03'/%3E%3Cpolygon points='320,90 350,20 380,90' fill='%23040c04'/%3E%3Cpolygon points='370,90 400,16 430,90' fill='%23030a03'/%3E%3C/svg%3E") repeat-x bottom;filter:blur(0.5px);animation:treeSway 12s ease-in-out infinite alternate;pointer-events:none}
 @keyframes treeSway{0%{transform:scaleX(1)}100%{transform:scaleX(1.02)}}
 .sports-icons{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .sports-icon{position:absolute;font-size:1.4rem;opacity:0.06;animation:floatIcon linear infinite}
@@ -116,6 +118,9 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:#0a0
 .ac-bg-join{background:linear-gradient(160deg,#041a0d,#0a3a1a,#062010)}
 .ac-bg-create{background:linear-gradient(160deg,#1a1400,#2e2400,#1c1800);border:1px solid rgba(245,200,66,0.25);box-shadow:0 0 30px rgba(245,200,66,0.08) inset}
 .ac-bg-clubs{background:linear-gradient(160deg,#04081a,#0a1432,#060e20)}
+.ac-bg-survivor{background:linear-gradient(160deg,#1a0a14,#3a1028,#12080c);border:1px solid rgba(0,255,136,0.22);box-shadow:0 0 30px rgba(0,255,136,0.08) inset}
+.action-card.locked{opacity:0.38}
+.action-card.locked .ac-icon{filter:grayscale(1);animation:none}
 .ac-icon{font-size:3rem;filter:drop-shadow(0 0 16px currentColor);animation:iconPulse 3s ease-in-out infinite}
 @keyframes iconPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
 .ac-gradient{position:absolute;bottom:0;left:0;right:0;height:50%;background:linear-gradient(transparent,rgba(0,0,0,0.8))}
@@ -146,6 +151,13 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:#0a0
 .cr-right{text-align:right}
 .cr-balance{font-size:0.95rem;font-weight:900}
 .cr-dir{font-size:0.62rem;color:#555;margin-top:1px}
+
+/* Players never sit on sportsbook lobby chrome */
+body.pb-player-only .action-grid,
+body.pb-player-only .secondary-row,
+body.pb-player-only .bnav,
+body.pb-player-only .wallet-bar,
+body.pb-player-only .bottom-nav{display:none!important}
 
 /* BOTTOM NAV */
 .bnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:rgba(5,8,20,0.97);border-top:1px solid rgba(255,255,255,0.08);display:flex;padding:10px 0 22px;z-index:100;backdrop-filter:blur(16px)}
@@ -251,6 +263,38 @@ body.theme-light [style*="color:#00c2ff"]{color:#0064c8!important}
 body.theme-light [style*="color:#ff3d57"],body.theme-light [style*="color:#ff6b6b"],body.theme-light [style*="color:#ff4444"]{color:#cc0000!important}
 body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
 
+/* ═══ MOBILE (≤480px / iPhone 375) — layout only, no redesign ═══ */
+@media (max-width:480px){
+  html,body{overflow-x:hidden;max-width:100%}
+  .auth-content{padding:40px 16px 32px;min-height:100dvh}
+  .auth-card{padding:16px;max-width:100%}
+  .auth-tabs{min-height:44px}
+  .auth-tab{min-height:44px;display:flex;align-items:center;justify-content:center;padding:12px 8px}
+  .auth-inp,.auth-submit,.btn-primary,.btn-secondary{min-height:44px}
+  .auth-app-name{overflow-wrap:anywhere}
+  #signup-form > div{min-width:0}
+  #a-contact-method{max-width:42%;min-width:0}
+  #a-contact-value{min-width:0}
+  #auth-recovery-links{flex-wrap:wrap;gap:8px;padding:0 4px}
+  .menu-btn{width:44px;height:44px}
+  .bn{min-height:44px;padding:8px 0}
+  .bnav{padding-bottom:max(16px,env(safe-area-inset-bottom,0px))}
+  .modal-bg{align-items:flex-end}
+  .modal{max-height:100dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom,0px))}
+  .action-grid,.secondary-row{padding-left:12px;padding-right:12px}
+  .ac-label{overflow-wrap:anywhere}
+  .club-row{min-width:0}
+  .cr-name{overflow:hidden;text-overflow:ellipsis}
+}
+
+@media (max-width:400px){
+  .auth-content{padding:28px 12px 24px}
+  .auth-card{padding:14px}
+  .auth-submit,.auth-inp{min-height:44px;width:100%;box-sizing:border-box}
+  .modal{max-width:100vw;width:100%}
+  .action-grid{grid-template-columns:1fr;padding-left:10px;padding-right:10px}
+}
+
 </style>
 <script>
 // ── PRE-RENDER: runs before body, before any CSS is applied to DOM ──────────
@@ -263,9 +307,61 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
     if (_screen === 'signin' || _screen === 'signup') {
       sessionStorage.removeItem('pb-force-lobby-home');
       // Hide lobby content and force auth-screen visible.
-      document.write('<style id="pb-force-auth">.content,.bnav,.bottom-nav{display:none!important}#auth-screen{display:flex!important;visibility:visible!important;opacity:1!important;z-index:9999!important;pointer-events:auto!important}#auth-screen *{pointer-events:auto!important}.auth-tab{cursor:pointer!important;pointer-events:auto!important}</style>');
+      document.write('<style id="pb-force-auth">.content,.bnav,.bottom-nav{display:none!important}#auth-screen{display:flex!important;visibility:visible!important;opacity:1!important;z-index:9999!important;pointer-events:auto!important}#auth-screen .auth-content,#auth-screen .auth-content *{pointer-events:auto!important}#auth-screen .auth-bg-glow,#auth-screen .particles,#auth-screen .sports-icons{pointer-events:none!important}.auth-tab{cursor:pointer!important;pointer-events:auto!important}</style>');
       window.__pbForceAuth = _screen;
       return;
+    }
+  } catch(_e){}
+  // Authed players skip the sportsbook lobby entirely. Hosts go to the dashboard
+  // unless they explicitly asked to stay (?from=host or ?stay=1).
+  try {
+    var _routeQs = new URLSearchParams(location.search);
+    if (_routeQs.get('preview') !== '1' && _routeQs.get('screen') !== 'signin' && _routeQs.get('screen') !== 'signup') {
+      var _tok = localStorage.getItem('pb-sports-token');
+      if (_tok) {
+        function _nr(r){ return String(r||'').toLowerCase().trim(); }
+        function _isHost(r){
+          var n = _nr(r);
+          return n==='host'||n==='admin'||n==='master_admin'||n==='owner'||n==='creator'||n==='full_admin'
+            || n==='cohost'||n==='staff'||n==='settlement_manager'
+            || n.indexOf('cohost_')===0||n.indexOf('staff_')===0;
+        }
+        var _role = '';
+        try { var _p = JSON.parse(localStorage.getItem('pb-player')||'null'); if (_p && _p.role) _role = _p.role; } catch(_e){}
+        try { var _h = JSON.parse(localStorage.getItem('pb-host')||'null'); if (_h && _isHost(_h.role)) _role = _h.role; } catch(_e){}
+        try { var _ar = localStorage.getItem('pb-actor-role'); if (_ar && _isHost(_ar)) _role = _ar; } catch(_e){}
+        try {
+          if (!_isHost(_role)) {
+            var _parts = _tok.split('.');
+            if (_parts.length === 3) {
+              var _pl = JSON.parse(atob(_parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+              if (_pl && _pl.role) _role = _pl.role;
+            }
+          }
+        } catch(_e){}
+        var _hostRec = false;
+        try { var _hr = JSON.parse(localStorage.getItem('pb-host')||'null'); if (_hr && (_hr.id || _hr.username || _hr.hostId || _hr.role)) _hostRec = true; } catch(_e){}
+        try {
+          var _clubs = JSON.parse(localStorage.getItem('pb-clubs')||'[]');
+          if (Array.isArray(_clubs) && _clubs.some(function(c){ return _isHost(c.role); })) _hostRec = true;
+        } catch(_e){}
+        try {
+          var _ac = JSON.parse(localStorage.getItem('pb-active-club')||localStorage.getItem('pb-club')||'null');
+          if (_ac && _isHost(_ac.role)) _hostRec = true;
+        } catch(_e){}
+        var _stay = _routeQs.get('stay') === '1' || _routeQs.get('from') === 'host';
+        // Hosts (JWT host/admin OR stored pb-host / host-role club) stay on
+        // sportsbook. JWT role `user` is the default for real hosts too — do
+        // NOT treat it as a player-only signal or they bounce to Survivor.
+        if ((_isHost(_role) || _hostRec) && !_stay) {
+          location.replace('index.html?from=lobby');
+          return;
+        }
+        if (!_isHost(_role) && !_hostRec && _nr(_role) === 'player') {
+          location.replace('survivor.html');
+          return;
+        }
+      }
     }
   } catch(_e){}
   var forceHome = sessionStorage.getItem('pb-force-lobby-home') === '1';
@@ -276,7 +372,7 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
   if (forceHome && hasState) {
     // Inject style BEFORE body renders — overrides .auth-screen{display:flex}
     document.write('<style id="pb-hide-auth">#auth-screen{display:none!important;visibility:hidden!important;pointer-events:none!important;position:absolute!important;z-index:-9999!important}</style>');
-    console.log('[PRE-RENDER] auth-screen suppressed before DOM builds');
+    
   }
   if (location.search.includes('preview=1')) {
     document.write('<style>#auth-screen{display:none!important;visibility:hidden!important;pointer-events:none!important;position:absolute!important;z-index:-9999!important}</style>');
@@ -337,7 +433,7 @@ try {
     <div class="wallet-item">
       <span class="wallet-icon">💎</span>
       <span class="wallet-val" id="w-diamonds">2,450</span>
-      <div class="wallet-add" onclick="showSection('buy-diamonds')">+</div>
+      <div class="wallet-add" onclick="openBuyDiamondsModal()">+</div>
     </div>
     <div class="wallet-sep"></div>
     <div class="wallet-item">
@@ -348,19 +444,18 @@ try {
   </div>
 
   <!-- ACTIVE CLUB CARD -->
-  <div class="active-club-wrap" id="active-club-wrap" onclick="enterActiveClub()">
+  <div class="active-club-wrap" id="active-club-wrap" onclick="goSurvivor()">
     <div class="active-club-card">
       <div class="ac-top">
-        <span class="ac-id" id="ac-id-display">No club selected — tap to join</span>
-        <span style="font-size:0.65rem;color:#999">TAP TO ENTER ›</span>
+        <span class="ac-id" id="ac-id-display">Survivor Pool</span>
+        <span style="font-size:0.65rem;color:#999">TAP TO PLAY ›</span>
       </div>
       <div class="ac-body" id="ac-body-el">
         <div id="ac-empty-state" style="text-align:center;padding:6px 10px">
-          <div style="font-size:2.5rem;margin-bottom:10px;opacity:0.6">🃏</div>
-          <div style="font-size:0.82rem;font-weight:700;color:#333;margin-bottom:14px">Join or create a club<br>to start betting</div>
+          <div style="font-size:2.5rem;margin-bottom:10px;opacity:0.85">🛡️</div>
+          <div style="font-size:0.82rem;font-weight:700;color:#333;margin-bottom:14px">Pick one NFL team each week.<br>Clubs are paused for this test.</div>
           <div style="display:flex;gap:8px;justify-content:center">
-            <button onclick="event.stopPropagation();openModal('modal-join')" style="padding:8px 16px;background:#00c2ff;color:#000;border:none;border-radius:20px;font-size:0.75rem;font-weight:900;cursor:pointer">Join Club</button>
-            <button onclick="event.stopPropagation();openModal('modal-create')" style="padding:8px 16px;background:#00ff88;color:#000;border:none;border-radius:20px;font-size:0.75rem;font-weight:900;cursor:pointer">Create Club</button>
+            <button onclick="event.stopPropagation();goSurvivor()" style="padding:8px 16px;background:#00ff88;color:#000;border:none;border-radius:20px;font-size:0.75rem;font-weight:900;cursor:pointer">Play Survivor</button>
           </div>
         </div>
         <img src="./logo.jpg" class="ac-logo" id="ac-logo" alt="Club" style="display:none">
@@ -369,7 +464,7 @@ try {
         <div class="ac-owner-avatar" id="ac-owner-av">PB</div>
         <div>
           <div class="ac-owner-name" id="ac-club-name">Pocket Books Sports</div>
-          <div class="ac-owner-sub" id="ac-role-display">Select a club to get started</div>
+          <div class="ac-owner-sub" id="ac-role-display">Survivor test group</div>
         </div>
         <div class="ac-stats">
           <span>💎</span>
@@ -381,21 +476,26 @@ try {
 
   <!-- ACTION GRID -->
   <div class="action-grid">
-    <div class="action-card" onclick="openModal('modal-join')">
-      <div class="ac-bg ac-bg-join"><div class="ac-icon">🔍</div></div>
+    <div class="action-card locked" onclick="clubsLockedGuard()">
+      <div class="ac-bg ac-bg-join"><div class="ac-icon">🔒</div></div>
       <div class="ac-gradient"></div>
-      <div class="ac-label">Join Club<br><span class="ac-sublabel">Enter code</span></div>
+      <div class="ac-label">Join Club<br><span class="ac-sublabel">Coming soon</span></div>
     </div>
-    <div class="action-card" onclick="openModal('modal-create')">
-      <div class="ac-bg ac-bg-create"><div class="ac-icon">🏆</div></div>
+    <div class="action-card locked" onclick="clubsLockedGuard()">
+      <div class="ac-bg ac-bg-create"><div class="ac-icon">🔒</div></div>
       <div class="ac-gradient"></div>
-      <div class="ac-label">Create Club<br><span class="ac-sublabel">Be the host</span></div>
+      <div class="ac-label">Create Club<br><span class="ac-sublabel">Coming soon</span></div>
     </div>
-    <div class="action-card" onclick="setBN(document.querySelectorAll('.bn')[1],'clubs');showMyClubsSection()" id="my-clubs-tile">
-      <div class="ac-bg ac-bg-clubs"><div class="ac-icon">🃏</div></div>
+    <div class="action-card locked" onclick="clubsLockedGuard()" id="my-clubs-tile">
+      <div class="ac-bg ac-bg-clubs"><div class="ac-icon">🔒</div></div>
       <div class="ac-gradient"></div>
-      <div class="ac-label" id="clubs-tile-content">My Clubs<br><span class="ac-sublabel" id="club-count-lbl">0 clubs</span></div>
+      <div class="ac-label" id="clubs-tile-content">My Clubs<br><span class="ac-sublabel" id="club-count-lbl">Paused</span></div>
     </div>
+    <a class="action-card" href="survivor.html" style="text-decoration:none;color:inherit">
+      <div class="ac-bg ac-bg-survivor"><div class="ac-icon">🛡️</div></div>
+      <div class="ac-gradient"></div>
+      <div class="ac-label">Survivor Pool<br><span class="ac-sublabel">Last team standing</span></div>
+    </a>
   </div>
 
   <!-- SECONDARY ROW -->
@@ -441,7 +541,7 @@ try {
     <div class="bn-ico"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
     <div class="bn-lbl">Messages</div>
   </div>
-  <div class="bn" id="player-lobby-profile-btn" onclick="console.log('[PROFILE OPEN] player lobby clicked'); document.querySelectorAll('.bn').forEach(function(n){n.classList.remove('active');}); this.classList.add('active'); if (typeof showPlayerSettings==='function') { showPlayerSettings(); } else { console.error('[PROFILE OPEN] showPlayerSettings is not defined'); }">
+  <div class="bn" id="player-lobby-profile-btn" onclick="document.querySelectorAll('.bn').forEach(function(n){n.classList.remove('active');}); this.classList.add('active'); if (typeof showPlayerSettings==='function') { showPlayerSettings(); } else { console.error('[PROFILE OPEN] showPlayerSettings is not defined'); }">
     <div class="bn-ico"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
     <div class="bn-lbl">Profile</div>
   </div>
@@ -465,45 +565,25 @@ try {
     <div class="auth-card">
       <div id="auth-error" class="auth-error"></div>
 
-      <!-- SIGNUP FIELDS -->
-      <div id="signup-fields">
-        <input id="a-name" class="auth-inp" placeholder="Display name" autocomplete="name">
-        <div style="display:flex;gap:8px;margin-bottom:10px">
-          <select id="a-contact-method" class="auth-inp" style="flex:0 0 auto;width:auto;padding-right:10px;cursor:pointer" onchange="(function(){var m=document.getElementById('a-contact-method').value,i=document.getElementById('a-contact-value'),p={telegram:'@username',signal:'Phone number or username',email:'Email address'};i.placeholder=p[m];i.type=m==='email'?'email':'text';})()">
-            <option value="telegram">Telegram</option>
-            <option value="signal">Signal</option>
-            <option value="email">Email</option>
-          </select>
-          <input id="a-contact-value" class="auth-inp" placeholder="@username" type="text" style="flex:1;margin-bottom:0">
+      <form id="login-form" method="post" action="" autocomplete="off" onsubmit="event.preventDefault(); submitAuth(); return false;">
+        <div id="login-hint" style="font-size:0.62rem;color:#666;margin:0 0 8px;padding:0 4px">Sign in with your display name or email</div>
+        <!-- No name/autocomplete attrs — password managers steal focus from identifier. -->
+        <input id="a-email" class="auth-inp" placeholder="Display name, email, or @telegram" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">
+        <input id="signin-secret" class="auth-inp" placeholder="Password" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">
+        <button type="submit" class="auth-submit" id="auth-submit-btn">Sign In →</button>
+        <div id="auth-recovery-links" style="display:flex;justify-content:center;gap:14px;margin-top:14px;font-size:0.72rem">
+          <span class="auth-recover-link" style="color:var(--cyan);cursor:pointer" onclick="openRecovery('username')">Forgot Username</span>
+          <span style="color:#333">·</span>
+          <span class="auth-recover-link" style="color:var(--cyan);cursor:pointer" onclick="openRecovery('password')">Forgot Password</span>
         </div>
-        <div id="signup-contact-hint" style="font-size:0.62rem;color:#666;margin:-6px 0 10px;padding:0 4px">Select how we can reach you — required for account recovery.</div>
-      </div>
+      </form>
 
-      <!-- SHARED FIELDS -->
-      <input id="a-email" class="auth-inp" placeholder="Email address" type="email" autocomplete="email" style="display:none">
-      <input id="a-pass" class="auth-inp" placeholder="Password" type="password" autocomplete="current-password">
-      <div id="confirm-pass-wrap" style="display:none">
-        <input id="a-pass2" class="auth-inp" placeholder="Confirm password" type="password">
-      </div>
+      <!-- Signup markup is injected from JS only when Create Account is selected.
+           Keeping password fields out of the initial HTML (including <template>)
+           prevents password managers / Telegram autocomplete from scanning a
+           second credential form and stealing focus from #a-email. -->
+      <div id="signup-form-slot"></div>
 
-      <!-- SIGNUP CHECKS -->
-      <div id="signup-checks" style="display:none">
-        <label class="auth-check">
-          <input type="checkbox" id="check-age">
-          <span class="auth-check-label">I confirm I am 21 years of age or older</span>
-        </label>
-        <label class="auth-check">
-          <input type="checkbox" id="check-terms">
-          <span class="auth-check-label">I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a></span>
-        </label>
-      </div>
-
-      <button class="auth-submit" id="auth-submit-btn" onclick="submitAuth()">Sign In →</button>
-      <div id="auth-recovery-links" style="display:flex;justify-content:center;gap:14px;margin-top:14px;font-size:0.72rem">
-        <span class="auth-recover-link" style="color:var(--cyan);cursor:pointer" onclick="openRecovery('username')">Forgot Username</span>
-        <span style="color:#333">·</span>
-        <span class="auth-recover-link" style="color:var(--cyan);cursor:pointer" onclick="openRecovery('password')">Forgot Password</span>
-      </div>
       <div class="auth-footer" id="auth-footer-text">Don't have an account? <span style="color:var(--cyan);cursor:pointer" onclick="setAuthTab('signup')">Create one free</span></div>
     </div>
   </div>
@@ -596,33 +676,179 @@ try {
 // AUTH
 let authMode = 'login';
 
-// Capture-phase delegate: catches Create Account / Sign In clicks even if a
-// parent overlay tries to swallow the event. Runs once at parse.
-(function(){
-  if (window.__pbAuthDelegateInstalled) return;
-  window.__pbAuthDelegateInstalled = true;
-  document.addEventListener('click', function(e) {
-    var t = e.target && e.target.closest && e.target.closest('.auth-tab,[data-auth-tab],#tab-login,#tab-signup');
-    if (!t) return;
-    console.log('[AUTH CLICK TARGET]', t, t.className, t.id);
-    var mode = (t.id === 'tab-signup' || t.dataset.authTab === 'signup') ? 'signup' : 'login';
-    e.preventDefault(); e.stopPropagation();
-    if (typeof setAuthTab === 'function') setAuthTab(mode);
-  }, true);
-})();
+function updateSignupContactAttrs() {
+  var sel = document.getElementById('a-contact-method');
+  var i = document.getElementById('a-contact-value');
+  if (!sel || !i) return;
+  var m = sel.value;
+  var p = {telegram:'@username', signal:'Phone number or username', email:'Email address'};
+  i.placeholder = p[m] || '@username';
+  i.type = m === 'email' ? 'email' : 'text';
+  if (m === 'email') {
+    i.name = 'email';
+    i.setAttribute('autocomplete', 'email');
+  } else if (m === 'signal') {
+    i.name = 'signal';
+    i.setAttribute('autocomplete', 'tel');
+  } else {
+    i.name = 'telegram';
+    i.setAttribute('autocomplete', 'username');
+  }
+}
+
+function _authSubmitBtn() {
+  return document.getElementById(authMode === 'signup' ? 'auth-signup-btn' : 'auth-submit-btn');
+}
+
+// Only one credential form may live in the document at a time.
+// Login nodes are moved (not cloned) into a hold fragment on signup so typed
+// values survive tab switches without re-creating inputs. Signup HTML is a JS
+// string so password managers never see it while Sign In is active.
+var _loginHold = null;
+var _SIGNUP_FORM_HTML =
+  '<form id="signup-form" method="post" action="" autocomplete="off" onsubmit="event.preventDefault(); submitAuth(); return false;">' +
+    '<input id="a-name" class="auth-inp" name="name" placeholder="Display name" autocomplete="name">' +
+    '<div style="display:flex;gap:8px;margin-bottom:10px">' +
+      '<select id="a-contact-method" class="auth-inp" style="flex:0 0 auto;width:auto;padding-right:10px;cursor:pointer" onchange="updateSignupContactAttrs()">' +
+        '<option value="telegram">Telegram</option>' +
+        '<option value="signal">Signal</option>' +
+        '<option value="email">Email</option>' +
+      '</select>' +
+      '<input id="a-contact-value" class="auth-inp" name="telegram" placeholder="@username" type="text" autocomplete="off" style="flex:1;margin-bottom:0">' +
+    '</div>' +
+    '<div id="signup-contact-hint" style="font-size:0.62rem;color:#666;margin:-6px 0 10px;padding:0 4px">Select how we can reach you — required for account recovery.</div>' +
+    '<input id="a-pass-signup" class="auth-inp" name="new-password" placeholder="Password" type="password" autocomplete="new-password">' +
+    '<input id="a-pass2" class="auth-inp" name="new-password-confirm" placeholder="Confirm password" type="password" autocomplete="new-password">' +
+    '<div id="signup-checks">' +
+      '<label class="auth-check"><input type="checkbox" id="check-age"><span class="auth-check-label">I confirm I am 21 years of age or older</span></label>' +
+      '<label class="auth-check"><input type="checkbox" id="check-terms"><span class="auth-check-label">I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a></span></label>' +
+    '</div>' +
+    '<button type="submit" class="auth-submit" id="auth-signup-btn">Create My Account →</button>' +
+  '</form>';
+
+function _authFieldFocused() {
+  var ae = document.activeElement;
+  if (!ae || !ae.closest) return false;
+  return !!ae.closest('#login-form, #signup-form');
+}
+
+function _authDomMatches(mode) {
+  var loginLive = !!document.getElementById('login-form');
+  var signupLive = !!document.getElementById('signup-form');
+  if (mode === 'login') return loginLive && !signupLive;
+  return signupLive && !loginLive;
+}
+
+function _holdLoginForm() {
+  var loginForm = document.getElementById('login-form');
+  if (!loginForm) return;
+  if (!_loginHold) _loginHold = document.createDocumentFragment();
+  _loginHold.appendChild(loginForm);
+}
+
+function _restoreLoginForm() {
+  if (document.getElementById('login-form')) {
+    _wireSigninSecretField();
+    return document.getElementById('login-form');
+  }
+  if (!_loginHold || !_loginHold.childNodes.length) return null;
+  var slot = document.getElementById('signup-form-slot');
+  var card = document.querySelector('.auth-card');
+  if (!card) return null;
+  if (slot && slot.parentNode === card) card.insertBefore(_loginHold, slot);
+  else {
+    var footer = document.getElementById('auth-footer-text');
+    if (footer) card.insertBefore(_loginHold, footer);
+    else card.appendChild(_loginHold);
+  }
+  _wireSigninSecretField();
+  return document.getElementById('login-form');
+}
+
+// Keep Sign In password as type=text until first keypress so password managers
+// do not attach to a password field and steal focus from #a-email.
+function _wireSigninSecretField() {
+  var el = document.getElementById('signin-secret');
+  if (!el || el.dataset.pmWired === '1') return;
+  el.dataset.pmWired = '1';
+  el.setAttribute('autocomplete', 'off');
+  el.removeAttribute('name');
+  if (el.type !== 'text' && !el.value) el.type = 'text';
+  el.addEventListener('focus', function () {
+    if (!el.value && el.type !== 'text') el.type = 'text';
+  });
+  el.addEventListener('keydown', function () {
+    if (el.type !== 'password') el.type = 'password';
+  });
+  el.addEventListener('input', function () {
+    if (el.value && el.type !== 'password') el.type = 'password';
+  });
+}
+
+function _unmountSignupForm() {
+  var slot = document.getElementById('signup-form-slot');
+  if (slot) slot.innerHTML = '';
+}
+
+function _mountSignupForm() {
+  var slot = document.getElementById('signup-form-slot');
+  if (!slot) return null;
+  if (document.getElementById('signup-form')) return document.getElementById('signup-form');
+  slot.innerHTML = _SIGNUP_FORM_HTML;
+  return document.getElementById('signup-form');
+}
+
+function _setAuthScreenVisible(show) {
+  var el = document.getElementById('auth-screen');
+  if (!el) return;
+  if (show) {
+    // Re-assigning display on an ancestor blurs focused inputs in some
+    // WebViews (iOS Safari / Telegram). Skip when already visible.
+    try {
+      var cs = window.getComputedStyle(el);
+      if (cs.display !== 'none' && cs.visibility !== 'hidden') return;
+    } catch (_e) {}
+    if (_authFieldFocused()) return;
+    el.style.display = 'flex';
+  } else {
+    el.style.display = 'none';
+  }
+}
 
 function setAuthTab(mode) {
+  mode = (mode === 'signup') ? 'signup' : 'login';
+
+  // Boot / preview re-entry while the user is already typing: do nothing.
+  if (authMode === mode && _authDomMatches(mode)) {
+    if (_authFieldFocused()) return;
+    return;
+  }
+  if (authMode === mode && _authFieldFocused()) return;
+
   authMode = mode;
-  document.getElementById('tab-login').classList.toggle('active', mode==='login');
-  document.getElementById('tab-signup').classList.toggle('active', mode==='signup');
-  document.getElementById('signup-fields').style.display = mode==='signup' ? 'block' : 'none';
-  document.getElementById('confirm-pass-wrap').style.display = mode==='signup' ? 'block' : 'none';
-  document.getElementById('signup-checks').style.display = mode==='signup' ? 'block' : 'none';
-  document.getElementById('auth-submit-btn').textContent = mode==='signup' ? 'Create My Account →' : 'Sign In →';
-  document.getElementById('auth-footer-text').innerHTML = mode==='login'
-    ? "Don't have an account? <span style='color:var(--cyan);cursor:pointer' onclick=\"setAuthTab('signup')\">Create one free</span>"
-    : "Already have an account? <span style='color:var(--cyan);cursor:pointer' onclick=\"setAuthTab('login')\">Sign in</span>";
-  document.getElementById('auth-error').style.display = 'none';
+  var tabLogin = document.getElementById('tab-login');
+  var tabSignup = document.getElementById('tab-signup');
+  if (tabLogin) tabLogin.classList.toggle('active', mode === 'login');
+  if (tabSignup) tabSignup.classList.toggle('active', mode === 'signup');
+
+  if (mode === 'login') {
+    _unmountSignupForm(); // signup must not remain in the DOM
+    _restoreLoginForm();
+    _wireSigninSecretField();
+  } else {
+    _holdLoginForm();
+    _mountSignupForm();
+    updateSignupContactAttrs();
+  }
+
+  var footer = document.getElementById('auth-footer-text');
+  if (footer) {
+    footer.innerHTML = mode === 'login'
+      ? "Don't have an account? <span style='color:var(--cyan);cursor:pointer' onclick=\"setAuthTab('signup')\">Create one free</span>"
+      : "Already have an account? <span style='color:var(--cyan);cursor:pointer' onclick=\"setAuthTab('login')\">Sign in</span>";
+  }
+  var err = document.getElementById('auth-error');
+  if (err) err.style.display = 'none';
 }
 
 function showAuthError(msg) {
@@ -824,10 +1050,14 @@ function openRecovery(kind){
   });
 }
 
-async function submitAuth() {
-  const btn = document.getElementById('auth-submit-btn');
-  const loginEmail = document.getElementById('a-email').value.trim();
-  const pass = document.getElementById('a-pass').value;
+async function submitAuth(e) {
+  if (e && e.preventDefault) e.preventDefault();
+  const btn = _authSubmitBtn();
+  const loginEmail = (document.getElementById('a-email') || {}).value.trim();
+  const passEl = document.getElementById(authMode === 'signup' ? 'a-pass-signup' : 'signin-secret')
+    || document.getElementById('signin-secret')
+    || document.getElementById('a-pass');
+  const pass = passEl ? passEl.value : '';
   // Signup contact method dropdown
   const contactMethodEl = document.getElementById('a-contact-method');
   const contactValueEl  = document.getElementById('a-contact-value');
@@ -838,10 +1068,10 @@ async function submitAuth() {
   const telegramContact = contactMethod === 'telegram' ? contactValue : '';
   document.getElementById('auth-error').style.display = 'none';
 
-  // Login still requires email (existing dev login). Signup requires password
-  // plus the contact value.
+  // Login accepts email, Telegram/Signal handle, or display name.
+  // Signup requires password plus the contact value.
   if (authMode === 'login') {
-    if (!loginEmail || !pass) { showAuthError('Please enter email and password'); return; }
+    if (!loginEmail || !pass) { showAuthError('Please enter your display name, email, or @telegram and password'); return; }
   } else {
     if (!pass) { showAuthError('Please enter a password'); return; }
     if (!contactValue) { showAuthError('Select a contact method and enter your details — required for account recovery'); return; }
@@ -852,6 +1082,7 @@ async function submitAuth() {
 
   try {
     let data;
+    var signupEmail = '';
     if (authMode === 'signup') {
       const name = document.getElementById('a-name').value.trim();
       const pass2 = document.getElementById('a-pass2').value;
@@ -863,23 +1094,26 @@ async function submitAuth() {
       if (!termsCheck) { showAuthError('You must accept the Terms of Service'); btn.disabled=false; btn.textContent='Create My Account →'; return; }
       // Backend signup keyed off email; synthesise a placeholder when the user
       // chose Telegram or Signal so the /api/auth/signup contract still holds.
-      var signupEmail = email
+      signupEmail = email
         || (signalContact   ? 'signal+'   + signalContact.replace(/[^a-zA-Z0-9]/g,'').toLowerCase()   + '@pocketbooks.local' : '')
         || (telegramContact ? 'telegram+' + telegramContact.replace(/[^a-zA-Z0-9]/g,'').toLowerCase() + '@pocketbooks.local' : '');
       data = await apiCall('POST', '/api/auth/signup', { name, email: signupEmail, password: pass, role: 'user',
         signalContact: signalContact || null, telegramContact: telegramContact || null });
     } else {
-      data = await apiCall('POST', '/api/auth/login', { email, password: pass });
+      data = await apiCall('POST', '/api/auth/login', { email: loginEmail, password: pass });
     }
 
     if (data.error) { showAuthError(data.error); btn.disabled=false; btn.textContent=authMode==='login'?'Sign In →':'Create My Account →'; return; }
 
     TOKEN = data.token;
-    localStorage.setItem('pb-session-token', TOKEN);
-    localStorage.setItem('pb-sports-token', TOKEN);
-    if (email) localStorage.setItem('pb-dev-email', email);
-    // NOTE: pb-dev-pass kept for dev only; do not rely on it for prod auth.
-    localStorage.setItem('pb-dev-pass', pass);
+    _storeAuthToken(data.token, data.expiresIn);
+    var storedEmail = signupEmail || email || loginEmail || (data.user && data.user.email) || '';
+    if (storedEmail) {
+      localStorage.setItem('pb-player-email', storedEmail);
+      localStorage.setItem('pb-dev-email', storedEmail);
+    }
+    try { localStorage.removeItem('pb-dev-pass'); } catch(_e){}
+    try { sessionStorage.removeItem('pb-force-lobby-home'); } catch(_e){}
     // Persist contact details into player-settings so the profile modal +
     // host receipts pipeline see them (signup path only).
     if (authMode==='signup') {
@@ -893,27 +1127,40 @@ async function submitAuth() {
     }
     // Seed a minimal canonical record for whichever role applies, so role/
     // profile survives refresh even if /api/auth/me hasn't returned yet.
+    var _loginRole = 'player';
     try {
-      var _role = (data.role || (data.user && data.user.role) || 'player');
+      _loginRole = (data.role || (data.user && data.user.role) || 'player');
       var _uname = (authMode==='signup'
         ? document.getElementById('a-name').value.trim()
-        : (email ? email.split('@')[0] : 'user'));
+        : ((data.user && data.user.name) || (storedEmail ? storedEmail.split('@')[0] : 'user')));
       var _rec  = {
         id:            data.userId || data.id || (data.user && data.user.id) || null,
         username:      _uname,
-        email:         email || '',
+        email:         storedEmail || '',
         signalContact: (authMode==='signup' ? signalContact : '') || '',
-        role:          _role,
+        role:          _loginRole,
       };
       localStorage.setItem('pb-player', JSON.stringify(_rec));
-      if (_role === 'host' || _role === 'owner') {
+      if (typeof isAppHostRole === 'function' ? isAppHostRole(_loginRole) : (_loginRole === 'host' || _loginRole === 'owner' || _loginRole === 'admin' || _loginRole === 'master_admin' || _loginRole === 'creator')) {
         localStorage.setItem('pb-host', JSON.stringify(_rec));
       }
+      // Do not remove pb-host when JWT says `user` — that is the default
+      // users.role for real hosts. Club / stored-host signals decide.
     } catch(_e){}
 
-    // Hide auth, show lobby
-    document.getElementById('auth-screen').style.display = 'none';
-    loadUser();
+    // JWT host/admin → dashboard. Stored host / hosted clubs → dashboard.
+    // Confirmed player-only (after club hydration) → Survivor.
+    if (typeof hydrateHostFromClubs === 'function') {
+      try { await hydrateHostFromClubs(); } catch(_he){}
+    }
+    if (typeof routeAuthedUser === 'function') {
+      routeAuthedUser(_loginRole);
+    } else if (typeof isHostSession === 'function' ? isHostSession() : (['host','admin','master_admin','owner','creator','full_admin'].indexOf(String(_loginRole||'').toLowerCase()) !== -1)) {
+      window.location.href = 'index.html?from=lobby';
+    } else {
+      window.location.href = 'survivor.html';
+    }
+    return;
 
   } catch(e) {
     showAuthError('Connection error — try again');
@@ -929,20 +1176,22 @@ function returnToLobby() {
   var _club      = JSON.parse(localStorage.getItem('pb-active-club') || localStorage.getItem('pb-club') || 'null');
   var _players   = JSON.parse(localStorage.getItem('pb-club-players') || '[]');
   var _hasTickets = (JSON.parse(localStorage.getItem('pb-tickets') || '[]')).length > 0;
-  console.log('Return to Lobby clicked', {
-    player: _player, club: _club, clubPlayers: _players.length, hasTickets: _hasTickets
-  });
+  
   if (!_player && !_players.length && !_hasTickets && !TOKEN) {
-    // Truly no session — show sign-in
-    document.getElementById('auth-screen').style.display = 'flex';
+    // Truly no session — show sign-in (skip reassignment if already visible)
+    if (typeof _setAuthScreenVisible === 'function') _setAuthScreenVisible(true);
+    else {
+      var _as = document.getElementById('auth-screen');
+      if (_as) _as.style.display = 'flex';
+    }
     return;
   }
-  // Determine role
+  // Determine role — players never re-enter the sportsbook.
   var _role = (_player && _player.role) || (_club && _club.role) || 'player';
-  if (typeof isHostRole === 'function' ? isHostRole(_role) : (_role === 'host' || _role === 'owner')) {
+  if (typeof isHostSession === 'function' ? isHostSession() : (typeof isAppHostRole === 'function' ? isAppHostRole(_role) : (_role === 'host' || _role === 'owner' || _role === 'admin' || _role === 'master_admin'))) {
     window.location.href = 'index.html?from=lobby';
   } else {
-    window.location.href = 'player.html?from=lobby';
+    window.location.href = 'survivor.html';
   }
 }
 // ══════════════════════════════════════════════════════════════════════════════
@@ -955,8 +1204,11 @@ function hasAnyPocketBooksState() {
   return hasToken && hasUser;
 }
 function hideAuthScreen() {
-  var el = document.getElementById('auth-screen');
-  if (el) el.style.display = 'none';
+  if (typeof _setAuthScreenVisible === 'function') _setAuthScreenVisible(false);
+  else {
+    var el = document.getElementById('auth-screen');
+    if (el) el.style.display = 'none';
+  }
 }
 function showLobbyContent() {
   var el = document.querySelector('.content');
@@ -977,15 +1229,27 @@ function showLobbyContent() {
 function checkAuthGate() {
   // Hard override applied pre-render — honor it and skip session/auto-route logic.
   if (window.__pbForceAuth) {
-    var ae = document.getElementById('auth-screen');
-    if (ae) ae.style.display = 'flex';
-    if (typeof setAuthTab === 'function') setAuthTab(window.__pbForceAuth === 'signup' ? 'signup' : 'login');
+    if (typeof _setAuthScreenVisible === 'function') _setAuthScreenVisible(true);
+    // HTML already paints Sign In. Only switch when signup is forced.
+    if (window.__pbForceAuth === 'signup' && typeof setAuthTab === 'function') setAuthTab('signup');
+    try {
+      var _expiredMsg = new URLSearchParams(location.search).get('msg');
+      if (_expiredMsg && typeof showAuthError === 'function') showAuthError(_expiredMsg);
+    } catch(_e){}
     return;
   }
-  // Bypass auth if coming from player/host dashboard via ?from= param
+  // Bypass auth if coming from host dashboard via ?from=host. Players who
+  // somehow land here (including ?from=player) go to Survivor, not sportsbook.
   var fromParam = new URLSearchParams(window.location.search).get('from');
-  if (fromParam === 'player' || fromParam === 'host') {
-    document.getElementById('auth-screen').style.display = 'none';
+  if (fromParam === 'player') {
+    if (typeof isHostSession === 'function' ? !isHostSession() : true) {
+      window.location.replace('survivor.html');
+      return;
+    }
+  }
+  if (fromParam === 'host') {
+    if (typeof _setAuthScreenVisible === 'function') _setAuthScreenVisible(false);
+    else { var _asHost = document.getElementById('auth-screen'); if (_asHost) _asHost.style.display = 'none'; }
     // Ensure lobby home content is visible
     var contentEl = document.querySelector('.content');
     if (contentEl) contentEl.style.display = '';
@@ -1006,7 +1270,7 @@ function checkAuthGate() {
     }
     var _cntEl = document.getElementById('club-count-lbl');
     if (_cntEl) _cntEl.textContent = _storedClubs.length + ' club' + (_storedClubs.length !== 1 ? 's' : '');
-    console.log('[lobby] auth bypassed: from=' + fromParam + ' | clubs:', _storedClubs.length);
+    
     return;
   }
   // Accept JWT OR any local session signal
@@ -1016,11 +1280,24 @@ function checkAuthGate() {
     false
   );
   var isAuthed = hasJWT || hasSession;
-  console.log('[lobby] checkAuthGate', { hasJWT: hasJWT, hasSession: hasSession, isAuthed: isAuthed });
-  var _authEl = document.getElementById('auth-screen');
-  if (!isAuthed) { console.trace('[AUTH SCREEN SHOWN HERE] checkAuthGate, isAuthed=false'); }
-  if (_authEl) _authEl.style.display = isAuthed ? 'none' : 'flex';
-  if (isAuthed) console.log('[AUTH] checkAuthGate: hiding auth, showing lobby');
+  
+  if (typeof _setAuthScreenVisible === 'function') _setAuthScreenVisible(!isAuthed);
+  else {
+    var _authEl = document.getElementById('auth-screen');
+    if (_authEl) _authEl.style.display = isAuthed ? 'none' : 'flex';
+  }
+  if (isAuthed) {
+    
+    if (typeof hideSportsbookChromeForPlayers === 'function') hideSportsbookChromeForPlayers();
+    var _stay = fromParam === 'host' || new URLSearchParams(window.location.search).get('stay') === '1';
+    if (typeof isHostSession === 'function' && isHostSession()) {
+      if (!_stay) window.location.replace('index.html?from=lobby');
+    } else if (typeof isPlayerOnlyRole === 'function' && isPlayerOnlyRole(typeof readSessionRole === 'function' ? readSessionRole() : '') && !(typeof hasHostSessionSignals === 'function' && hasHostSessionSignals())) {
+      window.location.replace('survivor.html');
+    }
+    // JWT `user` with no host signals yet: stay and let loadMyClubs +
+    // _maybeAutoRoute decide after club hydration.
+  }
 }
 
 // PREVIEW MODE — must run before auth gate
@@ -1066,17 +1343,103 @@ if (_preview) {
   const authEl = document.getElementById('auth-screen');
   if (authEl) {
     if (_screen === 'signin' || _screen === 'signup') {
-      // Show auth screen, hide lobby
-      authEl.style.display = 'flex';
-      setTimeout(() => { if(typeof setAuthTab==='function') setAuthTab(_screen === 'signup' ? 'signup' : 'login'); }, 100);
+      // Show auth screen, hide lobby — no delayed setAuthTab (it stole focus).
+      if (typeof _setAuthScreenVisible === 'function') _setAuthScreenVisible(true);
+      else authEl.style.display = 'flex';
+      if (_screen === 'signup' && typeof setAuthTab === 'function') setAuthTab('signup');
     } else {
-      authEl.style.display = 'none';
+      if (typeof _setAuthScreenVisible === 'function') _setAuthScreenVisible(false);
+      else authEl.style.display = 'none';
     }
   }
 }
 
 const API = 'https://pocketbooks-sports-backend-production.up.railway.app';
 let TOKEN = localStorage.getItem('pb-sports-token') || '';
+var _TOKEN_SKEW_MS = 5 * 60 * 1000;
+var _tokenRefreshInFlight = null;
+function _decodeJwtPayload(token) {
+  try {
+    var parts = String(token || '').split('.');
+    if (parts.length !== 3) return null;
+    return JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+  } catch (_e) { return null; }
+}
+function _tokenExpMs(token) {
+  var p = _decodeJwtPayload(token);
+  return (p && p.exp) ? (p.exp * 1000) : 0;
+}
+function _isClubSessionToken(token) {
+  var p = _decodeJwtPayload(token);
+  return !!(p && (p.jti || p.actorId || p.sub));
+}
+function _storeAuthToken(token, expiresInSec) {
+  if (!token) return;
+  TOKEN = token;
+  try {
+    localStorage.setItem('pb-sports-token', token);
+    var expMs = expiresInSec ? (Date.now() + Number(expiresInSec) * 1000) : _tokenExpMs(token);
+    if (!expMs) expMs = Date.now() + 86400 * 1000;
+    localStorage.setItem('pb-token-expires', String(expMs));
+  } catch (_e) {}
+}
+function _storedActorClub() {
+  var pl = null, club = null;
+  try { pl = JSON.parse(localStorage.getItem('pb-player') || 'null'); } catch (_e) {}
+  try { club = JSON.parse(localStorage.getItem('pb-club') || 'null') || JSON.parse(localStorage.getItem('pb-active-club') || 'null'); } catch (_e) {}
+  var actorId = pl && (pl.id != null ? String(pl.id) : (pl.username || ''));
+  var clubId = club && (club.id != null ? String(club.id) : (club.clubId || ''));
+  if (actorId && clubId) return { actorId: actorId, clubId: clubId };
+  return null;
+}
+function _isAuthApiPath(path) {
+  return /^\/api\/auth\/(token|refresh|login|signup|logout|verify)\b/.test(path || '');
+}
+async function _doRefreshAuthToken() {
+  var ids = _storedActorClub();
+  if (ids) {
+    try {
+      var r = await fetch(API + '/api/auth/token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actorId: ids.actorId, clubId: ids.clubId })
+      });
+      var data = await r.json();
+      if (data && data.token) { _storeAuthToken(data.token, data.expiresIn); return true; }
+    } catch (_e) {}
+  }
+  var current = TOKEN || localStorage.getItem('pb-sports-token') || '';
+  if (current && _isClubSessionToken(current) && _tokenExpMs(current) > Date.now()) {
+    try {
+      var r2 = await fetch(API + '/api/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + current }
+      });
+      var data2 = await r2.json();
+      if (data2 && data2.token) { _storeAuthToken(data2.token, data2.expiresIn); return true; }
+    } catch (_e) {}
+  }
+  return false;
+}
+function _refreshAuthToken() {
+  if (_tokenRefreshInFlight) return _tokenRefreshInFlight;
+  var p = _doRefreshAuthToken();
+  _tokenRefreshInFlight = p;
+  p.then(function () {}, function () {}).then(function () {
+    if (_tokenRefreshInFlight === p) _tokenRefreshInFlight = null;
+  });
+  return p;
+}
+async function _ensureFreshToken() {
+  var token = TOKEN || localStorage.getItem('pb-sports-token') || '';
+  if (!token) return;
+  var exp = parseInt(localStorage.getItem('pb-token-expires') || '0', 10) || _tokenExpMs(token);
+  if (exp) { try { localStorage.setItem('pb-token-expires', String(exp)); } catch (_e) {} }
+  if (!exp || Date.now() < (exp - _TOKEN_SKEW_MS)) return;
+  if (!_isClubSessionToken(token) && !_storedActorClub()) return;
+  await _refreshAuthToken();
+}
+const CLUBS_LOCKED = true;
+const CLUBS_LOCKED_MSG = 'Clubs are paused for this test — sign in and play Survivor Pool.';
 let userClubs = JSON.parse(localStorage.getItem('pb-clubs') || '[]');
 let activeClub = (function(){
   try {
@@ -1132,44 +1495,41 @@ async function loadUser() {
         username: u.name || u.username || prev.username,
         name:     u.name || prev.name,
         email:    u.email || prev.email,
-        role:     u.role || prev.role || 'player',
+        role:     (typeof isAppHostRole === 'function' && isAppHostRole(prev.role)) ? prev.role : (u.role || prev.role || 'player'),
       })));
     } catch(_e){}
     await loadMyClubs();
+    try {
+      if (typeof hasHostSessionSignals === 'function' && hasHostSessionSignals() && typeof persistHostRecord === 'function') persistHostRecord();
+    } catch(_e){}
     _maybeAutoRoute();
   } catch(e) {}
 }
 
-// Auto-route after sign-in: approved player with one player-role club → player.html.
-// We do NOT auto-route owners/cohosts — they need to pick Host vs Sportsbook per
-// club from the dual-button card. Without this gate, an owner with one club
-// gets bounced to index.html on every lobby visit and can never reach
-// player.html for their own club to test the betting flow.
-//
-// Suppressed by ?from=player|host|lobby (back-button) and ?stay=1.
+// Auto-route after sign-in / returning session (runs after club hydration):
+//   host/admin/master_admin/owner/creator OR stored host / host-role club → dashboard
+//   confirmed player-only (no host signals) → Survivor Pool
+//   JWT `user` is NOT player-only — hosts use that default role.
+// Hosts may stay on the lobby with ?from=host or ?stay=1.
 function _maybeAutoRoute() {
   var params = new URLSearchParams(window.location.search);
-  var fromParam = params.get('from');
-  if (fromParam === 'player' || fromParam === 'host' || fromParam === 'lobby') return;
+  if (params.get('preview') === '1') return;
+  if (window.__pbForceAuth) return;
   if (params.get('stay') === '1') return;
-  var clubs = userClubs || [];
-  if (!clubs.length) return;
-  // Only auto-route players with exactly one approved player-role club.
-  // Owners/cohosts always see the lobby so they can choose mode per club.
-  var approvedPlayerClubs = clubs.filter(function(c){ return !isHostRole(c.role) && c.status==='approved'; });
-  if (approvedPlayerClubs.length === 1) {
-    try {
-      syncSelectedClubStorage(approvedPlayerClubs[0]);
-    } catch(_e){}
-    activeClub = approvedPlayerClubs[0];
-    enterActiveClub('player');
+  var fromParam = params.get('from');
+  if (fromParam === 'host') return;
+  if (typeof isHostSession === 'function' ? isHostSession() : (typeof isAppHostRole === 'function' && isAppHostRole(readSessionRole()))) {
+    window.location.href = 'index.html?from=lobby';
+    return;
   }
+  window.location.href = 'survivor.html';
 }
 
 // ══ SIGN OUT ══ Clears token + dev creds + per-user session keys, returns to auth.
 function signOut() {
   try {
-    ['pb-session-token','pb-sports-token','pb-dev-email','pb-dev-pass','pb-player','pb-host',
+    ['pb-sports-token','pb-token-expires','pb-player-email','pb-session-token','pb-test-user',
+     'pb-dev-email','pb-dev-pass','pb-player','pb-host',
      'pb-active-club','pb-clubs','pb-club','pb-user-clubs']
       .forEach(function(k){ localStorage.removeItem(k); });
   } catch(_e){}
@@ -1181,13 +1541,93 @@ window.signOut = signOut;
 
 // ── Role helpers (shared by render + routing) ───────────────────────────────
 function normRole(r) { return String(r||'').toLowerCase().trim(); }
-function isOwnerRole(r) { return ['owner','host','creator'].includes(normRole(r)); }
+function isOwnerRole(r) { return ['owner','host','creator','admin','master_admin'].includes(normRole(r)); }
 function isCohostRole(r) {
   var n = normRole(r);
   return n === 'cohost' || n.startsWith('cohost_') || n === 'staff' || n.startsWith('staff_') ||
          n === 'full_admin' || n === 'settlement_manager' || n === 'risk_viewer' || n === 'view_only';
 }
 function isHostRole(r) { return isOwnerRole(r) || isCohostRole(r); }
+function isAppHostRole(r) { return isHostRole(r); }
+function isPlayerOnlyRole(r) { return normRole(r) === 'player'; }
+function persistHostRecord(rec) {
+  if (!rec) {
+    try { rec = JSON.parse(localStorage.getItem('pb-player')||'null')||{}; } catch(_e){ rec = {}; }
+  }
+  var role = rec.role;
+  if (!isAppHostRole(role)) role = 'host';
+  localStorage.setItem('pb-host', JSON.stringify({
+    id: rec.id || rec.hostId || null,
+    hostId: rec.hostId || rec.id || null,
+    username: rec.username || rec.name || '',
+    name: rec.name || rec.username || '',
+    email: rec.email || '',
+    role: role
+  }));
+}
+async function hydrateHostFromClubs() {
+  try { if (typeof loadMyClubs === 'function') await loadMyClubs(); } catch(_e){}
+  if (hasHostSessionSignals()) {
+    persistHostRecord();
+    return true;
+  }
+  return isHostSession();
+}
+function readSessionRole() {
+  try {
+    var h = JSON.parse(localStorage.getItem('pb-host')||'null');
+    if (h && h.role && isAppHostRole(h.role)) return h.role;
+  } catch(_e){}
+  try {
+    var p = JSON.parse(localStorage.getItem('pb-player')||'null');
+    if (p && p.role) return p.role;
+  } catch(_e){}
+  try {
+    var ar = localStorage.getItem('pb-actor-role');
+    if (ar) return ar;
+  } catch(_e){}
+  try {
+    var tok = TOKEN || localStorage.getItem('pb-sports-token') || '';
+    var parts = String(tok).split('.');
+    if (parts.length === 3) {
+      var payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+      if (payload && payload.role) return payload.role;
+    }
+  } catch(_e){}
+  return '';
+}
+function hasHostSessionSignals() {
+  try {
+    var h = JSON.parse(localStorage.getItem('pb-host')||'null');
+    if (h && (h.id || h.username || h.hostId || h.role)) return true;
+  } catch(_e){}
+  try {
+    var clubs = JSON.parse(localStorage.getItem('pb-clubs')||'[]');
+    if (Array.isArray(clubs) && clubs.some(function(c){ return isAppHostRole(c.role); })) return true;
+  } catch(_e){}
+  try {
+    var ac = JSON.parse(localStorage.getItem('pb-active-club')||localStorage.getItem('pb-club')||'null');
+    if (ac && isAppHostRole(ac.role)) return true;
+  } catch(_e){}
+  if (typeof userClubs !== 'undefined' && Array.isArray(userClubs) && userClubs.some(function(c){ return isAppHostRole(c.role); })) return true;
+  return false;
+}
+function isHostSession() {
+  return isAppHostRole(readSessionRole()) || hasHostSessionSignals();
+}
+function routeAuthedUser(role) {
+  if (isAppHostRole(role) || isHostSession()) {
+    if (!isAppHostRole(role) && hasHostSessionSignals()) persistHostRecord();
+    window.location.href = 'index.html?from=lobby';
+  } else {
+    window.location.href = 'survivor.html';
+  }
+}
+function hideSportsbookChromeForPlayers() {
+  if (isHostSession()) return;
+  if (!localStorage.getItem('pb-sports-token')) return;
+  if (document.body) document.body.classList.add('pb-player-only');
+}
 function canonicalStatus(s) { return String(s||'').toLowerCase().trim(); }
 function syncSelectedClubStorage(club) {
   if (!club) return;
@@ -1284,7 +1724,6 @@ async function loadMyClubs() {
 function renderClubsList() {
   const el = document.getElementById('clubs-list-el');
   if (!el) return;
-  if (typeof showToast === 'function') showToast('LOBBY CLUBS RENDERED: '+userClubs.length);
   if (!userClubs.length) {
     el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#444;font-size:0.85rem"><div style="font-size:2rem;margin-bottom:10px">🃏</div>No clubs yet — join or create one</div>';
     return;
@@ -1325,6 +1764,7 @@ function renderClubsList() {
 }
 
 function showMyClubsSection(forceShow) {
+  if (clubsLockedGuard()) return;
   const sec = document.getElementById('section-my-clubs');
   if (forceShow) { sec.style.display = 'block'; return; }
   const isVisible = sec.style.display !== 'none';
@@ -1332,6 +1772,7 @@ function showMyClubsSection(forceShow) {
 }
 
 function updateClubsTilePreview() {
+  if (CLUBS_LOCKED) return;
   const el = document.getElementById('clubs-tile-content');
   if (!el) return;
   if (!userClubs.length) {
@@ -1344,6 +1785,7 @@ function updateClubsTilePreview() {
 }
 
 function setActiveClub(club) {
+  if (CLUBS_LOCKED) return;
   activeClub = club;
   try {
     syncSelectedClubStorage(club);
@@ -1369,7 +1811,7 @@ function selectClub(id, action) {
 // Called before navigating to player.html or index.html.
 // Issues a club-scoped JWT via /api/auth/token so player.html always has one.
 async function _acquireClubToken(playerId, clubId) {
-  console.log('TOKEN_WRITE_ATTEMPT playerId='+playerId+' clubId='+clubId);
+  
   try {
     var resp = await fetch(API + '/api/auth/token', {
       method: 'POST',
@@ -1379,9 +1821,7 @@ async function _acquireClubToken(playerId, clubId) {
     });
     var data = await resp.json();
     if (data.ok && data.token) {
-      TOKEN = data.token;
-      localStorage.setItem('pb-session-token', TOKEN);
-      localStorage.setItem('pb-sports-token', TOKEN);
+      _storeAuthToken(data.token, data.expiresIn);
       // Decode token and sync pb-player.id to token's actorId so backend self-check passes
       try {
         var _tp = JSON.parse(atob(data.token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
@@ -1392,10 +1832,10 @@ async function _acquireClubToken(playerId, clubId) {
           _lpl.id = _tokenActorId; // ensure pb-player.id matches token actorId
           if (_tokenRole) _lpl.role = _tokenRole;
           localStorage.setItem('pb-player', JSON.stringify(_lpl));
-          console.log('TOKEN_SCOPE role='+(_tokenRole||'?')+' clubId='+clubId+' playerCapable=true actorId='+_tokenActorId);
+          
         }
       } catch(_td){}
-      console.log('TOKEN_WRITE_SUCCESS playerId='+playerId+' clubId='+clubId);
+      
       return { ok:true, token:data.token, role:data.role, status:data.status || 'active', club_id:data.club_id || data.clubId || clubId };
     } else {
       console.warn('TOKEN_WRITE_FAILED reason='+(data.error||data.code||'no_token_in_response'));
@@ -1409,6 +1849,7 @@ async function _acquireClubToken(playerId, clubId) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function enterActiveClub(action) {
+  if (CLUBS_LOCKED) { goSurvivor(); return; }
   // Fallback: restore activeClub from pb-club or pb-club-players if returning from player/host
   if (!activeClub) {
     var _pbClub = JSON.parse(localStorage.getItem('pb-club') || 'null');
@@ -1419,7 +1860,7 @@ function enterActiveClub(action) {
       var _pbPlayer = JSON.parse(localStorage.getItem('pb-player') || 'null');
       var _pid = _pbPlayer && _pbPlayer.id;
       var _me = _pid && _pbPlayers.find(function(p){ return p.playerId === _pid; });
-      window.location.href = (_me && isHostRole(_me.role)) ? 'index.html' : 'player.html';
+      window.location.href = (_me && isHostRole(_me.role)) ? 'index.html' : 'survivor.html';
       return;
     }
   }
@@ -1449,7 +1890,7 @@ function enterActiveClub(action) {
   try { _navPlayer = JSON.parse(localStorage.getItem('pb-player')||'null'); } catch(_){}
   var _navPid = _navPlayer && (_navPlayer.id != null ? String(_navPlayer.id) : _navPlayer.username) || null;
   var _navCid = String(activeClub.id != null ? activeClub.id : (activeClub.clubId || ''));
-  console.log('ROUTE_DECISION action='+(action||'(default)')+' localRole='+(activeClub.role||'player')+' pending_token=true');
+  
 
   if (_navPid && _navCid) {
     _acquireClubToken(_navPid, _navCid).then(function(result) {
@@ -1460,7 +1901,7 @@ function enterActiveClub(action) {
         return;
       }
       var canonicalRole = result.role || 'player';
-      var dest = isHostRole(canonicalRole) ? 'index.html' : 'player.html';
+      var dest = isHostRole(canonicalRole) ? 'index.html' : 'survivor.html';
       var syncedClub = Object.assign({}, activeClub, {
         id: result.club_id || result.clubId || activeClub.id,
         clubId: result.club_id || result.clubId || activeClub.clubId || activeClub.id,
@@ -1468,7 +1909,7 @@ function enterActiveClub(action) {
         status: result.status || 'active'
       });
       try { syncSelectedClubStorage(syncedClub); } catch(_e){}
-      console.log('ROUTE_DECISION canonicalRole='+canonicalRole+' route='+dest);
+      
       window.location.href = dest + '?from=lobby';
     });
   } else {
@@ -1479,6 +1920,7 @@ function enterActiveClub(action) {
 
 // Search & Join
 async function searchClub() {
+  if (clubsLockedGuard()) return;
   const code = document.getElementById('join-code').value.trim();
   if (!code) return;
   const el = document.getElementById('join-result');
@@ -1506,6 +1948,7 @@ async function searchClub() {
 }
 
 async function requestJoin(clubId, code, name) {
+  if (clubsLockedGuard()) return;
   if (!TOKEN) { showToast('Sign in to join clubs'); return; }
   try {
     const r = await apiCall('POST', '/api/clubs/request', {code});
@@ -1557,6 +2000,7 @@ function updateLogoInitials(name) {
 }
 
 async function createClub() {
+  if (clubsLockedGuard()) return;
   const name = document.getElementById('cc-name').value.trim();
   if (!name) { showToast('Enter a club name'); return; }
   try {
@@ -1586,7 +2030,22 @@ async function createClub() {
 
 // Helpers
 function showSection(s) { showToast(s + ' coming soon!'); }
-function openModal(id) { document.getElementById(id).classList.add('open'); }
+function clubsLockedGuard() {
+  if (!CLUBS_LOCKED) return false;
+  showToast(CLUBS_LOCKED_MSG);
+  return true;
+}
+function goSurvivor() {
+  if (!TOKEN) { showToast('Sign in to play Survivor'); return; }
+  window.location.href = 'survivor.html';
+}
+function openModal(id) {
+  if (CLUBS_LOCKED && (id === 'modal-create' || id === 'modal-join')) {
+    clubsLockedGuard();
+    return;
+  }
+  document.getElementById(id).classList.add('open');
+}
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 function closeAllModals() { document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remove('open')); }
 document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')}));
@@ -1612,7 +2071,7 @@ function applyPlayerTheme() {
 try { if (typeof document!=='undefined') { if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',applyPlayerTheme); else applyPlayerTheme(); } } catch(_e){}
 
 function showPlayerSettings() {
-  console.log('[PROFILE OPEN] showPlayerSettings invoked');
+  
   var existing = document.getElementById('ps-overlay'); if (existing) existing.remove();
   var s = loadPlayerSettings();
   var ov = document.createElement('div');
@@ -1660,7 +2119,7 @@ function showPlayerSettings() {
   // Mount to documentElement (above body) so any body-level overflow:hidden
   // or auth-screen wrappers can't hide the modal.
   (document.documentElement || document.body).appendChild(ov);
-  console.log('[PROFILE OPEN] modal mounted; rect=', ov.getBoundingClientRect && ov.getBoundingClientRect());
+  
   ov.addEventListener('click', function(e){ if (e.target===ov) ov.remove(); });
   ov.querySelector('#ps-close').addEventListener('click', function(){ ov.remove(); });
   Array.prototype.forEach.call(ov.querySelectorAll('[data-pset-theme]'), function(b){
@@ -1689,9 +2148,21 @@ function showPlayerSettings() {
   });
 }
 
-async function apiCall(method, path, body) {
-  const r = await fetch(API+path, {method, headers:{'Content-Type':'application/json',...(TOKEN?{'Authorization':'Bearer '+TOKEN}:{})}, body:body?JSON.stringify(body):undefined});
-  return r.json();
+async function apiCall(method, path, body, _retried) {
+  if (!_retried && !_isAuthApiPath(path)) {
+    try { await _ensureFreshToken(); } catch (_e) {}
+  }
+  var token = TOKEN || localStorage.getItem('pb-sports-token') || '';
+  const r = await fetch(API+path, {method, headers:{'Content-Type':'application/json',...(token?{'Authorization':'Bearer '+token}:{})}, body:body?JSON.stringify(body):undefined});
+  var data = {};
+  try { data = await r.json(); } catch (_e) { data = {}; }
+  var expired = r.status === 401 || (data && (data.error === 'expired_token' || /expired token/i.test(String(data.error || ''))));
+  if (expired && !_retried && !_isAuthApiPath(path)) {
+    var ok = await _refreshAuthToken();
+    if (ok) return apiCall(method, path, body, true);
+    window.location.href = 'lobby.html?screen=signin&msg=' + encodeURIComponent('Your session expired — please sign in again');
+  }
+  return data;
 }
 
 function showToast(msg){
@@ -1709,7 +2180,7 @@ const isPreview = new URLSearchParams(window.location.search).get('preview') ===
 const _isAuthScreen = (_screen === 'signin' || _screen === 'signup');
 if (isPreview && !_isAuthScreen) {
   // DevPreview mode (non-auth): force hide auth, render preview, never run auth gate.
-  console.log('[preview]', { screen: _screen, preview: true });
+  
   // 1) Force hide auth-screen up front (style + inline display).
   (function forceHideAuth(){
     var ae = document.getElementById('auth-screen');
@@ -1752,11 +2223,24 @@ if (isPreview && !_isAuthScreen) {
   } catch(e) { console.warn('[preview] mock-data step failed (non-fatal):', e && e.message); }
 } else if (isPreview && _isAuthScreen) {
   // Preview of the auth screens: show auth, do not render lobby preview.
-  var _ae = document.getElementById('auth-screen');
-  if (_ae) _ae.style.display = 'flex';
-  setTimeout(function(){ if (typeof setAuthTab === 'function') setAuthTab(_screen === 'signup' ? 'signup' : 'login'); }, 100);
+  if (typeof _setAuthScreenVisible === 'function') _setAuthScreenVisible(true);
+  else {
+    var _ae = document.getElementById('auth-screen');
+    if (_ae) _ae.style.display = 'flex';
+  }
+  // Sign In is the default painted HTML — only switch when previewing signup.
+  if (_screen === 'signup' && typeof setAuthTab === 'function') setAuthTab('signup');
 } else {
   checkAuthGate();
+  if (typeof hideSportsbookChromeForPlayers === 'function') hideSportsbookChromeForPlayers();
+  // Default HTML already shows the login form. Calling setAuthTab('login') on
+  // boot re-armed inputs and stole focus while typing — do not do that.
+  // Only mount signup when explicitly forced; signup stays out of the DOM otherwise.
+  if (!TOKEN && window.__pbForceAuth === 'signup' && typeof setAuthTab === 'function') {
+    setAuthTab('signup');
+  } else if (typeof _wireSigninSecretField === 'function') {
+    _wireSigninSecretField();
+  }
   loadUser();
 }
 if (userClubs.length) {
@@ -1772,8 +2256,9 @@ if (userClubs.length) {
 }
 if (activeClub) setActiveClub(activeClub);
 
-// ── MOCK CLUBS SEED ───────────────────────────────────────────────────────────
+// ── MOCK CLUBS SEED (preview only) ───────────────────────────────────────────
 (function(){
+  if (!isPreview) return;
   var stored = JSON.parse(localStorage.getItem('pb-user-clubs')||'null');
   if (stored && stored.length) { /* already have clubs */ }
   else {
@@ -1792,12 +2277,12 @@ if (activeClub) setActiveClub(activeClub);
       if (typeof renderClubsList === 'function') renderClubsList();
       if (typeof updateClubsTilePreview === 'function') updateClubsTilePreview();
       if (typeof showMyClubsSection === 'function') showMyClubsSection(true);
-      if (typeof showToast === 'function') showToast('LOBBY CLUBS RENDERED: '+saved.length);
     }
   }, 400);
 })();
 // ─────────────────────────────────────────────────────────────────────────────
 
 </script>
+<script src="diamonds.js"></script>
 </body>
 </html>

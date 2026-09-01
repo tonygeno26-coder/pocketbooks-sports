@@ -351,6 +351,43 @@ test('host_balance_not_found when no balance row', function() {
   assertEq(r.error, 'host_balance_not_found');
 });
 
+// ── Backend source: event-type authority ─────────────────────────────────────
+console.log('\n── Backend HAB event-type wiring ──');
+(function(){
+  var fs = require('fs');
+  var path = require('path');
+  var candidates = [
+    path.resolve(__dirname, '../../pocketbooks-sports-backend/index.js'),
+    path.resolve('/Users/anthonygenosa/Desktop/pocketbooks-sports-backend/index.js')
+  ];
+  var src = '';
+  for (var i = 0; i < candidates.length; i++) {
+    try { src = fs.readFileSync(candidates[i], 'utf8'); if (src) break; } catch(_e){}
+  }
+  test('backend HAB charge does not write HOST_ACTIVE_BETTOR_CHARGE to sportsbook ledger', function() {
+    assert(src.length > 0, 'backend index.js readable');
+    assert(!/await _writeLedgerEntry\(\{\s*clubId, playerId:host\.host_actor_id,\s*eventType:'HOST_ACTIVE_BETTOR_CHARGE'/.test(src),
+      'no _writeLedgerEntry(HOST_ACTIVE_BETTOR_CHARGE) in HAB charge');
+  });
+  test('backend HAB charge writes host_diamond_ledger before mutating balance', function() {
+    assert(src.length > 0, 'backend index.js readable');
+    var habStart = src.indexOf('async function _processActiveBettorCharge');
+    var habEnd = src.indexOf('// ── Host diamond ledger writer');
+    assert(habStart !== -1 && habEnd > habStart, 'HAB function found');
+    var body = src.slice(habStart, habEnd);
+    assert(body.indexOf('_writeHostDiamondLedger(sb,') !== -1, 'writes host diamond ledger');
+    assert(body.indexOf("eventType:'HOST_ACTIVE_BETTOR_CHARGE'") !== -1, 'uses HOST_ACTIVE_BETTOR_CHARGE');
+    var ledgerIdx = body.indexOf('_writeHostDiamondLedger');
+    var deductIdx = body.indexOf('.update({ balance_diamonds:');
+    assert(ledgerIdx !== -1 && deductIdx !== -1 && ledgerIdx < deductIdx,
+      'ledger write happens before balance deduct');
+  });
+  test('backend host diamond ledger validates VALID_HD_EVENT_TYPES', function() {
+    assert(src.indexOf('VALID_HD_EVENT_TYPES.has(eventType)') !== -1,
+      'validates host diamond event types before insert');
+  });
+})();
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('\n'+'─'.repeat(54));
 console.log('Host active-bettor tests: '+_pass+' passed, '+_fail+' failed');

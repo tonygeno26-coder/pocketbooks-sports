@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Unresolved Grading — PocketBooks Sports</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--bg:#050505;--card:#111;--card2:#191919;--border:#222;--green:#00ff88;--cyan:#00c2ff;--gold:#f5c842;--red:#ff3d57;--purple:#7c3aed;--white:#fff;--gray:#555}
+body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(--bg);color:var(--white);min-height:100vh;max-width:960px;margin:0 auto;padding-bottom:80px}
+.gate{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center}
+.hdr{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:rgba(5,5,5,0.97);position:sticky;top:0;z-index:100;border-bottom:1px solid var(--border);gap:8px;flex-wrap:wrap}
+.admin-badge{background:linear-gradient(135deg,#4c1d95,#7c3aed);color:#fff;font-size:0.58rem;font-weight:900;padding:3px 8px;border-radius:6px;letter-spacing:1px;text-transform:uppercase}
+.hdr-title{font-size:0.95rem;font-weight:900}
+.hdr-link{font-size:0.72rem;color:var(--gray);text-decoration:none;background:var(--card2);border:1px solid var(--border);padding:5px 11px;border-radius:8px;font-weight:700}
+.note{font-size:0.72rem;color:var(--gray);line-height:1.5;padding:14px 16px}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;padding:0 16px 14px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px}
+.sc-val{font-size:1.25rem;font-weight:900;margin-bottom:4px}
+.sc-lbl{font-size:0.6rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;font-weight:700}
+.sec-title{font-size:1rem;font-weight:900;padding:8px 16px}
+.table-wrap{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:auto;margin:0 16px 18px;max-width:100%;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:0.75rem}
+th{text-align:left;font-size:0.58rem;font-weight:800;color:var(--gray);text-transform:uppercase;padding:10px 8px;border-bottom:1px solid var(--border)}
+td{padding:9px 8px;border-bottom:1px solid var(--border);vertical-align:top;overflow-wrap:anywhere}
+.pill{font-size:0.56rem;font-weight:800;padding:3px 7px;border-radius:6px;text-transform:uppercase;display:inline-block}
+.p-ok{background:rgba(0,255,136,0.1);color:var(--green)}
+.p-warn{background:rgba(245,200,66,0.12);color:var(--gold)}
+.p-bad{background:rgba(255,61,87,0.12);color:var(--red)}
+.loading{text-align:center;padding:24px;color:var(--gray)}
+.mono{font-family:ui-monospace,monospace;font-size:0.68rem;word-break:break-all}
+@media (max-width:400px){
+  html,body{overflow-x:hidden;max-width:100%}
+  .hdr{flex-wrap:wrap;gap:8px}
+  .hdr-title{overflow-wrap:anywhere}
+  .hdr-link{min-height:44px;display:inline-flex;align-items:center}
+  .stat-grid{grid-template-columns:1fr}
+  .table-wrap{max-width:100%}
+  td,th{overflow-wrap:anywhere}
+}
+</style>
+</head>
+<body>
+<div id="gate" class="gate">
+  <div class="hdr-title" style="color:var(--purple);margin-bottom:8px">Unresolved Grading Monitor</div>
+  <div class="note">Host / admin only. Checking session…</div>
+</div>
+<div id="app" style="display:none">
+  <div class="hdr">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="admin-badge">Monitor</div>
+      <div class="hdr-title">Unresolved tickets</div>
+    </div>
+    <a class="hdr-link" href="admin.html">← Admin</a>
+  </div>
+  <div class="note">Read-only. Tickets are never auto-graded or voided because they are old. Incorrect grading is worse than leaving a ticket unresolved.</div>
+  <div class="stat-grid" id="counts"></div>
+  <div id="buckets"></div>
+</div>
+<script>
+window.PBS_BUILD_SHA = '9bb31f8';
+window.PBS_BUILD_DATE = '2026-09-01T21:40:03.823Z';
+const ROLE_RANK = { owner:5, full_admin:4, settlement_manager:3, risk_viewer:2, player:1, view_only:0 };
+const AUTH_ROLE_ALIASES = { host:'full_admin', admin:'full_admin', owner:'owner', cohost:'settlement_manager', staff:'risk_viewer', user:'player' };
+function _token() {
+  try {
+    return localStorage.getItem('pb-admin-token') || localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token') || '';
+  } catch (_e) { return ''; }
+}
+function _clubId() {
+  try {
+    var club = JSON.parse(localStorage.getItem('pb-club')||'{}');
+    return String(club.id != null ? club.id : club.clubId || '').trim();
+  } catch (_e) { return ''; }
+}
+function _headers() {
+  var h = { 'Content-Type':'application/json' };
+  var t = _token();
+  if (t) h.Authorization = 'Bearer ' + t;
+  var cid = _clubId();
+  if (cid) h['X-Club-Id'] = cid;
+  return h;
+}
+function isHostOrAdmin(actor) {
+  if (!actor) return false;
+  if (actor.platformRole === 'platform_admin') return true;
+  var role = AUTH_ROLE_ALIASES[actor.role] || actor.role;
+  return (ROLE_RANK[role] || 0) >= ROLE_RANK.risk_viewer;
+}
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+  });
+}
+function pill(v) {
+  var s = String(v||'');
+  var cls = /final|won|found/.test(s) ? 'p-ok' : /not_found|MISMATCH|AMBIGUOUS|FAILED/.test(s) ? 'p-bad' : 'p-warn';
+  return '<span class="pill '+cls+'">'+esc(s)+'</span>';
+}
+async function gate() {
+  var tok = _token();
+  if (!tok) { location.href = 'lobby.html'; return; }
+  try {
+    var v = await fetch('/api/auth/verify', { headers: _headers() });
+    var d = await v.json();
+    if (v.ok && isHostOrAdmin(d)) { showApp(); return; }
+  } catch (_e) {}
+  location.href = 'lobby.html';
+}
+function showApp() {
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  loadReport();
+}
+function rowsHtml(list) {
+  if (!list || !list.length) return '<div class="loading">None</div>';
+  return '<div class="table-wrap"><table><thead><tr><th>Ticket</th><th>Player</th><th>Sport</th><th>Event</th><th>Start</th><th>Status</th><th>Owls</th><th>ESPN</th><th>Last attempt</th><th>Reason</th><th>Age h</th></tr></thead><tbody>' +
+    list.map(function(t){
+      return '<tr><td class="mono">'+esc(t.ticketId)+'</td><td>'+esc(t.player)+'</td><td>'+esc(t.sport)+'</td><td>'+esc(t.event)+'</td><td>'+esc(t.scheduledStart)+'</td><td>'+esc(t.currentStatus)+'</td><td>'+pill(t.owlsMatchStatus)+'</td><td>'+pill(t.espnMatchStatus)+'</td><td>'+esc(t.lastGradingAttempt||'—')+'</td><td>'+pill(t.reasonUnresolved)+'</td><td>'+esc(t.ageHours)+'</td></tr>';
+    }).join('') + '</tbody></table></div>';
+}
+async function loadReport() {
+  var cid = _clubId();
+  var url = '/api/host/unresolved-grading' + (cid ? ('?clubId='+encodeURIComponent(cid)) : '');
+  var r = await fetch(url, { headers: _headers() });
+  var d = await r.json();
+  if (!r.ok) {
+    document.getElementById('counts').innerHTML = '<div class="loading" style="color:var(--red)">'+esc(d.error||('http_'+r.status))+'</div>';
+    return;
+  }
+  var c = d.counts || {};
+  document.getElementById('counts').innerHTML = [
+    ['Unresolved', c.unresolved||0],
+    ['> 24h', c.over24||0],
+    ['> 48h', c.over48||0],
+    ['> 72h', c.over72||0]
+  ].map(function(x){ return '<div class="stat-card"><div class="sc-val">'+esc(x[1])+'</div><div class="sc-lbl">'+esc(x[0])+'</div></div>'; }).join('');
+  var buckets = d.buckets || {};
+  document.getElementById('buckets').innerHTML =
+    '<div class="sec-title">UNRESOLVED &gt; 72 HOURS</div>' + rowsHtml(buckets['UNRESOLVED > 72 HOURS']) +
+    '<div class="sec-title">UNRESOLVED &gt; 48 HOURS</div>' + rowsHtml(buckets['UNRESOLVED > 48 HOURS']) +
+    '<div class="sec-title">UNRESOLVED &gt; 24 HOURS</div>' + rowsHtml(buckets['UNRESOLVED > 24 HOURS']) +
+    '<div class="sec-title">All unresolved (including &lt; 24h)</div>' + rowsHtml(d.tickets);
+}
+gate();
+</script>
+</body>
+</html>

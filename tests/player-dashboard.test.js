@@ -297,6 +297,36 @@ test('player/dashboard: null balance_start falls back to 1000', function() {
   assertApprox(start, 1000, 'null balance_start → fallback 1000');
 });
 
+// ── Display authority: player.html prefers server over localStorage ──────────
+console.log('\n── player.html display authority ──');
+
+var fs = require('fs');
+var path = require('path');
+var playerHtml = fs.readFileSync(path.join(__dirname, '..', 'player.html'), 'utf8');
+
+test('player.html does not paint localStorage balance before dashboard hydrates', function() {
+  assert(playerHtml.indexOf("player-balance-display") !== -1, 'balance display id present');
+  assert(playerHtml.indexOf('_liveAvailableBalance') !== -1, '_liveAvailableBalance helper present');
+  assert(!/Sync balance on page load immediately/.test(playerHtml), 'boot IIFE that wrote localStorage balance is gone');
+  assert(playerHtml.indexOf('if (tok) return;') !== -1, 'signed-in boot skips localStorage flash');
+});
+
+test('confirm-bet and placement use _liveAvailableBalance, not calcAvailableBalance overwrite', function() {
+  assert(playerHtml.indexOf('var _avBal = _liveAvailableBalance();') !== -1, 'confirm modal uses live/server balance');
+  assert(playerHtml.indexOf('var _avail = _liveAvailableBalance();') !== -1, 'placement gate uses live/server balance');
+  assert(playerHtml.indexOf('playerBalance = _avBal;') === -1, 'confirm modal does not overwrite playerBalance from localStorage');
+});
+
+test('dashboard apply sets _balanceFromServer from availableBalance', function() {
+  assert(playerHtml.indexOf('applyDisplayedBalance(Number(b.availableBalance))') !== -1, 'applies dashboard availableBalance');
+  assert(playerHtml.indexOf('_balanceFromServer = true') !== -1, 'marks server as authoritative');
+});
+
+test('visibility/pageshow refresh dashboard from server', function() {
+  assert(playerHtml.indexOf("window.addEventListener('pageshow'") !== -1, 'pageshow refreshes dashboard');
+  assert(playerHtml.indexOf('loadPlayerDashboardFromDb();') !== -1, 'visibility/pageshow calls dashboard');
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log('\n' + '─'.repeat(54));
 console.log('Player dashboard tests: ' + _pass + ' passed, ' + _fail + ' failed');
