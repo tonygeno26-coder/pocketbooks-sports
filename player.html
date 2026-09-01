@@ -603,8 +603,16 @@ try {
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',syncBody); else syncBody();
 })();
 
-// ═══ DEBUG / AUDIT ACCESS PANEL ═══════════════════════════════════════════════
+// ═══ DEBUG / AUDIT ACCESS PANEL (opt-in only: ?debug=1 or localStorage pb-debug=1) ═══
+function _pbsDebugEnabled() {
+  try {
+    if (new URLSearchParams(location.search).get('debug') === '1') return true;
+    if (localStorage.getItem('pb-debug') === '1') return true;
+  } catch (_e) {}
+  return false;
+}
 function openDebugPanel() {
+  if (!_pbsDebugEnabled()) return;
   var existing = document.getElementById('_debug_panel');
   if (existing) { existing.remove(); return; }
 
@@ -5739,21 +5747,6 @@ function _prepareGradingInputs(sel, gameResult) {
     ? MLB_TEAM_BY_TLA[raw.AwayTeam.toUpperCase()]
     : _canonicalizeTeamString(gameResult.away);
 
-  // TEMP DEBUG — prove the rewrite is what we expect.
-  try {
-    var hs = gameResult.home_score;
-    var as = gameResult.away_score;
-    var winnerRaw = (hs != null && as != null)
-      ? (hs > as ? String(gameResult.home || '').toLowerCase()
-                 : (as > hs ? String(gameResult.away || '').toLowerCase() : 'push'))
-      : 'pending';
-    var winnerCanon = (hs != null && as != null)
-      ? (hs > as ? homeOut.toLowerCase()
-                 : (as > hs ? awayOut.toLowerCase() : 'push'))
-      : 'pending';
-    
-  } catch(_e){}
-
   // Clone shallowly; only override the fields _gradeSingleLeg reads.
   var selOut = {};
   for (var k in sel) if (Object.prototype.hasOwnProperty.call(sel,k)) selOut[k] = sel[k];
@@ -8009,13 +8002,6 @@ function renderMyBets() {
       ? '<span style="font-size:0.6rem;font-weight:800;letter-spacing:0.4px;color:#0064c8;background:#eef4ff;border:1px solid #cfe0ff;border-radius:6px;padding:1px 6px;margin-right:6px;text-transform:uppercase">'+ticketSport+'</span>'
       : '';
 
-    // TEMP DEBUG — spec'd log block. One per ticket render.
-    try {
-      var __rawFields = Object.keys(__firstLeg).filter(function(k){
-        var v = __firstLeg[k]; return v != null && v !== '';
-      }).map(function(k){ return k+'='+String(__firstLeg[k]).slice(0,40); }).join(' | ');
-      
-    } catch(_e){}
     var isDeletePending = t.deleteRequestStatus === 'pending';
     var isDeleteDenied  = t.deleteRequestStatus === 'denied';
     var isVoided        = displayStatus === 'voided' || displayStatus === 'deleted' || displayStatus === 'canceled';
@@ -8194,45 +8180,6 @@ function renderMyBets() {
   // reload. Any ticket appearing in the UI MUST have an id that exists
   // in pb-tickets at this moment. No mock seeder, no in-memory fixture,
   // no host-mirror direct rendering.
-  try {
-    function _firstId(arr) { return (Array.isArray(arr) && arr[0] && arr[0].id) ? String(arr[0].id) : '—'; }
-    
-    
-  } catch(_e){}
-  // TEMP DEBUG — dump real persisted schema for one active + one settled
-  // ticket so we can see EXACTLY what confirmBet/saveTickets writes,
-  // independent of any defensive rendering helpers. Strip after the
-  // display regression is verified closed.
-  try {
-  } catch(_e){
-    console.warn('[raw ticket object] dump failed', _e && _e.message || _e);
-  }
-  // TEMP DEBUG — ticket source audit. Confirms which localStorage key the
-  // renderer is reading from versus what other code is reading/writing.
-  // pb-tickets is the canonical player ticket source for ALL paths in
-  // player.html (confirmBet -> saveTickets -> renderMyBets / grader /
-  // auto-poll / calcAvailableBalance / simulateGrade). hostActiveBets is
-  // a host-side MIRROR (read by index.html). pb-settlements is host-only
-  // weekly settlement history, never written by player code.
-  try {
-    var _ptRaw = localStorage.getItem('pb-tickets');
-    var _ptArr = null;
-    try { _ptArr = _ptRaw ? JSON.parse(_ptRaw) : null; } catch(_e){ _ptArr = null; }
-    var _habRaw = localStorage.getItem('hostActiveBets');
-    var _habArr = null;
-    try { _habArr = _habRaw ? JSON.parse(_habRaw) : null; } catch(_e){ _habArr = null; }
-    var _allKeys = [];
-    try {
-      for (var __i = 0; __i < localStorage.length; __i++) {
-        var __k = localStorage.key(__i);
-        if (__k && __k.indexOf('pb-') === 0) _allKeys.push(__k);
-        if (__k === 'hostActiveBets') _allKeys.push(__k);
-      }
-    } catch(_e){}
-    
-  } catch(_e){
-    console.warn('[ticket source audit] failed:', _e && _e.message || _e);
-  }
   var html =
     '<div style="padding:16px 14px 8px;display:flex;justify-content:space-between;align-items:center">' +
       '<span style="font-size:1rem;font-weight:900;color:#111">My Bets</span>' +
@@ -8886,7 +8833,6 @@ function openBetSlip() {
     if (saInp) saInp.value = '';
     bsSyncPlaceBtn();
   }, 30);
-  setTimeout(runPlaceBetHitTest, 600);
   document.getElementById('bs-overlay').classList.add('show');
 }
 function closeBetSlip() {
@@ -9316,49 +9262,9 @@ function bsToggle(cellId, game, time, market, pick, odds) {
   bsUpdate();
 }
 
-// ── MOBILE DEBUG BANNER ──────────────────────────────────────────────────────
+// dbgBanner kept as a no-op so legacy call sites stay safe.
 function dbgBanner(msg, color) {}
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ── HIT TEST: runs 1s after slip opens, logs exact blocker ──────────────────
-function runPlaceBetHitTest() {
-  var btn = document.getElementById('bs-place-btn');
-  if (!btn) { console.warn('HIT TEST: button not found'); return; }
-  var r = btn.getBoundingClientRect();
-  var x = r.left + r.width / 2;
-  var y = r.top + r.height / 2;
-  var hit = document.elementFromPoint(x, y);
-  
-  
-  
-  if (hit && hit !== btn) {
-    var cs = window.getComputedStyle(hit);
-    console.warn('BLOCKER:', hit.tagName, '#'+hit.id, '.'+hit.className, 'z-index:'+cs.zIndex, 'pointer-events:'+cs.pointerEvents, 'display:'+cs.display);
-    dbgBanner('BLOCKED BY:\n'+hit.tagName+(hit.id?' #'+hit.id:'')+(hit.className?'\n.'+String(hit.className).replace(/ /g,' .'):''), '#800');
-    // Auto-fix: set the blocker to pointer-events:none if it's not interactive
-    var safe = ['BUTTON','A','INPUT','SELECT','TEXTAREA'];
-    if (safe.indexOf(hit.tagName) === -1) {
-      hit.style.pointerEvents = 'none';
-      
-      dbgBanner('AUTO-FIXED BLOCKER:\n'+hit.tagName+(hit.id?' #'+hit.id:'')+(hit.className?'\n.'+String(hit.className).replace(/ /g,' .'):''), '#060');
-    }
-  } else if (hit === btn) {
-    dbgBanner('HIT TEST PASS\nButton reachable - attaching onclick', '#006');
-    
-    // Attach direct onclick as final fallback
-    btn.onclick = function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      dbgBanner('✅ CLICK FIRED\nbsPlaceBet called', '#020');
-      window.bsPlaceBet();
-    };
-    
-  } else {
-    console.warn('HIT TEST: elementFromPoint returned null at', x, y);
-    dbgBanner('HIT TEST: null at '+Math.round(x)+','+Math.round(y)+'\nButton rect: '+JSON.stringify({t:Math.round(r.top),l:Math.round(r.left),w:Math.round(r.width),h:Math.round(r.height)}), '#550');
-  }
-}
+function runPlaceBetHitTest() { /* removed: production hit-test / pointer-events mutation */ }
 
 // ═══ PLAYER RESULTS PAGE ═══════════════════════════════════════════════════
 // Mirrors host Settlements UX: week selector + big net + Mon-Sun chart +
@@ -11270,10 +11176,22 @@ window.openGradingConsole = openGradingConsole;
 </div>
 
 
-<!-- BUILD INFO FOOTER + DEBUG TRIGGER -->
-<div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;background:rgba(0,0,0,0.7);border-top:1px solid #1a1a1a;padding:3px 12px;display:flex;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span onclick="openDebugPanel()" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px;cursor:pointer" title="Click for debug panel">🔍 main · 9100d35 · Jun 2, 02:54 AM</span>
+<!-- BUILD INFO (debug panel only with ?debug=1 / pb-debug=1) -->
+<div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;padding:2px 10px;display:none;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
+  <span id="build-info-label" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px">🔍 main · 9100d35 · Jun 2, 02:54 AM</span>
 </div>
+<script>
+(function(){
+  try {
+    if (typeof _pbsDebugEnabled === 'function' && _pbsDebugEnabled()) {
+      var bi = document.getElementById('build-info');
+      var lbl = document.getElementById('build-info-label');
+      if (bi) { bi.style.display = 'flex'; bi.style.pointerEvents = 'auto'; bi.style.background = 'rgba(0,0,0,0.7)'; }
+      if (lbl) { lbl.style.cursor = 'pointer'; lbl.onclick = function(){ openDebugPanel(); }; }
+    }
+  } catch(_e){}
+})();
+</script>
 
 <!-- Orphan IIFE closer removed (was rendering as a literal IIFE close
      between the build-info footer and the version-guard script block). -->
@@ -11307,10 +11225,9 @@ window.openGradingConsole = openGradingConsole;
   window._checkBuildVersion = _check;
 })();
 
-// ── DB SOURCE DEBUG BADGE ────────────────────────────────────────────────────────────────────────────
+// ── DB SOURCE DEBUG BADGE (opt-in debug only) ────────────────────────────────
 function _updateDbSourceBadge(source, localCount, dbCount, fallbackReason) {
-  // Only shown when DB primary reads are enabled (dev mode)
-  if (!_DB_PRIMARY_READS_ENABLED) {
+  if (typeof _pbsDebugEnabled !== 'function' || !_pbsDebugEnabled()) {
     var old = document.getElementById('_db_source_badge'); if (old) old.remove(); return;
   }
   var badge = document.getElementById('_db_source_badge');
