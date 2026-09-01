@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Test Dashboard — Pocketbooks Sports</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    :root{--bg:#050505;--card:#111;--card2:#191919;--border:#222;--green:#00ff88;--cyan:#00c2ff;--gold:#f5c842;--red:#ff3d57;--orange:#ffa500;--white:#fff;--gray:#555;--light:#999}
+    body{font-family:-apple-system,Arial,sans-serif;background:var(--bg);color:var(--white);min-height:100vh;padding:18px}
+    .wrap{max-width:1120px;margin:0 auto}
+    .header{display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:12px 16px;background:var(--card);border-radius:14px;border:1px solid var(--border);flex-wrap:wrap}
+    .badge{background:rgba(255,165,0,.14);color:var(--orange);border:1px solid rgba(255,165,0,.3);font-size:.58rem;font-weight:900;padding:3px 8px;border-radius:6px;letter-spacing:.5px;text-transform:uppercase}
+    .title{font-size:1rem;font-weight:900;color:var(--cyan)}
+    .sub{font-size:.72rem;color:var(--gray);margin-top:2px}
+    .hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .pill{font-size:.62rem;font-weight:800;padding:4px 9px;border-radius:20px;border:1px solid var(--border);color:var(--light);background:var(--card2)}
+    .pill.ok{color:var(--green);border-color:rgba(0,255,136,.3);background:rgba(0,255,136,.08)}
+    .pill.warn{color:var(--gold);border-color:rgba(245,200,66,.3);background:rgba(245,200,66,.08)}
+    .pill.bad{color:var(--red);border-color:rgba(255,61,87,.3);background:rgba(255,61,87,.08)}
+    a.back{padding:7px 14px;background:rgba(0,194,255,.12);border:1px solid var(--cyan);color:var(--cyan);border-radius:20px;font-size:.72rem;font-weight:800;text-decoration:none}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+    @media(max-width:860px){.grid{grid-template-columns:1fr}}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px}
+    .card-title{font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--gray);margin-bottom:10px}
+    .acct-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+    button,.btn{font-family:inherit;cursor:pointer}
+    .btn{padding:8px 12px;border-radius:8px;font-size:.75rem;font-weight:800;border:1px solid var(--border);background:var(--card2);color:var(--white)}
+    .btn:hover{border-color:#444}
+    .btn.active{background:rgba(0,194,255,.16);border-color:var(--cyan);color:var(--cyan)}
+    .btn.host{border-color:rgba(245,200,66,.35);color:var(--gold)}
+    .btn.host.active{background:rgba(245,200,66,.12);border-color:var(--gold)}
+    .btn.primary{background:rgba(0,194,255,.14);border-color:var(--cyan);color:var(--cyan)}
+    .btn.danger{background:rgba(255,61,87,.1);border-color:rgba(255,61,87,.35);color:var(--red)}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .host-form{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+    input,select{padding:8px 10px;background:#0a0a0a;border:1px solid #2a2a2a;color:var(--white);border-radius:8px;font-size:.78rem;font-family:inherit;outline:none}
+    input:focus,select:focus{border-color:var(--cyan)}
+    input[type=password],input[type=email],input[type=text]{min-width:160px;flex:1}
+    .token-meta{font-size:.72rem;color:var(--light);line-height:1.55;font-family:monospace}
+    .token-meta b{color:var(--white);font-weight:800}
+    .muted{color:var(--gray)}
+    .ok{color:var(--green)}
+    .bad{color:var(--red)}
+    .warn{color:var(--gold)}
+    .stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+    .stat{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+    .stat-val{font-size:1.05rem;font-weight:900;margin-bottom:2px}
+    .stat-lbl{font-size:.58rem;color:var(--gray);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+    .stat-sub{font-size:.62rem;color:var(--gray);margin-top:3px}
+    .actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .actions input[type=number]{width:90px}
+    .actions select{min-width:180px;max-width:100%;flex:1}
+    .hint{font-size:.68rem;color:var(--gray);margin-top:8px;line-height:1.45}
+    #log{background:#0a0a0a;border:1px solid #1a1a1a;border-radius:10px;padding:10px 12px;font-size:.7rem;font-family:ui-monospace,Menlo,monospace;color:#aaa;min-height:160px;max-height:280px;overflow-y:auto;white-space:pre-wrap;word-break:break-word}
+    .log-ok{color:var(--green)}
+    .log-bad{color:var(--red)}
+    .log-info{color:var(--cyan)}
+    .log-warn{color:var(--gold)}
+    .dash-out{font-size:.72rem;font-family:ui-monospace,Menlo,monospace;color:#bbb;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:10px;padding:10px 12px;margin-top:10px;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div class="badge">test</div>
+    <div>
+      <div class="title">Sportsbook Test Dashboard</div>
+      <div class="sub">Internal flow tester — tokens in sessionStorage only, never git</div>
+    </div>
+    <div class="hdr-right">
+      <span id="poll-pill" class="pill">poll idle</span>
+      <a class="back" href="dev.html">← Dev Preview</a>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-title">Quick Login</div>
+      <div class="host-form">
+        <input id="host-email" type="email" placeholder="Host email" autocomplete="username">
+        <input id="host-pass" type="password" placeholder="Host password" autocomplete="current-password">
+      </div>
+      <div class="acct-row">
+        <button class="btn host" id="btn-host" type="button">Host</button>
+        <button class="btn" id="btn-p1" type="button">TestPlayer1</button>
+        <button class="btn" id="btn-p2" type="button">TestPlayer2</button>
+        <button class="btn" id="btn-p3" type="button">TestPlayer3</button>
+        <button class="btn danger" id="btn-clear" type="button">Clear session</button>
+      </div>
+      <div class="token-meta" id="token-meta">No account selected.</div>
+      <div class="hint">Host uses <code>/api/auth/login</code> with the fields above (password stays in sessionStorage). Test players mint via <code>/api/auth/token</code>. JWT is never shown in full — last 6 chars only.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Live Status <span class="muted" id="status-ago"></span></div>
+      <div class="stat-grid" id="status-grid">
+        <div class="stat"><div class="stat-val muted">—</div><div class="stat-lbl">Backend</div></div>
+        <div class="stat"><div class="stat-val muted">—</div><div class="stat-lbl">Markets</div></div>
+        <div class="stat"><div class="stat-val muted">—</div><div class="stat-lbl">Grade</div></div>
+        <div class="stat"><div class="stat-val muted">—</div><div class="stat-lbl">P1 balance</div></div>
+        <div class="stat"><div class="stat-val muted">—</div><div class="stat-lbl">P2 balance</div></div>
+        <div class="stat"><div class="stat-val muted">—</div><div class="stat-lbl">P3 balance</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-title">Quick Actions</div>
+    <div class="actions" style="margin-bottom:8px">
+      <select id="game-sel"><option value="">Loading games…</option></select>
+      <select id="team-sel"><option value="">Pick team</option></select>
+      <input id="stake" type="number" min="1" step="1" value="1" title="Stake">
+      <button class="btn primary" id="btn-place" type="button">Place test bet</button>
+      <button class="btn" id="btn-games" type="button">Reload games</button>
+    </div>
+    <div class="actions">
+      <button class="btn" id="btn-grade" type="button">Trigger grade run</button>
+      <button class="btn" id="btn-dash" type="button">Check player dashboard</button>
+      <input id="ticket-id" type="text" placeholder="Ticket ID to cancel" style="min-width:180px">
+      <button class="btn danger" id="btn-cancel" type="button">Cancel ticket</button>
+      <button class="btn" id="btn-reset" type="button">Reset test balances</button>
+    </div>
+    <div class="hint">Place + cancel use the <b>selected</b> account token and snapshot contract fields (pick, market, odds, line, canonicalGameKey, scheduledStart, gameId). Grade/reset need host/admin — 403 is shown, not faked.</div>
+    <div class="dash-out" id="dash-out" style="display:none"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Activity Log <span class="muted">last 20</span></div>
+    <div id="log">Ready.</div>
+  </div>
+</div>
+
+<script>
+window.PBS_BUILD_SHA = 'unknown';
+window.PBS_BUILD_DATE = '';
+
+(function () {
+  var BACKEND = 'https://pocketbooks-sports-backend-production.up.railway.app';
+  var API = (location.protocol === 'file:') ? BACKEND : '';
+  var CLUB_ID = 'd616dc2a-95a6-473a-97b1-7da330878479';
+  var SS = {
+    accounts: 'pbs-td-accounts',
+    active: 'pbs-td-active',
+    hostEmail: 'pbs-td-host-email',
+    hostPass: 'pbs-td-host-pass',
+    log: 'pbs-td-log'
+  };
+  var PLAYERS = {
+    p1: { id: '2a3e6819-be2f-4df3-8112-54ce19d0929e', label: 'TestPlayer1' },
+    p2: { id: '12bb68f1-bcca-4e63-8ae4-7065dbb19172', label: 'TestPlayer2' },
+    p3: { id: 'bc767309-6fc7-4585-9077-3de7b898df13', label: 'TestPlayer3' }
+  };
+  var SPORTS = ['mlb', 'nba', 'nhl', 'nfl'];
+  var POLL_MS = 10000;
+  var REFRESH_PAD_SEC = 5 * 60;
+
+  var accounts = {};
+  var activeKey = '';
+  var games = [];
+  var logEntries = [];
+  var pollTimer = null;
+  var mintFailed = {};
+
+  function $(id) { return document.getElementById(id); }
+
+  function ssGet(key, fallback) {
+    try {
+      var v = sessionStorage.getItem(key);
+      return v == null ? fallback : v;
+    } catch (_e) { return fallback; }
+  }
+  function ssSet(key, val) {
+    try { sessionStorage.setItem(key, val); } catch (_e) {}
+  }
+  function ssDel(key) {
+    try { sessionStorage.removeItem(key); } catch (_e) {}
+  }
+
+  function loadState() {
+    try { accounts = JSON.parse(ssGet(SS.accounts, '{}') || '{}') || {}; } catch (_e) { accounts = {}; }
+    activeKey = ssGet(SS.active, '') || '';
+    try { logEntries = JSON.parse(ssGet(SS.log, '[]') || '[]') || []; } catch (_e) { logEntries = []; }
+    var em = ssGet(SS.hostEmail, '');
+    var pw = ssGet(SS.hostPass, '');
+    if (em) $('host-email').value = em;
+    if (pw) $('host-pass').value = pw;
+  }
+  function persistAccounts() {
+    ssSet(SS.accounts, JSON.stringify(accounts));
+    if (activeKey) ssSet(SS.active, activeKey);
+    else ssDel(SS.active);
+  }
+
+  function nowTs() {
+    return new Date().toLocaleTimeString();
+  }
+  function renderLog() {
+    var el = $('log');
+    if (!logEntries.length) { el.textContent = 'Ready.'; return; }
+    el.innerHTML = logEntries.map(function (e) {
+      var cls = e.ok === true ? 'log-ok' : (e.ok === false ? 'log-bad' : (e.level === 'warn' ? 'log-warn' : 'log-info'));
+      return '<div class="' + cls + '">[' + esc(e.ts) + '] ' + esc(e.msg) + '</div>';
+    }).join('');
+    el.scrollTop = el.scrollHeight;
+  }
+  function log(msg, ok) {
+    logEntries.push({ ts: nowTs(), msg: String(msg), ok: ok });
+    if (logEntries.length > 20) logEntries = logEntries.slice(-20);
+    ssSet(SS.log, JSON.stringify(logEntries));
+    renderLog();
+  }
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function decodeJwt(token) {
+    if (!token || typeof token !== 'string') return null;
+    var parts = token.split('.');
+    if (parts.length < 2) return null;
+    try {
+      var b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) b64 += '=';
+      return JSON.parse(atob(b64));
+    } catch (_e) { return null; }
+  }
+  function tokenTail(token) {
+    if (!token) return '—';
+    return '…' + String(token).slice(-6);
+  }
+  function fmtExp(payload) {
+    if (!payload || !payload.exp) return 'unknown';
+    var d = new Date(payload.exp * 1000);
+    if (isNaN(d.getTime())) return 'unknown';
+    var left = Math.round((d.getTime() - Date.now()) / 1000);
+    var label = d.toLocaleString();
+    if (left <= 0) return label + ' (expired)';
+    var m = Math.floor(left / 60);
+    var s = left % 60;
+    return label + ' (' + m + 'm ' + s + 's left)';
+  }
+
+  function headersFor(acct, extra) {
+    var h = { 'Content-Type': 'application/json', 'X-Club-Id': CLUB_ID };
+    if (acct && acct.actorId) h['X-Actor-Id'] = acct.actorId;
+    if (acct && acct.role) h['X-Actor-Role'] = acct.role;
+    if (acct && acct.token) h['Authorization'] = 'Bearer ' + acct.token;
+    if (extra) Object.keys(extra).forEach(function (k) { h[k] = extra[k]; });
+    return h;
+  }
+  function idemKey(prefix) {
+    var hex = '';
+    try {
+      var arr = new Uint8Array(8);
+      crypto.getRandomValues(arr);
+      hex = Array.from(arr).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+    } catch (_e) {
+      hex = Math.random().toString(16).slice(2, 10);
+    }
+    return (prefix || 'TD') + '_' + Date.now() + '_' + hex;
+  }
+
+  async function api(method, path, body, acct, extraHeaders) {
+    var url = API + path;
+    var opts = { method: method, headers: headersFor(acct, extraHeaders) };
+    if (body != null) opts.body = JSON.stringify(body);
+    var r = await fetch(url, opts);
+    var text = await r.text();
+    var data = null;
+    try { data = JSON.parse(text); } catch (_e) { data = { raw: text.slice(0, 400) }; }
+    return { status: r.status, ok: r.ok, data: data };
+  }
+
+  function summarize(res) {
+    var d = res.data || {};
+    if (d.error) return res.status + ' ' + d.error + (d.hint ? ' (' + d.hint + ')' : '');
+    if (Array.isArray(d.errors) && d.errors.length) return res.status + ' ' + d.errors.join(',');
+    if (d.ok === false) return res.status + ' ' + JSON.stringify(d).slice(0, 180);
+    if (!res.ok) return res.status + ' ' + JSON.stringify(d).slice(0, 180);
+    return 'ok';
+  }
+
+  function setActive(key) {
+    activeKey = key;
+    persistAccounts();
+    ['host', 'p1', 'p2', 'p3'].forEach(function (k) {
+      var btn = $('btn-' + k);
+      if (btn) btn.classList.toggle('active', k === key);
+    });
+    renderTokenMeta();
+  }
+
+  function renderTokenMeta() {
+    var acct = accounts[activeKey];
+    var el = $('token-meta');
+    if (!acct || !acct.token) {
+      el.innerHTML = activeKey
+        ? '<span class="warn">Selected ' + esc(activeKey) + ' — no token yet.</span>'
+        : 'No account selected.';
+      return;
+    }
+    var p = decodeJwt(acct.token) || {};
+    var role = acct.role || p.role || p.platformRole || '—';
+    el.innerHTML =
+      '<b>' + esc(acct.label || activeKey) + '</b>' +
+      ' · role <b>' + esc(role) + '</b>' +
+      ' · exp ' + esc(fmtExp(p)) +
+      ' · jwt ' + esc(tokenTail(acct.token)) +
+      (acct.actorId ? ' · actor ' + esc(acct.actorId.slice(0, 8)) + '…' : '');
+  }
+
+  function storeAcct(key, patch) {
+    accounts[key] = Object.assign({}, accounts[key] || {}, patch);
+    persistAccounts();
+    if (activeKey === key) renderTokenMeta();
+  }
+
+  async function mintPlayer(key) {
+    var cfg = PLAYERS[key];
+    if (!cfg) return null;
+    var res = await api('POST', '/api/auth/token', { actorId: cfg.id, clubId: CLUB_ID }, null);
+    if (!res.ok || !res.data || !res.data.token) {
+      mintFailed[key] = true;
+      log(cfg.label + ' token mint failed: ' + summarize(res), false);
+      return null;
+    }
+    mintFailed[key] = false;
+    var p = decodeJwt(res.data.token) || {};
+    storeAcct(key, {
+      token: res.data.token,
+      actorId: res.data.actorId || cfg.id,
+      role: res.data.role || p.role || 'player',
+      label: cfg.label,
+      via: 'token'
+    });
+    log(cfg.label + ' token ok role=' + (res.data.role || p.role || 'player') + ' jwt=' + tokenTail(res.data.token), true);
+    return accounts[key];
+  }
+
+  async function loginHost() {
+    var email = ($('host-email').value || '').trim();
+    var pass = $('host-pass').value || '';
+    if (!email || !pass) {
+      log('Host login needs email + password on this page (not stored in git).', false);
+      $('host-pass').focus();
+      return null;
+    }
+    ssSet(SS.hostEmail, email);
+    ssSet(SS.hostPass, pass);
+    var res = await api('POST', '/api/auth/login', { email: email, password: pass }, null);
+    if (!res.ok || !(res.data && (res.data.token || res.data.success))) {
+      log('Host login failed: ' + summarize(res), false);
+      return null;
+    }
+    var loginToken = res.data.token;
+    var user = res.data.user || {};
+    var actorId = user.id || (decodeJwt(loginToken) || {}).id || null;
+    var role = user.role || (decodeJwt(loginToken) || {}).role || 'host';
+    storeAcct('host', {
+      token: loginToken,
+      actorId: actorId ? String(actorId) : null,
+      role: role,
+      label: 'Host',
+      via: 'login',
+      email: email
+    });
+    log('Host login ok role=' + role + ' jwt=' + tokenTail(loginToken), true);
+
+    if (actorId) {
+      var minted = await api('POST', '/api/auth/token', { actorId: String(actorId), clubId: CLUB_ID }, null);
+      if (minted.ok && minted.data && minted.data.token) {
+        var mp = decodeJwt(minted.data.token) || {};
+        storeAcct('host', {
+          token: minted.data.token,
+          actorId: minted.data.actorId || String(actorId),
+          role: minted.data.role || mp.role || role,
+          label: 'Host',
+          via: 'token',
+          email: email
+        });
+        log('Host club token ok role=' + (minted.data.role || mp.role) + ' jwt=' + tokenTail(minted.data.token), true);
+      } else {
+        log('Host club token skipped: ' + summarize(minted) + ' — using login JWT', null);
+      }
+    }
+    return accounts.host;
+  }
+
+  function secondsLeft(token) {
+    var p = decodeJwt(token);
+    if (!p || !p.exp) return null;
+    return p.exp - Math.floor(Date.now() / 1000);
+  }
+
+  async function refreshAcct(key) {
+    var acct = accounts[key];
+    if (!acct || !acct.token) return;
+    var left = secondsLeft(acct.token);
+    if (left == null || left > REFRESH_PAD_SEC) return;
+    if (key === 'host' && acct.via === 'login') {
+      var email = ssGet(SS.hostEmail, '');
+      var pass = ssGet(SS.hostPass, '');
+      if (email && pass) {
+        log('Refreshing host login token…', null);
+        await loginHost();
+      } else {
+        log('Host token near expiry — re-enter password to refresh', false);
+      }
+      return;
+    }
+    if (acct.via === 'token' && acct.actorId) {
+      var minted = await api('POST', '/api/auth/token', { actorId: acct.actorId, clubId: CLUB_ID }, null);
+      if (minted.ok && minted.data && minted.data.token) {
+        storeAcct(key, {
+          token: minted.data.token,
+          role: minted.data.role || acct.role,
+          actorId: minted.data.actorId || acct.actorId
+        });
+        log('Refreshed ' + (acct.label || key) + ' via /api/auth/token', true);
+        return;
+      }
+    }
+    var refreshed = await api('POST', '/api/auth/refresh', {}, acct);
+    if (refreshed.ok && refreshed.data && refreshed.data.token) {
+      storeAcct(key, { token: refreshed.data.token });
+      log('Refreshed ' + (acct.label || key) + ' via /api/auth/refresh', true);
+    } else {
+      log('Refresh failed for ' + (acct.label || key) + ': ' + summarize(refreshed), false);
+    }
+  }
+
+  async function ensureFreshAll() {
+    var keys = Object.keys(accounts);
+    for (var i = 0; i < keys.length; i++) {
+      try { await refreshAcct(keys[i]); } catch (_e) {}
+    }
+    renderTokenMeta();
+  }
+
+  function money(n) {
+    if (n == null || isNaN(Number(n))) return '—';
+    return '$' + Number(n).toFixed(2);
+  }
+
+  async function fetchDashboard(acct, playerId) {
+    var pid = playerId || (acct && acct.actorId);
+    if (!acct || !acct.token || !pid) return null;
+    var q = '/api/player/dashboard?clubId=' + encodeURIComponent(CLUB_ID) +
+      '&playerId=' + encodeURIComponent(pid);
+    return api('GET', q, null, acct);
+  }
+
+  async function pollStatus() {
+    $('poll-pill').textContent = 'polling…';
+    await ensureFreshAll();
+    var grid = $('status-grid');
+    grid.innerHTML = '';
+    function add(lbl, val, sub, cls) {
+      var d = document.createElement('div');
+      d.className = 'stat';
+      d.dataset.lbl = lbl;
+      d.innerHTML = '<div class="stat-val ' + (cls || '') + '">' + esc(val) + '</div>' +
+        '<div class="stat-lbl">' + esc(lbl) + '</div>' +
+        (sub ? '<div class="stat-sub">' + esc(sub) + '</div>' : '');
+      grid.appendChild(d);
+    }
+
+    try {
+      var h = await api('GET', '/api/health', null, null);
+      var hd = h.data || {};
+      add('Backend', h.ok ? 'up' : 'down',
+        'db=' + (hd.dbStatus || '?') + ' odds=' + (hd.oddsStatus || '?'),
+        h.ok && hd.ok !== false ? 'ok' : 'bad');
+    } catch (e) {
+      add('Backend', 'error', String(e.message || e), 'bad');
+    }
+
+    try {
+      var m = await api('GET', '/api/markets/status', null, accounts[activeKey] || accounts.host || accounts.p1);
+      var md = m.data || {};
+      if (m.status === 401 || m.status === 403) {
+        add('Markets', m.status, md.error || 'auth required', 'warn');
+      } else {
+        add('Markets', String(md.gameCount != null ? md.gameCount : '—') + ' games',
+          'stale ' + (md.staleMarketCount != null ? md.staleMarketCount : '—') +
+          ' · active ' + (md.activeMarketCount != null ? md.activeMarketCount : '—'),
+          md.serviceOk === false ? 'warn' : 'ok');
+      }
+    } catch (e) {
+      add('Markets', 'error', String(e.message || e), 'bad');
+    }
+
+    try {
+      var g = await api('GET', '/api/grade/status', null, accounts[activeKey] || accounts.host);
+      var gd = g.data || {};
+      add('Grade', gd.lastGradedAt ? new Date(gd.lastGradedAt).toLocaleString() : 'never',
+        'active tickets ' + (gd.activeTicketCount != null ? gd.activeTicketCount : '—'),
+        gd.enabled === false ? 'warn' : '');
+    } catch (e) {
+      add('Grade', 'error', String(e.message || e), 'bad');
+    }
+
+    var pkeys = ['p1', 'p2', 'p3'];
+    for (var i = 0; i < pkeys.length; i++) {
+      var k = pkeys[i];
+      if ((!accounts[k] || !accounts[k].token) && !mintFailed[k]) {
+        try {
+          var minted = await mintPlayer(k);
+          if (!minted) mintFailed[k] = true;
+        } catch (_e) { mintFailed[k] = true; }
+      }
+      var acct = accounts[k];
+      var lbl = PLAYERS[k].label + ' bal';
+      if (!acct || !acct.token) {
+        add(lbl, 'no token', '', 'warn');
+        continue;
+      }
+      try {
+        var d = await fetchDashboard(acct, PLAYERS[k].id);
+        var bal = d && d.data && d.data.balance;
+        if (!d || !d.ok) add(lbl, d ? String(d.status) : 'fail', d ? summarize(d) : '', 'bad');
+        else add(lbl, money(bal && bal.availableBalance),
+          'open ' + money(bal && bal.openRisk), 'ok');
+      } catch (e) {
+        add(lbl, 'error', String(e.message || e), 'bad');
+      }
+    }
+
+    $('status-ago').textContent = '· ' + nowTs();
+    $('poll-pill').textContent = 'poll 10s';
+    $('poll-pill').className = 'pill ok';
+  }
+
+  function toIso(v) {
+    if (!v) return null;
+    var ms = new Date(v).getTime();
+    if (isNaN(ms)) return null;
+    return new Date(ms).toISOString();
+  }
+  function fillOwlsKey(game) {
+    var iso = toIso(game.scheduledStart || game.time);
+    var dateStr = iso ? iso.slice(0, 10) : '';
+    var key = String(game.canonicalGameKey || '');
+    var parts = key.split('|');
+    if (parts.length >= 4 && !/^\d{4}-\d{2}-\d{2}$/.test(parts[parts.length - 1] || '') && dateStr) {
+      parts[parts.length - 1] = dateStr;
+      key = parts.join('|');
+    }
+    if (!key && game.away && game.home && dateStr) {
+      var sport = String(game.sport || 'mlb').toLowerCase();
+      var map = { mlb: 'baseball_mlb', nba: 'basketball_nba', nhl: 'icehockey_nhl', nfl: 'americanfootball_nfl' };
+      key = (map[sport] || sport) + '|' + game.away + '|' + game.home + '|' + dateStr;
+    }
+    return key;
+  }
+  function amToDec(o) {
+    var n = Number(o);
+    if (!n) return 1;
+    return n > 0 ? (1 + n / 100) : (1 + 100 / Math.abs(n));
+  }
+  function ticketPayout(stake, odds) {
+    return Math.round(stake * amToDec(odds) * 100) / 100;
+  }
+
+  function renderGames() {
+    var sel = $('game-sel');
+    sel.innerHTML = '';
+    if (!games.length) {
+      sel.innerHTML = '<option value="">No games</option>';
+      $('team-sel').innerHTML = '<option value="">Pick team</option>';
+      return;
+    }
+    games.forEach(function (g, i) {
+      var opt = document.createElement('option');
+      opt.value = String(i);
+      var st = g.status ? ' [' + g.status + ']' : '';
+      opt.textContent = (g.away || '?') + ' @ ' + (g.home || '?') + ' · ' + (g.sport || '') + st;
+      sel.appendChild(opt);
+    });
+    renderTeams();
+  }
+  function renderTeams() {
+    var g = games[parseInt($('game-sel').value, 10)];
+    var sel = $('team-sel');
+    sel.innerHTML = '';
+    if (!g) { sel.innerHTML = '<option value="">Pick team</option>'; return; }
+    var mls = Array.isArray(g.moneyline) ? g.moneyline : [];
+    if (!mls.length) {
+      sel.innerHTML = '<option value="">No moneyline</option>';
+      return;
+    }
+    mls.forEach(function (m, i) {
+      if (!m || m.odds == null) return;
+      var opt = document.createElement('option');
+      opt.value = String(i);
+      var odds = Number(m.odds);
+      var oddsStr = odds > 0 ? ('+' + odds) : String(odds);
+      opt.textContent = (m.team || m.name || '?') + ' ML ' + oddsStr;
+      sel.appendChild(opt);
+    });
+    if (!sel.options.length) sel.innerHTML = '<option value="">No moneyline</option>';
+  }
+
+  async function loadGames() {
+    $('game-sel').innerHTML = '<option value="">Loading games…</option>';
+    var acct = accounts[activeKey] || accounts.p1 || accounts.host;
+    var all = [];
+    for (var i = 0; i < SPORTS.length; i++) {
+      try {
+        var r = await api('GET', '/api/odds/' + SPORTS[i], null, acct);
+        var list = [];
+        if (Array.isArray(r.data)) list = r.data;
+        else if (r.data && Array.isArray(r.data.games)) list = r.data.games;
+        list.forEach(function (g) {
+          if (!g) return;
+          g.sport = g.sport || SPORTS[i].toUpperCase();
+          all.push(g);
+        });
+      } catch (_e) {}
+    }
+    var now = Date.now();
+    games = all.filter(function (g) {
+      var st = String(g.status || '').toLowerCase();
+      if (st === 'final' || st === 'canceled' || st === 'cancelled') return false;
+      if (!Array.isArray(g.moneyline) || !g.moneyline.length) return false;
+      var iso = toIso(g.scheduledStart || g.time);
+      if (st === 'live') return true;
+      if (!iso) return true;
+      return new Date(iso).getTime() > now - 3 * 3600 * 1000;
+    });
+    renderGames();
+    log('Loaded ' + games.length + ' games from /api/odds', games.length ? true : null);
+  }
+
+  function selectedAcct() {
+    return accounts[activeKey] || null;
+  }
+
+  async function placeBet() {
+    var acct = selectedAcct();
+    if (!acct || !acct.token) { log('Select an account first', false); return; }
+    var g = games[parseInt($('game-sel').value, 10)];
+    if (!g) { log('Pick a game', false); return; }
+    var ml = (g.moneyline || [])[parseInt($('team-sel').value, 10)];
+    if (!ml) { log('Pick a team', false); return; }
+    var stake = parseFloat($('stake').value);
+    if (!stake || stake <= 0) { log('Stake must be > 0', false); return; }
+    var pick = String(ml.team || ml.name || '').replace(/\s+to\s+win\s*$/i, '').trim();
+    var odds = Number(ml.odds);
+    var iso = toIso(ml.scheduledStart || g.scheduledStart || g.time);
+    var key = fillOwlsKey(g);
+    var gameId = String(ml.providerGameId || g.providerGameId || g.id || '');
+    var payout = ticketPayout(stake, odds);
+    var payload = {
+      clubId: CLUB_ID,
+      playerId: acct.actorId,
+      betType: 'Single',
+      stake: stake,
+      payout: payout,
+      potentialProfit: Math.round((payout - stake) * 100) / 100,
+      idempotencyKey: idemKey('BET'),
+      legs: [{
+        pick: pick,
+        market: 'moneyline',
+        odds: odds,
+        line: null,
+        canonicalGameKey: key,
+        scheduledStart: iso,
+        gameId: gameId
+      }]
+    };
+    var res = await api('POST', '/api/bets/place', payload, acct, {
+      'Idempotency-Key': payload.idempotencyKey
+    });
+    if (res.status === 409 && res.data && res.data.code === 'odds_changed' && Number.isFinite(Number(res.data.serverOdds))) {
+      payload.legs[0].odds = Number(res.data.serverOdds);
+      payload.payout = ticketPayout(stake, payload.legs[0].odds);
+      payload.potentialProfit = Math.round((payload.payout - stake) * 100) / 100;
+      payload.idempotencyKey = payload.idempotencyKey + '_oa';
+      res = await api('POST', '/api/bets/place', payload, acct, {
+        'Idempotency-Key': payload.idempotencyKey
+      });
+    }
+    var tid = res.data && (res.data.ticketId || (res.data.ticket && res.data.ticket.id));
+    log('Place bet ' + pick + ' $' + stake + ' → ' + summarize(res) + (tid ? ' ticket=' + tid : ''), !!res.ok && res.data && res.data.ok !== false);
+    if (tid) $('ticket-id').value = tid;
+  }
+
+  async function triggerGrade() {
+    var acct = accounts.host || selectedAcct();
+    if (!acct || !acct.token) { log('Grade run needs a logged-in host (or privileged) token', false); return; }
+    var res = await api('POST', '/api/grade/run', { clubId: CLUB_ID, daysBack: 3 }, acct, {
+      'Idempotency-Key': idemKey('GR')
+    });
+    if (res.status === 403) {
+      log('Grade run 403 — ' + summarize(res) + ' (not faking admin)', false);
+      return;
+    }
+    var d = res.data || {};
+    log('Grade run ' + summarize(res) +
+      (d.checked != null ? ' checked=' + d.checked : '') +
+      (d.graded != null ? ' graded=' + d.graded : ''),
+      !!(res.ok && d.ok !== false));
+  }
+
+  async function checkDash() {
+    var acct = selectedAcct();
+    if (!acct || !acct.token) { log('Select an account first', false); return; }
+    var pid = acct.actorId;
+    var res = await fetchDashboard(acct, pid);
+    var out = $('dash-out');
+    out.style.display = 'block';
+    if (!res) { out.textContent = 'no request'; return; }
+    var d = res.data || {};
+    var bal = d.balance || {};
+    var tix = d.tickets || {};
+    out.textContent =
+      summarize(res) + '\n' +
+      'player=' + (d.playerId || pid) + '\n' +
+      'available=' + money(bal.availableBalance) +
+      ' start=' + money(bal.startingBalance) +
+      ' openRisk=' + money(bal.openRisk) + '\n' +
+      'tickets active=' + ((tix.active && tix.active.length) || 0) +
+      ' settled=' + ((tix.settled && tix.settled.length) || 0) +
+      ' canceled=' + ((tix.canceled && tix.canceled.length) || 0);
+    log('Dashboard ' + (acct.label || activeKey) + ' → ' + summarize(res) + ' avail=' + money(bal.availableBalance), !!(res.ok && d.ok !== false));
+  }
+
+  async function cancelTicket() {
+    var acct = selectedAcct();
+    if (!acct || !acct.token) { log('Select an account first', false); return; }
+    var ticketId = ($('ticket-id').value || '').trim();
+    if (!ticketId) { log('Enter a ticket ID', false); return; }
+    var payload = {
+      clubId: CLUB_ID,
+      playerId: acct.actorId,
+      ticketId: ticketId,
+      idempotencyKey: idemKey('CXL'),
+      reason: 'test_dashboard'
+    };
+    var res = await api('POST', '/api/bets/cancel', payload, acct, {
+      'Idempotency-Key': payload.idempotencyKey
+    });
+    log('Cancel ' + ticketId + ' → ' + summarize(res), !!(res.ok && res.data && res.data.ok !== false));
+  }
+
+  async function resetBalances() {
+    log('Reset test player balances: no endpoint', false);
+    var out = $('dash-out');
+    out.style.display = 'block';
+    out.textContent = 'no endpoint — there is no admin/host reset-balance route in the API. Balances live on club_members.balance_start plus ticket ledger.';
+  }
+
+  function clearSession() {
+    accounts = {};
+    activeKey = '';
+    ['host', 'p1', 'p2', 'p3'].forEach(function (k) {
+      var btn = $('btn-' + k);
+      if (btn) btn.classList.remove('active');
+    });
+    ssDel(SS.accounts);
+    ssDel(SS.active);
+    ssDel(SS.hostPass);
+    renderTokenMeta();
+    log('Cleared sessionStorage tokens/password (email kept)', null);
+  }
+
+  async function clickPlayer(key) {
+    var acct = await mintPlayer(key);
+    if (acct) setActive(key);
+  }
+  async function clickHost() {
+    var acct = await loginHost();
+    if (acct) setActive('host');
+  }
+
+  $('btn-host').addEventListener('click', function () { clickHost(); });
+  $('btn-p1').addEventListener('click', function () { clickPlayer('p1'); });
+  $('btn-p2').addEventListener('click', function () { clickPlayer('p2'); });
+  $('btn-p3').addEventListener('click', function () { clickPlayer('p3'); });
+  $('btn-clear').addEventListener('click', clearSession);
+  $('btn-place').addEventListener('click', function () { placeBet(); });
+  $('btn-games').addEventListener('click', function () { loadGames(); });
+  $('btn-grade').addEventListener('click', function () { triggerGrade(); });
+  $('btn-dash').addEventListener('click', function () { checkDash(); });
+  $('btn-cancel').addEventListener('click', function () { cancelTicket(); });
+  $('btn-reset').addEventListener('click', function () { resetBalances(); });
+  $('game-sel').addEventListener('change', renderTeams);
+  $('host-email').addEventListener('change', function () {
+    ssSet(SS.hostEmail, this.value.trim());
+  });
+  $('host-pass').addEventListener('change', function () {
+    if (this.value) ssSet(SS.hostPass, this.value);
+  });
+
+  loadState();
+  renderLog();
+  if (activeKey) setActive(activeKey);
+  else renderTokenMeta();
+
+  pollStatus();
+  loadGames();
+  pollTimer = setInterval(pollStatus, POLL_MS);
+})();
+</script>
+
+<script>
+(function _versionGuard() {
+  var CURRENT_SHA = window.PBS_BUILD_SHA || 'unknown';
+  function _showStaleBanner(latestSha, builtAt) {
+    if (document.getElementById('_pbs_stale_banner')) return;
+    var b = document.createElement('div');
+    b.id = '_pbs_stale_banner';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#7f1d1d;color:#fef2f2;padding:10px 16px;font-family:monospace;font-size:0.75rem;font-weight:700;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:2px solid #dc2626;box-shadow:0 4px 20px rgba(0,0,0,0.6)';
+    b.innerHTML = '<span style="font-size:1rem">⚠️</span><span style="flex:1"><strong>STALE BUILD</strong> — you are testing old code!<br><span style="font-weight:400;opacity:0.85">Loaded: <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px">' + CURRENT_SHA + '</code> &nbsp;|&nbsp; Latest: <code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px">' + latestSha + '</code>' + (builtAt ? ' &nbsp;|&nbsp; Built: ' + new Date(builtAt).toLocaleString() : '') + '</span></span><button onclick="location.reload(true)" style="background:#dc2626;border:none;color:#fff;padding:8px 16px;border-radius:8px;font-weight:900;cursor:pointer;font-size:0.8rem;white-space:nowrap;flex-shrink:0">⟳ Hard Reload Latest</button>';
+    if (document.body) { document.body.insertBefore(b, document.body.firstChild); document.body.style.paddingTop = '64px'; }
+  }
+  function _check() {
+    fetch('/build.json?_=' + Date.now(), { cache: 'no-store' })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(d) {
+        if (!d || !d.sha) return;
+        var latest = String(d.sha).trim(), cur = String(CURRENT_SHA).trim();
+        if (latest && cur && cur !== 'unknown' && latest !== cur) _showStaleBanner(latest, d.builtAt);
+        else { var x = document.getElementById('_pbs_stale_banner'); if (x) { x.remove(); document.body.style.paddingTop = ''; } }
+      }).catch(function() {});
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _check);
+  else _check();
+  setInterval(_check, 60000);
+})();
+</script>
+</body>
+</html>
