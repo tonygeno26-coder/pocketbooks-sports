@@ -1409,7 +1409,7 @@ function syncBalanceDisplays() {
   }
   var s = calcAvailableBalance();
   applyDisplayedBalance(s.available);
-  dbgBanner('BALANCE RECALCULATED\nStarting: $'+s.starting.toFixed(2)+'\nOpen Risk: $'+s.openRisk.toFixed(2)+'\nAvailable: $'+s.available.toFixed(2), '#005');
+  // Balance recalc complete — dbgBanner removed (production)
   
   return s;
 }
@@ -2472,7 +2472,6 @@ function setBNav(el,tab){
   } else if(tab==='sportsbook_legacy'){
   } else if(tab==='mybets'||tab==='trades'){
     
-    dbgBanner('MY BETS CLICKED\nTickets: '+betTickets.length+' stored', '#004');
     const sec=document.getElementById('mybets-section');
     if(sec) sec.style.display='block';
     if(ss) ss.style.display='none';
@@ -2485,7 +2484,6 @@ function setBNav(el,tab){
         loadPlayerDashboardFromDb().then(function(){ try { renderMyBets(); } catch(_){} }).catch(function(){});
       } catch(_){}
     }
-    dbgBanner('MY BETS SCREEN RENDERED: '+betTickets.length+' tickets', '#004');
   } else {
     const sec=document.getElementById('sportsbook-section');
     if(sec) sec.style.display='block';
@@ -2741,7 +2739,6 @@ function _handleScopeFailure(scope, source) {
     + ' playerId='      + (scope.playerId     || '(none)')
     + ' reason='        + (scope.reason       || '?');
   console.warn(banner);
-  try { dbgBanner(banner, '#800'); } catch(_){}
   // Hard-wipe stale credentials on mismatch or missing token
   localStorage.removeItem('pb-sports-token');
   localStorage.removeItem('pb-active-club');
@@ -3645,23 +3642,19 @@ window.bsPlaceBet = function bsPlaceBet() {
     bsStake = Object.values(bsStakes).reduce(function(s,v){ return s+(parseFloat(v)||0); }, 0);
   }
   
-  dbgBanner('STEP 1: bsPlaceBet started\npicks:'+betSlip.length+' stake:'+bsStake+' type:'+bsType, '#020');
   
   try {
     var err = document.getElementById('bs-err');
     if (!betSlip.length) {
-      dbgBanner('ERROR: no picks', '#800');
       if (err) { err.style.display='block'; err.textContent='Add at least one selection'; }
       setTimeout(function(){ if(err) err.style.display='none'; }, 2500);
       return;
     }
     if (!bsStake || bsStake <= 0) {
-      dbgBanner('ERROR: no amount entered\nbsStake='+bsStake+' bsStakes='+JSON.stringify(bsStakes), '#800');
       if (err) { err.style.display='block'; err.textContent='Enter a valid amount'; }
       setTimeout(function(){ if(err) err.style.display='none'; }, 2500);
       return;
     }
-    dbgBanner('STEP 2: validation passed\nSTEP 3: opening modal...', '#040');
     // Host validation
     var _pid = (JSON.parse(localStorage.getItem('pb-player')||'null')||{}).id || TOKEN || null;
     if (_pid) {
@@ -3669,12 +3662,10 @@ window.bsPlaceBet = function bsPlaceBet() {
       var _me = _players.find(function(p){ return p.playerId === _pid; });
       if (_me) {
         if (_me.status === 'blocked') {
-          dbgBanner('BET BLOCKED\nBlocked by host', '#800');
           showToast('Bet blocked by host settings', 'error'); return;
         }
         var _avail = getClientAvailCredit(_pid);
         if (bsStake > _avail) {
-          dbgBanner('EXCEEDS CREDIT\nAvailable: $'+_avail.toFixed(2), '#800');
           showToast('Exceeds available credit ($'+_avail.toFixed(2)+' available)', 'error'); return;
         }
         var _lim = getPlayerLimitsClient(_pid);
@@ -3688,16 +3679,13 @@ window.bsPlaceBet = function bsPlaceBet() {
           if (!_blockedSport && isSportBlocked(b.sport)) _blockedSport = b.sport;
         });
         if (_blockedSport) {
-          dbgBanner('BET BLOCKED: blocked sport '+_blockedSport, '#800');
           showToast('This bet includes '+_blockedSport+', which is blocked by host settings', 'error');
           return;
         }
       }
     }
     openBetConfirm();
-    dbgBanner('STEP 4: modal rendered', '#006');
   } catch(e) {
-    dbgBanner('ERROR in bsPlaceBet:\n'+e.message, '#800');
     console.error('bsPlaceBet error:', e);
   }
 }
@@ -3716,7 +3704,6 @@ function openBetConfirm() {
     payout = betSlip.reduce(function(s,b){ var st=bsStakes[b.cellId]||0; return s+st*amToDecimal(b.odds); }, 0);
     toWin  = payout - risk;
     
-    dbgBanner('SINGLE CONFIRM | Risk: $'+risk.toFixed(2)+' | To Win: $'+toWin.toFixed(2)+' | Payout: $'+payout.toFixed(2), '#004');
   } else if (bsType === 'teaser') {
     risk   = bsStake;
     payout = calcPayout(bsStake, betSlip, bsType);
@@ -3873,7 +3860,6 @@ function openBetConfirm() {
   if (_confirmBtn) _confirmBtn.addEventListener('click', function(){
     // ── DIAGNOSTIC: trace every confirm click — catches "button does nothing" reports
     
-    try { dbgBanner('CONFIRM_BET_CLICKED', '#024'); } catch(_dbg){}
     try {
       confirmBet();
     } catch (_clickErr) {
@@ -3889,7 +3875,7 @@ function openBetConfirm() {
       closeBetConfirm();
     });
   });
-  } catch(e) { dbgBanner('ERROR in openBetConfirm:\n'+e.message,'#800'); console.error(e); }
+  } catch(e) { console.error(e); }
 }
 
 function closeBetConfirm() {
@@ -4875,7 +4861,6 @@ async function confirmBet() {
   try { clearSlip();      } catch(_) {}
   try { syncBalanceDisplays(); } catch(_) {}
   try { renderMyBets(); } catch(_) {}
-  try { dbgBanner('CONFIRMED: '+newTickets.length+' ticket(s)\nRisk: $'+riskAmount.toFixed(2),'#020'); } catch(_){}
   showToast('\u2705 '+newTickets.length+' bet'+(newTickets.length>1?'s':'')+' placed \xb7 Balance: '+fmtBalance());
   _cbLog('CONFIRM_BET_COMPLETE', 'path=localStorage tickets='+newTickets.length);
   _cbBtnReady();
