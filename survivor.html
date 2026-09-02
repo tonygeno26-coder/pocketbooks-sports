@@ -417,7 +417,7 @@ async function _ensureFreshToken() {
   await _refreshAuthToken();
 }
 
-// ESPN abbrevs for https://a.espncdn.com/i/teamlogos/nfl/500/{abbrev}.png
+// ESPN abbrevs for NFL logos (combiner URL tolerates hotlinking better than /500/).
 var NFL_TEAM_LOGOS = {
   'Arizona Cardinals': 'ari', 'Atlanta Falcons': 'atl', 'Baltimore Ravens': 'bal',
   'Buffalo Bills': 'buf', 'Carolina Panthers': 'car', 'Chicago Bears': 'chi',
@@ -564,7 +564,10 @@ function teamLogoUrl(name, source){
     var pfr = NFL_PFR_ABBREV[ab] || ab;
     return 'https://cdn.ssref.net/req/202408161/tlogo/pfr/'+pfr+'.png';
   }
-  return 'https://a.espncdn.com/i/teamlogos/nfl/500/'+ab+'.png';
+  if (source === 'espn-direct') {
+    return 'https://a.espncdn.com/i/teamlogos/nfl/500/'+ab+'.png';
+  }
+  return 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/'+ab+'.png&w=80&h=80';
 }
 function teamAbbrev(name){
   var key = canonicalTeam(name);
@@ -576,10 +579,16 @@ function teamAbbrev(name){
 function logoFallback(img){
   if (!img) return;
   var step = parseInt(img.getAttribute('data-logo-step')||'0', 10);
+  var espnDirect = img.getAttribute('data-espn') || '';
   var pfr = img.getAttribute('data-pfr') || '';
   var ab = img.getAttribute('data-ab') || '?';
-  if (step === 0 && pfr) {
+  if (step === 0 && espnDirect) {
     img.setAttribute('data-logo-step', '1');
+    img.src = espnDirect;
+    return;
+  }
+  if (step === 1 && pfr) {
+    img.setAttribute('data-logo-step', '2');
     img.src = pfr;
     return;
   }
@@ -595,6 +604,7 @@ function logoFallback(img){
 function teamLogoImg(team, cls){
   var c = (typeof cls === 'string') ? cls : 'mu-logo';
   var espn = teamLogoUrl(team);
+  var espnDirect = teamLogoUrl(team, 'espn-direct');
   var pfr = teamLogoUrl(team, 'pfr');
   var ab = teamAbbrev(team);
   var clsAttr = (c + ' ').trim();
@@ -604,7 +614,7 @@ function teamLogoImg(team, cls){
   return '<img'+(clsAttr ? ' class="'+esc(clsAttr)+'"' : '')
     + ' src="'+esc(espn)+'" alt="'+esc(team)+'"'
     + ' referrerpolicy="no-referrer" data-logo-step="0"'
-    + ' data-pfr="'+esc(pfr)+'" data-ab="'+esc(ab)+'"'
+    + ' data-espn="'+esc(espnDirect)+'" data-pfr="'+esc(pfr)+'" data-ab="'+esc(ab)+'"'
     + ' onerror="logoFallback(this)">';
 }
 function shortTeam(name){
