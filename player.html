@@ -74,6 +74,14 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .filter-row::-webkit-scrollbar{display:none}
 .pill{flex-shrink:0;padding:7px 16px;border-radius:20px;border:1.5px solid var(--border);font-size:0.82rem;font-weight:700;color:var(--gray);cursor:pointer;background:transparent;white-space:nowrap}
 .pill.active{border-color:var(--green);color:var(--green);background:rgba(0,255,135,0.08);box-shadow:0 0 8px rgba(0,255,135,0.2)}
+.pill.disabled{opacity:0.35;pointer-events:none}
+.mc-alt-panel{display:none;padding:0 4px 6px}
+.mc-alt-section{margin-bottom:10px}
+.mc-alt-title{font-size:0.62rem;font-weight:800;color:var(--gray);text-transform:uppercase;letter-spacing:0.6px;margin:0 4px 6px}
+.mc-alt-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 4px;border-bottom:1px solid rgba(255,255,255,0.04)}
+.mc-alt-row:last-child{border-bottom:none}
+.mc-alt-label{font-size:0.78rem;font-weight:700;color:#ddd;flex:1;min-width:0}
+.mc-alt-row .odds-box{min-width:72px;flex-shrink:0}
 
 
 
@@ -805,6 +813,7 @@ function _debugClearTickets() {
   <div class="pill" id="mf-spread" onclick="setMarketFilter(this,'spread')">Spread</div>
   <div class="pill" id="mf-totals" onclick="setMarketFilter(this,'totals')">Totals</div>
   <div class="pill" id="mf-ml" onclick="setMarketFilter(this,'moneyline')">To Win</div>
+  <div class="pill" id="mf-altlines" onclick="setMarketFilter(this,'altlines')">Alt Lines</div>
 </div>
 
 
@@ -1722,6 +1731,96 @@ function _pbGameCardId(g) {
   return g && (g.id != null || g.providerGameId != null) ? String(g.id != null ? g.id : g.providerGameId) : '';
 }
 
+function _pbAltSpreadCellId(gid, team, line) {
+  return gid + '-alt-sp-' + String(team).replace(/\s+/g, '-') + '-' + String(line).replace('.', '_');
+}
+function _pbAltTotalCellId(gid, name, line) {
+  return gid + '-alt-tot-' + String(name).replace(/\s+/g, '-') + '-' + String(line).replace('.', '_');
+}
+function _pbGameHasAltLines(g) {
+  return !!(g && ((Array.isArray(g.alt_spreads) && g.alt_spreads.length) || (Array.isArray(g.alt_totals) && g.alt_totals.length)));
+}
+function _pbRenderAltLinesPanelHtml(g, sp, aw, hw, gid, cellFn) {
+  var altSp = Array.isArray(g.alt_spreads) ? g.alt_spreads.slice() : [];
+  var altTot = Array.isArray(g.alt_totals) ? g.alt_totals.slice() : [];
+  if (!altSp.length && !altTot.length) return '';
+  altSp.sort(function(a, b) {
+    if (a.team !== b.team) return String(a.team).localeCompare(String(b.team));
+    return (a.line || 0) - (b.line || 0);
+  });
+  altTot.sort(function(a, b) {
+    if (a.name !== b.name) return String(a.name).localeCompare(String(b.name));
+    return (a.line || 0) - (b.line || 0);
+  });
+  var html = '<div class="mc-alt-panel">';
+  if (altSp.length) {
+    html += '<div class="mc-alt-section"><div class="mc-alt-title">Alternate Run Lines</div>';
+    altSp.forEach(function(s) {
+      if (!s || typeof s.line !== 'number') return;
+      var lbl = s.team + ' ' + (s.line > 0 ? '+' : '') + s.line;
+      var cid = _pbAltSpreadCellId(gid, s.team, s.line);
+      html += '<div class="mc-alt-row"><span class="mc-alt-label">' + lbl + '</span>' +
+        cellFn(cid, (s.line > 0 ? '+' : '') + s.line, s.odds, 'Run Line', s.team + ' ' + (s.line > 0 ? '+' : '') + s.line, s.team) +
+        '</div>';
+    });
+    html += '</div>';
+  }
+  if (altTot.length) {
+    html += '<div class="mc-alt-section"><div class="mc-alt-title">Alternate Totals</div>';
+    altTot.forEach(function(t) {
+      if (!t || typeof t.line !== 'number') return;
+      var side = t.name || 'Over';
+      var prefix = side === 'Under' ? 'U ' : 'O ';
+      var cid = _pbAltTotalCellId(gid, side, t.line);
+      html += '<div class="mc-alt-row"><span class="mc-alt-label">' + side + ' ' + t.line + '</span>' +
+        cellFn(cid, prefix + t.line, t.odds, 'Total', side + ' ' + t.line) +
+        '</div>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+function _pbUpdateAltLinesTabVisibility(games) {
+  games = games || _pbLastLoadedGames || [];
+  _pbLastLoadedGames = games;
+  var hasAlt = games.some(_pbGameHasAltLines);
+  var tab = document.getElementById('mf-altlines');
+  if (!tab) return;
+  tab.classList.toggle('disabled', !hasAlt);
+  if (!hasAlt && activeMarketFilter === 'altlines') {
+    var linesTab = document.getElementById('mf-lines');
+    if (linesTab) setMarketFilter(linesTab, 'lines');
+  }
+}
+function _pbApplyMarketFilterToCards() {
+  var filter = activeMarketFilter || 'lines';
+  var showAlt = filter === 'altlines';
+  var showSpread = filter === 'lines' || filter === 'spread';
+  var showTotals = filter === 'lines' || filter === 'totals';
+  var showML = filter === 'lines' || filter === 'moneyline';
+  document.querySelectorAll('.mc-cols').forEach(function(colHeader) {
+    colHeader.style.display = showAlt ? 'none' : '';
+    var labels = colHeader.querySelectorAll('.mc-col-label');
+    if (labels[0]) labels[0].style.display = showSpread ? '' : 'none';
+    if (labels[1]) labels[1].style.display = showTotals ? '' : 'none';
+    if (labels[2]) labels[2].style.display = showML ? '' : 'none';
+  });
+  document.querySelectorAll('.mc-team-row').forEach(function(row) {
+    row.style.display = showAlt ? 'none' : '';
+    var cells = row.querySelectorAll('.odds-box');
+    if (cells[0]) cells[0].style.display = showSpread ? '' : 'none';
+    if (cells[1]) cells[1].style.display = showTotals ? '' : 'none';
+    if (cells[2]) cells[2].style.display = showML ? '' : 'none';
+  });
+  document.querySelectorAll('.mc-divider').forEach(function(d) {
+    d.style.display = showAlt ? 'none' : '';
+  });
+  document.querySelectorAll('.mc-alt-panel').forEach(function(p) {
+    p.style.display = showAlt ? '' : 'none';
+  });
+}
+
 function _pbExtractGameMarkets(g) {
   if (!g) return null;
   var aw = (g.away || g.away_team) || '';
@@ -1783,6 +1882,21 @@ function _pbUpdateGameCardInPlace(card, g) {
   if (d.hwSp) _pbUpdateOddsCellContent(gid + '-sp-hw', (d.hwSp.line > 0 ? '+' : '') + d.hwSp.line, d.hwSp.odds, { pick:spreadPick(hw, d.hwSp), liveMarket:isLive });
   if (d.un) _pbUpdateOddsCellContent(gid + '-un', 'U ' + d.un.line, d.un.odds, { pick:'Under ' + d.un.line, liveMarket:isLive });
   if (d.hwML) _pbUpdateOddsCellContent(gid + '-ml-hw', null, d.hwML.odds, { pick:hw, liveMarket:isLive });
+  (Array.isArray(g.alt_spreads) ? g.alt_spreads : []).forEach(function(s) {
+    if (!s || typeof s.line !== 'number') return;
+    var cid = _pbAltSpreadCellId(gid, s.team, s.line);
+    _pbUpdateOddsCellContent(cid, (s.line > 0 ? '+' : '') + s.line, s.odds, {
+      pick: s.team + ' ' + (s.line > 0 ? '+' : '') + s.line, liveMarket: isLive
+    });
+  });
+  (Array.isArray(g.alt_totals) ? g.alt_totals : []).forEach(function(t) {
+    if (!t || typeof t.line !== 'number') return;
+    var side = t.name || 'Over';
+    var cid = _pbAltTotalCellId(gid, side, t.line);
+    _pbUpdateOddsCellContent(cid, (side === 'Under' ? 'U ' : 'O ') + t.line, t.odds, {
+      pick: side + ' ' + t.line, liveMarket: isLive
+    });
+  });
 }
 
 function _pbRenderGameCardHtml(g) {
@@ -1865,6 +1979,7 @@ function _pbRenderGameCardHtml(g) {
       '<div class="mc-footer"><span class="mc-time">' + time + '</span>' +
       (showPropsBtn ? '<button type="button" class="mc-props-btn" onclick="_pbToggleGameProps(this,\'' + safeGameId + '\',\'' + sportRoute + '\')">Props ▾</button>' : '') +
       '</div>' +
+      _pbRenderAltLinesPanelHtml(g, sp, aw, hw, g.id, cell) +
       '<div class="mc-props-panel"></div>' +
       '</div>';
   } catch (cardErr) {
@@ -1928,6 +2043,8 @@ function _pbSyncGamesListInPlace(el, games) {
   _pbApplyLiveFreshnessState();
   _pbResyncBetSlipSelections();
   if (expandedId && seen[expandedId]) _pbRefreshExpandedGameProps({ silent: true });
+  _pbUpdateAltLinesTabVisibility(games);
+  _pbApplyMarketFilterToCards();
 }
 
 var _pbExpandedPropsGameId = null;
@@ -2337,6 +2454,8 @@ async function loadGames(sport, opts){
       return;
     }
     el.innerHTML=games.map(_pbRenderGameCardHtml).filter(function(s){ return s; }).join('');
+    _pbUpdateAltLinesTabVisibility(games);
+    _pbApplyMarketFilterToCards();
     
     _pbFlashLineMovements();
     _pbApplyLiveFreshnessState();
@@ -2466,6 +2585,7 @@ function setTopTab(el,tab){
 
 // Market filter
 var activeMarketFilter = 'lines';
+var _pbLastLoadedGames = [];
 var _splitsByGameId = {};
 
 function _renderSplitBar(split, awayLabel, homeLabel) {
@@ -2493,27 +2613,14 @@ async function _loadSplitsForSport(sport) {
 }
 
 function setMarketFilter(el, filter) {
+  if (filter === 'altlines') {
+    var hasAlt = (_pbLastLoadedGames || []).some(_pbGameHasAltLines);
+    if (!hasAlt) return;
+  }
   activeMarketFilter = filter;
-  document.querySelectorAll('.pill').forEach(function(p){ p.classList.remove('active'); });
+  document.querySelectorAll('.filter-row .pill').forEach(function(p){ p.classList.remove('active'); });
   el.classList.add('active');
-  var showSpread   = filter === 'lines' || filter === 'spread';
-  var showTotals   = filter === 'lines' || filter === 'totals';
-  var showML       = filter === 'lines' || filter === 'moneyline';
-  // Scope per-card so index never accumulates across multiple game cards
-  document.querySelectorAll('.mc-cols').forEach(function(colHeader) {
-    var labels = colHeader.querySelectorAll('.mc-col-label');
-    // labels: 0=Run Line, 1=Total, 2=To Win  (first child is spacer div, not a label)
-    if (labels[0]) labels[0].style.display = showSpread  ? '' : 'none';
-    if (labels[1]) labels[1].style.display = showTotals  ? '' : 'none';
-    if (labels[2]) labels[2].style.display = showML      ? '' : 'none';
-  });
-  document.querySelectorAll('.mc-team-row').forEach(function(row) {
-    var cells = row.querySelectorAll('.odds-box');
-    // cells order matches render: 0=spread/runline, 1=total, 2=moneyline
-    if (cells[0]) cells[0].style.display = showSpread  ? '' : 'none';
-    if (cells[1]) cells[1].style.display = showTotals  ? '' : 'none';
-    if (cells[2]) cells[2].style.display = showML      ? '' : 'none';
-  });
+  _pbApplyMarketFilterToCards();
 }
 
 // ════════════════════════════════════════════════════════════════════════════
