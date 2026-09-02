@@ -1849,10 +1849,13 @@ async function loadGames(sport, opts){
       throw new Error('Backend unreachable');
     }
     if (!games.length && _lastErrStatus && _routeKeys.length === 1) {
-      var _fatal = (_lastErrBody.error_code === 'OUT_OF_USAGE_CREDITS' || _lastErrStatus === 402)
+      var _quotaHit = _lastErrBody.error_code === 'OUT_OF_USAGE_CREDITS' || _lastErrStatus === 402;
+      var _fatal = _quotaHit
         && _lastErrBody.error_code !== 'UNKNOWN_SPORT';
       if (_fatal) {
-        throw new Error('Odds temporarily unavailable. Try again shortly.');
+        // Quota exhaustion on the legacy Odds API path should not hard-fail
+        // the lobby — show an empty slate and let the user retry.
+        console.warn('[sportsbook] odds quota exhausted for sport=' + _sport);
       }
     }
     // Surface cache source (HIT/MISS/STALE) from the backend if present.
@@ -2354,11 +2357,14 @@ function _updateSportTabs() {
     var blocked = isSportBlocked(sport);
     var entry    = catalogEntry(sport);
     var gameCount = entry ? (entry.games || 0) : (sportsByKey ? 0 : null);
+    var isActive = tab.classList.contains('active');
     var hasGames = gameCount === null || gameCount > 0;
     tab.style.display = '';
     tab.style.opacity = blocked ? '0.35' : (hasGames ? '' : '0.55');
-    tab.style.pointerEvents = blocked ? 'none' : (gameCount === 0 ? 'none' : '');
-    tab.classList.toggle('zero-games', !blocked && gameCount === 0);
+    // Keep the active tab tappable even when the catalog reports 0 games —
+    // the lobby still fetches /api/odds/{sport} directly on load.
+    tab.style.pointerEvents = blocked ? 'none' : ((gameCount === 0 && !isActive) ? 'none' : '');
+    tab.classList.toggle('zero-games', !blocked && gameCount === 0 && !isActive);
     tab.title = blocked
       ? ('Your host has disabled ' + sport.toUpperCase() + ' betting')
       : (hasGames ? '' : 'No games available right now');
