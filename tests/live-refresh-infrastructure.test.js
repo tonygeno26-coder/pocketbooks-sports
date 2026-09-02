@@ -40,7 +40,7 @@ test('live stale market state disables live odds cells and place button', functi
 
 test('live refresh path uses backend status and no local market-status fallback', function() {
   assert(html.indexOf("API + '/api/markets/status'") !== -1, 'market status must use backend API base');
-  assert(html.indexOf("API + '/api/odds/' + _sport") !== -1, 'odds fetch must use backend API base');
+  assert(html.indexOf("API + '/api/odds/' + routeKey") !== -1, 'odds fetch must use backend API base');
 });
 
 test('line movement animation is wired', function() {
