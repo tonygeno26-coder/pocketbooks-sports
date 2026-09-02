@@ -809,10 +809,12 @@ function parseEspnScoreboard(data){
     };
   }).sort(function(a,b){ return new Date(a.time) - new Date(b.time); });
 }
+var NFL_2026_WEEK1_OPEN = 'September 4, 2026';
 async function fetchEspnWeek(week){
-  var w = Math.max(1, Math.min(18, parseInt(week,10)||1));
+  var w = Math.max(1, Math.min(22, parseInt(week,10)||1));
   if (espnCache[w] && espnCache[w].games) return espnCache[w];
   var url = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&week='+w;
+  if (w <= 18) url += '&dates=2026';
   var r = await fetch(url);
   if (!r.ok) throw new Error('espn_'+r.status);
   var data = await r.json();
@@ -822,16 +824,16 @@ async function fetchEspnWeek(week){
 }
 async function ensureWeek1OpenLabel(){
   if (week1OpenLabel) return week1OpenLabel;
+  week1OpenLabel = NFL_2026_WEEK1_OPEN;
   try {
     var w1 = await fetchEspnWeek(1);
     var first = (w1.games || [])[0];
     if (first && first.time){
       week1OpenLabel = new Date(first.time).toLocaleString('en-US', {
-        timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric'
+        timeZone: 'America/New_York', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
       });
     }
   } catch(_e){}
-  if (!week1OpenLabel) week1OpenLabel = 'Sep 10';
   return week1OpenLabel;
 }
 function mergeEspnRecords(oddsList, espnList){
@@ -1029,8 +1031,12 @@ function pickBannerHtml(){
   } else if (!scheduleLocked && isPreseasonTestMode()){
     html += '<div class="pick-banner warn">⚠️ Preseason test mode — picks are for testing only</div>';
   } else {
-    var when = week1OpenLabel || 'Sep 10';
-    html += '<div class="pick-banner">🏈 '+esc(weekTitle(browseWeek))+' Preview — Picks open '+esc(when)+'</div>';
+    var when = week1OpenLabel || NFL_2026_WEEK1_OPEN;
+    if (browseWeek === 1) {
+      html += '<div class="pick-banner">🏈 Week 1 Preview — Picks open ' + esc(when) + '</div>';
+    } else {
+      html += '<div class="pick-banner">🏈 '+esc(weekTitle(browseWeek))+' Preview — Picks open '+esc(when)+'</div>';
+    }
   }
   return html;
 }
