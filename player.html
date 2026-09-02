@@ -1799,6 +1799,14 @@ function _pbApplyMarketFilterToCards() {
   var showSpread = filter === 'lines' || filter === 'spread';
   var showTotals = filter === 'lines' || filter === 'totals';
   var showML = filter === 'lines' || filter === 'moneyline';
+  if (showAlt) {
+    var games = _pbLastLoadedGames || [];
+    var withAlt = games.filter(_pbGameHasAltLines);
+    console.log('[Alt Lines] tab active — games with alt data:', withAlt.length + '/' + games.length,
+      withAlt.slice(0, 2).map(function(g) {
+        return { id: g.id, alt_spreads: (g.alt_spreads || []).length, alt_totals: (g.alt_totals || []).length };
+      }));
+  }
   document.querySelectorAll('.mc-cols').forEach(function(colHeader) {
     colHeader.style.display = showAlt ? 'none' : '';
     var labels = colHeader.querySelectorAll('.mc-col-label');
@@ -1817,7 +1825,18 @@ function _pbApplyMarketFilterToCards() {
     d.style.display = showAlt ? 'none' : '';
   });
   document.querySelectorAll('.mc-alt-panel').forEach(function(p) {
-    p.style.display = showAlt ? '' : 'none';
+    // CSS defaults .mc-alt-panel to display:none — must set block explicitly
+    p.style.display = showAlt ? 'block' : 'none';
+  });
+  document.querySelectorAll('.market-card[data-game-id]').forEach(function(card) {
+    if (!showAlt) {
+      card.style.display = '';
+      return;
+    }
+    var gid = card.getAttribute('data-game-id');
+    var g = (window.gamesCache || {})[gid];
+    var hasAlt = _pbGameHasAltLines(g) || !!card.querySelector('.mc-alt-row');
+    card.style.display = hasAlt ? '' : 'none';
   });
 }
 
