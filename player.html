@@ -35,6 +35,26 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .sport-tab{flex-shrink:0;display:flex;align-items:center;gap:6px;font-size:0.82rem;font-weight:700;color:var(--gray);cursor:pointer;padding:6px 2px 8px;border-bottom:2px solid transparent;white-space:nowrap;opacity:0.6;transition:opacity 0.15s,color 0.15s}
 .sport-tab.active{color:var(--white);border-bottom-color:var(--green);opacity:1}
 .sport-tab svg{width:17px;height:17px;flex-shrink:0}
+.sport-tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:rgba(255,255,255,0.1);color:var(--gray);font-size:0.58rem;font-weight:800;margin-left:2px}
+.sport-tab.active .sport-tab-count{background:rgba(0,255,136,0.15);color:var(--green)}
+.sport-tab.zero-games .sport-tab-count{opacity:0.45}
+.sport-tab.zero-games{opacity:0.45;pointer-events:none}
+
+/* BETTING SPLITS */
+.split-row{padding:0 16px 10px}
+.split-label{display:flex;justify-content:space-between;font-size:0.58rem;color:#666;margin-bottom:4px;font-weight:700}
+.split-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:#2a2a2a}
+.split-bar-away{background:var(--cyan);height:100%}
+.split-bar-home{background:var(--green);height:100%}
+
+/* PROPS MARKET */
+.props-card{margin:0 16px 12px;background:linear-gradient(180deg,#1e1e1e,#181818);border-radius:18px;overflow:hidden;border:1px solid #2a2a2a;padding:12px 14px}
+.props-game{font-size:0.72rem;color:var(--gray);margin-bottom:10px;font-weight:700;text-transform:uppercase}
+.props-player{font-size:0.88rem;font-weight:800;margin-bottom:6px}
+.props-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid #2a2a2a}
+.props-side{flex:1;font-size:0.78rem;color:#aaa}
+.props-odds{min-width:72px;text-align:center;padding:8px 6px;background:#242424;border-radius:10px;cursor:pointer;border:1.5px solid #303030;font-weight:900;font-size:0.82rem}
+.props-odds.selected{border-color:#fff;background:rgba(0,255,136,0.18)}
 
 /* FILTER PILLS */
 .filter-row{display:flex;gap:8px;padding:12px 16px;overflow-x:auto;scrollbar-width:none}
@@ -533,6 +553,12 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
 }
 
 /* ═══ 390px phones — odds remain tappable, slips stay on-screen ═══ */
+@media (max-width:375px){
+  body{max-width:100vw}
+  .sport-tab{min-height:44px;padding:10px 6px 10px}
+  .pill,.odds-box,.props-odds{min-height:44px}
+  .bet-slip-panel,.dkslip{max-width:100vw}
+}
 @media (max-width:400px){
   .market-card{margin:0 8px 10px;max-width:calc(100vw - 16px)}
   .market-card .mc-cols,
@@ -963,7 +989,7 @@ function _showSessionExpiredModal(result) {
   var _sgResult;
   try { _sgResult = _validatePlayerSession(); }
   catch(_sgErr) {
-    console.error('BOOT_STAGE=session_gate_error err='+(_sgErr&&_sgErr.message||_sgErr)+' — failing open');
+    /* session gate failed — fail open */
     _sessionValid = true;
     return;
   }
@@ -1783,6 +1809,7 @@ async function loadGames(sport, opts){
     // live refresh paths intentionally avoid local proxy fallback.
     var _rawSport = sport || 'mlb';
     var _sportLc  = String(_rawSport).toLowerCase();
+    await _loadSplitsForSport(_sportLc);
     var _isMlb    = (_sportLc === 'mlb' || _sportLc === 'baseball_mlb');
     var _routeKeys = _resolveOddsRouteKeys(_sportLc);
     var _sport = _routeKeys[0] || 'mlb';
@@ -1924,6 +1951,8 @@ async function loadGames(sport, opts){
       const sp=(g.sport?g.sport.toUpperCase():null)||'MLB';
       const icon=icons[sp]||'🏅';
       const isLiveMarket = _pbMarketIsLive(g);
+      const split = _splitsByGameId[String(g.id)] || _splitsByGameId[String(g.canonicalGameKey || '')];
+      const splitHtml = split ? _renderSplitBar(split.moneyline, awN, hwN) : '';
 
       function cell(id,top,odds,marketType,teamPick,teamName){
         if(!odds)return'<div class="odds-box" style="cursor:default;pointer-events:none"><span style="color:var(--gray)">—</span></div>';
@@ -1957,6 +1986,7 @@ async function loadGames(sport, opts){
 
       return`<div class="market-card" style="margin-bottom:14px">
         <div class="mc-header"><span style="font-size:0.9rem">${icon}</span><span class="mc-sport">${sp}</span>${isLiveMarket?'<span style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:rgba(255,61,87,0.12);border:1px solid rgba(255,61,87,0.35);color:#ff3d57;font-size:0.55rem;font-weight:900;letter-spacing:0.5px;text-transform:uppercase;padding:2px 7px;border-radius:6px"><span style="width:6px;height:6px;border-radius:50%;background:#ff3d57;animation:pbLivePulse 1.4s ease-in-out infinite"></span>Live</span>':''}</div>
+        ${splitHtml}
         <div class="mc-cols"><div></div><div class="mc-col-label">Run Line</div><div class="mc-col-label">Total</div><div class="mc-col-label">To Win</div></div>
         <div class="mc-team-row">
           <div class="mc-team">${teamAvatar(aw, sp)}<div><div class="mc-city">${awC}</div><div class="mc-name">${awN}</div></div></div>
@@ -2123,14 +2153,101 @@ function setTopTab(el,tab){
 
 // Market filter
 var activeMarketFilter = 'lines';
+var _splitsByGameId = {};
+
+function _renderSplitBar(split, awayLabel, homeLabel) {
+  if (!split) return '';
+  var awayPct = split.awayPct != null ? split.awayPct : (split.overPct != null ? split.overPct : 50);
+  var homePct = split.homePct != null ? split.homePct : (split.underPct != null ? split.underPct : 50);
+  return '<div class="split-row">' +
+    '<div class="split-label"><span>' + awayLabel + ' ' + awayPct + '%</span><span>' + homeLabel + ' ' + homePct + '%</span></div>' +
+    '<div class="split-bar"><div class="split-bar-away" style="width:' + awayPct + '%"></div><div class="split-bar-home" style="width:' + homePct + '%"></div></div>' +
+    '</div>';
+}
+
+async function _loadSplitsForSport(sport) {
+  try {
+    var res = await fetch(API + '/api/splits/' + encodeURIComponent(sport || 'mlb'), { cache: 'no-store' });
+    if (!res.ok) return;
+    var data = await res.json();
+    var map = {};
+    (data.splits || []).forEach(function(s) {
+      if (s && s.gameId) map[String(s.gameId)] = s;
+      if (s && s.canonicalGameKey) map[String(s.canonicalGameKey)] = s;
+    });
+    _splitsByGameId = map;
+  } catch (_e) { _splitsByGameId = {}; }
+}
+
+async function loadPropsMarket(sport) {
+  var el = document.getElementById('games-list');
+  if (!el) return;
+  var s = String(sport || _currentSport || 'mlb').toLowerCase();
+  el.innerHTML = '<div class="empty">Loading props...</div>';
+  try {
+    var res = await fetch(API + '/api/props/' + encodeURIComponent(s), { cache: 'no-store' });
+    var data = await res.json();
+    if (!res.ok) {
+      el.innerHTML = '<div class="empty" style="padding:40px 20px;text-align:center;color:#888">' +
+        (data.error === 'props_not_supported' ? 'Props not available for this sport yet.' : 'Props unavailable right now.') +
+        '</div>';
+      return;
+    }
+    var props = data.props || [];
+    if (!props.length) {
+      el.innerHTML = '<div class="empty" style="padding:40px 20px;text-align:center;color:#888">No player props available right now.</div>';
+      return;
+    }
+    var byGame = {};
+    props.forEach(function(p) {
+      var key = p.gameId || (p.away + ' vs ' + p.home);
+      (byGame[key] || (byGame[key] = { meta: p, rows: [] })).rows.push(p);
+    });
+    el.innerHTML = Object.keys(byGame).map(function(gKey) {
+      var grp = byGame[gKey];
+      var m = grp.meta;
+      return '<div class="props-card">' +
+        '<div class="props-game">' + (m.away || '') + ' @ ' + (m.home || '') + '</div>' +
+        grp.rows.map(function(p) {
+          var cellId = 'prop-' + gKey + '-' + String(p.playerName).replace(/\s+/g, '-') + '-' + p.side + '-' + p.line;
+          var fmt = (p.odds > 0 ? '+' : '') + p.odds;
+          var sideLabel = (p.side === 'under' ? 'U' : 'O') + ' ' + p.line + ' ' + p.propType;
+          var isSel = betSlip.some(function(b){ return b.cellId === cellId; });
+          return '<div class="props-player">' + p.playerName + (p.team ? ' · ' + p.team : '') + '</div>' +
+            '<div class="props-row">' +
+              '<div class="props-side">' + sideLabel + '</div>' +
+              '<div class="props-odds odds-cell' + (isSel ? ' selected' : '') + '" id="c-' + cellId + '" ' +
+                'data-id="' + cellId + '" data-game-id="' + (p.gameId || '') + '" ' +
+                'data-game="' + ((m.away || '') + ' vs ' + (m.home || '')).replace(/"/g, '') + '" ' +
+                'data-time="' + (p.scheduledStart || '') + '" data-market="Prop" ' +
+                'data-pick="' + String(p.pick || '').replace(/"/g, '') + '" data-odds="' + p.odds + '" ' +
+                'data-sport="' + (p.sport || s.toUpperCase()) + '">' + fmt + '</div>' +
+            '</div>';
+        }).join('') +
+        '</div>';
+    }).join('');
+    setTimeout(function() {
+      betSlip.forEach(function(b) {
+        var c = document.getElementById('c-' + b.cellId);
+        if (c) c.classList.add('selected');
+      });
+    }, 0);
+  } catch (e) {
+    el.innerHTML = '<div class="empty" style="padding:40px 20px;text-align:center;color:#888">Could not load props.</div>';
+  }
+}
+
 function setMarketFilter(el, filter) {
+  var prev = activeMarketFilter;
   activeMarketFilter = filter;
   document.querySelectorAll('.pill').forEach(function(p){ p.classList.remove('active'); });
   el.classList.add('active');
-  // Show/hide columns in game cards
   if (filter === 'props') {
-    showToast('Props unavailable from current odds provider', 'info');
+    loadPropsMarket(_currentSport || 'mlb');
     return;
+  }
+  if (prev === 'props' && filter !== 'props') {
+    loadGames(_currentSport || 'mlb');
   }
   var showSpread   = filter === 'lines' || filter === 'spread';
   var showTotals   = filter === 'lines' || filter === 'totals';
@@ -2235,21 +2352,30 @@ function _updateSportTabs() {
     var tab = document.getElementById(tabMap[sport]);
     if (!tab) return;
     var blocked = isSportBlocked(sport);
-    // Owls-supported tabs stay visible (dimmed when the slate is empty).
-    // We do not hide them just because production currently enables a
-    // subset — the tab still filters /api/odds/{key} when clicked.
     var entry    = catalogEntry(sport);
-    var hasGames = !sportsByKey || (entry && entry.games > 0);
+    var gameCount = entry ? (entry.games || 0) : (sportsByKey ? 0 : null);
+    var hasGames = gameCount === null || gameCount > 0;
     tab.style.display = '';
     tab.style.opacity = blocked ? '0.35' : (hasGames ? '' : '0.55');
-    tab.style.pointerEvents = blocked ? 'none' : '';
+    tab.style.pointerEvents = blocked ? 'none' : (gameCount === 0 ? 'none' : '');
+    tab.classList.toggle('zero-games', !blocked && gameCount === 0);
     tab.title = blocked
       ? ('Your host has disabled ' + sport.toUpperCase() + ' betting')
       : (hasGames ? '' : 'No games available right now');
+    var badge = tab.querySelector('.sport-tab-count');
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'sport-tab-count';
+      tab.appendChild(badge);
+    }
+    if (gameCount === null) {
+      badge.style.display = 'none';
+    } else {
+      badge.style.display = '';
+      badge.textContent = String(gameCount);
+    }
     if (!hasGames) _dim++; else _vis++;
   });
-  // Always log so we can debug catalog drift in production.
-  
 }
 
 // Fetch the backend's sport catalog so tab visibility can adapt to whatever
@@ -2293,7 +2419,11 @@ function setSport(el,sport){
   el.classList.add('active');
   _currentSport = sport;
   _updateTeaserTab();
-  loadGames(sport);
+  if (activeMarketFilter === 'props') {
+    loadPropsMarket(sport);
+  } else {
+    loadGames(sport);
+  }
   _pbScheduleSportsbookLiveRefresh();
 }
 // setFilter removed — replaced by setMarketFilter
@@ -2492,7 +2622,6 @@ async function _installDevSession() {
         localStorage.setItem('pb-balance-start', '1000');
         localStorage.setItem('pb-balance-start:' + _tc.pid, '1000');
         
-        try { dbgBanner('TEST SESSION: ' + _tc.name + ' @ Dev Club', '#024'); } catch(_) {}
         return;
       }
       console.warn('[devSession] token rejected:', JSON.stringify(_data));
@@ -2525,7 +2654,6 @@ async function _installDevSession() {
   localStorage.setItem('pb-balance-start:'+_devPid, '1000');
   try { localStorage.removeItem('pb-session-token'); } catch(_){}
   
-  try { dbgBanner('DEV SESSION: '+_devName+' ('+_devPid+') @ '+_devCid, '#240'); } catch(_){}
 }
 if (_pDev) { _installDevSession().catch(console.error); }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2635,8 +2763,6 @@ function _handleScopeFailure(scope, source) {
 
 // ── If session is invalid: show modal + skip game loading ─────────────────
 if (!_sessionValid) {
-  console.warn('BOOT_STAGE=session_invalid — skipping loadGames');
-  // Clear any "Loading..." spinner
   var _glEl = document.getElementById('games-list');
   if (_glEl) _glEl.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#666;font-size:0.85rem">Sign in to view games.</div>';
 } else {
@@ -2667,7 +2793,6 @@ setTimeout(function(){
   if (!gl) return;
   var txt = gl.textContent || '';
   if (txt.indexOf('Loading') !== -1) {
-    console.warn('BOOT_STAGE=stall_watchdog — games-list still loading after 5s');
     if (_sessionValid) {
       // Session is fine — odds endpoint stalled
       gl.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#888">'
@@ -2676,8 +2801,6 @@ setTimeout(function(){
         +'<button onclick="loadGames(\'mlb\')" style="padding:10px 20px;background:#00ff88;color:#000;border:none;border-radius:10px;font-weight:800;cursor:pointer">🔄 Retry</button>'
         +'</div>';
     } else {
-      // Session invalid + modal may not have rendered yet — force it
-      console.warn('BOOT_STAGE=stall_watchdog — session invalid, showing modal');
       _showSessionExpiredModal({ missing:[], reason:'startup_stall' });
     }
   }
