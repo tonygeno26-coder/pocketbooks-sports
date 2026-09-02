@@ -313,6 +313,7 @@ select.inp option:disabled{color:#444}
   </div>
 </div>
 
+<script src="team-logos.js"></script>
 <script>
 const API = 'https://pocketbooks-sports-backend-production.up.railway.app';
 let TOKEN = localStorage.getItem('pb-sports-token') || '';
@@ -417,52 +418,29 @@ async function _ensureFreshToken() {
   await _refreshAuthToken();
 }
 
-// ESPN abbrevs for NFL logos (combiner URL tolerates hotlinking better than /500/).
-var NFL_TEAM_LOGOS = {
-  'Arizona Cardinals': 'ari', 'Atlanta Falcons': 'atl', 'Baltimore Ravens': 'bal',
-  'Buffalo Bills': 'buf', 'Carolina Panthers': 'car', 'Chicago Bears': 'chi',
-  'Cincinnati Bengals': 'cin', 'Cleveland Browns': 'cle', 'Dallas Cowboys': 'dal',
-  'Denver Broncos': 'den', 'Detroit Lions': 'det', 'Green Bay Packers': 'gb',
-  'Houston Texans': 'hou', 'Indianapolis Colts': 'ind', 'Jacksonville Jaguars': 'jax',
-  'Kansas City Chiefs': 'kc', 'Las Vegas Raiders': 'lv', 'Los Angeles Chargers': 'lac',
-  'Los Angeles Rams': 'lar', 'Miami Dolphins': 'mia', 'Minnesota Vikings': 'min',
-  'New England Patriots': 'ne', 'New Orleans Saints': 'no', 'New York Giants': 'nyg',
-  'New York Jets': 'nyj', 'Philadelphia Eagles': 'phi', 'Pittsburgh Steelers': 'pit',
-  'San Francisco 49ers': 'sf', 'Seattle Seahawks': 'sea', 'Tampa Bay Buccaneers': 'tb',
-  'Tennessee Titans': 'ten', 'Washington Commanders': 'wsh'
-};
-// Pro-Football-Reference abbrevs for ssref fallback CDN (different from ESPN).
-var NFL_PFR_ABBREV = {
-  ari:'crd', atl:'atl', bal:'rav', buf:'buf', car:'car', chi:'chi',
-  cin:'cin', cle:'cle', dal:'dal', den:'den', det:'det', gb:'gnb',
-  hou:'htx', ind:'clt', jax:'jax', kc:'kan', lv:'rai', lac:'sdg',
-  lar:'ram', mia:'mia', min:'min', ne:'nwe', no:'nor', nyg:'nyg',
-  nyj:'nyj', phi:'phi', pit:'pit', sf:'sfo', sea:'sea', tb:'tam',
-  ten:'oti', wsh:'was'
-};
-// Short / alternate names → canonical full name (substring match misses many of these).
-var NFL_NAME_ALIASES = {
-  'ARI':'Arizona Cardinals','ATL':'Atlanta Falcons','BAL':'Baltimore Ravens',
-  'BUF':'Buffalo Bills','CAR':'Carolina Panthers','CHI':'Chicago Bears',
-  'CIN':'Cincinnati Bengals','CLE':'Cleveland Browns','DAL':'Dallas Cowboys',
-  'DEN':'Denver Broncos','DET':'Detroit Lions','GB':'Green Bay Packers',
-  'HOU':'Houston Texans','IND':'Indianapolis Colts','JAX':'Jacksonville Jaguars',
-  'JAC':'Jacksonville Jaguars','KC':'Kansas City Chiefs','LV':'Las Vegas Raiders',
-  'LAC':'Los Angeles Chargers','LAR':'Los Angeles Rams','MIA':'Miami Dolphins',
-  'MIN':'Minnesota Vikings','NE':'New England Patriots','NO':'New Orleans Saints',
-  'NYG':'New York Giants','NYJ':'New York Jets','PHI':'Philadelphia Eagles',
-  'PIT':'Pittsburgh Steelers','SF':'San Francisco 49ers','SEA':'Seattle Seahawks',
-  'TB':'Tampa Bay Buccaneers','TEN':'Tennessee Titans','WSH':'Washington Commanders',
-  'WAS':'Washington Commanders',
-  'LA Rams':'Los Angeles Rams','LA Chargers':'Los Angeles Chargers',
-  'NY Giants':'New York Giants','NY Jets':'New York Jets',
-  'KC Chiefs':'Kansas City Chiefs','NE Patriots':'New England Patriots',
-  'NO Saints':'New Orleans Saints','SF 49ers':'San Francisco 49ers',
-  'TB Buccaneers':'Tampa Bay Buccaneers','GB Packers':'Green Bay Packers',
-  'LV Raiders':'Las Vegas Raiders','WSH Commanders':'Washington Commanders',
-  'WAS Commanders':'Washington Commanders',
-  'Washington Football Team':'Washington Commanders'
-};
+// NFL survivor uses shared team-logos.js (sport: nfl)
+function canonicalTeam(name){
+  return (typeof resolveTeamName === 'function') ? resolveTeamName(name, 'nfl') : (name || '');
+}
+function teamLogoUrl(name){
+  return (typeof getTeamLogo === 'function') ? getTeamLogo(name, 'nfl', 80) : '';
+}
+function teamAbbrev(name){
+  if (typeof getTeamAbbrev === 'function') return getTeamAbbrev(name, 'nfl').toUpperCase();
+  var parts = String(name||'').trim().split(/\s+/);
+  return (parts[parts.length-1] || '?').slice(0,3).toUpperCase();
+}
+function logoFallback(img){
+  if (typeof handleTeamLogoError === 'function') handleTeamLogoError(img);
+}
+function teamLogoImg(team, cls){
+  var c = (typeof cls === 'string') ? cls : 'mu-logo';
+  if (typeof getTeamLogoImg === 'function') {
+    return getTeamLogoImg(team, 'nfl', 52, c);
+  }
+  var ab = teamAbbrev(team);
+  return '<div class="'+esc((c+' mu-logo-fb').trim())+'" aria-hidden="true">'+esc(ab)+'</div>';
+}
 
 let currentPoolId = null;
 let currentDetail = null;
@@ -546,76 +524,6 @@ function teamMatches(a, b){
   var nb = String(b||'').toLowerCase().replace(/[^a-z0-9]/g,'');
   if (!na || !nb) return false;
   return na === nb || na.indexOf(nb) >= 0 || nb.indexOf(na) >= 0;
-}
-function canonicalTeam(name){
-  if (!name) return '';
-  if (NFL_TEAM_LOGOS[name]) return name;
-  var alias = NFL_NAME_ALIASES[name] || NFL_NAME_ALIASES[String(name).toUpperCase()];
-  if (alias && NFL_TEAM_LOGOS[alias]) return alias;
-  var keys = Object.keys(NFL_TEAM_LOGOS);
-  for (var i=0;i<keys.length;i++){ if (teamMatches(keys[i], name)) return keys[i]; }
-  return name || '';
-}
-function teamLogoUrl(name, source){
-  var key = canonicalTeam(name);
-  var ab = NFL_TEAM_LOGOS[key];
-  if (!ab) return '';
-  if (source === 'pfr') {
-    var pfr = NFL_PFR_ABBREV[ab] || ab;
-    return 'https://cdn.ssref.net/req/202408161/tlogo/pfr/'+pfr+'.png';
-  }
-  if (source === 'espn-direct') {
-    return 'https://a.espncdn.com/i/teamlogos/nfl/500/'+ab+'.png';
-  }
-  return 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/'+ab+'.png&w=80&h=80';
-}
-function teamAbbrev(name){
-  var key = canonicalTeam(name);
-  var ab = NFL_TEAM_LOGOS[key];
-  if (ab) return ab.toUpperCase();
-  var parts = String(name||'').trim().split(/\s+/);
-  return (parts[parts.length-1] || '?').slice(0,3).toUpperCase();
-}
-function logoFallback(img){
-  if (!img) return;
-  var step = parseInt(img.getAttribute('data-logo-step')||'0', 10);
-  var espnDirect = img.getAttribute('data-espn') || '';
-  var pfr = img.getAttribute('data-pfr') || '';
-  var ab = img.getAttribute('data-ab') || '?';
-  if (step === 0 && espnDirect) {
-    img.setAttribute('data-logo-step', '1');
-    img.src = espnDirect;
-    return;
-  }
-  if (step === 1 && pfr) {
-    img.setAttribute('data-logo-step', '2');
-    img.src = pfr;
-    return;
-  }
-  if (img.id === 'pick-confirm-logo') {
-    img.style.display = 'none';
-    var fb = document.getElementById('pick-confirm-logo-fb');
-    if (fb) { fb.textContent = ab; fb.style.display = 'flex'; }
-    return;
-  }
-  var cls = ((img.className || '') + ' mu-logo-fb').trim();
-  img.outerHTML = '<div class="'+esc(cls)+'" aria-hidden="true">'+esc(ab)+'</div>';
-}
-function teamLogoImg(team, cls){
-  var c = (typeof cls === 'string') ? cls : 'mu-logo';
-  var espn = teamLogoUrl(team);
-  var espnDirect = teamLogoUrl(team, 'espn-direct');
-  var pfr = teamLogoUrl(team, 'pfr');
-  var ab = teamAbbrev(team);
-  var clsAttr = (c + ' ').trim();
-  if (!espn) {
-    return '<div class="'+esc((clsAttr+' mu-logo-fb').trim())+'" aria-hidden="true">'+esc(ab)+'</div>';
-  }
-  return '<img'+(clsAttr ? ' class="'+esc(clsAttr)+'"' : '')
-    + ' src="'+esc(espn)+'" alt="'+esc(team)+'"'
-    + ' referrerpolicy="no-referrer" data-logo-step="0"'
-    + ' data-espn="'+esc(espnDirect)+'" data-pfr="'+esc(pfr)+'" data-ab="'+esc(ab)+'"'
-    + ' onerror="logoFallback(this)">';
 }
 function shortTeam(name){
   var n = canonicalTeam(name);
@@ -1295,8 +1203,10 @@ function openPickConfirm(game, team, side){
   if (logoEl) {
     logoEl.onerror = function(){ logoFallback(logoEl); };
     logoEl.setAttribute('data-logo-step', '0');
-    logoEl.setAttribute('data-pfr', teamLogoUrl(team, 'pfr'));
-    logoEl.setAttribute('data-ab', teamAbbrev(team));
+    logoEl.setAttribute('data-team-name', team);
+    logoEl.setAttribute('data-team-sport', 'nfl');
+    logoEl.setAttribute('data-logo-direct', (typeof getTeamLogoDirect === 'function') ? getTeamLogoDirect(team, 'nfl') : '');
+    logoEl.setAttribute('data-logo-size', '80');
     logoEl.referrerPolicy = 'no-referrer';
     if (logo) {
       logoEl.src = logo;

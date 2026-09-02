@@ -861,6 +861,7 @@ function _debugClearTickets() {
   </button>
 </nav>
 
+<script src="team-logos.js"></script>
 <script>
 // ══ SESSION VALIDATION GATE ══════════════════════════════════════════════════
 // Runs on load. Blocks bet placement if no valid player/club session exists.
@@ -1559,103 +1560,14 @@ async function api(method,path,body,_retried){
   return data;
 }
 
-// TEAM LOGO MAP - ESPN CDN
-const TEAM_LOGOS = {
-  // MLB - full name and last word
-  'New York Mets':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/nym.png','Mets':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/nym.png',
-  'New York Yankees':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/nyy.png','Yankees':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/nyy.png',
-  'Boston Red Sox':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/bos.png','Red Sox':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/bos.png',
-  'Los Angeles Dodgers':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/lad.png','Dodgers':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/lad.png',
-  'Chicago Cubs':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/chc.png','Cubs':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/chc.png',
-  'St. Louis Cardinals':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/stl.png','Cardinals':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/stl.png',
-  'San Francisco Giants':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/sf.png','Giants':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/sf.png',
-  'Atlanta Braves':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/atl.png','Braves':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/atl.png',
-  'Philadelphia Phillies':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/phi.png','Phillies':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/phi.png',
-  'Houston Astros':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/hou.png','Astros':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/hou.png',
-  'Texas Rangers':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/tex.png','Rangers':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/tex.png',
-  'Los Angeles Angels':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/laa.png','Angels':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/laa.png',
-  'Oakland Athletics':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/oak.png','Athletics':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/oak.png',
-  'Seattle Mariners':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/sea.png','Mariners':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/sea.png',
-  'San Diego Padres':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/sd.png','Padres':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/sd.png',
-  'Colorado Rockies':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/col.png','Rockies':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/col.png',
-  'Arizona Diamondbacks':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/ari.png','Diamondbacks':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/ari.png',
-  'Cleveland Guardians':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/cle.png','Guardians':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/cle.png',
-  'Detroit Tigers':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/det.png','Tigers':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/det.png',
-  'Minnesota Twins':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/min.png','Twins':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/min.png',
-  'Chicago White Sox':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/chw.png','White Sox':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/chw.png',
-  'Kansas City Royals':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/kc.png','Royals':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/kc.png',
-  'Baltimore Orioles':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/bal.png','Orioles':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/bal.png',
-  'Toronto Blue Jays':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/tor.png','Blue Jays':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/tor.png',
-  'Tampa Bay Rays':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/tb.png','Rays':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/tb.png',
-  'Washington Nationals':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/wsh.png','Nationals':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/wsh.png',
-  'Miami Marlins':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/mia.png','Marlins':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/mia.png',
-  'Pittsburgh Pirates':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/pit.png','Pirates':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/pit.png',
-  'Cincinnati Reds':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/cin.png','Reds':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/cin.png',
-  'Milwaukee Brewers':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/mil.png','Brewers':'https://a.espncdn.com/i/teamlogos/mlb/500-dark/mil.png',
-  // NBA
-  'Los Angeles Lakers':'https://a.espncdn.com/i/teamlogos/nba/500-dark/lal.png','Lakers':'https://a.espncdn.com/i/teamlogos/nba/500-dark/lal.png',
-  'Boston Celtics':'https://a.espncdn.com/i/teamlogos/nba/500-dark/bos.png','Celtics':'https://a.espncdn.com/i/teamlogos/nba/500-dark/bos.png',
-  'Golden State Warriors':'https://a.espncdn.com/i/teamlogos/nba/500-dark/gs.png','Warriors':'https://a.espncdn.com/i/teamlogos/nba/500-dark/gs.png',
-  'Miami Heat':'https://a.espncdn.com/i/teamlogos/nba/500-dark/mia.png','Heat':'https://a.espncdn.com/i/teamlogos/nba/500-dark/mia.png',
-  'Milwaukee Bucks':'https://a.espncdn.com/i/teamlogos/nba/500-dark/mil.png','Bucks':'https://a.espncdn.com/i/teamlogos/nba/500-dark/mil.png',
-  'Denver Nuggets':'https://a.espncdn.com/i/teamlogos/nba/500-dark/den.png','Nuggets':'https://a.espncdn.com/i/teamlogos/nba/500-dark/den.png',
-  'Phoenix Suns':'https://a.espncdn.com/i/teamlogos/nba/500-dark/phx.png','Suns':'https://a.espncdn.com/i/teamlogos/nba/500-dark/phx.png',
-  'Los Angeles Clippers':'https://a.espncdn.com/i/teamlogos/nba/500-dark/lac.png','Clippers':'https://a.espncdn.com/i/teamlogos/nba/500-dark/lac.png',
-  'New York Knicks':'https://a.espncdn.com/i/teamlogos/nba/500-dark/ny.png','Knicks':'https://a.espncdn.com/i/teamlogos/nba/500-dark/ny.png',
-  'Chicago Bulls':'https://a.espncdn.com/i/teamlogos/nba/500-dark/chi.png','Bulls':'https://a.espncdn.com/i/teamlogos/nba/500-dark/chi.png',
-  'Philadelphia 76ers':'https://a.espncdn.com/i/teamlogos/nba/500-dark/phi.png','76ers':'https://a.espncdn.com/i/teamlogos/nba/500-dark/phi.png',
-  'Brooklyn Nets':'https://a.espncdn.com/i/teamlogos/nba/500-dark/bkn.png','Nets':'https://a.espncdn.com/i/teamlogos/nba/500-dark/bkn.png',
-  'Oklahoma City Thunder':'https://a.espncdn.com/i/teamlogos/nba/500-dark/okc.png','Thunder':'https://a.espncdn.com/i/teamlogos/nba/500-dark/okc.png',
-  'Minnesota Timberwolves':'https://a.espncdn.com/i/teamlogos/nba/500-dark/min.png','Timberwolves':'https://a.espncdn.com/i/teamlogos/nba/500-dark/min.png',
-  'Indiana Pacers':'https://a.espncdn.com/i/teamlogos/nba/500-dark/ind.png','Pacers':'https://a.espncdn.com/i/teamlogos/nba/500-dark/ind.png',
-  'Cleveland Cavaliers':'https://a.espncdn.com/i/teamlogos/nba/500-dark/cle.png','Cavaliers':'https://a.espncdn.com/i/teamlogos/nba/500-dark/cle.png',
-  'New Orleans Pelicans':'https://a.espncdn.com/i/teamlogos/nba/500-dark/no.png','Pelicans':'https://a.espncdn.com/i/teamlogos/nba/500-dark/no.png',
-  'Sacramento Kings':'https://a.espncdn.com/i/teamlogos/nba/500-dark/sac.png','Kings':'https://a.espncdn.com/i/teamlogos/nba/500-dark/sac.png',
-  'Dallas Mavericks':'https://a.espncdn.com/i/teamlogos/nba/500-dark/dal.png','Mavericks':'https://a.espncdn.com/i/teamlogos/nba/500-dark/dal.png',
-  'Memphis Grizzlies':'https://a.espncdn.com/i/teamlogos/nba/500-dark/mem.png','Grizzlies':'https://a.espncdn.com/i/teamlogos/nba/500-dark/mem.png',
-  // NHL
-  'New York Rangers':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/nyr.png',
-  'Boston Bruins':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/bos.png','Bruins':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/bos.png',
-  'Toronto Maple Leafs':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/tor.png','Leafs':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/tor.png',
-  'Montreal Canadiens':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/mtl.png','Canadiens':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/mtl.png',
-  'Pittsburgh Penguins':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/pit.png','Penguins':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/pit.png',
-  'Chicago Blackhawks':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/chi.png','Blackhawks':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/chi.png',
-  'Edmonton Oilers':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/edm.png','Oilers':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/edm.png',
-  'Calgary Flames':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/cgy.png','Flames':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/cgy.png',
-  'Vancouver Canucks':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/van.png','Canucks':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/van.png',
-  'Tampa Bay Lightning':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/tb.png','Lightning':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/tb.png',
-  'Florida Panthers':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/fla.png',
-  'Vegas Golden Knights':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/vgs.png','Golden Knights':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/vgs.png',
-  'Colorado Avalanche':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/col.png','Avalanche':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/col.png',
-  'Carolina Hurricanes':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/car.png','Hurricanes':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/car.png',
-  'New York Islanders':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/nyi.png','Islanders':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/nyi.png',
-  'Washington Capitals':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/wsh.png','Capitals':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/wsh.png',
-  'Minnesota Wild':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/min.png','Wild':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/min.png',
-  'Seattle Kraken':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/sea.png','Kraken':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/sea.png',
-  'Dallas Stars':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/dal.png','Stars':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/dal.png',
-  'St. Louis Blues':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/stl.png','Blues':'https://a.espncdn.com/i/teamlogos/nhl/500-dark/stl.png',
-};
-
-function getTeamLogo(teamName) {
-  if (!teamName) return null;
-  // Try exact match first
-  if (TEAM_LOGOS[teamName]) return TEAM_LOGOS[teamName];
-  // Try last word (e.g. "Mets" from "New York Mets")
-  var lastWord = teamName.split(' ').slice(-1)[0];
-  if (TEAM_LOGOS[lastWord]) return TEAM_LOGOS[lastWord];
-  // Try last two words (e.g. "Red Sox", "Blue Jays", "White Sox")
-  var lastTwo = teamName.split(' ').slice(-2).join(' ');
-  if (TEAM_LOGOS[lastTwo]) return TEAM_LOGOS[lastTwo];
-  return null;
-}
-
-function teamAvatar(name) {
-  const abbr = name.split(' ').slice(-1)[0].slice(0,3).toUpperCase();
-  const logo = getTeamLogo(name);
-  if (logo) {
-    return `<div class="mc-jersey"><img src="${logo}" alt="${abbr}" onerror="this.parentNode.innerHTML='${abbr}'"></div>`;
+// Team logos via shared team-logos.js
+function teamAvatar(name, sport) {
+  sport = sport || (typeof _currentSport !== 'undefined' ? _currentSport : '') || '';
+  if (typeof getTeamLogoImg === 'function') {
+    return '<div class="mc-jersey">' + getTeamLogoImg(name, sport, 52) + '</div>';
   }
-  return `<div class="mc-jersey">${abbr}</div>`;
+  var abbr = String(name || '?').split(' ').slice(-1)[0].slice(0, 3).toUpperCase();
+  return '<div class="mc-jersey">' + abbr + '</div>';
 }
 
 // LOAD GAMES
@@ -2047,14 +1959,14 @@ async function loadGames(sport, opts){
         <div class="mc-header"><span style="font-size:0.9rem">${icon}</span><span class="mc-sport">${sp}</span>${isLiveMarket?'<span style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:rgba(255,61,87,0.12);border:1px solid rgba(255,61,87,0.35);color:#ff3d57;font-size:0.55rem;font-weight:900;letter-spacing:0.5px;text-transform:uppercase;padding:2px 7px;border-radius:6px"><span style="width:6px;height:6px;border-radius:50%;background:#ff3d57;animation:pbLivePulse 1.4s ease-in-out infinite"></span>Live</span>':''}</div>
         <div class="mc-cols"><div></div><div class="mc-col-label">Run Line</div><div class="mc-col-label">Total</div><div class="mc-col-label">To Win</div></div>
         <div class="mc-team-row">
-          <div class="mc-team">${teamAvatar(aw)}<div><div class="mc-city">${awC}</div><div class="mc-name">${awN}</div></div></div>
+          <div class="mc-team">${teamAvatar(aw, sp)}<div><div class="mc-city">${awC}</div><div class="mc-name">${awN}</div></div></div>
           ${cell(g.id+'-sp-aw',awSp?(awSp.line>0?'+':'')+awSp.line:null,awSp?awSp.odds:null,'Run Line',aw+' '+(awSp?(awSp.line>0?'+':'')+awSp.line:''),aw)}
           ${cell(g.id+'-ov',ov?'O '+ov.line:null,ov?ov.odds:null,'Total',ov?'Over '+ov.line:null)}
           ${cell(g.id+'-ml-aw',null,awML?awML.odds:null,'Moneyline',aw)}
         </div>
         <div class="mc-divider"></div>
         <div class="mc-team-row">
-          <div class="mc-team">${teamAvatar(hw)}<div><div class="mc-city">${hwC}</div><div class="mc-name">${hwN}</div></div></div>
+          <div class="mc-team">${teamAvatar(hw, sp)}<div><div class="mc-city">${hwC}</div><div class="mc-name">${hwN}</div></div></div>
           ${cell(g.id+'-sp-hw',hwSp?(hwSp.line>0?'+':'')+hwSp.line:null,hwSp?hwSp.odds:null,'Run Line',hw+' '+(hwSp?(hwSp.line>0?'+':'')+hwSp.line:''),hw)}
           ${cell(g.id+'-un',un?'U '+un.line:null,un?un.odds:null,'Total',un?'Under '+un.line:null)}
           ${cell(g.id+'-ml-hw',null,hwML?hwML.odds:null,'Moneyline',hw)}
@@ -3187,12 +3099,17 @@ document.addEventListener('click', function(e) {
 }, true);
 
 
-function bsTeamLogo(pickStr, game) {
-  // extract team name from pick to find logo
+function bsTeamLogo(pickStr, game, sport) {
   if (!pickStr || !game) return null;
   var teams = game.split(' vs ');
-  var matched = teams.find(function(t){ return pickStr.toLowerCase().includes(t.split(' ').pop().toLowerCase()); });
-  return matched ? getTeamLogo(matched) : null;
+  var away = teams[0] || '';
+  var home = teams[1] || '';
+  sport = sport || (typeof _currentSport !== 'undefined' ? _currentSport : '') || '';
+  if (typeof extractTeamFromPick === 'function' && typeof getTeamLogo === 'function') {
+    var team = extractTeamFromPick(pickStr, home, away, sport);
+    return team ? getTeamLogo(team, sport) : null;
+  }
+  return null;
 }
 function bsTeamAbbr(pickStr, game) {
   if (!pickStr) return '?';
@@ -3467,10 +3384,11 @@ function bsRenderLegs() {
           var pm = b.market||'Market', pp = b.pick||'Unknown Selection', pg = b.game||'';
           var pteams = pg.split(' vs ');
           var pshort = pteams.length===2 ? pteams[0].split(' ').pop()+' vs '+pteams[1].split(' ').pop() : pg;
-          var plogo = bsTeamLogo(pp, pg); var pabbr = bsTeamAbbr(pp, pg);
-          var plogoHtml = plogo
-            ? '<div class="dkslip-leg-logo"><img src="'+plogo+'" alt="'+pabbr+'"></div>'
-            : '<div class="dkslip-leg-logo">'+pabbr+'</div>';
+          var legSport = b.sport || _currentSport || 'mlb';
+          var pteam = (typeof extractTeamFromPick === 'function') ? extractTeamFromPick(pp, pteams[1]||'', pteams[0]||'', legSport) : pp;
+          var plogoHtml = (typeof getTeamLogoImg === 'function')
+            ? '<div class="dkslip-leg-logo">' + getTeamLogoImg(pteam || pp, legSport, 36) + '</div>'
+            : '<div class="dkslip-leg-logo">' + bsTeamAbbr(pp, pg) + '</div>';
           return '<div class="dkslip-leg">' +
             plogoHtml +
             '<div style="flex:1">' +
@@ -3507,11 +3425,11 @@ function bsRenderLegs() {
         var shortGame = teams.length===2 ? teams[0].split(' ').pop()+' vs '+teams[1].split(' ').pop() : matchup;
         var timeStr = '';
         try { if(b.time){ var td=new Date(b.time); if(!isNaN(td.getTime())) timeStr=' • '+td.toLocaleString('en-US',{weekday:'short',hour:'2-digit',minute:'2-digit'}); } } catch(e){}
-        var logo = bsTeamLogo(pick, matchup);
-        var abbr = bsTeamAbbr(pick, matchup);
-        var logoHtml = logo
-          ? '<div class="dkslip-leg-logo"><img src="'+logo+'" alt="'+abbr+'"></div>'
-          : '<div class="dkslip-leg-logo">'+abbr+'</div>';
+        var legSport = b.sport || _currentSport || 'mlb';
+        var team = (typeof extractTeamFromPick === 'function') ? extractTeamFromPick(pick, teams[1]||'', teams[0]||'', legSport) : pick;
+        var logoHtml = (typeof getTeamLogoImg === 'function')
+          ? '<div class="dkslip-leg-logo">' + getTeamLogoImg(team || pick, legSport, 36) + '</div>'
+          : '<div class="dkslip-leg-logo">' + bsTeamAbbr(pick, matchup) + '</div>';
         var st = bsStakes[b.cellId] || 0;
         var payout = st > 0 ? fmtDollar(st * amToDecimal(b.odds)) : null;
         return '<div class="dkslip-card">' +
@@ -3746,11 +3664,12 @@ function openBetConfirm() {
 
   // Build DK-style light modal content
   var legsHtml = betSlip.map(function(b) {
-    var logo = (bsTeamLogo(b.pick, b.game)||'').replace('/500-dark/','/500/');
-    var abbr = bsTeamAbbr(b.pick, b.game);
-    var logoHtml = logo
-      ? '<div style="width:36px;height:36px;border-radius:8px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;padding:4px;flex-shrink:0;margin-right:10px;overflow:hidden"><img src="'+logo+'" alt="'+abbr+'" style="width:100%;height:100%;object-fit:contain"></div>'
-      : '<div style="width:36px;height:36px;border-radius:8px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:900;color:#333;flex-shrink:0;margin-right:10px">'+abbr+'</div>';
+    var legSport = b.sport || _currentSport || 'mlb';
+    var teams = (b.game||'').split(' vs ');
+    var team = (typeof extractTeamFromPick === 'function') ? extractTeamFromPick(b.pick, teams[1]||'', teams[0]||'', legSport) : b.pick;
+    var logoHtml = (typeof getTeamLogoImg === 'function')
+      ? '<div style="width:36px;height:36px;border-radius:8px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;padding:4px;flex-shrink:0;margin-right:10px;overflow:hidden">' + getTeamLogoImg(team || b.pick, legSport, 36) + '</div>'
+      : '<div style="width:36px;height:36px;border-radius:8px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:900;color:#333;flex-shrink:0;margin-right:10px">' + bsTeamAbbr(b.pick, b.game) + '</div>';
     var teams = (b.game||'').split(' vs ');
     var shortGame = teams.length===2 ? teams[0].split(' ').pop()+' vs '+teams[1].split(' ').pop() : (b.game||'');
     var stake = bsType==='straight' ? (bsStakes[b.cellId]||0) : null;

@@ -150,6 +150,7 @@
   </div>
 </div>
 
+<script src="team-logos.js"></script>
 <script>
 window.PBS_BUILD_SHA = 'local';
 (function () {
@@ -410,10 +411,12 @@ window.PBS_BUILD_SHA = 'local';
       });
       var act = hd.data.activeTickets || [];
       activeBetsCache = act.map(function (t) {
+        var sel = (t.selections && t.selections[0]) || {};
         return {
           id: t.id,
           player: t.playerUsername || t.playerName || t.playerId,
-          pick: t.pick || t.matchup || t.game || (t.type || 'Bet'),
+          pick: sel.pick || t.pick || t.matchup || t.game || (t.type || 'Bet'),
+          sport: sel.sport || t.sport || 'mlb',
           stake: t.riskAmount != null ? t.riskAmount : t.risk_amount,
           status: t.status
         };
@@ -449,10 +452,12 @@ window.PBS_BUILD_SHA = 'local';
       var pd = await api('GET', '/api/player/dashboard?clubId=' + encodeURIComponent(CLUB_ID) + '&playerId=' + encodeURIComponent(cfg.id), null, acct);
       var active = (pd.data && pd.data.tickets && pd.data.tickets.active) || [];
       active.forEach(function (t) {
+        var sel = (t.selections && t.selections[0]) || (t.legs && t.legs[0]) || {};
         merged.push({
           id: t.id,
           player: cfg.label,
-          pick: t.type || 'Bet',
+          pick: sel.pick || t.type || 'Bet',
+          sport: sel.sport || t.sport || 'mlb',
           stake: t.risk_amount,
           status: t.status,
           placed: t.placed_at
@@ -471,7 +476,11 @@ window.PBS_BUILD_SHA = 'local';
     $('active-bet-count').textContent = String(activeBetsCache.length);
     if (!activeBetsCache.length) { el.innerHTML = '<div class="muted">No active bets.</div>'; return; }
     el.innerHTML = activeBetsCache.map(function (b) {
-      return '<div class="bet-item"><div class="top"><span>' + esc(b.player) + '</span><span>' + esc(money(b.stake)) + '</span></div>' +
+      var legSport = b.sport || 'mlb';
+      var logo = (typeof getTeamLogoImg === 'function' && b.pick)
+        ? '<span style="display:inline-flex;vertical-align:middle;margin-right:6px;flex-shrink:0">' + getTeamLogoImg(b.pick, legSport, 24) + '</span>'
+        : '';
+      return '<div class="bet-item"><div class="top"><span style="display:flex;align-items:center;gap:6px;min-width:0">' + logo + '<span>' + esc(b.player) + '</span></span><span>' + esc(money(b.stake)) + '</span></div>' +
         '<div class="sub">' + esc(b.pick) + ' · ' + esc(b.status) + (b.id ? ' · ' + esc(String(b.id).slice(0, 18)) : '') + '</div></div>';
     }).join('');
   }
