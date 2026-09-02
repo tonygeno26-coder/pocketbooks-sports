@@ -1722,6 +1722,8 @@ async function _pbRefreshSportsbookOdds(opts) {
   try {
     if (_pbActiveTab === 'live') {
       if (typeof loadGames === 'function') await loadGames(_currentSport || 'mlb', { targetId:'live-games-list', liveOnly:true, silent:!!opts.silent });
+    } else if (activeMarketFilter === 'props') {
+      if (typeof loadPropsMarket === 'function') await loadPropsMarket(_currentSport || 'mlb');
     } else if (typeof loadGames === 'function') {
       await loadGames(_currentSport || 'mlb', { silent:!!opts.silent });
     }
@@ -2184,7 +2186,7 @@ async function _loadSplitsForSport(sport) {
 
 async function _updatePropsTabVisibility(sport) {
   var pill = document.getElementById('mf-props');
-  if (!pill) return;
+  if (!pill) return false;
   var s = String(sport || _currentSport || 'mlb').toLowerCase();
   var available = false;
   try {
@@ -2194,11 +2196,10 @@ async function _updatePropsTabVisibility(sport) {
   } catch (_e) {
     available = false;
   }
+  // Ignore stale async responses after the user switched sports.
+  if (String(_currentSport || 'mlb').toLowerCase() !== s) return available;
   pill.style.display = available ? '' : 'none';
-  if (!available && activeMarketFilter === 'props') {
-    var linesPill = document.getElementById('mf-lines');
-    if (linesPill) setMarketFilter(linesPill, 'lines');
-  }
+  return available;
 }
 
 async function loadPropsMarket(sport) {
@@ -2433,7 +2434,7 @@ try {
 } catch(_lr) { console.warn('[live odds refresh] init failed:', _lr && _lr.message || _lr); }
 // ════════════════════════════════════════════════════════════════════════════
 
-function setSport(el,sport){
+async function setSport(el,sport){
   // Gate: if host blocked this sport, don't switch to it
   var _sa = _checkPlayerSportAccess(sport);
   if (!_sa.allowed) {
@@ -2444,9 +2445,14 @@ function setSport(el,sport){
   el.classList.add('active');
   _currentSport = sport;
   _updateTeaserTab();
-  _updatePropsTabVisibility(sport);
+  var propsAvail = await _updatePropsTabVisibility(sport);
   if (activeMarketFilter === 'props') {
-    loadPropsMarket(sport);
+    if (propsAvail) loadPropsMarket(sport);
+    else {
+      var linesPill = document.getElementById('mf-lines');
+      if (linesPill) setMarketFilter(linesPill, 'lines');
+      else loadGames(sport);
+    }
   } else {
     loadGames(sport);
   }
@@ -2472,7 +2478,8 @@ function setBNav(el,tab){
     if(sec) sec.style.display='block';
     if(ss) ss.style.display='flex';
     if(pb) pb.style.display='flex';
-    loadGames(_currentSport || 'mlb');
+    if (activeMarketFilter === 'props') loadPropsMarket(_currentSport || 'mlb');
+    else loadGames(_currentSport || 'mlb');
     _pbScheduleSportsbookLiveRefresh();
   } else if(tab==='live'){
     const sec=document.getElementById('live-section');
