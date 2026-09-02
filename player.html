@@ -1704,6 +1704,265 @@ function _pbFlashLineMovements() {
   });
 }
 
+var _PB_GAME_ICONS = {MLB:'⚾',NBA:'🏀',WNBA:'🏀',NHL:'🏒',UFL:'🏈',NFL:'🏈',NCAAF:'🏈',NCAAB:'🏀',SOCCER:'⚽',TENNIS:'🎾',GOLF:'⛳','COLLEGE BASEBALL':'⚾',MMA:'🥊',BOXING:'🥊',NASCAR:'🏁','FORMULA 1':'🏎',F1:'🏎',CRICKET:'🏏',RUGBY:'🏉','RUGBY LEAGUE':'🏉',AFL:'🏉','TABLE TENNIS':'🏓',CS2:'🎮',VALORANT:'🎮',LOL:'🎮','DOTA 2':'🎮','ROCKET LEAGUE':'🚗'};
+
+function _pbGameCardId(g) {
+  return g && (g.id != null || g.providerGameId != null) ? String(g.id != null ? g.id : g.providerGameId) : '';
+}
+
+function _pbExtractGameMarkets(g) {
+  if (!g) return null;
+  var aw = (g.away || g.away_team) || '';
+  var hw = (g.home || g.home_team) || '';
+  if (!aw || !hw) return null;
+  return {
+    g:g, aw:aw, hw:hw, gid:_pbGameCardId(g),
+    awSp:(Array.isArray(g.spreads)?g.spreads:[]).find(function(s){ return s && s.team === aw; }),
+    hwSp:(Array.isArray(g.spreads)?g.spreads:[]).find(function(s){ return s && s.team === hw; }),
+    ov:(Array.isArray(g.totals)?g.totals:[]).find(function(t){ return t && t.name === 'Over'; }),
+    un:(Array.isArray(g.totals)?g.totals:[]).find(function(t){ return t && t.name === 'Under'; }),
+    awML:(Array.isArray(g.moneyline)?g.moneyline:[]).find(function(m){ return m && m.team === aw; }),
+    hwML:(Array.isArray(g.moneyline)?g.moneyline:[]).find(function(m){ return m && m.team === hw; })
+  };
+}
+
+function _pbUpdateOddsCellContent(cellId, top, odds, extras) {
+  extras = extras || {};
+  var cell = document.getElementById('c-' + cellId);
+  if (!cell || !cell.classList.contains('odds-cell')) return;
+  var lineEl = cell.querySelector('.odds-line');
+  if (top) {
+    if (!lineEl) {
+      lineEl = document.createElement('span');
+      lineEl.className = 'odds-line';
+      var numAnchor = cell.querySelector('.odds-num');
+      cell.insertBefore(lineEl, numAnchor || null);
+    }
+    lineEl.textContent = top;
+  } else if (lineEl) {
+    lineEl.remove();
+  }
+  if (odds != null) {
+    var numEl = cell.querySelector('.odds-num');
+    if (numEl) {
+      numEl.textContent = (odds > 0 ? '+' : '') + odds;
+      numEl.className = 'odds-num ' + (odds > 0 ? 'odds-pos' : 'odds-neg');
+    }
+    cell.setAttribute('data-odds', String(odds));
+  }
+  if (extras.pick != null) cell.setAttribute('data-pick', extras.pick);
+  if (extras.liveMarket != null) cell.setAttribute('data-live-market', extras.liveMarket ? 'true' : 'false');
+}
+
+function _pbUpdateGameCardInPlace(card, g) {
+  var d = _pbExtractGameMarkets(g);
+  if (!d || !d.gid) return;
+  window.gamesCache = window.gamesCache || {};
+  window.gamesCache[g.id] = g;
+  var isLive = _pbMarketIsLive(g);
+  var aw = d.aw, hw = d.hw, gid = d.gid;
+  function spreadPick(team, sp) {
+    if (!sp) return null;
+    return team + ' ' + ((sp.line > 0 ? '+' : '') + sp.line);
+  }
+  if (d.awSp) _pbUpdateOddsCellContent(gid + '-sp-aw', (d.awSp.line > 0 ? '+' : '') + d.awSp.line, d.awSp.odds, { pick:spreadPick(aw, d.awSp), liveMarket:isLive });
+  if (d.ov) _pbUpdateOddsCellContent(gid + '-ov', 'O ' + d.ov.line, d.ov.odds, { pick:'Over ' + d.ov.line, liveMarket:isLive });
+  if (d.awML) _pbUpdateOddsCellContent(gid + '-ml-aw', null, d.awML.odds, { pick:aw, liveMarket:isLive });
+  if (d.hwSp) _pbUpdateOddsCellContent(gid + '-sp-hw', (d.hwSp.line > 0 ? '+' : '') + d.hwSp.line, d.hwSp.odds, { pick:spreadPick(hw, d.hwSp), liveMarket:isLive });
+  if (d.un) _pbUpdateOddsCellContent(gid + '-un', 'U ' + d.un.line, d.un.odds, { pick:'Under ' + d.un.line, liveMarket:isLive });
+  if (d.hwML) _pbUpdateOddsCellContent(gid + '-ml-hw', null, d.hwML.odds, { pick:hw, liveMarket:isLive });
+}
+
+function _pbRenderGameCardHtml(g) {
+  window.gamesCache = window.gamesCache || {};
+  window.gamesCache[g.id] = g;
+  try {
+    var aw = (g && (g.away || g.away_team)) || '';
+    var hw = (g && (g.home || g.home_team)) || '';
+    if (!aw || !hw) {
+      console.warn('[card] skipping game with missing teams', g && g.id);
+      return '';
+    }
+    var awN = aw.split(' ').slice(-1)[0] || aw, hwN = hw.split(' ').slice(-1)[0] || hw;
+    var awC = aw.split(' ').slice(0, -1).join(' '), hwC = hw.split(' ').slice(0, -1).join(' ');
+    var awSp = (Array.isArray(g.spreads) ? g.spreads : []).find(function(s){ return s && s.team === aw; });
+    var hwSp = (Array.isArray(g.spreads) ? g.spreads : []).find(function(s){ return s && s.team === hw; });
+    var ov = (Array.isArray(g.totals) ? g.totals : []).find(function(t){ return t && t.name === 'Over'; });
+    var un = (Array.isArray(g.totals) ? g.totals : []).find(function(t){ return t && t.name === 'Under'; });
+    var awML = (Array.isArray(g.moneyline) ? g.moneyline : []).find(function(m){ return m && m.team === aw; });
+    var hwML = (Array.isArray(g.moneyline) ? g.moneyline : []).find(function(m){ return m && m.team === hw; });
+    var timeRaw = g.time || g.commence_time || null;
+    var time = timeRaw ? new Date(timeRaw).toLocaleString('en-US', { weekday:'short', hour:'2-digit', minute:'2-digit' }) : 'TBD';
+    var sp = (g.sport ? g.sport.toUpperCase() : null) || 'MLB';
+    var icon = _PB_GAME_ICONS[sp] || '🏅';
+    var isLiveMarket = _pbMarketIsLive(g);
+    var split = _splitsByGameId[String(g.id)] || _splitsByGameId[String(g.canonicalGameKey || '')];
+    var splitHtml = split ? _renderSplitBar(split.moneyline, awN, hwN) : '';
+    var safeGameId = String(g.id || g.providerGameId || '').replace(/"/g, '');
+
+    function cell(id, top, odds, marketType, teamPick, teamName) {
+      if (!odds) return '<div class="odds-box" style="cursor:default;pointer-events:none"><span style="color:var(--gray)">—</span></div>';
+      var c = odds > 0 ? 'odds-pos' : 'odds-neg';
+      var f = (odds > 0 ? '+' : '') + odds;
+      var safeGame = (aw + ' vs ' + hw).replace(/"/g, '').replace(/'/g, '');
+      var safeTime = g.time || '';
+      var isoStart = String(g.scheduledStart || g.time || g.commence_time || '').replace(/"/g, '');
+      var safeMkt = _normalizeSlipMarket(marketType || 'moneyline').replace(/"/g, '').replace(/'/g, '');
+      var pickLabel = teamPick || top || f;
+      if (pickLabel && /^[+-]?\d+\.?\d*$/.test(String(pickLabel).trim()) && teamName) pickLabel = teamName + ' ' + pickLabel;
+      var safePick = (pickLabel || 'Unknown Selection').replace(/"/g, '').replace(/'/g, '');
+      return '<div class="odds-box odds-cell" id="c-' + id + '"' +
+        ' data-id="' + id + '"' +
+        ' data-game-id="' + safeGameId + '"' +
+        ' data-game="' + safeGame + '"' +
+        ' data-time="' + safeTime + '"' +
+        ' data-start="' + isoStart + '"' +
+        ' data-market="' + safeMkt + '"' +
+        ' data-pick="' + safePick + '"' +
+        ' data-odds="' + odds + '"' +
+        ' data-sport="' + sp + '"' +
+        ' data-status="' + (g.status || g.state || '') + '"' +
+        ' data-live-market="' + (isLiveMarket ? 'true' : 'false') + '"' +
+        '>' + (top ? '<span class="odds-line">' + top + '</span>' : '') +
+        '<span class="odds-num ' + c + '">' + f + '</span></div>';
+    }
+
+    return '<div class="market-card" data-game-id="' + safeGameId + '" style="margin-bottom:14px">' +
+      '<div class="mc-header"><span style="font-size:0.9rem">' + icon + '</span><span class="mc-sport">' + sp + '</span>' +
+      (isLiveMarket ? '<span style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:rgba(255,61,87,0.12);border:1px solid rgba(255,61,87,0.35);color:#ff3d57;font-size:0.55rem;font-weight:900;letter-spacing:0.5px;text-transform:uppercase;padding:2px 7px;border-radius:6px"><span style="width:6px;height:6px;border-radius:50%;background:#ff3d57;animation:pbLivePulse 1.4s ease-in-out infinite"></span>Live</span>' : '') +
+      '</div>' +
+      splitHtml +
+      '<div class="mc-cols"><div></div><div class="mc-col-label">Run Line</div><div class="mc-col-label">Total</div><div class="mc-col-label">To Win</div></div>' +
+      '<div class="mc-team-row">' +
+        '<div class="mc-team">' + teamAvatar(aw, sp) + '<div><div class="mc-city">' + awC + '</div><div class="mc-name">' + awN + '</div></div></div>' +
+        cell(g.id + '-sp-aw', awSp ? (awSp.line > 0 ? '+' : '') + awSp.line : null, awSp ? awSp.odds : null, 'Run Line', aw + ' ' + (awSp ? (awSp.line > 0 ? '+' : '') + awSp.line : ''), aw) +
+        cell(g.id + '-ov', ov ? 'O ' + ov.line : null, ov ? ov.odds : null, 'Total', ov ? 'Over ' + ov.line : null) +
+        cell(g.id + '-ml-aw', null, awML ? awML.odds : null, 'Moneyline', aw) +
+      '</div>' +
+      '<div class="mc-divider"></div>' +
+      '<div class="mc-team-row">' +
+        '<div class="mc-team">' + teamAvatar(hw, sp) + '<div><div class="mc-city">' + hwC + '</div><div class="mc-name">' + hwN + '</div></div></div>' +
+        cell(g.id + '-sp-hw', hwSp ? (hwSp.line > 0 ? '+' : '') + hwSp.line : null, hwSp ? hwSp.odds : null, 'Run Line', hw + ' ' + (hwSp ? (hwSp.line > 0 ? '+' : '') + hwSp.line : ''), hw) +
+        cell(g.id + '-un', un ? 'U ' + un.line : null, un ? un.odds : null, 'Total', un ? 'Under ' + un.line : null) +
+        cell(g.id + '-ml-hw', null, hwML ? hwML.odds : null, 'Moneyline', hw) +
+      '</div>' +
+      '<div class="mc-footer"><span class="mc-time">' + time + '</span></div>' +
+      '</div>';
+  } catch (cardErr) {
+    try {
+      var _aw = (g && (g.away || g.away_team)) || 'unknown';
+      var _hw = (g && (g.home || g.home_team)) || 'unknown';
+      console.error('[card render error]', _aw + ' vs ' + _hw, cardErr && cardErr.message || cardErr, g);
+    } catch (_e2) {}
+    return '';
+  }
+}
+
+function _pbResyncBetSlipSelections() {
+  setTimeout(function() {
+    if (typeof betSlip === 'undefined' || !betSlip) return;
+    betSlip.forEach(function(b) {
+      var c = document.getElementById('c-' + b.cellId);
+      if (c) c.classList.add('selected');
+    });
+  }, 50);
+}
+
+function _pbSyncGamesListInPlace(el, games) {
+  var existing = {};
+  el.querySelectorAll('.market-card[data-game-id]').forEach(function(card) {
+    existing[card.getAttribute('data-game-id')] = card;
+  });
+  var seen = {};
+  games.forEach(function(g) {
+    var gid = _pbGameCardId(g);
+    if (!gid) return;
+    seen[gid] = true;
+    if (existing[gid]) _pbUpdateGameCardInPlace(existing[gid], g);
+    else {
+      var html = _pbRenderGameCardHtml(g);
+      if (html) {
+        var wrap = document.createElement('div');
+        wrap.innerHTML = html;
+        if (wrap.firstElementChild) el.appendChild(wrap.firstElementChild);
+      }
+    }
+  });
+  Object.keys(existing).forEach(function(gid) {
+    if (!seen[gid] && existing[gid].parentNode) existing[gid].parentNode.removeChild(existing[gid]);
+  });
+  _pbFlashLineMovements();
+  _pbApplyLiveFreshnessState();
+  _pbResyncBetSlipSelections();
+}
+
+function _pbPropCellId(p, gKey) {
+  return 'prop-' + gKey + '-' + String(p.playerName).replace(/\s+/g, '-') + '-' + p.side + '-' + p.line;
+}
+
+function _pbRenderPropsCardHtml(gKey, grp, sport) {
+  var m = grp.meta;
+  var s = String(sport || _currentSport || 'mlb').toLowerCase();
+  return '<div class="props-card" data-prop-game-key="' + String(gKey).replace(/"/g, '') + '">' +
+    '<div class="props-game">' + (m.away || '') + ' @ ' + (m.home || '') + '</div>' +
+    grp.rows.map(function(p) {
+      var cellId = _pbPropCellId(p, gKey);
+      var fmt = (p.odds > 0 ? '+' : '') + p.odds;
+      var sideLabel = (p.side === 'under' ? 'U' : 'O') + ' ' + p.line + ' ' + p.propType;
+      var isSel = typeof betSlip !== 'undefined' && betSlip.some(function(b){ return b.cellId === cellId; });
+      return '<div class="props-player">' + p.playerName + (p.team ? ' · ' + p.team : '') + '</div>' +
+        '<div class="props-row">' +
+          '<div class="props-side">' + sideLabel + '</div>' +
+          '<div class="props-odds odds-cell' + (isSel ? ' selected' : '') + '" id="c-' + cellId + '" ' +
+            'data-id="' + cellId + '" data-game-id="' + (p.gameId || '') + '" ' +
+            'data-game="' + ((m.away || '') + ' vs ' + (m.home || '')).replace(/"/g, '') + '" ' +
+            'data-time="' + (p.scheduledStart || '') + '" data-market="Prop" ' +
+            'data-pick="' + String(p.pick || '').replace(/"/g, '') + '" data-odds="' + p.odds + '" ' +
+            'data-sport="' + (p.sport || s.toUpperCase()) + '">' + fmt + '</div>' +
+        '</div>';
+    }).join('') +
+    '</div>';
+}
+
+function _pbSyncPropsListInPlace(el, props, sport) {
+  var byGame = {};
+  props.forEach(function(p) {
+    var key = p.gameId || (p.away + ' vs ' + p.home);
+    (byGame[key] || (byGame[key] = { meta:p, rows:[] })).rows.push(p);
+  });
+  var existing = {};
+  el.querySelectorAll('.props-card[data-prop-game-key]').forEach(function(card) {
+    existing[card.getAttribute('data-prop-game-key')] = card;
+  });
+  var seen = {};
+  Object.keys(byGame).forEach(function(gKey) {
+    seen[gKey] = true;
+    var grp = byGame[gKey];
+    if (existing[gKey]) {
+      grp.rows.forEach(function(p) {
+        var cellId = _pbPropCellId(p, gKey);
+        var cell = document.getElementById('c-' + cellId);
+        if (cell) {
+          cell.textContent = (p.odds > 0 ? '+' : '') + p.odds;
+          cell.setAttribute('data-odds', String(p.odds));
+        }
+      });
+    } else {
+      var html = _pbRenderPropsCardHtml(gKey, grp, sport);
+      if (html) {
+        var wrap = document.createElement('div');
+        wrap.innerHTML = html;
+        if (wrap.firstElementChild) el.appendChild(wrap.firstElementChild);
+      }
+    }
+  });
+  Object.keys(existing).forEach(function(gKey) {
+    if (!seen[gKey] && existing[gKey].parentNode) existing[gKey].parentNode.removeChild(existing[gKey]);
+  });
+  _pbFlashLineMovements();
+  _pbResyncBetSlipSelections();
+}
+
 function _pbScheduleSportsbookLiveRefresh() {
   if (_pbSportsbookRefreshTimer) clearInterval(_pbSportsbookRefreshTimer);
   var delay = document.hidden ? 30000 : 5000;
@@ -1723,7 +1982,7 @@ async function _pbRefreshSportsbookOdds(opts) {
     if (_pbActiveTab === 'live') {
       if (typeof loadGames === 'function') await loadGames(_currentSport || 'mlb', { targetId:'live-games-list', liveOnly:true, silent:!!opts.silent });
     } else if (activeMarketFilter === 'props') {
-      if (typeof loadPropsMarket === 'function') await loadPropsMarket(_currentSport || 'mlb');
+      if (typeof loadPropsMarket === 'function') await loadPropsMarket(_currentSport || 'mlb', { silent:!!opts.silent });
     } else if (typeof loadGames === 'function') {
       await loadGames(_currentSport || 'mlb', { silent:!!opts.silent });
     }
@@ -1906,6 +2165,10 @@ async function loadGames(sport, opts){
     } catch (_dbg) {}
     
     if(!games.length){
+      if (opts.silent && el.querySelector('.market-card[data-game-id]')) {
+        el.querySelectorAll('.market-card[data-game-id]').forEach(function(c){ if (c.parentNode) c.parentNode.removeChild(c); });
+        return;
+      }
       if (_liveOnly) {
         el.innerHTML='<div class="empty" style="padding:60px 20px;text-align:center;color:#888">No live games right now.</div>';
       } else {
@@ -1931,108 +2194,15 @@ async function loadGames(sport, opts){
       const cnt = document.getElementById('live-count');
       if (cnt) cnt.textContent = games.length + (games.length===1?' game':' games');
     }
-    const icons={MLB:'⚾',NBA:'🏀',WNBA:'🏀',NHL:'🏒',UFL:'🏈',NFL:'🏈',NCAAF:'🏈',NCAAB:'🏀',SOCCER:'⚽',TENNIS:'🎾',GOLF:'⛳','COLLEGE BASEBALL':'⚾',MMA:'🥊',BOXING:'🥊',NASCAR:'🏁','FORMULA 1':'🏎',F1:'🏎',CRICKET:'🏏',RUGBY:'🏉','RUGBY LEAGUE':'🏉',AFL:'🏉','TABLE TENNIS':'🏓',CS2:'🎮',VALORANT:'🎮',LOL:'🎮','DOTA 2':'🎮','ROCKET LEAGUE':'🚗'};
-    window.gamesCache = window.gamesCache || {};
-    el.innerHTML=games.map(g=>{
-      window.gamesCache[g.id]=g;
-      try {
-      // Defensive: tolerate legacy raw odds-payload shape if normalization is
-      // bypassed (e.g. proxy fallback during shape drift). Prefer flat
-      // fields, fall back to v4 names. Skip the card entirely if neither
-      // team name is resolvable — better an empty slot than red error.
-      const aw=(g && (g.away || g.away_team)) || '';
-      const hw=(g && (g.home || g.home_team)) || '';
-      if (!aw || !hw) {
-        console.warn('[card] skipping game with missing teams', g && g.id);
-        return '';
-      }
-      const awN=aw.split(' ').slice(-1)[0]||aw,hwN=hw.split(' ').slice(-1)[0]||hw;
-      const awC=aw.split(' ').slice(0,-1).join(' '),hwC=hw.split(' ').slice(0,-1).join(' ');
-      const awSp=(Array.isArray(g.spreads)?g.spreads:[]).find(s=>s&&s.team===aw),hwSp=(Array.isArray(g.spreads)?g.spreads:[]).find(s=>s&&s.team===hw);
-      const ov=(Array.isArray(g.totals)?g.totals:[]).find(t=>t&&t.name==='Over'),un=(Array.isArray(g.totals)?g.totals:[]).find(t=>t&&t.name==='Under');
-      const awML=(Array.isArray(g.moneyline)?g.moneyline:[]).find(m=>m&&m.team===aw),hwML=(Array.isArray(g.moneyline)?g.moneyline:[]).find(m=>m&&m.team===hw);
-      const timeRaw=g.time||g.commence_time||null;
-      const time=timeRaw?new Date(timeRaw).toLocaleString('en-US',{weekday:'short',hour:'2-digit',minute:'2-digit'}):'TBD';
-      const sp=(g.sport?g.sport.toUpperCase():null)||'MLB';
-      const icon=icons[sp]||'🏅';
-      const isLiveMarket = _pbMarketIsLive(g);
-      const split = _splitsByGameId[String(g.id)] || _splitsByGameId[String(g.canonicalGameKey || '')];
-      const splitHtml = split ? _renderSplitBar(split.moneyline, awN, hwN) : '';
-
-      function cell(id,top,odds,marketType,teamPick,teamName){
-        if(!odds)return'<div class="odds-box" style="cursor:default;pointer-events:none"><span style="color:var(--gray)">—</span></div>';
-        const c=odds>0?'odds-pos':'odds-neg';
-        const f=(odds>0?'+':'')+odds;
-        const safeGame=(aw+' vs '+hw).replace(/"/g,'').replace(/'/g,'');
-        const safeTime=g.time||'';
-        const isoStart=String(g.scheduledStart||g.time||g.commence_time||'').replace(/"/g,'');
-        const safeMkt=_normalizeSlipMarket(marketType||'moneyline').replace(/"/g,'').replace(/'/g,'');
-        const safeGameId=String(g.id||g.providerGameId||'').replace(/"/g,'');
-        // Build clean pick label: always include full team name
-        var pickLabel = teamPick || top || f;
-        // Never allow bare line like "-1.5" without team
-        if(pickLabel && /^[+-]?\d+\.?\d*$/.test(pickLabel.trim()) && teamName) pickLabel = teamName+' '+pickLabel;
-        const safePick=(pickLabel||'Unknown Selection').replace(/"/g,'').replace(/'/g,'');
-        return`<div class="odds-box odds-cell" id="c-${id}"
-          data-id="${id}"
-          data-game-id="${safeGameId}"
-          data-game="${safeGame}"
-          data-time="${safeTime}"
-          data-start="${isoStart}"
-          data-market="${safeMkt}"
-          data-pick="${safePick}"
-          data-odds="${odds}"
-          data-sport="${sp}"
-          data-status="${(g.status||g.state||'')}"
-          data-live-market="${isLiveMarket ? 'true' : 'false'}"
-          >${top?`<span class="odds-line">${top}</span>`:''}
-          <span class="odds-num ${c}">${f}</span></div>`;
-      }
-
-      return`<div class="market-card" style="margin-bottom:14px">
-        <div class="mc-header"><span style="font-size:0.9rem">${icon}</span><span class="mc-sport">${sp}</span>${isLiveMarket?'<span style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:rgba(255,61,87,0.12);border:1px solid rgba(255,61,87,0.35);color:#ff3d57;font-size:0.55rem;font-weight:900;letter-spacing:0.5px;text-transform:uppercase;padding:2px 7px;border-radius:6px"><span style="width:6px;height:6px;border-radius:50%;background:#ff3d57;animation:pbLivePulse 1.4s ease-in-out infinite"></span>Live</span>':''}</div>
-        ${splitHtml}
-        <div class="mc-cols"><div></div><div class="mc-col-label">Run Line</div><div class="mc-col-label">Total</div><div class="mc-col-label">To Win</div></div>
-        <div class="mc-team-row">
-          <div class="mc-team">${teamAvatar(aw, sp)}<div><div class="mc-city">${awC}</div><div class="mc-name">${awN}</div></div></div>
-          ${cell(g.id+'-sp-aw',awSp?(awSp.line>0?'+':'')+awSp.line:null,awSp?awSp.odds:null,'Run Line',aw+' '+(awSp?(awSp.line>0?'+':'')+awSp.line:''),aw)}
-          ${cell(g.id+'-ov',ov?'O '+ov.line:null,ov?ov.odds:null,'Total',ov?'Over '+ov.line:null)}
-          ${cell(g.id+'-ml-aw',null,awML?awML.odds:null,'Moneyline',aw)}
-        </div>
-        <div class="mc-divider"></div>
-        <div class="mc-team-row">
-          <div class="mc-team">${teamAvatar(hw, sp)}<div><div class="mc-city">${hwC}</div><div class="mc-name">${hwN}</div></div></div>
-          ${cell(g.id+'-sp-hw',hwSp?(hwSp.line>0?'+':'')+hwSp.line:null,hwSp?hwSp.odds:null,'Run Line',hw+' '+(hwSp?(hwSp.line>0?'+':'')+hwSp.line:''),hw)}
-          ${cell(g.id+'-un',un?'U '+un.line:null,un?un.odds:null,'Total',un?'Under '+un.line:null)}
-          ${cell(g.id+'-ml-hw',null,hwML?hwML.odds:null,'Moneyline',hw)}
-        </div>
-        <div class="mc-footer"><span class="mc-time">${time}</span></div>
-      </div>`;
-      } catch(cardErr) {
-        // Never paint a red error card with "undefined vs undefined". Log
-        // for debug; skip the broken game silently so the rest of the slate
-        // still renders.
-        try {
-          const _aw = (g && (g.away || g.away_team)) || 'unknown';
-          const _hw = (g && (g.home || g.home_team)) || 'unknown';
-          console.error('[card render error]', _aw + ' vs ' + _hw, cardErr && cardErr.message || cardErr, g);
-        } catch(_e2){}
-        return '';
-      }
-    }).filter(function(s){ return s; }).join('');
+    if (opts.silent && el.querySelector('.market-card[data-game-id]')) {
+      _pbSyncGamesListInPlace(el, games);
+      return;
+    }
+    el.innerHTML=games.map(_pbRenderGameCardHtml).filter(function(s){ return s; }).join('');
     
     _pbFlashLineMovements();
     _pbApplyLiveFreshnessState();
-    // Re-sync highlights after DOM update
-    setTimeout(function(){
-      betSlip.forEach(function(b){
-        var c=document.getElementById('c-'+b.cellId);
-        if(c){
-          c.classList.add('selected');
-          
-        }
-      });
-    },50);
+    _pbResyncBetSlipSelections();
   }catch(e){console.error('[sportsbook fetch failed]',e.message);el.innerHTML='<div class="empty" style="color:#ff4444">'+e.message+'</div>';}
 }
 
@@ -2202,15 +2372,17 @@ async function _updatePropsTabVisibility(sport) {
   return available;
 }
 
-async function loadPropsMarket(sport) {
+async function loadPropsMarket(sport, opts) {
+  opts = opts || {};
   var el = document.getElementById('games-list');
   if (!el) return;
   var s = String(sport || _currentSport || 'mlb').toLowerCase();
-  el.innerHTML = '<div class="empty">Loading props...</div>';
+  if (!opts.silent) el.innerHTML = '<div class="empty">Loading props...</div>';
   try {
     var res = await fetch(API + '/api/props/' + encodeURIComponent(s), { cache: 'no-store' });
     var data = await res.json();
     if (!res.ok) {
+      if (opts.silent) return;
       el.innerHTML = '<div class="empty" style="padding:40px 20px;text-align:center;color:#888">' +
         (data.error === 'props_not_supported' ? 'Props not available for this sport yet.' : 'Props unavailable right now.') +
         '</div>';
@@ -2218,7 +2390,15 @@ async function loadPropsMarket(sport) {
     }
     var props = data.props || [];
     if (!props.length) {
+      if (opts.silent && el.querySelector('.props-card[data-prop-game-key]')) {
+        el.querySelectorAll('.props-card[data-prop-game-key]').forEach(function(c){ if (c.parentNode) c.parentNode.removeChild(c); });
+        return;
+      }
       el.innerHTML = '<div class="empty" style="padding:40px 20px;text-align:center;color:#888">No player props available right now.</div>';
+      return;
+    }
+    if (opts.silent && el.querySelector('.props-card[data-prop-game-key]')) {
+      _pbSyncPropsListInPlace(el, props, s);
       return;
     }
     var byGame = {};
@@ -2227,36 +2407,11 @@ async function loadPropsMarket(sport) {
       (byGame[key] || (byGame[key] = { meta: p, rows: [] })).rows.push(p);
     });
     el.innerHTML = Object.keys(byGame).map(function(gKey) {
-      var grp = byGame[gKey];
-      var m = grp.meta;
-      return '<div class="props-card">' +
-        '<div class="props-game">' + (m.away || '') + ' @ ' + (m.home || '') + '</div>' +
-        grp.rows.map(function(p) {
-          var cellId = 'prop-' + gKey + '-' + String(p.playerName).replace(/\s+/g, '-') + '-' + p.side + '-' + p.line;
-          var fmt = (p.odds > 0 ? '+' : '') + p.odds;
-          var sideLabel = (p.side === 'under' ? 'U' : 'O') + ' ' + p.line + ' ' + p.propType;
-          var isSel = betSlip.some(function(b){ return b.cellId === cellId; });
-          return '<div class="props-player">' + p.playerName + (p.team ? ' · ' + p.team : '') + '</div>' +
-            '<div class="props-row">' +
-              '<div class="props-side">' + sideLabel + '</div>' +
-              '<div class="props-odds odds-cell' + (isSel ? ' selected' : '') + '" id="c-' + cellId + '" ' +
-                'data-id="' + cellId + '" data-game-id="' + (p.gameId || '') + '" ' +
-                'data-game="' + ((m.away || '') + ' vs ' + (m.home || '')).replace(/"/g, '') + '" ' +
-                'data-time="' + (p.scheduledStart || '') + '" data-market="Prop" ' +
-                'data-pick="' + String(p.pick || '').replace(/"/g, '') + '" data-odds="' + p.odds + '" ' +
-                'data-sport="' + (p.sport || s.toUpperCase()) + '">' + fmt + '</div>' +
-            '</div>';
-        }).join('') +
-        '</div>';
+      return _pbRenderPropsCardHtml(gKey, byGame[gKey], s);
     }).join('');
-    setTimeout(function() {
-      betSlip.forEach(function(b) {
-        var c = document.getElementById('c-' + b.cellId);
-        if (c) c.classList.add('selected');
-      });
-    }, 0);
+    _pbResyncBetSlipSelections();
   } catch (e) {
-    el.innerHTML = '<div class="empty" style="padding:40px 20px;text-align:center;color:#888">Could not load props.</div>';
+    if (!opts.silent) el.innerHTML = '<div class="empty" style="padding:40px 20px;text-align:center;color:#888">Could not load props.</div>';
   }
 }
 
