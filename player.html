@@ -43,9 +43,36 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 /* BETTING SPLITS */
 .split-row{padding:0 16px 10px}
 .split-label{display:flex;justify-content:space-between;font-size:0.58rem;color:#666;margin-bottom:4px;font-weight:700}
+.split-action{font-size:0.62rem;color:#888;font-weight:700;margin-bottom:5px;text-align:center}
 .split-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:#2a2a2a}
 .split-bar-away{background:var(--cyan);height:100%}
 .split-bar-home{background:var(--green);height:100%}
+
+/* SHARP VALUE / EV BETS */
+.value-bets-section{margin:0 16px 14px;background:linear-gradient(180deg,#1a2418,#141a14);border:1px solid rgba(0,255,136,0.22);border-radius:14px;overflow:hidden}
+.value-bets-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid rgba(0,255,136,0.12)}
+.value-bets-title{font-size:0.72rem;font-weight:900;color:var(--green);text-transform:uppercase;letter-spacing:0.6px}
+.value-bets-count{font-size:0.58rem;color:#666;font-weight:700}
+.value-bets-list{padding:6px 0}
+.value-bet-row{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid rgba(255,255,255,0.04)}
+.value-bet-row:last-child{border-bottom:none}
+.value-bet-ev{min-width:42px;text-align:center;font-size:0.72rem;font-weight:900;color:#00ff88;background:rgba(0,255,136,0.12);border:1px solid rgba(0,255,136,0.25);border-radius:8px;padding:4px 6px}
+.value-bet-info{flex:1;min-width:0}
+.value-bet-pick{font-size:0.78rem;font-weight:800;color:#eee;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.value-bet-meta{font-size:0.58rem;color:#666;margin-top:2px}
+.value-bet-odds{font-size:0.78rem;font-weight:900;color:#ccc}
+
+/* LIVE SCOREBOARD ON CARDS */
+.mc-live-score{display:flex;align-items:center;justify-content:center;gap:10px;padding:6px 16px 4px;font-size:0.72rem;font-weight:800;color:#ddd}
+.mc-live-score .mc-live-state{font-size:0.58rem;color:#ff3d57;font-weight:900;text-transform:uppercase;letter-spacing:0.4px}
+.sport-tab-live{display:inline-flex;align-items:center;gap:4px;margin-left:4px;font-size:0.5rem;font-weight:900;color:#ff3d57;background:rgba(255,61,87,0.15);border:1px solid rgba(255,61,87,0.35);border-radius:6px;padding:1px 5px;letter-spacing:0.4px;text-transform:uppercase;vertical-align:middle}
+.sport-tab-live-dot{width:5px;height:5px;border-radius:50%;background:#ff3d57;animation:pbLivePulse 1.4s ease-in-out infinite}
+
+/* PARLAY BUILDER UX */
+.dkslip-leg-removing{animation:pbLegRemove 0.28s ease forwards}
+@keyframes pbLegRemove{0%{opacity:1;transform:translateX(0);max-height:120px}100%{opacity:0;transform:translateX(24px);max-height:0;padding:0;margin:0}}
+.dkslip-share-btn{background:transparent;border:1px solid #ddd;border-radius:8px;color:#555;font-size:0.62rem;font-weight:800;padding:4px 8px;cursor:pointer;margin-right:6px}
+.dkslip-leg-limit{font-size:0.62rem;color:#888;font-weight:700;padding:4px 14px 8px}
 
 /* INLINE GAME PROPS */
 .market-card.props-expanded{border-color:var(--green);box-shadow:0 0 0 1px rgba(0,255,135,0.35),0 4px 20px rgba(0,255,135,0.12)}
@@ -818,6 +845,9 @@ function _debugClearTickets() {
 
 
 
+
+<!-- SHARP VALUE / BEST BETS -->
+<div id="value-bets-section" style="display:none"></div>
 
 <!-- GAMES -->
 <div style="height:20px"></div>
@@ -1682,9 +1712,42 @@ function _pbApplyLiveFreshnessState() {
 
 function _pbMarketIsLive(g) {
   if (!g) return false;
-  if (g.live === true || g.in_play === true || g.eventLive === true || g._mockLive === true) return true;
+  if (g.isLive === true || g.live === true || g.in_play === true || g.eventLive === true || g._mockLive === true) return true;
   var s = String(g.status || g.state || g.gameStatus || '').toLowerCase();
   return s === 'live' || s === 'in_play' || s === 'inprogress' || s === 'in_progress';
+}
+
+function _pbCompareGamesLiveFirst(a, b) {
+  var aLive = _pbMarketIsLive(a) ? 0 : 1;
+  var bLive = _pbMarketIsLive(b) ? 0 : 1;
+  if (aLive !== bLive) return aLive - bLive;
+  var at = Date.parse(a && (a.time || a.scheduledStart || a.commence_time) || '') || Infinity;
+  var bt = Date.parse(b && (b.time || b.scheduledStart || b.commence_time) || '') || Infinity;
+  return at - bt;
+}
+
+function _pbTeamNameMatch(a, b) {
+  var na = String(a || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  var nb = String(b || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!na || !nb) return false;
+  return na === nb || na.indexOf(nb) >= 0 || nb.indexOf(na) >= 0;
+}
+
+function _pbUpdateSportTabLiveBadge(sport, liveCount) {
+  var key = String(sport || 'mlb').toLowerCase();
+  var tab = document.getElementById('st-' + key.replace(/_/g, '-')) || document.getElementById('st-' + key);
+  if (!tab) return;
+  var badge = tab.querySelector('.sport-tab-live');
+  if (!liveCount) {
+    if (badge) badge.remove();
+    return;
+  }
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = 'sport-tab-live';
+    tab.appendChild(badge);
+  }
+  badge.innerHTML = '<span class="sport-tab-live-dot"></span>LIVE';
 }
 
 async function _pbFetchMarketStatus() {
@@ -1941,8 +2004,19 @@ function _pbRenderGameCardHtml(g) {
     var sp = (g.sport ? g.sport.toUpperCase() : null) || 'MLB';
     var icon = _PB_GAME_ICONS[sp] || '🏅';
     var isLiveMarket = _pbMarketIsLive(g);
-    var split = _splitsByGameId[String(g.id)] || _splitsByGameId[String(g.canonicalGameKey || '')];
-    var splitHtml = split ? _renderSplitBar(split.moneyline, awN, hwN) : '';
+    var split = _findSplitForGame(g);
+    var splitHtml = split ? _renderSplitBar(split, awN, hwN) : '';
+    var liveScoreHtml = '';
+    if (isLiveMarket && (g.homeScore != null || g.awayScore != null || g.gameStateText)) {
+      var awSc = g.awayScore != null ? g.awayScore : '—';
+      var hwSc = g.homeScore != null ? g.homeScore : '—';
+      var stateTxt = g.gameStateText || g.period || g.clock || g.inning || '';
+      liveScoreHtml = '<div class="mc-live-score">' +
+        '<span>' + awN + ' <span style="color:#fff;font-size:0.9rem">' + awSc + '</span></span>' +
+        (stateTxt ? '<span class="mc-live-state">' + stateTxt + '</span>' : '<span style="color:#555">—</span>') +
+        '<span><span style="color:#fff;font-size:0.9rem">' + hwSc + '</span> ' + hwN + '</span>' +
+        '</div>';
+    }
     var safeGameId = String(g.id || g.providerGameId || '').replace(/"/g, '');
     var sportRoute = _ODDS_ROUTE_KEY[sp.toLowerCase()] || sp.toLowerCase();
     var showPropsBtn = _pbSportSupportsProps(sportRoute);
@@ -1980,6 +2054,7 @@ function _pbRenderGameCardHtml(g) {
       '<div class="mc-header"><span style="font-size:0.9rem">' + icon + '</span><span class="mc-sport">' + sp + '</span>' +
       (isLiveMarket ? '<span style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:rgba(255,61,87,0.12);border:1px solid rgba(255,61,87,0.35);color:#ff3d57;font-size:0.55rem;font-weight:900;letter-spacing:0.5px;text-transform:uppercase;padding:2px 7px;border-radius:6px"><span style="width:6px;height:6px;border-radius:50%;background:#ff3d57;animation:pbLivePulse 1.4s ease-in-out infinite"></span>Live</span>' : '') +
       '</div>' +
+      liveScoreHtml +
       splitHtml +
       '<div class="mc-cols"><div></div><div class="mc-col-label">Run Line</div><div class="mc-col-label">Total</div><div class="mc-col-label">To Win</div></div>' +
       '<div class="mc-team-row">' +
@@ -2345,6 +2420,8 @@ async function loadGames(sport, opts){
     var _rawSport = sport || 'mlb';
     var _sportLc  = String(_rawSport).toLowerCase();
     await _loadSplitsForSport(_sportLc);
+    _startSplitsLobbyRefresh(_sportLc);
+    if (!_liveOnly) _loadValueBetsForSport(_sportLc);
     var _isMlb    = (_sportLc === 'mlb' || _sportLc === 'baseball_mlb');
     var _routeKeys = _resolveOddsRouteKeys(_sportLc);
     var _sport = _routeKeys[0] || 'mlb';
@@ -2455,10 +2532,7 @@ async function loadGames(sport, opts){
     // mark the first 2 games as mock-live so the placeholder is testable.
     if (_liveOnly) {
       const _isLive = function(g){
-        if (!g) return false;
-        if (g.live === true || g.in_play === true || g._mockLive === true) return true;
-        const s = (g.status || g.state || '').toString().toLowerCase();
-        return s === 'live' || s === 'in_play' || s === 'inprogress' || s === 'in_progress';
+        return _pbMarketIsLive(g);
       };
       let liveGames = games.filter(_isLive);
       if (!liveGames.length) {
@@ -2467,6 +2541,10 @@ async function loadGames(sport, opts){
       games = liveGames;
       const cnt = document.getElementById('live-count');
       if (cnt) cnt.textContent = games.length + (games.length===1?' game':' games');
+    } else {
+      games = games.slice().sort(_pbCompareGamesLiveFirst);
+      var liveN = games.filter(_pbMarketIsLive).length;
+      _pbUpdateSportTabLiveBadge(_sportLc, liveN);
     }
     if (opts.silent && el.querySelector('.market-card[data-game-id]')) {
       _pbSyncGamesListInPlace(el, games);
@@ -2606,15 +2684,65 @@ function setTopTab(el,tab){
 var activeMarketFilter = 'lines';
 var _pbLastLoadedGames = [];
 var _splitsByGameId = {};
+var _splitsByTeamKey = {};
+var _splitsRefreshTimer = null;
+var _valueBetsCache = [];
+var _MAX_PARLAY_LEGS = 8;
+
+function _splitTeamKey(away, home) {
+  return String(away || '').toLowerCase().trim() + '|' + String(home || '').toLowerCase().trim();
+}
+
+function _findSplitForGame(g) {
+  if (!g) return null;
+  var byId = _splitsByGameId[String(g.id)] || _splitsByGameId[String(g.canonicalGameKey || '')];
+  if (byId) return byId.moneyline || byId;
+  var aw = g.away || g.away_team || '';
+  var hw = g.home || g.home_team || '';
+  var key = _splitTeamKey(aw, hw);
+  if (_splitsByTeamKey[key]) return _splitsByTeamKey[key].moneyline || _splitsByTeamKey[key];
+  var match = null;
+  Object.keys(_splitsByTeamKey).some(function(k) {
+    var s = _splitsByTeamKey[k];
+    if (!s) return false;
+    if (_pbTeamNameMatch(s.away, aw) && _pbTeamNameMatch(s.home, hw)) { match = s.moneyline || s; return true; }
+    return false;
+  });
+  return match;
+}
 
 function _renderSplitBar(split, awayLabel, homeLabel) {
   if (!split) return '';
   var awayPct = split.awayPct != null ? split.awayPct : (split.overPct != null ? split.overPct : 50);
   var homePct = split.homePct != null ? split.homePct : (split.underPct != null ? split.underPct : 50);
+  var leader = awayPct >= homePct ? awayLabel : homeLabel;
+  var leaderPct = Math.max(awayPct, homePct);
   return '<div class="split-row">' +
+    '<div class="split-action">' + leaderPct + '% of bets on ' + leader + '</div>' +
     '<div class="split-label"><span>' + awayLabel + ' ' + awayPct + '%</span><span>' + homeLabel + ' ' + homePct + '%</span></div>' +
     '<div class="split-bar"><div class="split-bar-away" style="width:' + awayPct + '%"></div><div class="split-bar-home" style="width:' + homePct + '%"></div></div>' +
     '</div>';
+}
+
+function _refreshSplitBarsOnCards() {
+  document.querySelectorAll('.market-card[data-game-id]').forEach(function(card) {
+    var gid = card.getAttribute('data-game-id');
+    var g = (window.gamesCache || {})[gid];
+    if (!g) return;
+    var split = _findSplitForGame(g);
+    var old = card.querySelector('.split-row');
+    if (!split) { if (old) old.remove(); return; }
+    var aw = g.away || g.away_team || '';
+    var hw = g.home || g.home_team || '';
+    var awN = aw.split(' ').pop() || aw;
+    var hwN = hw.split(' ').pop() || hw;
+    var html = _renderSplitBar(split, awN, hwN);
+    if (old) old.outerHTML = html;
+    else {
+      var hdr = card.querySelector('.mc-header');
+      if (hdr && hdr.nextSibling) hdr.insertAdjacentHTML('afterend', html);
+    }
+  });
 }
 
 async function _loadSplitsForSport(sport) {
@@ -2623,12 +2751,50 @@ async function _loadSplitsForSport(sport) {
     if (!res.ok) return;
     var data = await res.json();
     var map = {};
+    var teamMap = {};
     (data.splits || []).forEach(function(s) {
-      if (s && s.gameId) map[String(s.gameId)] = s;
-      if (s && s.canonicalGameKey) map[String(s.canonicalGameKey)] = s;
+      if (!s) return;
+      if (s.gameId) map[String(s.gameId)] = s;
+      if (s.canonicalGameKey) map[String(s.canonicalGameKey)] = s;
+      if (s.away && s.home) teamMap[_splitTeamKey(s.away, s.home)] = s;
     });
     _splitsByGameId = map;
-  } catch (_e) { _splitsByGameId = {}; }
+    _splitsByTeamKey = teamMap;
+    _refreshSplitBarsOnCards();
+  } catch (_e) { _splitsByGameId = {}; _splitsByTeamKey = {}; }
+}
+
+function _startSplitsLobbyRefresh(sport) {
+  if (_splitsRefreshTimer) clearInterval(_splitsRefreshTimer);
+  _splitsRefreshTimer = setInterval(function() {
+    if (_pbActiveTab !== 'sportsbook' && _pbActiveTab !== 'sports' && _pbActiveTab !== 'live') return;
+    _loadSplitsForSport(sport || _currentSport || 'mlb');
+  }, 5000);
+}
+
+async function _loadValueBetsForSport(sport) {
+  var sec = document.getElementById('value-bets-section');
+  if (!sec) return;
+  try {
+    var res = await fetch(API + '/api/value-bets/' + encodeURIComponent(sport || 'mlb'), { cache: 'no-store' });
+    if (!res.ok) { sec.style.display = 'none'; return; }
+    var data = await res.json();
+    var bets = (data.bets || data.valueBets || []).slice(0, 6);
+    _valueBetsCache = bets;
+    if (!bets.length) { sec.style.display = 'none'; return; }
+    sec.style.display = '';
+    sec.innerHTML = '<div class="value-bets-section">' +
+      '<div class="value-bets-hdr"><span class="value-bets-title">Sharp Value</span><span class="value-bets-count">' + bets.length + ' best bet' + (bets.length !== 1 ? 's' : '') + '</span></div>' +
+      '<div class="value-bets-list">' + bets.map(function(b) {
+        var ev = b.evPct != null ? ('+' + Number(b.evPct).toFixed(1) + '% EV') : (b.ev != null ? ('+' + Number(b.ev).toFixed(1) + '% EV') : 'EV+');
+        var odds = b.bookPrice != null ? ((b.bookPrice > 0 ? '+' : '') + b.bookPrice) : (b.odds != null ? ((b.odds > 0 ? '+' : '') + b.odds) : '');
+        var pick = b.team || b.pick || b.side || 'Pick';
+        var meta = (b.away && b.home) ? (b.away + ' @ ' + b.home) : (b.matchup || b.book || '');
+        return '<div class="value-bet-row"><span class="value-bet-ev">' + ev + '</span>' +
+          '<div class="value-bet-info"><div class="value-bet-pick">' + pick + '</div><div class="value-bet-meta">' + meta + '</div></div>' +
+          (odds ? '<span class="value-bet-odds">' + odds + '</span>' : '') + '</div>';
+      }).join('') + '</div></div>';
+  } catch (_e) { if (sec) sec.style.display = 'none'; }
 }
 
 function setMarketFilter(el, filter) {
@@ -3867,10 +4033,14 @@ function bsRenderLegs() {
       var parlayPayout = bsStake > 0 ? fmtDollar(bsStake * adjD) : null;
       // No blocking note for SGP — future: replace with correlation disclaimer if needed
       var sgpNote = '';
-      return '<div class="dkslip-card">' +
+      var legLimitHtml = '<div class="dkslip-leg-limit">' + betSlip.length + ' / ' + _MAX_PARLAY_LEGS + ' legs</div>';
+      return legLimitHtml + '<div class="dkslip-card">' +
         '<div class="dkslip-card-hdr">' +
           '<span class="dkslip-card-title">'+parlayLabel+'</span>' +
-          '<span class="dkslip-card-odds">'+oddsDisplay+'</span>' +
+          '<span style="display:flex;align-items:center;gap:6px">' +
+            (validLegs.length >= 2 ? '<button type="button" class="dkslip-share-btn" onclick="event.stopPropagation();shareParlaySlip()">Share</button>' : '') +
+            '<span class="dkslip-card-odds">'+oddsDisplay+'</span>' +
+          '</span>' +
         '</div>' +
         sgpNote +
         betSlip.map(function(b,i){
@@ -3882,7 +4052,7 @@ function bsRenderLegs() {
           var plogoHtml = (typeof getTeamLogoImg === 'function')
             ? '<div class="dkslip-leg-logo">' + getTeamLogoImg(pteam || pp, legSport, 36) + '</div>'
             : '<div class="dkslip-leg-logo">' + bsTeamAbbr(pp, pg) + '</div>';
-          return '<div class="dkslip-leg">' +
+          return '<div class="dkslip-leg" data-cell-id="'+b.cellId+'">' +
             plogoHtml +
             '<div style="flex:1">' +
               '<div class="dkslip-leg-matchup">'+pshort+'</div>' +
@@ -9237,6 +9407,17 @@ function bsRemove(i) {
   // i can be a numeric index OR a cellId string — support both
   var idx = (typeof i === 'string') ? betSlip.findIndex(function(x){ return x.cellId === i; }) : i;
   if (idx < 0 || idx >= betSlip.length) { console.warn('[bsRemove] idx out of range', i, idx); return; }
+  var cellId = betSlip[idx].cellId;
+  var legEl = document.querySelector('.dkslip-leg[data-cell-id="' + cellId + '"]');
+  if (legEl) {
+    legEl.classList.add('dkslip-leg-removing');
+    setTimeout(function(){ _bsRemoveCore(idx); }, 260);
+    return;
+  }
+  _bsRemoveCore(idx);
+}
+function _bsRemoveCore(idx) {
+  if (idx < 0 || idx >= betSlip.length) return;
   var b = betSlip[idx];
   // Remove highlight from odds cell
   ['c-'+b.cellId, 'cell-'+b.cellId].forEach(function(id){
@@ -9262,8 +9443,31 @@ function bsRemove(i) {
   bsUpdate();
 }
 
+function shareParlaySlip() {
+  if (betSlip.length < 2) { showToast('Add 2+ legs to share a parlay', 'error'); return; }
+  var validLegs = betSlip.filter(function(b){ return b.odds && !isNaN(b.odds); });
+  var d = validLegs.reduce(function(p,b){ return p * amToDecimal(b.odds); }, 1);
+  var raw = Math.round((d - 1) * 100);
+  var co = raw > 0 ? ('+' + raw) : String(Math.round(-100 / (d - 1)));
+  var lines = validLegs.map(function(b, i) {
+    return (i + 1) + '. ' + (b.pick || 'Pick') + ' (' + fmtOdds(b.odds) + ') — ' + (b.game || '');
+  });
+  var text = betSlip.length + '-Pick Parlay (' + co + ')\n' + lines.join('\n');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function(){ showToast('Parlay copied to clipboard', 'success'); })
+      .catch(function(){ showToast('Could not copy parlay', 'error'); });
+  } else {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+      showToast('Parlay copied to clipboard', 'success');
+    } catch (_e) { showToast('Could not copy parlay', 'error'); }
+  }
+}
+
 function clearSlip() {
-  
+  if (betSlip.length && !confirm('Clear all ' + betSlip.length + ' selection' + (betSlip.length !== 1 ? 's' : '') + ' from your slip?')) return;
   bsStakes = {}; bsStake = 0; rrStakes = {}; _pendingRisk = 0; _pendingPayout = 0; _pendingProfit = 0; _pendingSnapshot = null;
   // Clear footer stake input DOM immediately
   var inp = document.getElementById('bs-stake-inp');
