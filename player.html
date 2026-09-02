@@ -47,14 +47,27 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .split-bar-away{background:var(--cyan);height:100%}
 .split-bar-home{background:var(--green);height:100%}
 
-/* PROPS MARKET */
-.props-card{margin:0 16px 12px;background:linear-gradient(180deg,#1e1e1e,#181818);border-radius:18px;overflow:hidden;border:1px solid #2a2a2a;padding:12px 14px}
-.props-game{font-size:0.72rem;color:var(--gray);margin-bottom:10px;font-weight:700;text-transform:uppercase}
-.props-player{font-size:0.88rem;font-weight:800;margin-bottom:6px}
-.props-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid #2a2a2a}
-.props-side{flex:1;font-size:0.78rem;color:#aaa}
-.props-odds{min-width:72px;text-align:center;padding:8px 6px;background:#242424;border-radius:10px;cursor:pointer;border:1.5px solid #303030;font-weight:900;font-size:0.82rem}
-.props-odds.selected{border-color:#fff;background:rgba(0,255,136,0.18)}
+/* INLINE GAME PROPS */
+.market-card.props-expanded{border-color:var(--green);box-shadow:0 0 0 1px rgba(0,255,135,0.35),0 4px 20px rgba(0,255,135,0.12)}
+.mc-props-btn{margin-left:auto;background:transparent;border:none;color:#666;font-size:0.68rem;font-weight:700;cursor:pointer;padding:4px 8px;border-radius:6px;transition:color 0.15s}
+.mc-props-btn:hover{color:#aaa}
+.market-card.props-expanded .mc-props-btn{color:var(--green)}
+.mc-props-panel{max-height:0;overflow:hidden;opacity:0;transition:max-height 0.35s ease,opacity 0.25s ease,padding 0.25s ease;padding:0 16px}
+.market-card.props-expanded .mc-props-panel{max-height:1200px;opacity:1;padding:0 16px 14px}
+.mc-prop-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid #2a2a2a}
+.mc-prop-player{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+.mc-prop-avatar{width:34px;height:34px;border-radius:50%;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#2a2a2a;border:1px solid #333;font-size:0.6rem;font-weight:900;color:#aaa}
+.mc-prop-avatar img{width:100%;height:100%;object-fit:contain}
+.mc-prop-info{min-width:0}
+.mc-prop-name{font-size:0.82rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mc-prop-type{font-size:0.65rem;color:#666;font-weight:700;margin-top:2px}
+.mc-prop-ous{display:flex;gap:6px;flex-shrink:0}
+.mc-prop-ou{min-width:58px;text-align:center;padding:6px 4px;background:#242424;border-radius:10px;cursor:pointer;border:1.5px solid #303030;display:flex;flex-direction:column;align-items:center;gap:1px;transition:transform 0.1s,border-color 0.12s,background 0.12s}
+.mc-prop-ou:active{transform:scale(0.97)}
+.mc-prop-ou-label{font-size:0.58rem;color:#666;font-weight:800}
+.mc-prop-ou-line{font-size:0.72rem;font-weight:800;color:#ccc}
+.mc-prop-ou-empty{opacity:0.35;cursor:default;pointer-events:none}
+.mc-props-loading,.mc-props-empty{padding:14px 0;text-align:center;font-size:0.75rem;color:#666}
 
 /* FILTER PILLS */
 .filter-row{display:flex;gap:8px;padding:12px 16px;overflow-x:auto;scrollbar-width:none}
@@ -792,7 +805,6 @@ function _debugClearTickets() {
   <div class="pill" id="mf-spread" onclick="setMarketFilter(this,'spread')">Spread</div>
   <div class="pill" id="mf-totals" onclick="setMarketFilter(this,'totals')">Totals</div>
   <div class="pill" id="mf-ml" onclick="setMarketFilter(this,'moneyline')">To Win</div>
-  <div class="pill" id="mf-props" onclick="setMarketFilter(this,'props')">Props</div>
 </div>
 
 
@@ -1799,6 +1811,8 @@ function _pbRenderGameCardHtml(g) {
     var split = _splitsByGameId[String(g.id)] || _splitsByGameId[String(g.canonicalGameKey || '')];
     var splitHtml = split ? _renderSplitBar(split.moneyline, awN, hwN) : '';
     var safeGameId = String(g.id || g.providerGameId || '').replace(/"/g, '');
+    var sportRoute = _ODDS_ROUTE_KEY[sp.toLowerCase()] || sp.toLowerCase();
+    var showPropsBtn = _pbSportSupportsProps(sportRoute);
 
     function cell(id, top, odds, marketType, teamPick, teamName) {
       if (!odds) return '<div class="odds-box" style="cursor:default;pointer-events:none"><span style="color:var(--gray)">—</span></div>';
@@ -1846,7 +1860,10 @@ function _pbRenderGameCardHtml(g) {
         cell(g.id + '-un', un ? 'U ' + un.line : null, un ? un.odds : null, 'Total', un ? 'Under ' + un.line : null) +
         cell(g.id + '-ml-hw', null, hwML ? hwML.odds : null, 'Moneyline', hw) +
       '</div>' +
-      '<div class="mc-footer"><span class="mc-time">' + time + '</span></div>' +
+      '<div class="mc-footer"><span class="mc-time">' + time + '</span>' +
+      (showPropsBtn ? '<button type="button" class="mc-props-btn" onclick="_pbToggleGameProps(this,\'' + safeGameId + '\',\'' + sportRoute + '\')">Props ▾</button>' : '') +
+      '</div>' +
+      '<div class="mc-props-panel"></div>' +
       '</div>';
   } catch (cardErr) {
     try {
@@ -1869,6 +1886,7 @@ function _pbResyncBetSlipSelections() {
 }
 
 function _pbSyncGamesListInPlace(el, games) {
+  var expandedId = _pbExpandedPropsGameId;
   var existing = {};
   el.querySelectorAll('.market-card[data-game-id]').forEach(function(card) {
     existing[card.getAttribute('data-game-id')] = card;
@@ -1889,78 +1907,186 @@ function _pbSyncGamesListInPlace(el, games) {
     }
   });
   Object.keys(existing).forEach(function(gid) {
-    if (!seen[gid] && existing[gid].parentNode) existing[gid].parentNode.removeChild(existing[gid]);
+    if (!seen[gid] && existing[gid].parentNode) {
+      if (expandedId === gid) _pbExpandedPropsGameId = null;
+      existing[gid].parentNode.removeChild(existing[gid]);
+    }
   });
+  if (expandedId && seen[expandedId]) {
+    var expCard = el.querySelector('.market-card[data-game-id="' + expandedId + '"]');
+    if (expCard) {
+      expCard.classList.add('props-expanded');
+      var expBtn = expCard.querySelector('.mc-props-btn');
+      if (expBtn) expBtn.textContent = 'Props ▴';
+    }
+  } else if (expandedId && !seen[expandedId]) {
+    _pbExpandedPropsGameId = null;
+  }
   _pbFlashLineMovements();
   _pbApplyLiveFreshnessState();
   _pbResyncBetSlipSelections();
+  if (expandedId && seen[expandedId]) _pbRefreshExpandedGameProps({ silent: true });
 }
 
-function _pbPropCellId(p, gKey) {
-  return 'prop-' + gKey + '-' + String(p.playerName).replace(/\s+/g, '-') + '-' + p.side + '-' + p.line;
+var _pbExpandedPropsGameId = null;
+var _PB_PROPS_SUPPORTED_SPORTS = ['mlb', 'nba', 'nfl', 'nhl', 'ncaab', 'ncaaf', 'wnba'];
+
+function _pbSportSupportsProps(sport) {
+  return _PB_PROPS_SUPPORTED_SPORTS.indexOf(String(sport || '').toLowerCase()) >= 0;
 }
 
-function _pbRenderPropsCardHtml(gKey, grp, sport) {
-  var m = grp.meta;
-  var s = String(sport || _currentSport || 'mlb').toLowerCase();
-  return '<div class="props-card" data-prop-game-key="' + String(gKey).replace(/"/g, '') + '">' +
-    '<div class="props-game">' + (m.away || '') + ' @ ' + (m.home || '') + '</div>' +
-    grp.rows.map(function(p) {
-      var cellId = _pbPropCellId(p, gKey);
-      var fmt = (p.odds > 0 ? '+' : '') + p.odds;
-      var sideLabel = (p.side === 'under' ? 'U' : 'O') + ' ' + p.line + ' ' + p.propType;
-      var isSel = typeof betSlip !== 'undefined' && betSlip.some(function(b){ return b.cellId === cellId; });
-      return '<div class="props-player">' + p.playerName + (p.team ? ' · ' + p.team : '') + '</div>' +
-        '<div class="props-row">' +
-          '<div class="props-side">' + sideLabel + '</div>' +
-          '<div class="props-odds odds-cell' + (isSel ? ' selected' : '') + '" id="c-' + cellId + '" ' +
-            'data-id="' + cellId + '" data-game-id="' + (p.gameId || '') + '" ' +
-            'data-game="' + ((m.away || '') + ' vs ' + (m.home || '')).replace(/"/g, '') + '" ' +
-            'data-time="' + (p.scheduledStart || '') + '" data-market="Prop" ' +
-            'data-pick="' + String(p.pick || '').replace(/"/g, '') + '" data-odds="' + p.odds + '" ' +
-            'data-sport="' + (p.sport || s.toUpperCase()) + '">' + fmt + '</div>' +
-        '</div>';
-    }).join('') +
-    '</div>';
+function _pbPropCellId(p, gameId) {
+  return 'prop-' + gameId + '-' + String(p.playerName).replace(/\s+/g, '-') + '-' + p.side + '-' + p.line;
 }
 
-function _pbSyncPropsListInPlace(el, props, sport) {
-  var byGame = {};
+function _pbPlayerPropAvatar(playerName, team, sport) {
+  sport = sport || (typeof _currentSport !== 'undefined' ? _currentSport : 'mlb');
+  if (team && typeof getTeamLogoImg === 'function') {
+    return '<div class="mc-prop-avatar">' + getTeamLogoImg(team, sport, 34) + '</div>';
+  }
+  var parts = String(playerName || '?').trim().split(/\s+/);
+  var initials = parts.length >= 2 ? (parts[0][0] + parts[parts.length - 1][0]) : (parts[0] || '?').slice(0, 2);
+  return '<div class="mc-prop-avatar mc-prop-initials">' + initials.toUpperCase() + '</div>';
+}
+
+function _pbGroupPropsForDisplay(props) {
+  var groups = {};
   props.forEach(function(p) {
-    var key = p.gameId || (p.away + ' vs ' + p.home);
-    (byGame[key] || (byGame[key] = { meta:p, rows:[] })).rows.push(p);
+    var key = String(p.playerName || '') + '|' + String(p.propType || '') + '|' + String(p.line);
+    var g = groups[key] || (groups[key] = { playerName: p.playerName, team: p.team, propType: p.propType, line: p.line, over: null, under: null });
+    if (p.side === 'over') g.over = p;
+    else if (p.side === 'under') g.under = p;
   });
-  var existing = {};
-  el.querySelectorAll('.props-card[data-prop-game-key]').forEach(function(card) {
-    existing[card.getAttribute('data-prop-game-key')] = card;
-  });
-  var seen = {};
-  Object.keys(byGame).forEach(function(gKey) {
-    seen[gKey] = true;
-    var grp = byGame[gKey];
-    if (existing[gKey]) {
-      grp.rows.forEach(function(p) {
-        var cellId = _pbPropCellId(p, gKey);
-        var cell = document.getElementById('c-' + cellId);
-        if (cell) {
-          cell.textContent = (p.odds > 0 ? '+' : '') + p.odds;
-          cell.setAttribute('data-odds', String(p.odds));
-        }
-      });
-    } else {
-      var html = _pbRenderPropsCardHtml(gKey, grp, sport);
-      if (html) {
-        var wrap = document.createElement('div');
-        wrap.innerHTML = html;
-        if (wrap.firstElementChild) el.appendChild(wrap.firstElementChild);
-      }
-    }
-  });
-  Object.keys(existing).forEach(function(gKey) {
-    if (!seen[gKey] && existing[gKey].parentNode) existing[gKey].parentNode.removeChild(existing[gKey]);
+  return Object.keys(groups).map(function(k) { return groups[k]; });
+}
+
+function _pbRenderPropOddsBtn(p, gameId, gameLabel, sport, sideLabel) {
+  if (!p) return '<div class="mc-prop-ou mc-prop-ou-empty">—</div>';
+  var cellId = _pbPropCellId(p, gameId);
+  var fmt = (p.odds > 0 ? '+' : '') + p.odds;
+  var isSel = typeof betSlip !== 'undefined' && betSlip.some(function(b) { return b.cellId === cellId; });
+  var c = p.odds > 0 ? 'odds-pos' : 'odds-neg';
+  return '<div class="mc-prop-ou odds-cell' + (isSel ? ' selected' : '') + '" id="c-' + cellId + '" ' +
+    'data-id="' + cellId + '" data-game-id="' + (p.gameId || gameId) + '" ' +
+    'data-game="' + String(gameLabel || '').replace(/"/g, '') + '" ' +
+    'data-time="' + (p.scheduledStart || '') + '" data-market="Prop" ' +
+    'data-pick="' + String(p.pick || '').replace(/"/g, '') + '" data-odds="' + p.odds + '" ' +
+    'data-sport="' + (p.sport || sport) + '">' +
+    '<span class="mc-prop-ou-label">' + sideLabel + '</span>' +
+    '<span class="mc-prop-ou-line">' + p.line + '</span>' +
+    '<span class="odds-num ' + c + '">' + fmt + '</span></div>';
+}
+
+function _pbRenderInlinePropsHtml(props, gameId, sport, meta) {
+  var s = String(sport || _currentSport || 'mlb').toUpperCase();
+  var gameLabel = (meta && meta.away && meta.home) ? (meta.away + ' vs ' + meta.home) : '';
+  var groups = _pbGroupPropsForDisplay(props);
+  if (!groups.length) return '<div class="mc-props-empty">No player props for this game.</div>';
+  return groups.map(function(grp) {
+    return '<div class="mc-prop-row">' +
+      '<div class="mc-prop-player">' +
+        _pbPlayerPropAvatar(grp.playerName, grp.team, s) +
+        '<div class="mc-prop-info">' +
+          '<div class="mc-prop-name">' + (grp.playerName || '') + '</div>' +
+          '<div class="mc-prop-type">' + (grp.propType || '') + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="mc-prop-ous">' +
+        _pbRenderPropOddsBtn(grp.over, gameId, gameLabel, s, 'O') +
+        _pbRenderPropOddsBtn(grp.under, gameId, gameLabel, s, 'U') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function _pbSyncInlinePropsInPlace(props, gameId) {
+  props.forEach(function(p) {
+    var cellId = _pbPropCellId(p, gameId);
+    var cell = document.getElementById('c-' + cellId);
+    if (!cell) return;
+    var numEl = cell.querySelector('.odds-num');
+    var fmt = (p.odds > 0 ? '+' : '') + p.odds;
+    if (numEl) numEl.textContent = fmt;
+    cell.setAttribute('data-odds', String(p.odds));
   });
   _pbFlashLineMovements();
   _pbResyncBetSlipSelections();
+}
+
+function _pbCollapseAllGameProps() {
+  document.querySelectorAll('.market-card.props-expanded').forEach(function(card) {
+    card.classList.remove('props-expanded');
+    var btn = card.querySelector('.mc-props-btn');
+    if (btn) btn.textContent = 'Props ▾';
+    var panel = card.querySelector('.mc-props-panel');
+    if (panel) panel.innerHTML = '';
+  });
+  _pbExpandedPropsGameId = null;
+}
+
+async function _pbLoadGameProps(gameId, sport, panel) {
+  var s = String(sport || _currentSport || 'mlb').toLowerCase();
+  try {
+    var res = await fetch(API + '/api/props/' + encodeURIComponent(s) + '?gameId=' + encodeURIComponent(gameId), { cache: 'no-store' });
+    var data = await res.json();
+    if (_pbExpandedPropsGameId !== String(gameId)) return;
+    if (!res.ok || !data.props || !data.props.length) {
+      panel.innerHTML = '<div class="mc-props-empty">No player props for this game.</div>';
+      return;
+    }
+    panel.innerHTML = _pbRenderInlinePropsHtml(data.props, gameId, s, data.props[0]);
+    _pbResyncBetSlipSelections();
+  } catch (_e) {
+    if (_pbExpandedPropsGameId === String(gameId)) {
+      panel.innerHTML = '<div class="mc-props-empty">Could not load props.</div>';
+    }
+  }
+}
+
+async function _pbRefreshExpandedGameProps(opts) {
+  if (!_pbExpandedPropsGameId) return;
+  var card = document.querySelector('.market-card[data-game-id="' + _pbExpandedPropsGameId + '"]');
+  if (!card || !card.classList.contains('props-expanded')) return;
+  var panel = card.querySelector('.mc-props-panel');
+  if (!panel) return;
+  var gameId = _pbExpandedPropsGameId;
+  var s = String(_currentSport || 'mlb').toLowerCase();
+  try {
+    var res = await fetch(API + '/api/props/' + encodeURIComponent(s) + '?gameId=' + encodeURIComponent(gameId), { cache: 'no-store' });
+    var data = await res.json();
+    if (_pbExpandedPropsGameId !== String(gameId)) return;
+    if (!res.ok || !data.props) return;
+    if (!data.props.length) {
+      panel.innerHTML = '<div class="mc-props-empty">No player props for this game.</div>';
+      return;
+    }
+    if (panel.querySelector('.mc-prop-row')) _pbSyncInlinePropsInPlace(data.props, gameId);
+    else {
+      panel.innerHTML = _pbRenderInlinePropsHtml(data.props, gameId, s, data.props[0]);
+      _pbResyncBetSlipSelections();
+    }
+  } catch (_e) {}
+}
+
+async function _pbToggleGameProps(btn, gameId, sport) {
+  var card = btn.closest('.market-card');
+  if (!card) return;
+  var panel = card.querySelector('.mc-props-panel');
+  if (!panel) return;
+  var gid = String(gameId);
+  if (card.classList.contains('props-expanded')) {
+    card.classList.remove('props-expanded');
+    btn.textContent = 'Props ▾';
+    panel.innerHTML = '';
+    _pbExpandedPropsGameId = null;
+    return;
+  }
+  _pbCollapseAllGameProps();
+  card.classList.add('props-expanded');
+  btn.textContent = 'Props ▴';
+  _pbExpandedPropsGameId = gid;
+  panel.innerHTML = '<div class="mc-props-loading">Loading props...</div>';
+  await _pbLoadGameProps(gid, sport, panel);
 }
 
 function _pbScheduleSportsbookLiveRefresh() {
@@ -1981,10 +2107,9 @@ async function _pbRefreshSportsbookOdds(opts) {
   try {
     if (_pbActiveTab === 'live') {
       if (typeof loadGames === 'function') await loadGames(_currentSport || 'mlb', { targetId:'live-games-list', liveOnly:true, silent:!!opts.silent });
-    } else if (activeMarketFilter === 'props') {
-      if (typeof loadPropsMarket === 'function') await loadPropsMarket(_currentSport || 'mlb', { silent:!!opts.silent });
     } else if (typeof loadGames === 'function') {
       await loadGames(_currentSport || 'mlb', { silent:!!opts.silent });
+      if (_pbExpandedPropsGameId) await _pbRefreshExpandedGameProps(opts);
     }
   } finally {
     _pbLiveOddsStatus.refreshing = false;
@@ -2354,79 +2479,10 @@ async function _loadSplitsForSport(sport) {
   } catch (_e) { _splitsByGameId = {}; }
 }
 
-async function _updatePropsTabVisibility(sport) {
-  var pill = document.getElementById('mf-props');
-  if (!pill) return false;
-  var s = String(sport || _currentSport || 'mlb').toLowerCase();
-  var available = false;
-  try {
-    var res = await fetch(API + '/api/props/' + encodeURIComponent(s), { cache: 'no-store' });
-    var data = await res.json();
-    available = !!(res.ok && data && ((data.count > 0) || (Array.isArray(data.props) && data.props.length > 0)));
-  } catch (_e) {
-    available = false;
-  }
-  // Ignore stale async responses after the user switched sports.
-  if (String(_currentSport || 'mlb').toLowerCase() !== s) return available;
-  pill.style.display = available ? '' : 'none';
-  return available;
-}
-
-async function loadPropsMarket(sport, opts) {
-  opts = opts || {};
-  var el = document.getElementById('games-list');
-  if (!el) return;
-  var s = String(sport || _currentSport || 'mlb').toLowerCase();
-  if (!opts.silent) el.innerHTML = '<div class="empty">Loading props...</div>';
-  try {
-    var res = await fetch(API + '/api/props/' + encodeURIComponent(s), { cache: 'no-store' });
-    var data = await res.json();
-    if (!res.ok) {
-      if (opts.silent) return;
-      el.innerHTML = '<div class="empty" style="padding:40px 20px;text-align:center;color:#888">' +
-        (data.error === 'props_not_supported' ? 'Props not available for this sport yet.' : 'Props unavailable right now.') +
-        '</div>';
-      return;
-    }
-    var props = data.props || [];
-    if (!props.length) {
-      if (opts.silent && el.querySelector('.props-card[data-prop-game-key]')) {
-        el.querySelectorAll('.props-card[data-prop-game-key]').forEach(function(c){ if (c.parentNode) c.parentNode.removeChild(c); });
-        return;
-      }
-      el.innerHTML = '<div class="empty" style="padding:40px 20px;text-align:center;color:#888">No player props available right now.</div>';
-      return;
-    }
-    if (opts.silent && el.querySelector('.props-card[data-prop-game-key]')) {
-      _pbSyncPropsListInPlace(el, props, s);
-      return;
-    }
-    var byGame = {};
-    props.forEach(function(p) {
-      var key = p.gameId || (p.away + ' vs ' + p.home);
-      (byGame[key] || (byGame[key] = { meta: p, rows: [] })).rows.push(p);
-    });
-    el.innerHTML = Object.keys(byGame).map(function(gKey) {
-      return _pbRenderPropsCardHtml(gKey, byGame[gKey], s);
-    }).join('');
-    _pbResyncBetSlipSelections();
-  } catch (e) {
-    if (!opts.silent) el.innerHTML = '<div class="empty" style="padding:40px 20px;text-align:center;color:#888">Could not load props.</div>';
-  }
-}
-
 function setMarketFilter(el, filter) {
-  var prev = activeMarketFilter;
   activeMarketFilter = filter;
   document.querySelectorAll('.pill').forEach(function(p){ p.classList.remove('active'); });
   el.classList.add('active');
-  if (filter === 'props') {
-    loadPropsMarket(_currentSport || 'mlb');
-    return;
-  }
-  if (prev === 'props' && filter !== 'props') {
-    loadGames(_currentSport || 'mlb');
-  }
   var showSpread   = filter === 'lines' || filter === 'spread';
   var showTotals   = filter === 'lines' || filter === 'totals';
   var showML       = filter === 'lines' || filter === 'moneyline';
@@ -2600,17 +2656,8 @@ async function setSport(el,sport){
   el.classList.add('active');
   _currentSport = sport;
   _updateTeaserTab();
-  var propsAvail = await _updatePropsTabVisibility(sport);
-  if (activeMarketFilter === 'props') {
-    if (propsAvail) loadPropsMarket(sport);
-    else {
-      var linesPill = document.getElementById('mf-lines');
-      if (linesPill) setMarketFilter(linesPill, 'lines');
-      else loadGames(sport);
-    }
-  } else {
-    loadGames(sport);
-  }
+  _pbCollapseAllGameProps();
+  loadGames(sport);
   _pbScheduleSportsbookLiveRefresh();
 }
 // setFilter removed — replaced by setMarketFilter
@@ -2633,8 +2680,7 @@ function setBNav(el,tab){
     if(sec) sec.style.display='block';
     if(ss) ss.style.display='flex';
     if(pb) pb.style.display='flex';
-    if (activeMarketFilter === 'props') loadPropsMarket(_currentSport || 'mlb');
-    else loadGames(_currentSport || 'mlb');
+    if (typeof loadGames === 'function') loadGames(_currentSport || 'mlb');
     _pbScheduleSportsbookLiveRefresh();
   } else if(tab==='live'){
     const sec=document.getElementById('live-section');
@@ -2956,7 +3002,6 @@ if (!_sessionValid) {
   try { _updateTeaserTab(); }  catch(e) { console.error('[PBS init] _updateTeaserTab failed (continuing):', e && e.message || e); }
   try { _updateSportTabs(); }  catch(e) { console.error('[PBS init] _updateSportTabs failed (continuing):', e && e.message || e); }
   try { loadGames('mlb'); }    catch(e) { console.error('[PBS fetch failed]', e); }
-  try { _updatePropsTabVisibility('mlb'); } catch(e) { console.error('[PBS init] props tab visibility failed:', e && e.message || e); }
   
 }
 
