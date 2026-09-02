@@ -2182,6 +2182,25 @@ async function _loadSplitsForSport(sport) {
   } catch (_e) { _splitsByGameId = {}; }
 }
 
+async function _updatePropsTabVisibility(sport) {
+  var pill = document.getElementById('mf-props');
+  if (!pill) return;
+  var s = String(sport || _currentSport || 'mlb').toLowerCase();
+  var available = false;
+  try {
+    var res = await fetch(API + '/api/props/' + encodeURIComponent(s), { cache: 'no-store' });
+    var data = await res.json();
+    available = !!(res.ok && data && ((data.count > 0) || (Array.isArray(data.props) && data.props.length > 0)));
+  } catch (_e) {
+    available = false;
+  }
+  pill.style.display = available ? '' : 'none';
+  if (!available && activeMarketFilter === 'props') {
+    var linesPill = document.getElementById('mf-lines');
+    if (linesPill) setMarketFilter(linesPill, 'lines');
+  }
+}
+
 async function loadPropsMarket(sport) {
   var el = document.getElementById('games-list');
   if (!el) return;
@@ -2425,6 +2444,7 @@ function setSport(el,sport){
   el.classList.add('active');
   _currentSport = sport;
   _updateTeaserTab();
+  _updatePropsTabVisibility(sport);
   if (activeMarketFilter === 'props') {
     loadPropsMarket(sport);
   } else {
@@ -2774,6 +2794,7 @@ if (!_sessionValid) {
   try { _updateTeaserTab(); }  catch(e) { console.error('[PBS init] _updateTeaserTab failed (continuing):', e && e.message || e); }
   try { _updateSportTabs(); }  catch(e) { console.error('[PBS init] _updateSportTabs failed (continuing):', e && e.message || e); }
   try { loadGames('mlb'); }    catch(e) { console.error('[PBS fetch failed]', e); }
+  try { _updatePropsTabVisibility('mlb'); } catch(e) { console.error('[PBS init] props tab visibility failed:', e && e.message || e); }
   
 }
 
