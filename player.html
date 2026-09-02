@@ -1841,7 +1841,9 @@ function _pbRenderGameCardHtml(g) {
         '<span class="odds-num ' + c + '">' + f + '</span></div>';
     }
 
-    return '<div class="market-card" data-game-id="' + safeGameId + '" style="margin-bottom:14px">' +
+    var safeHome = hw.replace(/"/g, '');
+    var safeAway = aw.replace(/"/g, '');
+    return '<div class="market-card" data-game-id="' + safeGameId + '" data-home="' + safeHome + '" data-away="' + safeAway + '" style="margin-bottom:14px">' +
       '<div class="mc-header"><span style="font-size:0.9rem">' + icon + '</span><span class="mc-sport">' + sp + '</span>' +
       (isLiveMarket ? '<span style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:rgba(255,61,87,0.12);border:1px solid rgba(255,61,87,0.35);color:#ff3d57;font-size:0.55rem;font-weight:900;letter-spacing:0.5px;text-transform:uppercase;padding:2px 7px;border-radius:6px"><span style="width:6px;height:6px;border-radius:50%;background:#ff3d57;animation:pbLivePulse 1.4s ease-in-out infinite"></span>Live</span>' : '') +
       '</div>' +
@@ -2024,10 +2026,21 @@ function _pbCollapseAllGameProps() {
   _pbExpandedPropsGameId = null;
 }
 
-async function _pbLoadGameProps(gameId, sport, panel) {
+function _pbPropsQueryString(gameId, card) {
+  var params = 'gameId=' + encodeURIComponent(gameId);
+  if (card) {
+    var home = card.getAttribute('data-home');
+    var away = card.getAttribute('data-away');
+    if (home) params += '&home=' + encodeURIComponent(home);
+    if (away) params += '&away=' + encodeURIComponent(away);
+  }
+  return params;
+}
+
+async function _pbLoadGameProps(gameId, sport, panel, card) {
   var s = String(sport || _currentSport || 'mlb').toLowerCase();
   try {
-    var res = await fetch(API + '/api/props/' + encodeURIComponent(s) + '?gameId=' + encodeURIComponent(gameId), { cache: 'no-store' });
+    var res = await fetch(API + '/api/props/' + encodeURIComponent(s) + '?' + _pbPropsQueryString(gameId, card), { cache: 'no-store' });
     var data = await res.json();
     if (_pbExpandedPropsGameId !== String(gameId)) return;
     if (!res.ok || !data.props || !data.props.length) {
@@ -2052,7 +2065,7 @@ async function _pbRefreshExpandedGameProps(opts) {
   var gameId = _pbExpandedPropsGameId;
   var s = String(_currentSport || 'mlb').toLowerCase();
   try {
-    var res = await fetch(API + '/api/props/' + encodeURIComponent(s) + '?gameId=' + encodeURIComponent(gameId), { cache: 'no-store' });
+    var res = await fetch(API + '/api/props/' + encodeURIComponent(s) + '?' + _pbPropsQueryString(gameId, card), { cache: 'no-store' });
     var data = await res.json();
     if (_pbExpandedPropsGameId !== String(gameId)) return;
     if (!res.ok || !data.props) return;
@@ -2086,7 +2099,7 @@ async function _pbToggleGameProps(btn, gameId, sport) {
   btn.textContent = 'Props ▴';
   _pbExpandedPropsGameId = gid;
   panel.innerHTML = '<div class="mc-props-loading">Loading props...</div>';
-  await _pbLoadGameProps(gid, sport, panel);
+  await _pbLoadGameProps(gid, sport, panel, card);
 }
 
 function _pbScheduleSportsbookLiveRefresh() {
