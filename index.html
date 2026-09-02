@@ -995,27 +995,15 @@ function refreshHostDashboardStats(trigger) {
 
   var holdPct = settledHandle > 0 ? (hostProfit / settledHandle * 100) : null;
 
-  // Settlement position from weekly net across players
+  // P&L: Players Owe You = sum of losing bet stakes; You Owe Players = sum of winning bet profits
   var playersOwe = 0, hostOwes = 0;
-  try {
-    var _club2 = {}; try { _club2 = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e2) {}
-    var _cid2  = _club2.id || _club2.clubId || null;
-    var players = loadClubPlayers ? loadClubPlayers() : [];
-    var now2 = new Date();
-    var ws = _sundayMidnight ? _sundayMidnight(now2) : new Date(now2.setDate(now2.getDate()-now2.getDay()));
-    var we = new Date(ws); we.setDate(we.getDate() + 7);
-    players.forEach(function(p) {
-      var pid = p.playerId || p.id;
-      if (!pid) return;
-      var net = 0;
-      try {
-        var wr = _calcWeekForPlayer ? _calcWeekForPlayer(pid, ws, we, _cid2) : null;
-        if (wr) net = (wr.lost || 0) - (wr.won || 0);
-      } catch(_e) {}
-      if (net > 0)  playersOwe += net;  // player lost net → owes host
-      if (net < 0)  hostOwes   += (-net); // player won net → host owes
-    });
-  } catch(_e) {}
+  allTickets.forEach(function(t) {
+    var s = (t.status || '').toLowerCase();
+    var risk = parseFloat(t.riskAmount) || 0;
+    var profit = parseFloat(t.potentialProfit) || 0;
+    if (s === 'lost') playersOwe += risk;
+    if (s === 'won') hostOwes += profit;
+  });
 
   playersOwe = Math.round(playersOwe * 100) / 100;
   hostOwes   = Math.round(hostOwes   * 100) / 100;
@@ -1089,6 +1077,8 @@ async function loadHostDashboardFromDb(trigger) {
     _set('stat-active-risk',  _fmtUSD(atRisk));
     _set('stat-active-bets',  String(activeCount));
     _set('host-bets-count',   activeCount+' bet'+(activeCount!==1?'s':''));
+    _set('stat-players-owe',  _fmtUSD(s.playersOwe != null ? s.playersOwe : s.settledLoss || 0));
+    _set('stat-host-owes',    _fmtUSD(s.hostOwes != null ? s.hostOwes : s.settledGain || 0));
     var profitEl = document.getElementById('stat-profit');
     if (profitEl) profitEl.style.color = s.profit>=0 ? 'var(--green,#00ff88)' : 'var(--red,#ff3d57)';
     try { _applyHostDashboardTickets(data); } catch(_te) {}
@@ -1916,7 +1906,7 @@ var _hostDbAllTickets = null;
 var _hostDbPlayers = null;
 var _hostDbPlayersById = null;
 var _hostPlayersFetchDone = false;
-var _hostBetsTab = 'all';
+var _hostBetsTab = 'active';
 var _hostBetsFilterPlayer = '';
 var _hostBetsFilterStatus = '';
 var _hostBetsFilterDate = '7';
