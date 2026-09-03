@@ -32,7 +32,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:#0a0
 .auth-check-label a{color:var(--cyan);text-decoration:none}
 .auth-submit{width:100%;padding:16px;background:linear-gradient(135deg,var(--green),#00cc66);color:#000;border:none;border-radius:14px;font-size:1rem;font-weight:900;cursor:pointer;margin-top:4px;box-shadow:0 4px 20px rgba(0,255,136,0.25);letter-spacing:0.3px}
 .auth-submit:disabled{opacity:0.5;cursor:not-allowed}
-.auth-error{color:var(--red);font-size:0.78rem;margin-bottom:10px;padding:10px 14px;background:rgba(255,61,87,0.08);border:1px solid rgba(255,61,87,0.2);border-radius:10px;display:none}
+.auth-error{color:var(--red);font-size:0.78rem;margin-top:10px;margin-bottom:0;padding:10px 14px;background:rgba(255,61,87,0.08);border:1px solid rgba(255,61,87,0.2);border-radius:10px;display:none}
 .auth-footer{margin-top:16px;text-align:center;font-size:0.72rem;color:#444}
 .auth-card form{margin:0;padding:0;border:0}
 /* BG */
@@ -272,9 +272,9 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
   .auth-tab{min-height:44px;display:flex;align-items:center;justify-content:center;padding:12px 8px}
   .auth-inp,.auth-submit,.btn-primary,.btn-secondary{min-height:44px}
   .auth-app-name{overflow-wrap:anywhere}
-  #signup-form > div{min-width:0}
-  #a-contact-method{max-width:42%;min-width:0}
-  #a-contact-value{min-width:0}
+  #pb-signup > div{min-width:0}
+  #pb-su-method{max-width:42%;min-width:0}
+  #pb-su-contact{min-width:0}
   #auth-recovery-links{flex-wrap:wrap;gap:8px;padding:0 4px}
   .menu-btn{width:44px;height:44px}
   .bn{min-height:44px;padding:8px 0}
@@ -570,26 +570,23 @@ try {
     </div>
 
     <div class="auth-card">
+      <!-- Exactly one auth form lives in #auth-form-slot at a time.
+           Switching tabs removes the other form from the DOM entirely. -->
+      <div id="auth-form-slot">
+        <form id="pb-signin" method="post" action="" autocomplete="off" onsubmit="event.preventDefault(); submitAuth(); return false;">
+          <div id="login-hint" style="font-size:0.62rem;color:#666;margin:0 0 8px;padding:0 4px">Sign in with your display name or email</div>
+          <input id="pb-id" class="auth-inp" placeholder="Display name, email, or @telegram" type="text" autocapitalize="off" autocorrect="off" spellcheck="false">
+          <input id="pb-pw" class="auth-inp" placeholder="Password" type="password" spellcheck="false">
+          <button type="submit" class="auth-submit" id="auth-submit-btn">Sign In →</button>
+          <div id="auth-recovery-links" style="display:flex;justify-content:center;gap:14px;margin-top:14px;font-size:0.72rem">
+            <span class="auth-recover-link" style="color:var(--cyan);cursor:pointer" onclick="openRecovery('username')">Forgot Username</span>
+            <span style="color:#333">·</span>
+            <span class="auth-recover-link" style="color:var(--cyan);cursor:pointer" onclick="openRecovery('password')">Forgot Password</span>
+          </div>
+        </form>
+      </div>
+
       <div id="auth-error" class="auth-error"></div>
-
-      <form id="login-form" method="post" action="" autocomplete="off" onsubmit="event.preventDefault(); submitAuth(); return false;">
-        <div id="login-hint" style="font-size:0.62rem;color:#666;margin:0 0 8px;padding:0 4px">Sign in with your display name or email</div>
-        <!-- No name/autocomplete attrs — password managers steal focus from identifier. -->
-        <input id="a-email" class="auth-inp" placeholder="Display name, email, or @telegram" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">
-        <input id="signin-secret" class="auth-inp" placeholder="Password" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">
-        <button type="submit" class="auth-submit" id="auth-submit-btn">Sign In →</button>
-        <div id="auth-recovery-links" style="display:flex;justify-content:center;gap:14px;margin-top:14px;font-size:0.72rem">
-          <span class="auth-recover-link" style="color:var(--cyan);cursor:pointer" onclick="openRecovery('username')">Forgot Username</span>
-          <span style="color:#333">·</span>
-          <span class="auth-recover-link" style="color:var(--cyan);cursor:pointer" onclick="openRecovery('password')">Forgot Password</span>
-        </div>
-      </form>
-
-      <!-- Signup markup is injected from JS only when Create Account is selected.
-           Keeping password fields out of the initial HTML (including <template>)
-           prevents password managers / Telegram autocomplete from scanning a
-           second credential form and stealing focus from #a-email. -->
-      <div id="signup-form-slot"></div>
 
       <div class="auth-footer" id="auth-footer-text">Don't have an account? <span style="color:var(--cyan);cursor:pointer" onclick="setAuthTab('signup')">Create one free</span></div>
     </div>
@@ -684,48 +681,51 @@ try {
 let authMode = 'login';
 
 function updateSignupContactAttrs() {
-  var sel = document.getElementById('a-contact-method');
-  var i = document.getElementById('a-contact-value');
+  var sel = document.getElementById('pb-su-method');
+  var i = document.getElementById('pb-su-contact');
   if (!sel || !i) return;
   var m = sel.value;
   var p = {telegram:'@username', signal:'Phone number or username', email:'Email address'};
   i.placeholder = p[m] || '@username';
-  i.type = m === 'email' ? 'email' : 'text';
-  if (m === 'email') {
-    i.name = 'email';
-    i.setAttribute('autocomplete', 'email');
-  } else if (m === 'signal') {
-    i.name = 'signal';
-    i.setAttribute('autocomplete', 'tel');
-  } else {
-    i.name = 'telegram';
-    i.setAttribute('autocomplete', 'username');
-  }
+  // Always type=text — never email/tel (password managers key off those).
+  i.type = 'text';
 }
 
 function _authSubmitBtn() {
   return document.getElementById(authMode === 'signup' ? 'auth-signup-btn' : 'auth-submit-btn');
 }
 
-// Only one credential form may live in the document at a time.
-// Login nodes are moved (not cloned) into a hold fragment on signup so typed
-// values survive tab switches without re-creating inputs. Signup HTML is a JS
-// string so password managers never see it while Sign In is active.
-var _loginHold = null;
+// Sign In markup — painted in HTML initially; also used when switching back
+// from Create Account. No name attrs, no autocomplete attrs on fields.
+var _SIGNIN_FORM_HTML =
+  '<form id="pb-signin" method="post" action="" autocomplete="off" onsubmit="event.preventDefault(); submitAuth(); return false;">' +
+    '<div id="login-hint" style="font-size:0.62rem;color:#666;margin:0 0 8px;padding:0 4px">Sign in with your display name or email</div>' +
+    '<input id="pb-id" class="auth-inp" placeholder="Display name, email, or @telegram" type="text" autocapitalize="off" autocorrect="off" spellcheck="false">' +
+    '<input id="pb-pw" class="auth-inp" placeholder="Password" type="password" spellcheck="false">' +
+    '<button type="submit" class="auth-submit" id="auth-submit-btn">Sign In →</button>' +
+    '<div id="auth-recovery-links" style="display:flex;justify-content:center;gap:14px;margin-top:14px;font-size:0.72rem">' +
+      '<span class="auth-recover-link" style="color:var(--cyan);cursor:pointer" onclick="openRecovery(\'username\')">Forgot Username</span>' +
+      '<span style="color:#333">·</span>' +
+      '<span class="auth-recover-link" style="color:var(--cyan);cursor:pointer" onclick="openRecovery(\'password\')">Forgot Password</span>' +
+    '</div>' +
+  '</form>';
+
+// Create Account — injected only when that tab is active. No name attrs,
+// no autocomplete attrs (password-manager hooks).
 var _SIGNUP_FORM_HTML =
-  '<form id="signup-form" method="post" action="" autocomplete="off" onsubmit="event.preventDefault(); submitAuth(); return false;">' +
-    '<input id="a-name" class="auth-inp" name="name" placeholder="Display name" autocomplete="name">' +
+  '<form id="pb-signup" method="post" action="" autocomplete="off" onsubmit="event.preventDefault(); submitAuth(); return false;">' +
+    '<input id="pb-su-name" class="auth-inp" placeholder="Display name" type="text" autocapitalize="off" autocorrect="off" spellcheck="false">' +
     '<div style="display:flex;gap:8px;margin-bottom:10px">' +
-      '<select id="a-contact-method" class="auth-inp" style="flex:0 0 auto;width:auto;padding-right:10px;cursor:pointer" onchange="updateSignupContactAttrs()">' +
+      '<select id="pb-su-method" class="auth-inp" style="flex:0 0 auto;width:auto;padding-right:10px;cursor:pointer" onchange="updateSignupContactAttrs()">' +
         '<option value="telegram">Telegram</option>' +
         '<option value="signal">Signal</option>' +
         '<option value="email">Email</option>' +
       '</select>' +
-      '<input id="a-contact-value" class="auth-inp" name="telegram" placeholder="@username" type="text" autocomplete="off" style="flex:1;margin-bottom:0">' +
+      '<input id="pb-su-contact" class="auth-inp" placeholder="@username" type="text" autocapitalize="off" autocorrect="off" spellcheck="false" style="flex:1;margin-bottom:0">' +
     '</div>' +
     '<div id="signup-contact-hint" style="font-size:0.62rem;color:#666;margin:-6px 0 10px;padding:0 4px">Select how we can reach you — required for account recovery.</div>' +
-    '<input id="a-pass-signup" class="auth-inp" name="new-password" placeholder="Password" type="password" autocomplete="new-password">' +
-    '<input id="a-pass2" class="auth-inp" name="new-password-confirm" placeholder="Confirm password" type="password" autocomplete="new-password">' +
+    '<input id="pb-su-pw" class="auth-inp" placeholder="Password" type="password" spellcheck="false">' +
+    '<input id="pb-su-pw2" class="auth-inp" placeholder="Confirm password" type="password" spellcheck="false">' +
     '<div id="signup-checks">' +
       '<label class="auth-check"><input type="checkbox" id="check-age"><span class="auth-check-label">I confirm I am 21 years of age or older</span></label>' +
       '<label class="auth-check"><input type="checkbox" id="check-terms"><span class="auth-check-label">I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a></span></label>' +
@@ -736,75 +736,35 @@ var _SIGNUP_FORM_HTML =
 function _authFieldFocused() {
   var ae = document.activeElement;
   if (!ae || !ae.closest) return false;
-  return !!ae.closest('#login-form, #signup-form');
+  return !!ae.closest('#pb-signin, #pb-signup');
 }
 
 function _authDomMatches(mode) {
-  var loginLive = !!document.getElementById('login-form');
-  var signupLive = !!document.getElementById('signup-form');
-  if (mode === 'login') return loginLive && !signupLive;
-  return signupLive && !loginLive;
+  var signinLive = !!document.getElementById('pb-signin');
+  var signupLive = !!document.getElementById('pb-signup');
+  if (mode === 'login') return signinLive && !signupLive;
+  return signupLive && !signinLive;
 }
 
-function _holdLoginForm() {
-  var loginForm = document.getElementById('login-form');
-  if (!loginForm) return;
-  if (!_loginHold) _loginHold = document.createDocumentFragment();
-  _loginHold.appendChild(loginForm);
+function _injectAuthForm(mode) {
+  var slot = document.getElementById('auth-form-slot');
+  if (!slot) return;
+  // Nuclear: wipe slot so the inactive form is fully gone from the DOM.
+  slot.innerHTML = '';
+  slot.innerHTML = (mode === 'signup') ? _SIGNUP_FORM_HTML : _SIGNIN_FORM_HTML;
 }
 
-function _restoreLoginForm() {
-  if (document.getElementById('login-form')) {
-    _wireSigninSecretField();
-    return document.getElementById('login-form');
-  }
-  if (!_loginHold || !_loginHold.childNodes.length) return null;
-  var slot = document.getElementById('signup-form-slot');
-  var card = document.querySelector('.auth-card');
-  if (!card) return null;
-  if (slot && slot.parentNode === card) card.insertBefore(_loginHold, slot);
-  else {
-    var footer = document.getElementById('auth-footer-text');
-    if (footer) card.insertBefore(_loginHold, footer);
-    else card.appendChild(_loginHold);
-  }
-  _wireSigninSecretField();
-  _wireAuthInputIsolation();
-  return document.getElementById('login-form');
+function _clearAuthError() {
+  var err = document.getElementById('auth-error');
+  if (!err) return;
+  err.textContent = '';
+  err.style.display = 'none';
 }
 
-// Keep Sign In password as type=text until first keypress so password managers
-// do not attach to a password field and steal focus from #a-email.
-function _wireSigninSecretField() {
-  var el = document.getElementById('signin-secret');
-  if (!el || el.dataset.pmWired === '1') return;
-  el.dataset.pmWired = '1';
-  el.setAttribute('autocomplete', 'off');
-  el.removeAttribute('name');
-  if (el.type !== 'text' && !el.value) el.type = 'text';
-  el.addEventListener('focus', function () {
-    if (!el.value && el.type !== 'text') el.type = 'text';
-  });
-  el.addEventListener('keydown', function () {
-    if (el.type !== 'password') el.type = 'password';
-  });
-  el.addEventListener('input', function () {
-    if (el.value && el.type !== 'password') el.type = 'password';
-  });
-}
-
-function _unmountSignupForm() {
-  var slot = document.getElementById('signup-form-slot');
-  if (slot) slot.innerHTML = '';
-}
-
-function _mountSignupForm() {
-  var slot = document.getElementById('signup-form-slot');
-  if (!slot) return null;
-  if (document.getElementById('signup-form')) return document.getElementById('signup-form');
-  slot.innerHTML = _SIGNUP_FORM_HTML;
-  _wireAuthInputIsolation();
-  return document.getElementById('signup-form');
+function _clearAuthFormFields() {
+  var form = document.getElementById(authMode === 'signup' ? 'pb-signup' : 'pb-signin');
+  if (form && typeof form.reset === 'function') form.reset();
+  _clearAuthError();
 }
 
 function _setAuthScreenVisible(show) {
@@ -827,12 +787,8 @@ function _setAuthScreenVisible(show) {
 function setAuthTab(mode) {
   mode = (mode === 'signup') ? 'signup' : 'login';
 
-  // Boot / preview re-entry while the user is already typing: do nothing.
-  if (authMode === mode && _authDomMatches(mode)) {
-    if (_authFieldFocused()) return;
-    return;
-  }
-  if (authMode === mode && _authFieldFocused()) return;
+  // Same tab and DOM already correct — do not touch the form (avoids focus loss).
+  if (authMode === mode && _authDomMatches(mode)) return;
 
   authMode = mode;
   var tabLogin = document.getElementById('tab-login');
@@ -840,15 +796,8 @@ function setAuthTab(mode) {
   if (tabLogin) tabLogin.classList.toggle('active', mode === 'login');
   if (tabSignup) tabSignup.classList.toggle('active', mode === 'signup');
 
-  if (mode === 'login') {
-    _unmountSignupForm(); // signup must not remain in the DOM
-    _restoreLoginForm();
-    _wireSigninSecretField();
-  } else {
-    _holdLoginForm();
-    _mountSignupForm();
-    updateSignupContactAttrs();
-  }
+  _injectAuthForm(mode);
+  if (mode === 'signup') updateSignupContactAttrs();
 
   var footer = document.getElementById('auth-footer-text');
   if (footer) {
@@ -856,24 +805,12 @@ function setAuthTab(mode) {
       ? "Don't have an account? <span style='color:var(--cyan);cursor:pointer' onclick=\"setAuthTab('signup')\">Create one free</span>"
       : "Already have an account? <span style='color:var(--cyan);cursor:pointer' onclick=\"setAuthTab('login')\">Sign in</span>";
   }
-  var err = document.getElementById('auth-error');
-  if (err) err.style.display = 'none';
-  _wireAuthInputIsolation();
-}
-
-// Prevent auth-card / screen-level handlers from stealing focus from inputs.
-function _wireAuthInputIsolation() {
-  document.querySelectorAll('#login-form .auth-inp, #signup-form .auth-inp').forEach(function(el) {
-    if (el.dataset.isoWired === '1') return;
-    el.dataset.isoWired = '1';
-    ['click', 'mousedown', 'touchstart', 'focusin'].forEach(function(evt) {
-      el.addEventListener(evt, function(e) { e.stopPropagation(); }, true);
-    });
-  });
+  _clearAuthError();
 }
 
 function showAuthError(msg) {
   const el = document.getElementById('auth-error');
+  if (!el) return;
   el.textContent = msg;
   el.style.display = 'block';
 }
@@ -1074,20 +1011,18 @@ function openRecovery(kind){
 async function submitAuth(e) {
   if (e && e.preventDefault) e.preventDefault();
   const btn = _authSubmitBtn();
-  const loginEmail = (document.getElementById('a-email') || {}).value.trim();
-  const passEl = document.getElementById(authMode === 'signup' ? 'a-pass-signup' : 'signin-secret')
-    || document.getElementById('signin-secret')
-    || document.getElementById('a-pass');
+  const loginEmail = ((document.getElementById('pb-id') || {}).value || '').trim();
+  const passEl = document.getElementById(authMode === 'signup' ? 'pb-su-pw' : 'pb-pw');
   const pass = passEl ? passEl.value : '';
   // Signup contact method dropdown
-  const contactMethodEl = document.getElementById('a-contact-method');
-  const contactValueEl  = document.getElementById('a-contact-value');
+  const contactMethodEl = document.getElementById('pb-su-method');
+  const contactValueEl  = document.getElementById('pb-su-contact');
   const contactMethod   = contactMethodEl ? contactMethodEl.value : '';
   const contactValue    = contactValueEl  ? contactValueEl.value.trim() : '';
   const email        = contactMethod === 'email'    ? contactValue : (loginEmail || (''));
   const signalContact = contactMethod === 'signal'  ? contactValue : '';
   const telegramContact = contactMethod === 'telegram' ? contactValue : '';
-  document.getElementById('auth-error').style.display = 'none';
+  _clearAuthError();
 
   // Login accepts email, Telegram/Signal handle, or display name.
   // Signup requires password plus the contact value.
@@ -1104,12 +1039,13 @@ async function submitAuth(e) {
   try {
     let data;
     var signupEmail = '';
+    var signupName = '';
     if (authMode === 'signup') {
-      const name = document.getElementById('a-name').value.trim();
-      const pass2 = document.getElementById('a-pass2').value;
+      signupName = document.getElementById('pb-su-name').value.trim();
+      const pass2 = document.getElementById('pb-su-pw2').value;
       const ageCheck = document.getElementById('check-age').checked;
       const termsCheck = document.getElementById('check-terms').checked;
-      if (!name) { showAuthError('Enter your display name'); btn.disabled=false; btn.textContent='Create My Account →'; return; }
+      if (!signupName) { showAuthError('Enter your display name'); btn.disabled=false; btn.textContent='Create My Account →'; return; }
       if (pass !== pass2) { showAuthError('Passwords do not match'); btn.disabled=false; btn.textContent='Create My Account →'; return; }
       if (!ageCheck) { showAuthError('You must confirm you are 21+'); btn.disabled=false; btn.textContent='Create My Account →'; return; }
       if (!termsCheck) { showAuthError('You must accept the Terms of Service'); btn.disabled=false; btn.textContent='Create My Account →'; return; }
@@ -1118,13 +1054,25 @@ async function submitAuth(e) {
       signupEmail = email
         || (signalContact   ? 'signal+'   + signalContact.replace(/[^a-zA-Z0-9]/g,'').toLowerCase()   + '@pocketbooks.local' : '')
         || (telegramContact ? 'telegram+' + telegramContact.replace(/[^a-zA-Z0-9]/g,'').toLowerCase() + '@pocketbooks.local' : '');
-      data = await apiCall('POST', '/api/auth/signup', { name, email: signupEmail, password: pass, role: 'user',
+      data = await apiCall('POST', '/api/auth/signup', { name: signupName, email: signupEmail, password: pass, role: 'user',
         signalContact: signalContact || null, telegramContact: telegramContact || null });
     } else {
       data = await apiCall('POST', '/api/auth/login', { email: loginEmail, password: pass });
     }
 
-    if (data.error) { showAuthError(data.error); btn.disabled=false; btn.textContent=authMode==='login'?'Sign In →':'Create My Account →'; return; }
+    if (data.error) {
+      showAuthError(data.error);
+      if (authMode === 'login') {
+        var pwFail = document.getElementById('pb-pw');
+        if (pwFail) pwFail.value = '';
+      }
+      btn.disabled=false;
+      btn.textContent=authMode==='login'?'Sign In →':'Create My Account →';
+      return;
+    }
+
+    // Clear credentials from the DOM before redirect.
+    _clearAuthFormFields();
 
     TOKEN = data.token;
     _storeAuthToken(data.token, data.expiresIn);
@@ -1152,7 +1100,7 @@ async function submitAuth(e) {
     try {
       _loginRole = (data.role || (data.user && data.user.role) || 'player');
       var _uname = (authMode==='signup'
-        ? document.getElementById('a-name').value.trim()
+        ? (signupName || 'user')
         : ((data.user && data.user.name) || (storedEmail ? storedEmail.split('@')[0] : 'user')));
       var _rec  = {
         id:            data.userId || data.id || (data.user && data.user.id) || null,
@@ -1185,6 +1133,10 @@ async function submitAuth(e) {
 
   } catch(e) {
     showAuthError('Connection error — try again');
+    if (authMode === 'login') {
+      var pwErr = document.getElementById('pb-pw');
+      if (pwErr) pwErr.value = '';
+    }
     btn.disabled = false;
     btn.textContent = authMode==='login' ? 'Sign In →' : 'Create My Account →';
   }
@@ -2254,13 +2206,11 @@ if (isPreview && !_isAuthScreen) {
 } else {
   checkAuthGate();
   if (typeof hideSportsbookChromeForPlayers === 'function') hideSportsbookChromeForPlayers();
-  // Default HTML already shows the login form. Calling setAuthTab('login') on
-  // boot re-armed inputs and stole focus while typing — do not do that.
+  // Default HTML already shows the login form. Do not call setAuthTab('login')
+  // on boot — that would wipe and recreate inputs while the user may be typing.
   // Only mount signup when explicitly forced; signup stays out of the DOM otherwise.
   if (!TOKEN && window.__pbForceAuth === 'signup' && typeof setAuthTab === 'function') {
     setAuthTab('signup');
-  } else if (typeof _wireSigninSecretField === 'function') {
-    _wireSigninSecretField();
   }
   loadUser();
 }
