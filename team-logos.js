@@ -372,6 +372,518 @@
     return resolveTeamName(stripped, sport) || stripped;
   }
 
+  // ── Soccer ESPN team IDs + Tennis player headshots ──────────────────────
+  // Soccer logos: https://a.espncdn.com/i/teamlogos/soccer/500/{espnTeamId}.png
+  // Tennis photos: https://a.espncdn.com/i/headshots/tennis/players/full/{espnPlayerId}.png
+  // Teams list endpoint soccer/all/teams 404s; per-league teams endpoints lack
+  // browser CORS. Prefer ESPN common search (ACAO: *) for lookups; optionally
+  // warm a multi-league cache when a proxy or CORS allows it.
+
+  var _soccerIdByNorm = {};      // normalized name → espn team id string
+  var _soccerMetaByNorm = {};    // normalized name → { id, abbr, displayName }
+  var _soccerMiss = {};          // normalized name → true
+  var _soccerPending = {};       // in-flight lookups
+  var _soccerCacheWarmed = false;
+  var _soccerWarmPromise = null;
+
+  var _tennisIdByNorm = {};
+  var _tennisMiss = {};
+  var _tennisPending = {};
+
+  var SOCCER_LEAGUE_SLUGS = [
+    'eng.1', 'esp.1', 'ita.1', 'ger.1', 'fra.1', 'usa.1',
+    'uefa.champions', 'uefa.europa', 'fifa.world', 'mex.1', 'ned.1', 'por.1',
+    'uefa.nations', 'eng.2', 'esp.2'
+  ];
+
+  /** FIFA/common 3-letter (and name) → flagcdn ISO code */
+  var COUNTRY_FLAG_CODES = {
+    usa: 'us', 'united states': 'us', 'united states of america': 'us', usmnt: 'us',
+    eng: 'gb-eng', england: 'gb-eng',
+    sco: 'gb-sct', scotland: 'gb-sct',
+    wal: 'gb-wls', wales: 'gb-wls',
+    nir: 'gb-nir', 'northern ireland': 'gb-nir',
+    fra: 'fr', france: 'fr',
+    ger: 'de', germany: 'de', deu: 'de',
+    esp: 'es', spain: 'es',
+    ita: 'it', italy: 'it',
+    por: 'pt', portugal: 'pt',
+    ned: 'nl', netherlands: 'nl', hol: 'nl',
+    bel: 'be', belgium: 'be',
+    bra: 'br', brazil: 'br',
+    arg: 'ar', argentina: 'ar',
+    mex: 'mx', mexico: 'mx',
+    can: 'ca', canada: 'ca',
+    jpn: 'jp', japan: 'jp',
+    kor: 'kr', 'south korea': 'kr', korea: 'kr',
+    aus: 'au', australia: 'au',
+    nzl: 'nz', 'new zealand': 'nz',
+    uru: 'uy', uruguay: 'uy',
+    chi: 'cl', chile: 'cl',
+    col: 'co', colombia: 'co',
+    per: 'pe', peru: 'pe',
+    ecu: 'ec', ecuador: 'ec',
+    par: 'py', paraguay: 'py',
+    bol: 'bo', bolivia: 'bo',
+    ven: 've', venezuela: 've',
+    crc: 'cr', 'costa rica': 'cr',
+    pan: 'pa', panama: 'pa',
+    jam: 'jm', jamaica: 'jm',
+    hai: 'ht', haiti: 'ht',
+    hon: 'hn', honduras: 'hn',
+    slv: 'sv', 'el salvador': 'sv',
+    gua: 'gt', guatemala: 'gt',
+    mar: 'ma', morocco: 'ma',
+    sen: 'sn', senegal: 'sn',
+    nga: 'ng', nigeria: 'ng',
+    gha: 'gh', ghana: 'gh',
+    cmr: 'cm', cameroon: 'cm',
+    egy: 'eg', egypt: 'eg',
+    tun: 'tn', tunisia: 'tn',
+    alg: 'dz', algeria: 'dz',
+    civ: 'ci', 'ivory coast': 'ci', "cote divoire": 'ci',
+    rsa: 'za', 'south africa': 'za',
+    irn: 'ir', iran: 'ir',
+    irq: 'iq', iraq: 'iq',
+    sau: 'sa', 'saudi arabia': 'sa',
+    qat: 'qa', qatar: 'qa',
+    uae: 'ae', 'united arab emirates': 'ae',
+    tur: 'tr', turkey: 'tr', turkiye: 'tr',
+    gre: 'gr', greece: 'gr',
+    cro: 'hr', croatia: 'hr',
+    srb: 'rs', serbia: 'rs',
+    svn: 'si', slovenia: 'si',
+    svk: 'sk', slovakia: 'sk',
+    cze: 'cz', 'czech republic': 'cz', czechia: 'cz',
+    pol: 'pl', poland: 'pl',
+    ukr: 'ua', ukraine: 'ua',
+    rus: 'ru', russia: 'ru',
+    swe: 'se', sweden: 'se',
+    nor: 'no', norway: 'no',
+    den: 'dk', denmark: 'dk',
+    fin: 'fi', finland: 'fi',
+    isl: 'is', iceland: 'is',
+    sui: 'ch', switzerland: 'ch',
+    aut: 'at', austria: 'at',
+    hun: 'hu', hungary: 'hu',
+    rou: 'ro', romania: 'ro',
+    bul: 'bg', bulgaria: 'bg',
+    irl: 'ie', ireland: 'ie', 'republic of ireland': 'ie',
+    chn: 'cn', china: 'cn',
+    ind: 'in', india: 'in',
+    tha: 'th', thailand: 'th',
+    vie: 'vn', vietnam: 'vn',
+    idn: 'id', indonesia: 'id',
+    mys: 'my', malaysia: 'my',
+    phi: 'ph', philippines: 'ph',
+    sgp: 'sg', singapore: 'sg'
+  };
+
+  function _normKey(name) {
+    return String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  function _playerInitials(name) {
+    var parts = String(name || '?').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  function _playerInitialColors(name) {
+    var hash = 0;
+    var s = String(name || '?');
+    for (var i = 0; i < s.length; i++) hash = ((hash << 5) - hash) + s.charCodeAt(i);
+    var hue = Math.abs(hash) % 360;
+    return { bg: 'hsl(' + hue + ',45%,32%)', fg: '#fff' };
+  }
+
+  function _initialsFallbackHtml(name, size, className) {
+    var colors = _playerInitialColors(name);
+    var initials = _playerInitials(name);
+    var cls = className ? ' class="' + esc(className) + '"' : '';
+    return '<div' + cls + ' style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:' + colors.bg + ';color:' + colors.fg + ';font-size:' + Math.max(8, Math.round(size * 0.32)) + 'px;font-weight:900;letter-spacing:0.3px;flex-shrink:0" aria-hidden="true">' + esc(initials) + '</div>';
+  }
+
+  function getCountryFlagCode(teamName) {
+    var raw = String(teamName || '').trim();
+    if (!raw) return '';
+    var lower = raw.toLowerCase();
+    if (COUNTRY_FLAG_CODES[lower]) return COUNTRY_FLAG_CODES[lower];
+    var norm = _normKey(raw);
+    if (COUNTRY_FLAG_CODES[norm]) return COUNTRY_FLAG_CODES[norm];
+    var meta = _soccerMetaByNorm[norm];
+    if (meta && meta.abbr) {
+      var ab = String(meta.abbr).toLowerCase();
+      if (COUNTRY_FLAG_CODES[ab]) return COUNTRY_FLAG_CODES[ab];
+    }
+    // Last token or whole abbrev-style names
+    var parts = lower.split(/\s+/);
+    if (parts.length === 1 && parts[0].length === 3 && COUNTRY_FLAG_CODES[parts[0]]) {
+      return COUNTRY_FLAG_CODES[parts[0]];
+    }
+    return '';
+  }
+
+  function getCountryFlagUrl(teamName, width) {
+    var code = getCountryFlagCode(teamName);
+    if (!code) return '';
+    var w = width || 24;
+    var h = Math.round(w * 18 / 24);
+    return 'https://flagcdn.com/' + w + 'x' + h + '/' + code + '.png';
+  }
+
+  function _rememberSoccerTeam(displayName, id, abbr) {
+    if (!id) return;
+    var idStr = String(id);
+    var names = [displayName];
+    if (abbr) names.push(abbr);
+    names.forEach(function (n) {
+      var k = _normKey(n);
+      if (!k) return;
+      _soccerIdByNorm[k] = idStr;
+      _soccerMetaByNorm[k] = { id: idStr, abbr: abbr || '', displayName: displayName || n };
+      delete _soccerMiss[k];
+    });
+  }
+
+  function _ingestSoccerTeamsPayload(data) {
+    try {
+      var sports = (data && data.sports) || [];
+      sports.forEach(function (sp) {
+        ((sp && sp.leagues) || []).forEach(function (lg) {
+          ((lg && lg.teams) || []).forEach(function (wrap) {
+            var t = (wrap && wrap.team) || wrap || {};
+            if (!t.id) return;
+            _rememberSoccerTeam(t.displayName || t.name || t.shortDisplayName, t.id, t.abbreviation);
+            if (t.location && t.name) _rememberSoccerTeam(t.location + ' ' + t.name, t.id, t.abbreviation);
+            if (t.shortDisplayName) _rememberSoccerTeam(t.shortDisplayName, t.id, t.abbreviation);
+            if (t.nickname) _rememberSoccerTeam(t.nickname, t.id, t.abbreviation);
+          });
+        });
+      });
+    } catch (_e) {}
+  }
+
+  function _lookupSoccerIdSync(teamName) {
+    var k = _normKey(teamName);
+    if (!k) return '';
+    if (_soccerIdByNorm[k]) return _soccerIdByNorm[k];
+    // Fuzzy: substring match against known keys
+    var keys = Object.keys(_soccerIdByNorm);
+    for (var i = 0; i < keys.length; i++) {
+      var kk = keys[i];
+      if (kk === k || kk.indexOf(k) >= 0 || k.indexOf(kk) >= 0) return _soccerIdByNorm[kk];
+    }
+    return '';
+  }
+
+  function getSoccerTeamLogo(teamName) {
+    var id = _lookupSoccerIdSync(teamName);
+    if (!id) return '';
+    return 'https://a.espncdn.com/i/teamlogos/soccer/500/' + id + '.png';
+  }
+
+  async function warmSoccerTeamsCache() {
+    if (_soccerCacheWarmed) return { ok: true, via: 'cache' };
+    if (_soccerWarmPromise) return _soccerWarmPromise;
+    _soccerWarmPromise = (async function () {
+      // Spec URL — currently 404s for league "all"
+      try {
+        var allRes = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/all/teams?limit=200', { cache: 'force-cache' });
+        if (allRes.ok) {
+          _ingestSoccerTeamsPayload(await allRes.json());
+          _soccerCacheWarmed = true;
+          return { ok: true, via: 'all' };
+        }
+      } catch (_eAll) { /* CORS or network */ }
+
+      var loaded = 0;
+      for (var i = 0; i < SOCCER_LEAGUE_SLUGS.length; i++) {
+        var slug = SOCCER_LEAGUE_SLUGS[i];
+        try {
+          var res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/' + slug + '/teams?limit=200', { cache: 'force-cache' });
+          if (!res.ok) continue;
+          _ingestSoccerTeamsPayload(await res.json());
+          loaded++;
+        } catch (_eLg) {
+          // Per-league teams endpoints typically lack ACAO — expected in browser.
+          break;
+        }
+      }
+      _soccerCacheWarmed = true;
+      return { ok: loaded > 0, via: loaded > 0 ? 'leagues' : 'search-only', leagues: loaded };
+    })();
+    try {
+      return await _soccerWarmPromise;
+    } finally {
+      /* keep promise for reuse */
+    }
+  }
+
+  async function _fetchSoccerTeamId(teamName) {
+    var k = _normKey(teamName);
+    if (!k) return null;
+    if (_soccerIdByNorm[k]) return _soccerIdByNorm[k];
+    if (_soccerMiss[k]) return null;
+    if (_soccerPending[k]) return _soccerPending[k];
+
+    _soccerPending[k] = (async function () {
+      try {
+        await warmSoccerTeamsCache();
+        var warmed = _lookupSoccerIdSync(teamName);
+        if (warmed) return warmed;
+
+        var url = 'https://site.api.espn.com/apis/common/v3/search?query=' +
+          encodeURIComponent(String(teamName).trim()) +
+          '&sport=soccer&type=team&limit=5';
+        var res = await fetch(url, { cache: 'force-cache' });
+        if (!res.ok) {
+          _soccerMiss[k] = true;
+          return null;
+        }
+        var data = await res.json();
+        var items = (data && data.items) || [];
+        var want = _normKey(teamName);
+        var pick = null;
+        for (var i = 0; i < items.length; i++) {
+          var it = items[i];
+          if (!it || !it.id) continue;
+          var dn = _normKey(it.displayName || it.name || '');
+          if (dn === want) { pick = it; break; }
+          if (!pick && (dn.indexOf(want) >= 0 || want.indexOf(dn) >= 0)) pick = it;
+        }
+        if (!pick && items.length) pick = items[0];
+        if (!pick || !pick.id) {
+          _soccerMiss[k] = true;
+          return null;
+        }
+        _rememberSoccerTeam(pick.displayName || pick.name || teamName, pick.id, pick.abbreviation);
+        return String(pick.id);
+      } catch (_e) {
+        _soccerMiss[k] = true;
+        return null;
+      } finally {
+        delete _soccerPending[k];
+      }
+    })();
+
+    return _soccerPending[k];
+  }
+
+  function handleSoccerLogoError(img) {
+    if (!img) return;
+    var step = parseInt(img.getAttribute('data-soccer-step') || '0', 10);
+    var teamName = img.getAttribute('data-team-name') || img.alt || '';
+    var size = parseInt(img.getAttribute('data-logo-size') || '40', 10);
+    var className = img.getAttribute('data-logo-class') || '';
+    var flag = img.getAttribute('data-flag-url') || getCountryFlagUrl(teamName, Math.max(24, Math.round(size * 0.55)));
+
+    if (step === 0 && flag) {
+      img.setAttribute('data-soccer-step', '1');
+      img.src = flag;
+      img.style.objectFit = 'cover';
+      return;
+    }
+    img.outerHTML = _initialsFallbackHtml(teamName, size, className);
+  }
+
+  function getSoccerTeamLogoImg(teamName, size, className) {
+    size = size || 40;
+    var name = String(teamName || '').trim();
+    var url = getSoccerTeamLogo(name);
+    var flag = getCountryFlagUrl(name, Math.max(24, Math.round(size * 0.55)));
+    var cls = className ? ' class="' + esc(className) + '"' : '';
+
+    if (!url && !flag) {
+      return '<span data-soccer-team="' + esc(name) + '" data-logo-size="' + size + '"' +
+        (className ? ' data-logo-class="' + esc(className) + '"' : '') + '>' +
+        _initialsFallbackHtml(name, size, className) + '</span>';
+    }
+
+    var src = url || flag;
+    return '<img' + cls +
+      ' src="' + esc(src) + '"' +
+      ' alt="' + esc(name) + '"' +
+      ' width="' + size + '" height="' + size + '"' +
+      ' style="width:' + size + 'px;height:' + size + 'px;object-fit:contain;display:block"' +
+      ' referrerpolicy="no-referrer"' +
+      ' data-soccer-step="' + (url ? '0' : '1') + '"' +
+      ' data-soccer-team="' + esc(name) + '"' +
+      ' data-team-name="' + esc(name) + '"' +
+      ' data-logo-size="' + size + '"' +
+      ' data-flag-url="' + esc(flag) + '"' +
+      (className ? ' data-logo-class="' + esc(className) + '"' : '') +
+      ' onerror="window.handleSoccerLogoError&&window.handleSoccerLogoError(this)">';
+  }
+
+  function getTennisPlayerPhoto(playerName) {
+    var k = _normKey(playerName);
+    var id = k && _tennisIdByNorm[k];
+    if (!id) return '';
+    return 'https://a.espncdn.com/i/headshots/tennis/players/full/' + id + '.png';
+  }
+
+  async function _fetchTennisPlayerId(playerName) {
+    var k = _normKey(playerName);
+    if (!k) return null;
+    if (_tennisIdByNorm[k]) return _tennisIdByNorm[k];
+    if (_tennisMiss[k]) return null;
+    if (_tennisPending[k]) return _tennisPending[k];
+
+    _tennisPending[k] = (async function () {
+      var url = 'https://site.api.espn.com/apis/common/v3/search?query=' +
+        encodeURIComponent(String(playerName).trim()) +
+        '&sport=tennis&type=player&limit=1';
+      try {
+        var res = await fetch(url, { cache: 'force-cache' });
+        if (!res.ok) {
+          _tennisMiss[k] = true;
+          return null;
+        }
+        var data = await res.json();
+        var items = (data && data.items) || [];
+        var pick = items[0];
+        if (!pick || !pick.id) {
+          _tennisMiss[k] = true;
+          return null;
+        }
+        _tennisIdByNorm[k] = String(pick.id);
+        if (pick.displayName) _tennisIdByNorm[_normKey(pick.displayName)] = String(pick.id);
+        return String(pick.id);
+      } catch (_e) {
+        _tennisMiss[k] = true;
+        return null;
+      } finally {
+        delete _tennisPending[k];
+      }
+    })();
+
+    return _tennisPending[k];
+  }
+
+  function handleTennisPhotoError(img) {
+    if (!img) return;
+    var name = img.getAttribute('data-player-name') || img.alt || '';
+    var size = parseInt(img.getAttribute('data-logo-size') || '40', 10);
+    var className = img.getAttribute('data-logo-class') || '';
+    var k = _normKey(name);
+    if (k && _tennisIdByNorm[k]) {
+      _tennisMiss[k] = true;
+      delete _tennisIdByNorm[k];
+    }
+    img.outerHTML = _initialsFallbackHtml(name, size, className);
+  }
+
+  function getTennisPlayerPhotoImg(playerName, size, className) {
+    size = size || 40;
+    var name = String(playerName || '').trim();
+    var url = getTennisPlayerPhoto(name);
+    var cls = className ? ' class="' + esc(className) + '"' : '';
+
+    if (!url) {
+      return '<span data-tennis-player="' + esc(name) + '" data-logo-size="' + size + '"' +
+        (className ? ' data-logo-class="' + esc(className) + '"' : '') + '>' +
+        _initialsFallbackHtml(name, size, className) + '</span>';
+    }
+
+    return '<img' + cls +
+      ' src="' + esc(url) + '"' +
+      ' alt="' + esc(name) + '"' +
+      ' width="' + size + '" height="' + size + '"' +
+      ' style="width:' + size + 'px;height:' + size + 'px;object-fit:cover;display:block;border-radius:10px"' +
+      ' referrerpolicy="no-referrer"' +
+      ' data-tennis-player="' + esc(name) + '"' +
+      ' data-player-name="' + esc(name) + '"' +
+      ' data-logo-size="' + size + '"' +
+      (className ? ' data-logo-class="' + esc(className) + '"' : '') +
+      ' onerror="window.handleTennisPhotoError&&window.handleTennisPhotoError(this)">';
+  }
+
+  function _replacePlaceholderWithImg(el, imgHtml) {
+    if (!el || !el.parentNode) return;
+    var tmp = document.createElement('div');
+    tmp.innerHTML = imgHtml;
+    var node = tmp.firstChild;
+    if (!node) return;
+    el.parentNode.replaceChild(node, el);
+  }
+
+  async function hydrateEspnLobbyMedia(root) {
+    var scope = root || (typeof document !== 'undefined' ? document : null);
+    if (!scope || !scope.querySelectorAll) return;
+
+    await warmSoccerTeamsCache();
+
+    var soccerEls = Array.prototype.slice.call(scope.querySelectorAll('[data-soccer-team]'));
+    var tennisEls = Array.prototype.slice.call(scope.querySelectorAll('[data-tennis-player]'));
+
+    var soccerNames = [];
+    soccerEls.forEach(function (el) {
+      var n = el.getAttribute('data-soccer-team') || '';
+      if (n) soccerNames.push(n);
+    });
+    var tennisNames = [];
+    tennisEls.forEach(function (el) {
+      var n = el.getAttribute('data-tennis-player') || '';
+      if (n) tennisNames.push(n);
+    });
+
+    // Dedupe + concurrent lookups
+    async function runPool(names, worker, concurrency) {
+      var seen = {};
+      var unique = [];
+      names.forEach(function (n) {
+        var k = _normKey(n);
+        if (!k || seen[k]) return;
+        seen[k] = true;
+        unique.push(n);
+      });
+      var idx = 0;
+      var limit = Math.max(1, concurrency || 6);
+      async function pump() {
+        while (idx < unique.length) {
+          var i = idx++;
+          await worker(unique[i]);
+        }
+      }
+      var jobs = [];
+      for (var w = 0; w < Math.min(limit, unique.length); w++) jobs.push(pump());
+      await Promise.all(jobs);
+    }
+
+    await Promise.all([
+      runPool(soccerNames, _fetchSoccerTeamId, 6),
+      runPool(tennisNames, _fetchTennisPlayerId, 6)
+    ]);
+
+    if (!scope.isConnected && scope !== document) return;
+
+    soccerEls = Array.prototype.slice.call(scope.querySelectorAll('[data-soccer-team]'));
+    tennisEls = Array.prototype.slice.call(scope.querySelectorAll('[data-tennis-player]'));
+
+    soccerEls.forEach(function (el) {
+      var name = el.getAttribute('data-soccer-team') || '';
+      var size = parseInt(el.getAttribute('data-logo-size') || '40', 10);
+      var className = el.getAttribute('data-logo-class') || '';
+      var url = getSoccerTeamLogo(name);
+      var flag = getCountryFlagUrl(name, Math.max(24, Math.round(size * 0.55)));
+      if (el.tagName === 'IMG' && url && el.getAttribute('src') === url) return;
+      if (!url && !flag) return;
+      _replacePlaceholderWithImg(el, getSoccerTeamLogoImg(name, size, className));
+    });
+
+    tennisEls.forEach(function (el) {
+      var name = el.getAttribute('data-tennis-player') || '';
+      var size = parseInt(el.getAttribute('data-logo-size') || '40', 10);
+      var className = el.getAttribute('data-logo-class') || '';
+      var url = getTennisPlayerPhoto(name);
+      if (el.tagName === 'IMG' && url && el.getAttribute('src') === url) return;
+      if (!url) return;
+      _replacePlaceholderWithImg(el, getTennisPlayerPhotoImg(name, size, className));
+    });
+  }
+
   global.TEAM_LOGOS = TEAM_LOGOS;
   global.normalizeSport = normalizeSport;
   global.resolveTeamName = resolveTeamName;
@@ -383,4 +895,14 @@
   global.getTeamLogoImg = getTeamLogoImg;
   global.handleTeamLogoError = handleTeamLogoError;
   global.extractTeamFromPick = extractTeamFromPick;
+  global.getSoccerTeamLogo = getSoccerTeamLogo;
+  global.getSoccerTeamLogoImg = getSoccerTeamLogoImg;
+  global.handleSoccerLogoError = handleSoccerLogoError;
+  global.getTennisPlayerPhoto = getTennisPlayerPhoto;
+  global.getTennisPlayerPhotoImg = getTennisPlayerPhotoImg;
+  global.handleTennisPhotoError = handleTennisPhotoError;
+  global.getCountryFlagUrl = getCountryFlagUrl;
+  global.getCountryFlagCode = getCountryFlagCode;
+  global.warmSoccerTeamsCache = warmSoccerTeamsCache;
+  global.hydrateEspnLobbyMedia = hydrateEspnLobbyMedia;
 })(typeof window !== 'undefined' ? window : this);

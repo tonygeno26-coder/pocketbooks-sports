@@ -129,6 +129,8 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .mc-team{display:flex;align-items:center;gap:10px}
 .mc-jersey{width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:900;background:linear-gradient(145deg,#1e1e1e,#111);border:1px solid rgba(255,255,255,0.06);padding:7px;overflow:hidden;box-shadow:inset 0 0 8px rgba(0,0,0,0.4),0 2px 8px rgba(0,0,0,0.3);flex-shrink:0}
 .mc-jersey img{width:100%;height:100%;object-fit:contain;display:block;max-width:100%;max-height:100%}
+.mc-jersey.mc-jersey-headshot{padding:2px;border-radius:14px}
+.mc-jersey.mc-jersey-headshot img{object-fit:cover;border-radius:10px}
 .mc-team{display:flex;align-items:center;gap:8px}
 .mc-city{font-size:0.6rem;color:#555;line-height:1.2;text-transform:uppercase;letter-spacing:0.3px}
 .mc-name{font-size:0.92rem;font-weight:800;letter-spacing:-0.2px;line-height:1.2}
@@ -1638,14 +1640,36 @@ async function api(method,path,body,_retried){
   return data;
 }
 
-// Team logos via shared team-logos.js
+// Team logos via shared team-logos.js (soccer ESPN IDs + tennis headshots)
+function _pbAvatarSportKey(sport) {
+  var s = String(sport || (typeof _currentSport !== 'undefined' ? _currentSport : '') || '').toLowerCase();
+  if (s.indexOf('tennis') === 0 || s === 'atp' || s === 'wta') return 'tennis';
+  if (s.indexOf('soccer') === 0 || s === 'epl' || s === 'mls' || s === 'ucl' ||
+      s === 'laliga' || s === 'seriea' || s === 'bundesliga' || s === 'ligue1' ||
+      s === 'worldcup' || s === 'euros') return 'soccer';
+  return s;
+}
+
 function teamAvatar(name, sport) {
   sport = sport || (typeof _currentSport !== 'undefined' ? _currentSport : '') || '';
+  var kind = _pbAvatarSportKey(sport);
+  if (kind === 'tennis' && typeof getTennisPlayerPhotoImg === 'function') {
+    return '<div class="mc-jersey mc-jersey-headshot">' + getTennisPlayerPhotoImg(name, 52) + '</div>';
+  }
+  if (kind === 'soccer' && typeof getSoccerTeamLogoImg === 'function') {
+    return '<div class="mc-jersey">' + getSoccerTeamLogoImg(name, 52) + '</div>';
+  }
   if (typeof getTeamLogoImg === 'function') {
     return '<div class="mc-jersey">' + getTeamLogoImg(name, sport, 52) + '</div>';
   }
   var abbr = String(name || '?').split(' ').slice(-1)[0].slice(0, 3).toUpperCase();
   return '<div class="mc-jersey">' + abbr + '</div>';
+}
+
+function _pbHydrateLobbyAvatars(root) {
+  if (typeof hydrateEspnLobbyMedia === 'function') {
+    hydrateEspnLobbyMedia(root || document.getElementById('games-list') || document).catch(function(){});
+  }
 }
 
 // LOAD GAMES
@@ -2197,15 +2221,18 @@ var _PB_PROPS_SUPPORTED_SPORTS = ['mlb', 'nba', 'nfl', 'nhl', 'ncaab', 'ncaaf', 
 var _espnPlayerCache = {};
 var _ESPN_SEARCH_SPORT = {
   mlb: 'baseball', nba: 'basketball', wnba: 'basketball', ncaab: 'basketball',
-  nfl: 'football', ncaaf: 'football', ncaafb: 'football', nhl: 'hockey'
+  nfl: 'football', ncaaf: 'football', ncaafb: 'football', nhl: 'hockey',
+  tennis: 'tennis', tennis_atp: 'tennis', tennis_wta: 'tennis'
 };
 var _ESPN_HEADSHOT_SPORT = {
   mlb: 'mlb', nba: 'nba', nfl: 'nfl', nhl: 'nhl', wnba: 'wnba',
-  ncaab: 'mens-college-basketball', ncaaf: 'college-football', ncaafb: 'college-football'
+  ncaab: 'mens-college-basketball', ncaaf: 'college-football', ncaafb: 'college-football',
+  tennis: 'tennis', tennis_atp: 'tennis', tennis_wta: 'tennis'
 };
 var _ESPN_LEAGUE_SLUG = {
   mlb: 'mlb', nba: 'nba', nfl: 'nfl', nhl: 'nhl', wnba: 'wnba',
-  ncaab: 'mens-college-basketball', ncaaf: 'college-football', ncaafb: 'college-football'
+  ncaab: 'mens-college-basketball', ncaaf: 'college-football', ncaafb: 'college-football',
+  tennis: 'atp', tennis_atp: 'atp', tennis_wta: 'wta'
 };
 
 function _pbSportSupportsProps(sport) {
@@ -2223,6 +2250,19 @@ function _pbSpreadMarketLabel(sport) {
   return 'Spread';
 }
 
+function _pbLobbyLogoImg(name, sport, size) {
+  size = size || 36;
+  var kind = _pbAvatarSportKey(sport);
+  if (kind === 'tennis' && typeof getTennisPlayerPhotoImg === 'function') {
+    return getTennisPlayerPhotoImg(name, size);
+  }
+  if (kind === 'soccer' && typeof getSoccerTeamLogoImg === 'function') {
+    return getSoccerTeamLogoImg(name, size);
+  }
+  if (typeof getTeamLogoImg === 'function') return getTeamLogoImg(name, sport, size);
+  return '';
+}
+
 function _pbNormalizePropSport(sport) {
   var s = String(sport || (typeof _currentSport !== 'undefined' ? _currentSport : 'mlb')).toLowerCase();
   if (s === 'ncaafb') return 'ncaaf';
@@ -2232,6 +2272,7 @@ function _pbNormalizePropSport(sport) {
   if (s === 'basketball_nba') return 'nba';
   if (s === 'basketball_wnba') return 'wnba';
   if (s === 'icehockey_nhl') return 'nhl';
+  if (s === 'tennis_atp' || s === 'atp' || s === 'tennis_wta' || s === 'wta') return 'tennis';
   return s;
 }
 
@@ -2817,6 +2858,7 @@ async function loadGames(sport, opts){
     }
     if (opts.silent && el.querySelector('.market-card[data-game-id]')) {
       _pbSyncGamesListInPlace(el, games);
+      _pbHydrateLobbyAvatars(el);
       return;
     }
     el.innerHTML=games.map(_pbRenderGameCardHtml).filter(function(s){ return s; }).join('');
@@ -2825,6 +2867,7 @@ async function loadGames(sport, opts){
     _pbFlashLineMovements();
     _pbApplyLiveFreshnessState();
     _pbResyncBetSlipSelections();
+    _pbHydrateLobbyAvatars(el);
   }catch(e){console.error('[sportsbook fetch failed]',e.message);el.innerHTML='<div class="empty" style="color:#ff4444">'+e.message+'</div>';}
 }
 
@@ -4313,8 +4356,9 @@ function bsRenderLegs() {
           var pshort = pteams.length===2 ? pteams[0].split(' ').pop()+' vs '+pteams[1].split(' ').pop() : pg;
           var legSport = b.sport || _currentSport || 'mlb';
           var pteam = (typeof extractTeamFromPick === 'function') ? extractTeamFromPick(pp, pteams[1]||'', pteams[0]||'', legSport) : pp;
-          var plogoHtml = (typeof getTeamLogoImg === 'function')
-            ? '<div class="dkslip-leg-logo">' + getTeamLogoImg(pteam || pp, legSport, 36) + '</div>'
+          var _plogo = (typeof _pbLobbyLogoImg === 'function') ? _pbLobbyLogoImg(pteam || pp, legSport, 36) : '';
+          var plogoHtml = _plogo
+            ? '<div class="dkslip-leg-logo">' + _plogo + '</div>'
             : '<div class="dkslip-leg-logo">' + bsTeamAbbr(pp, pg) + '</div>';
           return '<div class="dkslip-leg" data-cell-id="'+b.cellId+'">' +
             plogoHtml +
@@ -4354,8 +4398,9 @@ function bsRenderLegs() {
         try { if(b.time){ var td=new Date(b.time); if(!isNaN(td.getTime())) timeStr=' • '+td.toLocaleString('en-US',{weekday:'short',hour:'2-digit',minute:'2-digit'}); } } catch(e){}
         var legSport = b.sport || _currentSport || 'mlb';
         var team = (typeof extractTeamFromPick === 'function') ? extractTeamFromPick(pick, teams[1]||'', teams[0]||'', legSport) : pick;
-        var logoHtml = (typeof getTeamLogoImg === 'function')
-          ? '<div class="dkslip-leg-logo">' + getTeamLogoImg(team || pick, legSport, 36) + '</div>'
+        var _logo = (typeof _pbLobbyLogoImg === 'function') ? _pbLobbyLogoImg(team || pick, legSport, 36) : '';
+        var logoHtml = _logo
+          ? '<div class="dkslip-leg-logo">' + _logo + '</div>'
           : '<div class="dkslip-leg-logo">' + bsTeamAbbr(pick, matchup) + '</div>';
         var st = bsStakes[b.cellId] || 0;
         var payout = st > 0 ? fmtDollar(st * amToDecimal(b.odds)) : null;
@@ -4584,8 +4629,9 @@ function openBetConfirm() {
     var legSport = b.sport || _currentSport || 'mlb';
     var teams = (b.game||'').split(' vs ');
     var team = (typeof extractTeamFromPick === 'function') ? extractTeamFromPick(b.pick, teams[1]||'', teams[0]||'', legSport) : b.pick;
-    var logoHtml = (typeof getTeamLogoImg === 'function')
-      ? '<div style="width:36px;height:36px;border-radius:8px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;padding:4px;flex-shrink:0;margin-right:10px;overflow:hidden">' + getTeamLogoImg(team || b.pick, legSport, 36) + '</div>'
+    var _cLogo = (typeof _pbLobbyLogoImg === 'function') ? _pbLobbyLogoImg(team || b.pick, legSport, 36) : '';
+    var logoHtml = _cLogo
+      ? '<div style="width:36px;height:36px;border-radius:8px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;padding:4px;flex-shrink:0;margin-right:10px;overflow:hidden">' + _cLogo + '</div>'
       : '<div style="width:36px;height:36px;border-radius:8px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:900;color:#333;flex-shrink:0;margin-right:10px">' + bsTeamAbbr(b.pick, b.game) + '</div>';
     var teams = (b.game||'').split(' vs ');
     var shortGame = teams.length===2 ? teams[0].split(' ').pop()+' vs '+teams[1].split(' ').pop() : (b.game||'');
@@ -8824,11 +8870,11 @@ function renderMyBets() {
     // which crashes on null/empty. Returns the raw teamAvatar() HTML
     // (a .mc-jersey div) so consumers can drop it into the sportsbook
     // .mc-team layout pattern unchanged.
-    function _safeTeamAvatar(name) {
+    function _safeTeamAvatar(name, sport) {
       var clean = (name != null) ? String(name).trim() : '';
       if (!clean) return '';
       try {
-        return teamAvatar(clean);
+        return teamAvatar(clean, sport || (typeof _currentSport !== 'undefined' ? _currentSport : ''));
       } catch (_e) {
         var abbr = clean.split(' ').slice(-1)[0].slice(0,3).toUpperCase();
         return '<div class="mc-jersey">' + abbr + '</div>';
@@ -8859,7 +8905,7 @@ function renderMyBets() {
       // .mc-jersey entirely rather than show a placeholder.
       var pickedTeam   = _legPickedTeamName(s);
       var teamSplit    = _splitCityName(pickedTeam || '');
-      var jerseyHtml   = pickedTeam ? _safeTeamAvatar(pickedTeam) : '';
+      var jerseyHtml   = pickedTeam ? _safeTeamAvatar(pickedTeam, s.sport || (t && t.sport)) : '';
       // Matchup text on a quiet second line, sportsbook-time style.
       var matchupBlock = (matchupText && matchupText.toLowerCase() !== pickText.toLowerCase())
         ? '<div style="font-size:0.66rem;color:#888;margin-top:2px">' + matchupText + '</div>'
@@ -10285,8 +10331,8 @@ function _renderResultsTicketCard(t){
   var teams   = matchup ? matchup.split(' vs ') : ['',''];
   var away    = (teams[0] || '').trim();
   var home    = (teams[1] || '').trim();
-  var awayLogo = (typeof teamAvatar === 'function' && away) ? teamAvatar(away) : '';
-  var homeLogo = (typeof teamAvatar === 'function' && home) ? teamAvatar(home) : '';
+  var awayLogo = (typeof teamAvatar === 'function' && away) ? teamAvatar(away, t.sport || first.sport) : '';
+  var homeLogo = (typeof teamAvatar === 'function' && home) ? teamAvatar(home, t.sport || first.sport) : '';
 
   var pick    = String(first.pick || first.name || first.label || '').trim() || '—';
   var market  = String(first.market || '').trim();
