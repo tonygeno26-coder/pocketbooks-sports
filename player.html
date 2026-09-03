@@ -941,6 +941,7 @@ function _debugClearTickets() {
   </button>
 </nav>
 
+<script src="player-photos.js"></script>
 <script src="team-logos.js"></script>
 <script>
 // ══ SESSION VALIDATION GATE ══════════════════════════════════════════════════
@@ -2276,8 +2277,10 @@ function _pbNormalizePropSport(sport) {
   return s;
 }
 
-function _pbEspnCacheKey(playerName, sport) {
-  return String(playerName || '').trim().toLowerCase() + '|' + _pbNormalizePropSport(sport);
+function _pbEspnCacheKey(playerName, sport, team) {
+  var base = String(playerName || '').trim().toLowerCase() + '|' + _pbNormalizePropSport(sport);
+  if (team) return base + '|' + String(team).trim().toLowerCase();
+  return base;
 }
 
 function _pbPlayerInitials(playerName) {
@@ -2287,7 +2290,13 @@ function _pbPlayerInitials(playerName) {
   return parts[0].slice(0, 2).toUpperCase();
 }
 
-function _pbPlayerInitialsColors(playerName) {
+function _pbPlayerInitialsColors(playerName, team, sport) {
+  try {
+    if (team && typeof getTeamColors === 'function') {
+      var tc = getTeamColors(team, sport);
+      if (tc && tc.primary) return { bg: tc.primary, fg: '#fff' };
+    }
+  } catch (_e) {}
   var hash = 0;
   var s = String(playerName || '?');
   for (var i = 0; i < s.length; i++) hash = ((hash << 5) - hash) + s.charCodeAt(i);
@@ -2295,14 +2304,18 @@ function _pbPlayerInitialsColors(playerName) {
   return { bg: 'hsl(' + hue + ',45%,32%)', fg: '#fff' };
 }
 
-function _pbPlayerInitialsAvatarHtml(playerName, attrs) {
+function _pbPlayerInitialsAvatarHtml(playerName, attrs, team, sport) {
   var initials = _pbPlayerInitials(playerName);
-  var colors = _pbPlayerInitialsColors(playerName);
+  var colors = _pbPlayerInitialsColors(playerName, team, sport);
   var extra = attrs || '';
   return '<div class="mc-prop-avatar mc-prop-initials" style="background:' + colors.bg + ';color:' + colors.fg + '"' + extra + '>' + initials + '</div>';
 }
 
 function _pbEspnHeadshotUrl(espnId, sport) {
+  if (typeof getPlayerHeadshotUrl === 'function') {
+    var via = getPlayerHeadshotUrl('', sport, espnId);
+    if (via) return via;
+  }
   var slug = _ESPN_HEADSHOT_SPORT[_pbNormalizePropSport(sport)] || _pbNormalizePropSport(sport) || 'mlb';
   return 'https://a.espncdn.com/i/headshots/' + slug + '/players/full/' + espnId + '.png';
 }
@@ -2310,44 +2323,108 @@ function _pbEspnHeadshotUrl(espnId, sport) {
 function _pbPlayerPropAvatar(playerName, team, sport) {
   sport = _pbNormalizePropSport(sport);
   var nameAttr = String(playerName || '').replace(/"/g, '&quot;');
-  var cacheKey = _pbEspnCacheKey(playerName, sport);
+  var teamAttr = String(team || '').replace(/"/g, '&quot;');
+  var cacheKey = _pbEspnCacheKey(playerName, sport, team);
   var cached = _espnPlayerCache[cacheKey];
-  var dataAttrs = ' data-player-name="' + nameAttr + '" data-player-sport="' + sport + '" data-espn-key="' + cacheKey.replace(/"/g, '') + '"';
+  // Tier 1: verified map (instant, no network)
+  if ((!cached || !cached.headshotUrl) && typeof getVerifiedPlayerId === 'function') {
+    var vid = getVerifiedPlayerId(playerName, sport);
+    if (vid) {
+      cached = { id: String(vid), headshotUrl: _pbEspnHeadshotUrl(vid, sport), verified: true };
+      _espnPlayerCache[cacheKey] = cached;
+      // also store without team for reuse
+      _espnPlayerCache[_pbEspnCacheKey(playerName, sport)] = cached;
+    }
+  }
+  var dataAttrs = ' data-player-name="' + nameAttr + '" data-player-sport="' + sport +
+    '" data-player-team="' + teamAttr + '" data-espn-key="' + cacheKey.replace(/"/g, '') + '"';
   if (cached && cached.headshotUrl) {
     return '<div class="mc-prop-avatar"' + dataAttrs + '>' +
       '<img src="' + cached.headshotUrl + '" alt="" referrerpolicy="no-referrer" ' +
+      'data-photo-step="0" data-player-name="' + nameAttr + '" data-player-sport="' + sport +
+      '" data-player-team="' + teamAttr + '" ' +
       'onerror="window._pbPropHeadshotError&&window._pbPropHeadshotError(this)">' +
       '</div>';
   }
-  return _pbPlayerInitialsAvatarHtml(playerName, dataAttrs);
+  return _pbPlayerInitialsAvatarHtml(playerName, dataAttrs, team, sport);
 }
 
 function _pbPropHeadshotError(img) {
   if (!img) return;
   var wrap = img.parentNode;
   if (!wrap) return;
-  var name = wrap.getAttribute('data-player-name') || '';
-  var sport = wrap.getAttribute('data-player-sport') || 'mlb';
-  var key = wrap.getAttribute('data-espn-key') || _pbEspnCacheKey(name, sport);
+  var name = wrap.getAttribute('data-player-name') || img.getAttribute('data-player-name') || '';
+  var sport = wrap.getAttribute('data-player-sport') || img.getAttribute('data-player-sport') || 'mlb';
+  var team = wrap.getAttribute('data-player-team') || img.getAttribute('data-player-team') || '';
+  var key = wrap.getAttribute('data-espn-key') || _pbEspnCacheKey(name, sport, team);
   if (_espnPlayerCache[key] && _espnPlayerCache[key].headshotUrl) {
     _espnPlayerCache[key] = { miss: true, id: _espnPlayerCache[key].id || null };
   }
-  var fb = document.createElement('div');
+  // Soccer props (rare): try team logo before initials
+  if (_pbNormalizePropSport(sport) === 'soccer' && team && typeof getSoccerTeamLogoImg === 'function') {
+    var logoHtml = getSoccerTeamLogoImg(team, 36);
+    if (logoHtml) {
+      var tmpLogo = document.createElement('div');
+      tmpLogo.innerHTML = '<div class="mc-prop-avatar" data-player-name="' + String(name).replace(/"/g, '&quot;') +
+        '" data-player-sport="' + sport + '" data-player-team="' + String(team).replace(/"/g, '&quot;') +
+        '" data-espn-key="' + key + '">' + logoHtml + '</div>';
+      if (tmpLogo.firstChild) {
+        wrap.parentNode.replaceChild(tmpLogo.firstChild, wrap);
+        return;
+      }
+    }
+  }
   var tmp = document.createElement('div');
-  tmp.innerHTML = _pbPlayerInitialsAvatarHtml(name, ' data-player-name="' + String(name).replace(/"/g, '&quot;') + '" data-player-sport="' + sport + '" data-espn-key="' + key + '"');
-  fb = tmp.firstChild;
+  tmp.innerHTML = _pbPlayerInitialsAvatarHtml(name,
+    ' data-player-name="' + String(name).replace(/"/g, '&quot;') + '" data-player-sport="' + sport +
+    '" data-player-team="' + String(team).replace(/"/g, '&quot;') + '" data-espn-key="' + key + '"',
+    team, sport);
+  var fb = tmp.firstChild;
   wrap.parentNode.replaceChild(fb, wrap);
 }
 window._pbPropHeadshotError = _pbPropHeadshotError;
 
-async function _pbFetchEspnPlayerId(playerName, sport) {
+async function _pbFetchEspnPlayerId(playerName, sport, team) {
   sport = _pbNormalizePropSport(sport);
-  var key = _pbEspnCacheKey(playerName, sport);
+  var key = _pbEspnCacheKey(playerName, sport, team);
+  var keyNoTeam = _pbEspnCacheKey(playerName, sport);
   if (_espnPlayerCache[key]) return _espnPlayerCache[key];
+  if (_espnPlayerCache[keyNoTeam] && _espnPlayerCache[keyNoTeam].headshotUrl) {
+    _espnPlayerCache[key] = _espnPlayerCache[keyNoTeam];
+    return _espnPlayerCache[key];
+  }
+
+  // Tier 1 — verified map
+  if (typeof getVerifiedPlayerId === 'function') {
+    var vid = getVerifiedPlayerId(playerName, sport);
+    if (vid) {
+      var vHit = { id: String(vid), headshotUrl: _pbEspnHeadshotUrl(vid, sport), verified: true };
+      _espnPlayerCache[key] = vHit;
+      _espnPlayerCache[keyNoTeam] = vHit;
+      return vHit;
+    }
+  }
+
+  // Tier 2 — shared search + localStorage (playerName|sport|team)
+  if (typeof searchEspnPlayerId === 'function') {
+    var shared = await searchEspnPlayerId(playerName, sport, team || '');
+    if (shared && shared.headshotUrl) {
+      _espnPlayerCache[key] = { id: String(shared.id), headshotUrl: shared.headshotUrl };
+      _espnPlayerCache[keyNoTeam] = _espnPlayerCache[key];
+      return _espnPlayerCache[key];
+    }
+    if (shared && shared.miss) {
+      _espnPlayerCache[key] = { miss: true };
+      return _espnPlayerCache[key];
+    }
+  }
+
   var searchSport = _ESPN_SEARCH_SPORT[sport] || sport;
   var wantLeague = _ESPN_LEAGUE_SLUG[sport] || sport;
-  var url = 'https://site.api.espn.com/apis/common/v3/search?query=' + encodeURIComponent(playerName) +
-    '&sport=' + encodeURIComponent(searchSport) + '&type=player&limit=5';
+  var query = String(playerName || '').trim();
+  if (team) query = query + ' ' + String(team).trim();
+  var url = 'https://site.api.espn.com/apis/common/v3/search?query=' + encodeURIComponent(query) +
+    '&sport=' + encodeURIComponent(searchSport) + '&type=player&limit=8';
   try {
     var res = await fetch(url, { cache: 'force-cache' });
     if (!res.ok) {
@@ -2370,6 +2447,7 @@ async function _pbFetchEspnPlayerId(playerName, sport) {
     }
     var headshotUrl = _pbEspnHeadshotUrl(pick.id, sport);
     _espnPlayerCache[key] = { id: String(pick.id), headshotUrl: headshotUrl };
+    _espnPlayerCache[keyNoTeam] = _espnPlayerCache[key];
     return _espnPlayerCache[key];
   } catch (_e) {
     _espnPlayerCache[key] = { miss: true };
@@ -2377,18 +2455,24 @@ async function _pbFetchEspnPlayerId(playerName, sport) {
   }
 }
 
-async function _pbBatchLookupEspnPlayers(playerNames, sport, concurrency) {
+async function _pbBatchLookupEspnPlayers(playerNames, sport, concurrency, teamByName) {
   sport = _pbNormalizePropSport(sport);
   var seen = {};
   var unique = [];
   (playerNames || []).forEach(function(n) {
     var name = String(n || '').trim();
     if (!name) return;
-    var k = _pbEspnCacheKey(name, sport);
+    var team = (teamByName && teamByName[name]) || '';
+    var k = _pbEspnCacheKey(name, sport, team);
     if (seen[k]) return;
     seen[k] = true;
-    if (_espnPlayerCache[k]) return;
-    unique.push(name);
+    if (_espnPlayerCache[k] || _espnPlayerCache[_pbEspnCacheKey(name, sport)]) return;
+    if (typeof getVerifiedPlayerId === 'function' && getVerifiedPlayerId(name, sport)) {
+      // warm cache from verified map
+      _pbFetchEspnPlayerId(name, sport, team);
+      return;
+    }
+    unique.push({ name: name, team: team });
   });
   if (!unique.length) return;
   var limit = Math.max(1, concurrency || 6);
@@ -2396,7 +2480,7 @@ async function _pbBatchLookupEspnPlayers(playerNames, sport, concurrency) {
   async function worker() {
     while (idx < unique.length) {
       var i = idx++;
-      await _pbFetchEspnPlayerId(unique[i], sport);
+      await _pbFetchEspnPlayerId(unique[i].name, sport, unique[i].team);
     }
   }
   var workers = [];
@@ -2410,19 +2494,25 @@ function _pbApplyPropHeadshots(panel, sport) {
   panel.querySelectorAll('.mc-prop-avatar[data-player-name]').forEach(function(el) {
     var name = el.getAttribute('data-player-name') || '';
     var sp = el.getAttribute('data-player-sport') || sport;
-    var key = el.getAttribute('data-espn-key') || _pbEspnCacheKey(name, sp);
-    var cached = _espnPlayerCache[key];
+    var team = el.getAttribute('data-player-team') || '';
+    var key = el.getAttribute('data-espn-key') || _pbEspnCacheKey(name, sp, team);
+    var cached = _espnPlayerCache[key] || _espnPlayerCache[_pbEspnCacheKey(name, sp)];
     if (!cached || !cached.headshotUrl) return;
     if (el.querySelector('img') && el.querySelector('img').getAttribute('src') === cached.headshotUrl) return;
     var wrap = document.createElement('div');
     wrap.className = 'mc-prop-avatar';
     wrap.setAttribute('data-player-name', name);
     wrap.setAttribute('data-player-sport', sp);
+    wrap.setAttribute('data-player-team', team);
     wrap.setAttribute('data-espn-key', key);
     var img = document.createElement('img');
     img.src = cached.headshotUrl;
     img.alt = '';
     img.referrerPolicy = 'no-referrer';
+    img.setAttribute('data-photo-step', '0');
+    img.setAttribute('data-player-name', name);
+    img.setAttribute('data-player-sport', sp);
+    img.setAttribute('data-player-team', team);
     img.onerror = function() { _pbPropHeadshotError(img); };
     wrap.appendChild(img);
     el.parentNode.replaceChild(wrap, el);
@@ -2431,8 +2521,15 @@ function _pbApplyPropHeadshots(panel, sport) {
 
 async function _pbHydratePropHeadshots(panel, props, sport) {
   if (!panel || !props || !props.length) return;
-  var names = props.map(function(p) { return p.playerName; });
-  await _pbBatchLookupEspnPlayers(names, sport, 6);
+  var teamByName = {};
+  var names = [];
+  props.forEach(function(p) {
+    var n = p.playerName;
+    if (!n) return;
+    names.push(n);
+    if (p.team && !teamByName[n]) teamByName[n] = p.team;
+  });
+  await _pbBatchLookupEspnPlayers(names, sport, 6, teamByName);
   if (!panel.isConnected) return;
   _pbApplyPropHeadshots(panel, sport);
 }

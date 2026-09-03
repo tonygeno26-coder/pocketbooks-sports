@@ -718,6 +718,17 @@
   }
 
   function getTennisPlayerPhoto(playerName) {
+    // Tier 1: verified player-photos.js map
+    if (typeof global.getPlayerHeadshotUrl === 'function') {
+      var verifiedUrl = global.getPlayerHeadshotUrl(playerName, 'tennis');
+      if (verifiedUrl) return verifiedUrl;
+    }
+    if (typeof global.getVerifiedPlayerId === 'function') {
+      var verifiedId = global.getVerifiedPlayerId(playerName, 'tennis');
+      if (verifiedId) {
+        return 'https://a.espncdn.com/i/headshots/tennis/players/full/' + verifiedId + '.png';
+      }
+    }
     var k = _normKey(playerName);
     var id = k && _tennisIdByNorm[k];
     if (!id) return '';
@@ -727,9 +738,37 @@
   async function _fetchTennisPlayerId(playerName) {
     var k = _normKey(playerName);
     if (!k) return null;
+    if (typeof global.getVerifiedPlayerId === 'function') {
+      var verifiedId = global.getVerifiedPlayerId(playerName, 'tennis');
+      if (verifiedId) {
+        _tennisIdByNorm[k] = String(verifiedId);
+        return String(verifiedId);
+      }
+    }
     if (_tennisIdByNorm[k]) return _tennisIdByNorm[k];
     if (_tennisMiss[k]) return null;
     if (_tennisPending[k]) return _tennisPending[k];
+
+    // Prefer shared search + 7-day localStorage cache when available
+    if (typeof global.searchEspnPlayerId === 'function') {
+      _tennisPending[k] = (async function () {
+        try {
+          var hit = await global.searchEspnPlayerId(playerName, 'tennis', '');
+          if (hit && hit.id) {
+            _tennisIdByNorm[k] = String(hit.id);
+            return String(hit.id);
+          }
+          _tennisMiss[k] = true;
+          return null;
+        } catch (_e) {
+          _tennisMiss[k] = true;
+          return null;
+        } finally {
+          delete _tennisPending[k];
+        }
+      })();
+      return _tennisPending[k];
+    }
 
     _tennisPending[k] = (async function () {
       var url = 'https://site.api.espn.com/apis/common/v3/search?query=' +
@@ -764,6 +803,10 @@
 
   function handleTennisPhotoError(img) {
     if (!img) return;
+    // Prefer shared tiered onerror when available
+    if (typeof global.handlePlayerPhotoError === 'function' && img.getAttribute('data-player-sport')) {
+      return global.handlePlayerPhotoError(img);
+    }
     var name = img.getAttribute('data-player-name') || img.alt || '';
     var size = parseInt(img.getAttribute('data-logo-size') || '40', 10);
     var className = img.getAttribute('data-logo-class') || '';
@@ -778,11 +821,16 @@
   function getTennisPlayerPhotoImg(playerName, size, className) {
     size = size || 40;
     var name = String(playerName || '').trim();
+    // Shared photo system (verified map → search → initials)
+    if (typeof global.getPlayerPhotoImg === 'function') {
+      return global.getPlayerPhotoImg(name, 'tennis', size, { className: className || '' });
+    }
     var url = getTennisPlayerPhoto(name);
     var cls = className ? ' class="' + esc(className) + '"' : '';
 
     if (!url) {
-      return '<span data-tennis-player="' + esc(name) + '" data-logo-size="' + size + '"' +
+      return '<span data-tennis-player="' + esc(name) + '" data-player-photo="' + esc(name) +
+        '" data-player-name="' + esc(name) + '" data-player-sport="tennis" data-logo-size="' + size + '"' +
         (className ? ' data-logo-class="' + esc(className) + '"' : '') + '>' +
         _initialsFallbackHtml(name, size, className) + '</span>';
     }
@@ -794,7 +842,9 @@
       ' style="width:' + size + 'px;height:' + size + 'px;object-fit:cover;display:block;border-radius:10px"' +
       ' referrerpolicy="no-referrer"' +
       ' data-tennis-player="' + esc(name) + '"' +
+      ' data-player-photo="' + esc(name) + '"' +
       ' data-player-name="' + esc(name) + '"' +
+      ' data-player-sport="tennis"' +
       ' data-logo-size="' + size + '"' +
       (className ? ' data-logo-class="' + esc(className) + '"' : '') +
       ' onerror="window.handleTennisPhotoError&&window.handleTennisPhotoError(this)">';
@@ -815,8 +865,13 @@
 
     await warmSoccerTeamsCache();
 
+    // Shared verified/search photo hydrate for tennis (and any data-player-photo nodes)
+    if (typeof global.hydratePlayerPhotos === 'function') {
+      try { await global.hydratePlayerPhotos(scope, 'tennis'); } catch (_eHydra) {}
+    }
+
     var soccerEls = Array.prototype.slice.call(scope.querySelectorAll('[data-soccer-team]'));
-    var tennisEls = Array.prototype.slice.call(scope.querySelectorAll('[data-tennis-player]'));
+    var tennisEls = Array.prototype.slice.call(scope.querySelectorAll('[data-tennis-player],[data-player-photo][data-player-sport="tennis"]'));
 
     var soccerNames = [];
     soccerEls.forEach(function (el) {
@@ -825,7 +880,7 @@
     });
     var tennisNames = [];
     tennisEls.forEach(function (el) {
-      var n = el.getAttribute('data-tennis-player') || '';
+      var n = el.getAttribute('data-tennis-player') || el.getAttribute('data-player-name') || el.getAttribute('data-player-photo') || '';
       if (n) tennisNames.push(n);
     });
 
@@ -860,7 +915,7 @@
     if (!scope.isConnected && scope !== document) return;
 
     soccerEls = Array.prototype.slice.call(scope.querySelectorAll('[data-soccer-team]'));
-    tennisEls = Array.prototype.slice.call(scope.querySelectorAll('[data-tennis-player]'));
+    tennisEls = Array.prototype.slice.call(scope.querySelectorAll('[data-tennis-player],[data-player-photo][data-player-sport="tennis"]'));
 
     soccerEls.forEach(function (el) {
       var name = el.getAttribute('data-soccer-team') || '';
@@ -874,7 +929,7 @@
     });
 
     tennisEls.forEach(function (el) {
-      var name = el.getAttribute('data-tennis-player') || '';
+      var name = el.getAttribute('data-tennis-player') || el.getAttribute('data-player-name') || el.getAttribute('data-player-photo') || '';
       var size = parseInt(el.getAttribute('data-logo-size') || '40', 10);
       var className = el.getAttribute('data-logo-class') || '';
       var url = getTennisPlayerPhoto(name);
