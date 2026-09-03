@@ -657,12 +657,30 @@ function renderAdminCrypto() {
   <div class="settle-card sc-red">
     <div class="sc-label">Players Owe You</div>
     <div class="sc-amount" id="total-owes-you">$0</div>
-    <div class="sc-sub">Pending collection</div>
+    <div class="sc-sub">Lost stakes (all-time)</div>
   </div>
   <div class="settle-card sc-green">
     <div class="sc-label">You Owe Players</div>
     <div class="sc-amount" id="total-you-owe">$0</div>
-    <div class="sc-sub">Pending payout</div>
+    <div class="sc-sub">Won profits (all-time)</div>
+  </div>
+</div>
+<div class="stats-row" id="settlement-week-section" style="margin-top:8px">
+  <div class="stat-card">
+    <div class="stat-val" id="settle-week-net">$0</div>
+    <div class="stat-lbl">Week Net</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val" id="settle-week-handle">$0</div>
+    <div class="stat-lbl">Week Handle</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val" id="settle-week-bets">0</div>
+    <div class="stat-lbl">Bets Settled</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-val" id="settle-all-net">$0</div>
+    <div class="stat-lbl">All-Time Net</div>
   </div>
 </div>
 
@@ -1024,6 +1042,8 @@ function refreshHostDashboardStats(trigger) {
   // Settlement position (if elements exist)
   _set('stat-players-owe',  _fmtUSD(playersOwe));
   _set('stat-host-owes',    _fmtUSD(hostOwes));
+  _set('total-owes-you',    _fmtUSD(playersOwe));
+  _set('total-you-owe',     _fmtUSD(hostOwes));
 
   // Color profit element
   var profitEl = document.getElementById('stat-profit');
@@ -1077,10 +1097,22 @@ async function loadHostDashboardFromDb(trigger) {
     _set('stat-active-risk',  _fmtUSD(atRisk));
     _set('stat-active-bets',  String(activeCount));
     _set('host-bets-count',   activeCount+' bet'+(activeCount!==1?'s':''));
-    _set('stat-players-owe',  _fmtUSD(s.playersOwe != null ? s.playersOwe : s.settledLoss || 0));
-    _set('stat-host-owes',    _fmtUSD(s.hostOwes != null ? s.hostOwes : s.settledGain || 0));
+    var _playersOwe = s.playersOwe != null ? s.playersOwe : (s.settledGain || 0);
+    var _hostOwes   = s.hostOwes != null ? s.hostOwes : (s.settledLoss || 0);
+    _set('stat-players-owe',  _fmtUSD(_playersOwe));
+    _set('stat-host-owes',    _fmtUSD(_hostOwes));
+    _set('total-owes-you',    _fmtUSD(_playersOwe));
+    _set('total-you-owe',     _fmtUSD(_hostOwes));
     var profitEl = document.getElementById('stat-profit');
     if (profitEl) profitEl.style.color = s.profit>=0 ? 'var(--green,#00ff88)' : 'var(--red,#ff3d57)';
+    // Settlement section (weekly)
+    var wk = s.weekly || {};
+    _set('settle-week-net',    (wk.net>=0?'+':'-')+_fmtUSD(wk.net||0));
+    _set('settle-week-handle', _fmtUSD(wk.handle||0));
+    _set('settle-week-bets',   String(wk.settledCount != null ? wk.settledCount : 0));
+    var at = s.allTime || {};
+    _set('settle-all-net',     ( (at.net!=null?at.net:s.profit||0) >=0 ?'+':'-')+_fmtUSD(at.net!=null?at.net:s.profit||0));
+    _set('settle-all-handle',  _fmtUSD(at.handle != null ? at.handle : s.handle || 0));
     try { _applyHostDashboardTickets(data); } catch(_te) {}
     _updateHostSourceBadge('db', data.warnings||[]);
     _setHostDbPrimary(true);  // Lock DOM authority to DB
