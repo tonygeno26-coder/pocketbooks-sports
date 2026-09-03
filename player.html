@@ -84,11 +84,13 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .market-card.props-expanded .mc-props-panel,.market-card.alt-expanded .mc-alt-panel{max-height:1200px;opacity:1;padding:0 16px 14px}
 .mc-prop-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid #2a2a2a}
 .mc-prop-player{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
-.mc-prop-avatar{width:34px;height:34px;border-radius:50%;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#2a2a2a;border:1px solid #333;font-size:0.6rem;font-weight:900;color:#aaa}
-.mc-prop-avatar img{width:100%;height:100%;object-fit:contain}
-.mc-prop-info{min-width:0}
+.mc-prop-avatar{width:40px;height:40px;border-radius:50%;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#2a2a2a;border:1px solid #333;font-size:0.65rem;font-weight:900;color:#fff;letter-spacing:0.3px}
+.mc-prop-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.mc-prop-avatar.mc-prop-initials{border:none}
+.mc-prop-info{min-width:0;flex:1}
 .mc-prop-name{font-size:0.82rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mc-prop-type{font-size:0.65rem;color:#666;font-weight:700;margin-top:2px}
+.mc-prop-meta{flex-shrink:0;text-align:right;max-width:38%;padding:0 4px}
+.mc-prop-type{font-size:0.65rem;color:#666;font-weight:700;line-height:1.25}
 .mc-prop-ous{display:flex;gap:6px;flex-shrink:0}
 .mc-prop-ou{min-width:58px;text-align:center;padding:6px 4px;background:#242424;border-radius:10px;cursor:pointer;border:1.5px solid #303030;display:flex;flex-direction:column;align-items:center;gap:1px;transition:transform 0.1s,border-color 0.12s,background 0.12s}
 .mc-prop-ou:active{transform:scale(0.97)}
@@ -2190,6 +2192,20 @@ function _pbSyncGamesListInPlace(el, games) {
 var _pbExpandedPropsGameId = null;
 var _pbExpandedAltGameId = null;
 var _PB_PROPS_SUPPORTED_SPORTS = ['mlb', 'nba', 'nfl', 'nhl', 'ncaab', 'ncaaf', 'wnba'];
+/** Cache: "playerName|sport" → { id, headshotUrl } | { miss: true } */
+var _espnPlayerCache = {};
+var _ESPN_SEARCH_SPORT = {
+  mlb: 'baseball', nba: 'basketball', wnba: 'basketball', ncaab: 'basketball',
+  nfl: 'football', ncaaf: 'football', ncaafb: 'football', nhl: 'hockey'
+};
+var _ESPN_HEADSHOT_SPORT = {
+  mlb: 'mlb', nba: 'nba', nfl: 'nfl', nhl: 'nhl', wnba: 'wnba',
+  ncaab: 'mens-college-basketball', ncaaf: 'college-football', ncaafb: 'college-football'
+};
+var _ESPN_LEAGUE_SLUG = {
+  mlb: 'mlb', nba: 'nba', nfl: 'nfl', nhl: 'nhl', wnba: 'wnba',
+  ncaab: 'mens-college-basketball', ncaaf: 'college-football', ncaafb: 'college-football'
+};
 
 function _pbSportSupportsProps(sport) {
   return _PB_PROPS_SUPPORTED_SPORTS.indexOf(String(sport || '').toLowerCase()) >= 0;
@@ -2199,14 +2215,171 @@ function _pbPropCellId(p, gameId) {
   return 'prop-' + gameId + '-' + String(p.playerName).replace(/\s+/g, '-') + '-' + p.side + '-' + p.line;
 }
 
+function _pbNormalizePropSport(sport) {
+  var s = String(sport || (typeof _currentSport !== 'undefined' ? _currentSport : 'mlb')).toLowerCase();
+  if (s === 'ncaafb') return 'ncaaf';
+  return s;
+}
+
+function _pbEspnCacheKey(playerName, sport) {
+  return String(playerName || '').trim().toLowerCase() + '|' + _pbNormalizePropSport(sport);
+}
+
+function _pbPlayerInitials(playerName) {
+  var parts = String(playerName || '?').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return parts[0].slice(0, 2).toUpperCase();
+}
+
+function _pbPlayerInitialsColors(playerName) {
+  var hash = 0;
+  var s = String(playerName || '?');
+  for (var i = 0; i < s.length; i++) hash = ((hash << 5) - hash) + s.charCodeAt(i);
+  var hue = Math.abs(hash) % 360;
+  return { bg: 'hsl(' + hue + ',45%,32%)', fg: '#fff' };
+}
+
+function _pbPlayerInitialsAvatarHtml(playerName, attrs) {
+  var initials = _pbPlayerInitials(playerName);
+  var colors = _pbPlayerInitialsColors(playerName);
+  var extra = attrs || '';
+  return '<div class="mc-prop-avatar mc-prop-initials" style="background:' + colors.bg + ';color:' + colors.fg + '"' + extra + '>' + initials + '</div>';
+}
+
+function _pbEspnHeadshotUrl(espnId, sport) {
+  var slug = _ESPN_HEADSHOT_SPORT[_pbNormalizePropSport(sport)] || _pbNormalizePropSport(sport) || 'mlb';
+  return 'https://a.espncdn.com/i/headshots/' + slug + '/players/full/' + espnId + '.png';
+}
+
 function _pbPlayerPropAvatar(playerName, team, sport) {
-  sport = sport || (typeof _currentSport !== 'undefined' ? _currentSport : 'mlb');
-  if (team && typeof getTeamLogoImg === 'function') {
-    return '<div class="mc-prop-avatar">' + getTeamLogoImg(team, sport, 34) + '</div>';
+  sport = _pbNormalizePropSport(sport);
+  var nameAttr = String(playerName || '').replace(/"/g, '&quot;');
+  var cacheKey = _pbEspnCacheKey(playerName, sport);
+  var cached = _espnPlayerCache[cacheKey];
+  var dataAttrs = ' data-player-name="' + nameAttr + '" data-player-sport="' + sport + '" data-espn-key="' + cacheKey.replace(/"/g, '') + '"';
+  if (cached && cached.headshotUrl) {
+    return '<div class="mc-prop-avatar"' + dataAttrs + '>' +
+      '<img src="' + cached.headshotUrl + '" alt="" referrerpolicy="no-referrer" ' +
+      'onerror="window._pbPropHeadshotError&&window._pbPropHeadshotError(this)">' +
+      '</div>';
   }
-  var parts = String(playerName || '?').trim().split(/\s+/);
-  var initials = parts.length >= 2 ? (parts[0][0] + parts[parts.length - 1][0]) : (parts[0] || '?').slice(0, 2);
-  return '<div class="mc-prop-avatar mc-prop-initials">' + initials.toUpperCase() + '</div>';
+  return _pbPlayerInitialsAvatarHtml(playerName, dataAttrs);
+}
+
+function _pbPropHeadshotError(img) {
+  if (!img) return;
+  var wrap = img.parentNode;
+  if (!wrap) return;
+  var name = wrap.getAttribute('data-player-name') || '';
+  var sport = wrap.getAttribute('data-player-sport') || 'mlb';
+  var key = wrap.getAttribute('data-espn-key') || _pbEspnCacheKey(name, sport);
+  if (_espnPlayerCache[key] && _espnPlayerCache[key].headshotUrl) {
+    _espnPlayerCache[key] = { miss: true, id: _espnPlayerCache[key].id || null };
+  }
+  var fb = document.createElement('div');
+  var tmp = document.createElement('div');
+  tmp.innerHTML = _pbPlayerInitialsAvatarHtml(name, ' data-player-name="' + String(name).replace(/"/g, '&quot;') + '" data-player-sport="' + sport + '" data-espn-key="' + key + '"');
+  fb = tmp.firstChild;
+  wrap.parentNode.replaceChild(fb, wrap);
+}
+window._pbPropHeadshotError = _pbPropHeadshotError;
+
+async function _pbFetchEspnPlayerId(playerName, sport) {
+  sport = _pbNormalizePropSport(sport);
+  var key = _pbEspnCacheKey(playerName, sport);
+  if (_espnPlayerCache[key]) return _espnPlayerCache[key];
+  var searchSport = _ESPN_SEARCH_SPORT[sport] || sport;
+  var wantLeague = _ESPN_LEAGUE_SLUG[sport] || sport;
+  var url = 'https://site.api.espn.com/apis/common/v3/search?query=' + encodeURIComponent(playerName) +
+    '&sport=' + encodeURIComponent(searchSport) + '&type=player&limit=5';
+  try {
+    var res = await fetch(url, { cache: 'force-cache' });
+    if (!res.ok) {
+      _espnPlayerCache[key] = { miss: true };
+      return _espnPlayerCache[key];
+    }
+    var data = await res.json();
+    var items = (data && data.items) || [];
+    var pick = null;
+    for (var i = 0; i < items.length; i++) {
+      if (String(items[i].league || '').toLowerCase() === String(wantLeague).toLowerCase()) {
+        pick = items[i];
+        break;
+      }
+    }
+    if (!pick && items.length) pick = items[0];
+    if (!pick || !pick.id) {
+      _espnPlayerCache[key] = { miss: true };
+      return _espnPlayerCache[key];
+    }
+    var headshotUrl = _pbEspnHeadshotUrl(pick.id, sport);
+    _espnPlayerCache[key] = { id: String(pick.id), headshotUrl: headshotUrl };
+    return _espnPlayerCache[key];
+  } catch (_e) {
+    _espnPlayerCache[key] = { miss: true };
+    return _espnPlayerCache[key];
+  }
+}
+
+async function _pbBatchLookupEspnPlayers(playerNames, sport, concurrency) {
+  sport = _pbNormalizePropSport(sport);
+  var seen = {};
+  var unique = [];
+  (playerNames || []).forEach(function(n) {
+    var name = String(n || '').trim();
+    if (!name) return;
+    var k = _pbEspnCacheKey(name, sport);
+    if (seen[k]) return;
+    seen[k] = true;
+    if (_espnPlayerCache[k]) return;
+    unique.push(name);
+  });
+  if (!unique.length) return;
+  var limit = Math.max(1, concurrency || 6);
+  var idx = 0;
+  async function worker() {
+    while (idx < unique.length) {
+      var i = idx++;
+      await _pbFetchEspnPlayerId(unique[i], sport);
+    }
+  }
+  var workers = [];
+  for (var w = 0; w < Math.min(limit, unique.length); w++) workers.push(worker());
+  await Promise.all(workers);
+}
+
+function _pbApplyPropHeadshots(panel, sport) {
+  if (!panel) return;
+  sport = _pbNormalizePropSport(sport);
+  panel.querySelectorAll('.mc-prop-avatar[data-player-name]').forEach(function(el) {
+    var name = el.getAttribute('data-player-name') || '';
+    var sp = el.getAttribute('data-player-sport') || sport;
+    var key = el.getAttribute('data-espn-key') || _pbEspnCacheKey(name, sp);
+    var cached = _espnPlayerCache[key];
+    if (!cached || !cached.headshotUrl) return;
+    if (el.querySelector('img') && el.querySelector('img').getAttribute('src') === cached.headshotUrl) return;
+    var wrap = document.createElement('div');
+    wrap.className = 'mc-prop-avatar';
+    wrap.setAttribute('data-player-name', name);
+    wrap.setAttribute('data-player-sport', sp);
+    wrap.setAttribute('data-espn-key', key);
+    var img = document.createElement('img');
+    img.src = cached.headshotUrl;
+    img.alt = '';
+    img.referrerPolicy = 'no-referrer';
+    img.onerror = function() { _pbPropHeadshotError(img); };
+    wrap.appendChild(img);
+    el.parentNode.replaceChild(wrap, el);
+  });
+}
+
+async function _pbHydratePropHeadshots(panel, props, sport) {
+  if (!panel || !props || !props.length) return;
+  var names = props.map(function(p) { return p.playerName; });
+  await _pbBatchLookupEspnPlayers(names, sport, 6);
+  if (!panel.isConnected) return;
+  _pbApplyPropHeadshots(panel, sport);
 }
 
 function _pbGroupPropsForDisplay(props) {
@@ -2238,22 +2411,26 @@ function _pbRenderPropOddsBtn(p, gameId, gameLabel, sport, sideLabel) {
 }
 
 function _pbRenderInlinePropsHtml(props, gameId, sport, meta) {
-  var s = String(sport || _currentSport || 'mlb').toUpperCase();
+  var s = _pbNormalizePropSport(sport || _currentSport || 'mlb');
+  var sportLabel = s.toUpperCase();
   var gameLabel = (meta && meta.away && meta.home) ? (meta.away + ' vs ' + meta.home) : '';
   var groups = _pbGroupPropsForDisplay(props);
   if (!groups.length) return '<div class="mc-props-empty">No player props for this game.</div>';
   return groups.map(function(grp) {
+    var lineStr = (grp.line != null && grp.line !== '') ? String(grp.line) : '';
     return '<div class="mc-prop-row">' +
       '<div class="mc-prop-player">' +
         _pbPlayerPropAvatar(grp.playerName, grp.team, s) +
         '<div class="mc-prop-info">' +
           '<div class="mc-prop-name">' + (grp.playerName || '') + '</div>' +
-          '<div class="mc-prop-type">' + (grp.propType || '') + '</div>' +
         '</div>' +
       '</div>' +
+      '<div class="mc-prop-meta">' +
+        '<div class="mc-prop-type">' + (grp.propType || '') + (lineStr ? ' · ' + lineStr : '') + '</div>' +
+      '</div>' +
       '<div class="mc-prop-ous">' +
-        _pbRenderPropOddsBtn(grp.over, gameId, gameLabel, s, 'O') +
-        _pbRenderPropOddsBtn(grp.under, gameId, gameLabel, s, 'U') +
+        _pbRenderPropOddsBtn(grp.over, gameId, gameLabel, sportLabel, 'O') +
+        _pbRenderPropOddsBtn(grp.under, gameId, gameLabel, sportLabel, 'U') +
       '</div>' +
     '</div>';
   }).join('');
@@ -2305,7 +2482,7 @@ function _pbPropsQueryString(gameId, card) {
 }
 
 async function _pbLoadGameProps(gameId, sport, panel, card) {
-  var s = String(sport || _currentSport || 'mlb').toLowerCase();
+  var s = _pbNormalizePropSport(sport || _currentSport || 'mlb');
   try {
     var res = await fetch(API + '/api/props/' + encodeURIComponent(s) + '?' + _pbPropsQueryString(gameId, card), { cache: 'no-store' });
     var data = await res.json();
@@ -2316,6 +2493,7 @@ async function _pbLoadGameProps(gameId, sport, panel, card) {
     }
     panel.innerHTML = _pbRenderInlinePropsHtml(data.props, gameId, s, data.props[0]);
     _pbResyncBetSlipSelections();
+    await _pbHydratePropHeadshots(panel, data.props, s);
   } catch (_e) {
     if (_pbExpandedPropsGameId === String(gameId)) {
       panel.innerHTML = '<div class="mc-props-empty">Could not load props.</div>';
@@ -2330,7 +2508,7 @@ async function _pbRefreshExpandedGameProps(opts) {
   var panel = card.querySelector('.mc-props-panel');
   if (!panel) return;
   var gameId = _pbExpandedPropsGameId;
-  var s = String(_currentSport || 'mlb').toLowerCase();
+  var s = _pbNormalizePropSport(_currentSport || 'mlb');
   try {
     var res = await fetch(API + '/api/props/' + encodeURIComponent(s) + '?' + _pbPropsQueryString(gameId, card), { cache: 'no-store' });
     var data = await res.json();
@@ -2340,10 +2518,13 @@ async function _pbRefreshExpandedGameProps(opts) {
       panel.innerHTML = '<div class="mc-props-empty">No player props for this game.</div>';
       return;
     }
-    if (panel.querySelector('.mc-prop-row')) _pbSyncInlinePropsInPlace(data.props, gameId);
-    else {
+    if (panel.querySelector('.mc-prop-row')) {
+      _pbSyncInlinePropsInPlace(data.props, gameId);
+      await _pbHydratePropHeadshots(panel, data.props, s);
+    } else {
       panel.innerHTML = _pbRenderInlinePropsHtml(data.props, gameId, s, data.props[0]);
       _pbResyncBetSlipSelections();
+      await _pbHydratePropHeadshots(panel, data.props, s);
     }
   } catch (_e) {}
 }
