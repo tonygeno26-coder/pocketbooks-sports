@@ -2384,6 +2384,15 @@ var _pbExpandedAltGameId = null;
 var _PB_PROPS_SUPPORTED_SPORTS = ['mlb', 'nba', 'nfl', 'nhl', 'ncaab', 'ncaaf', 'wnba', 'tennis'];
 var _pbPropsCache = {};
 var _pbPropsUiState = {};
+/** Cache: "sport|away|home" → { map:{normName:'away'|'home'}, ready, loading, promise } */
+var _pbPropsRosterCache = {};
+/** Cache: sport → { normTeamName → { id, displayName } } */
+var _pbEspnTeamsCache = {};
+var _ESPN_SITE_PATH = {
+  mlb: 'baseball/mlb', nba: 'basketball/nba', nfl: 'football/nfl', nhl: 'hockey/nhl',
+  wnba: 'basketball/wnba', ncaab: 'basketball/mens-college-basketball',
+  ncaaf: 'football/college-football', ncaafb: 'football/college-football'
+};
 var _PB_PROP_SECTION_LIMIT = 5;
 var _PB_PROP_TAB_DEFS = {
   mlb: [
@@ -2849,14 +2858,208 @@ function _pbTeamShort(name) {
   return parts[parts.length - 1];
 }
 
-function _pbPropTeamBucket(p, away, home) {
-  var team = String((p && p.team) || '').toLowerCase();
-  if (!team) return 'all';
-  var a = String(away || '').toLowerCase();
-  var h = String(home || '').toLowerCase();
-  if (a && (team === a || team.indexOf(a) >= 0 || a.indexOf(team) >= 0 || team.indexOf(_pbTeamShort(away).toLowerCase()) >= 0)) return 'away';
-  if (h && (team === h || team.indexOf(h) >= 0 || h.indexOf(team) >= 0 || team.indexOf(_pbTeamShort(home).toLowerCase()) >= 0)) return 'home';
-  return 'all';
+function _pbNormPropPlayerName(name) {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/[\u2019']/g, '')
+    .replace(/\./g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function _pbParseGameIdTeams(gameId) {
+  var s = String(gameId || '');
+  var m = s.match(/^[a-z0-9_]+:(.+)@(.+)-(\d{8})$/i);
+  if (!m) return null;
+  return { away: m[1].trim(), home: m[2].trim(), date: m[3] };
+}
+
+function _pbTeamNameMatches(team, target) {
+  if (!team || !target) return false;
+  var t = _pbNormPropPlayerName(team);
+  var x = _pbNormPropPlayerName(target);
+  if (!t || !x) return false;
+  if (t === x) return true;
+  if (t.indexOf(x) >= 0 || x.indexOf(t) >= 0) return true;
+  var short = _pbNormPropPlayerName(_pbTeamShort(target));
+  if (short && (t === short || t.indexOf(short) >= 0 || short.indexOf(t) >= 0)) return true;
+  return false;
+}
+
+function _pbSplitPropPlayerNames(playerName) {
+  return String(playerName || '')
+    .split(/\s*&\s*|\s+\/\s+|\s+and\s+/i)
+    .map(function(n) { return n.trim(); })
+    .filter(Boolean);
+}
+
+function _pbRosterCacheKey(sport, away, home) {
+  return [_pbNormalizePropSport(sport), String(away || '').trim().toLowerCase(), String(home || '').trim().toLowerCase()].join('|');
+}
+
+function _pbGetPropsRosterMap(sport, away, home) {
+  var entry = _pbPropsRosterCache[_pbRosterCacheKey(sport, away, home)];
+  return (entry && entry.map) || {};
+}
+
+/** Infer player→away/home from any props that already carry a team field. */
+function _pbInferPlayerTeamMap(props, away, home) {
+  var map = {};
+  (props || []).forEach(function(p) {
+    if (!p || !p.playerName) return;
+    var team = p.team || p.playerTeam || p.teamName || '';
+    if (!team) return;
+    var bucket = null;
+    if (_pbTeamNameMatches(team, away)) bucket = 'away';
+    else if (_pbTeamNameMatches(team, home)) bucket = 'home';
+    if (!bucket) return;
+    _pbSplitPropPlayerNames(p.playerName).forEach(function(n) {
+      var k = _pbNormPropPlayerName(n);
+      if (k) map[k] = bucket;
+    });
+  });
+  return map;
+}
+
+function _pbMergePropTeamMaps(rosterMap, inferredMap) {
+  var out = {};
+  if (rosterMap) Object.keys(rosterMap).forEach(function(k) { out[k] = rosterMap[k]; });
+  // Explicit prop.team inferences win over roster (game-day lineup / traded players).
+  if (inferredMap) Object.keys(inferredMap).forEach(function(k) { out[k] = inferredMap[k]; });
+  return out;
+}
+
+/**
+ * Resolve a prop/row to 'away' | 'home' | null.
+ * Prefer any team field; else playerName→team map (roster / inferred).
+ */
+function _pbResolvePropTeamBucket(p, away, home, teamMap) {
+  if (!p) return null;
+  var team = p.team || p.playerTeam || p.teamName || '';
+  if (team) {
+    if (_pbTeamNameMatches(team, away)) return 'away';
+    if (_pbTeamNameMatches(team, home)) return 'home';
+  }
+  var names = _pbSplitPropPlayerNames(p.playerName);
+  if (!names.length || !teamMap) return null;
+  var buckets = [];
+  names.forEach(function(n) {
+    var b = teamMap[_pbNormPropPlayerName(n)];
+    if (b) buckets.push(b);
+  });
+  if (!buckets.length) return null;
+  var first = buckets[0];
+  if (buckets.every(function(b) { return b === first; })) return first;
+  return null;
+}
+
+function _pbPropTeamBucket(p, away, home, teamMap) {
+  return _pbResolvePropTeamBucket(p, away, home, teamMap) || 'unknown';
+}
+
+function _pbFillPropTeamFromBucket(p, bucket, away, home) {
+  if (!p || p.team || !bucket) return;
+  if (bucket === 'away' && away) p.team = away;
+  else if (bucket === 'home' && home) p.team = home;
+}
+
+function _pbAnnotatePropsTeams(props, away, home, teamMap) {
+  (props || []).forEach(function(p) {
+    if (!p || p.team) return;
+    _pbFillPropTeamFromBucket(p, _pbResolvePropTeamBucket(p, away, home, teamMap), away, home);
+  });
+  return props;
+}
+
+async function _pbFetchEspnTeamsIndex(sport) {
+  var s = _pbNormalizePropSport(sport);
+  if (_pbEspnTeamsCache[s]) return _pbEspnTeamsCache[s];
+  var path = _ESPN_SITE_PATH[s];
+  if (!path) {
+    _pbEspnTeamsCache[s] = {};
+    return _pbEspnTeamsCache[s];
+  }
+  try {
+    var res = await fetch('https://site.api.espn.com/apis/site/v2/sports/' + path + '/teams?limit=500', { cache: 'force-cache' });
+    var data = await res.json();
+    var idx = {};
+    var league = ((((data.sports || [])[0] || {}).leagues) || [])[0] || {};
+    (league.teams || []).forEach(function(wrap) {
+      var t = (wrap && wrap.team) || wrap || {};
+      if (!t.id) return;
+      var entry = { id: String(t.id), displayName: t.displayName || t.name || '' };
+      var names = [t.displayName, t.name, t.shortDisplayName, t.nickname, t.location, t.abbreviation];
+      if (t.location && t.name) names.push(String(t.location) + ' ' + String(t.name));
+      names.forEach(function(n) {
+        if (!n) return;
+        idx[_pbNormPropPlayerName(n)] = entry;
+        var short = _pbTeamShort(n);
+        if (short) idx[_pbNormPropPlayerName(short)] = entry;
+      });
+    });
+    _pbEspnTeamsCache[s] = idx;
+    return idx;
+  } catch (_e) {
+    _pbEspnTeamsCache[s] = {};
+    return _pbEspnTeamsCache[s];
+  }
+}
+
+async function _pbFetchEspnRosterPlayerNames(sport, teamName) {
+  var s = _pbNormalizePropSport(sport);
+  var path = _ESPN_SITE_PATH[s];
+  if (!path || !teamName) return [];
+  var idx = await _pbFetchEspnTeamsIndex(s);
+  var entry = idx[_pbNormPropPlayerName(teamName)] || idx[_pbNormPropPlayerName(_pbTeamShort(teamName))];
+  if (!entry || !entry.id) return [];
+  try {
+    var res = await fetch('https://site.api.espn.com/apis/site/v2/sports/' + path + '/teams/' + entry.id + '/roster', { cache: 'force-cache' });
+    var data = await res.json();
+    var names = [];
+    (data.athletes || []).forEach(function(group) {
+      var items = group.items || group.athletes || (group.displayName ? [group] : []);
+      items.forEach(function(a) {
+        var n = a.displayName || a.fullName || ((a.firstName || '') + ' ' + (a.lastName || '')).trim();
+        if (n) names.push(n);
+      });
+    });
+    return names;
+  } catch (_e) {
+    return [];
+  }
+}
+
+async function _pbEnsurePropsRosterMap(sport, away, home) {
+  var key = _pbRosterCacheKey(sport, away, home);
+  var existing = _pbPropsRosterCache[key];
+  if (existing && existing.ready) return existing.map;
+  if (existing && existing.loading && existing.promise) return existing.promise;
+  var entry = { loading: true, ready: false, map: {}, promise: null };
+  _pbPropsRosterCache[key] = entry;
+  entry.promise = Promise.all([
+    _pbFetchEspnRosterPlayerNames(sport, away),
+    _pbFetchEspnRosterPlayerNames(sport, home)
+  ]).then(function(results) {
+    var map = {};
+    (results[0] || []).forEach(function(n) {
+      var k = _pbNormPropPlayerName(n);
+      if (k) map[k] = 'away';
+    });
+    (results[1] || []).forEach(function(n) {
+      var k = _pbNormPropPlayerName(n);
+      if (k) map[k] = 'home';
+    });
+    entry.map = map;
+    entry.ready = true;
+    entry.loading = false;
+    return map;
+  }).catch(function() {
+    entry.loading = false;
+    entry.ready = true;
+    entry.map = entry.map || {};
+    return entry.map;
+  });
+  return entry.promise;
 }
 
 function _pbThresholdLabel(line) {
@@ -2878,7 +3081,7 @@ function _pbGroupPropsForDisplay(props) {
   return Object.keys(groups).map(function(k) { return groups[k]; });
 }
 
-function _pbGroupPlayerPropRows(props) {
+function _pbGroupPlayerPropRows(props, away, home, teamMap) {
   var byPlayerType = {};
   props.forEach(function(p) {
     var key = String(p.playerName || '') + '||' + String(p.propType || '');
@@ -2889,6 +3092,10 @@ function _pbGroupPlayerPropRows(props) {
       lines: {}
     });
     if (p.team && !g.team) g.team = p.team;
+    if (!g.team) {
+      var bucket = _pbResolvePropTeamBucket(p, away, home, teamMap);
+      _pbFillPropTeamFromBucket(g, bucket, away, home);
+    }
     var lk = String(p.line);
     var lineGroup = g.lines[lk] || (g.lines[lk] = { line: p.line, over: null, under: null });
     if (p.side === 'over') lineGroup.over = p;
@@ -2929,7 +3136,7 @@ function _pbRenderPropOddsBtn(p, gameId, gameLabel, sport, sideLabel, lineLabel)
     '<span class="odds-num ' + c + '">' + fmt + '</span></div>';
 }
 
-function _pbRenderPlayerPropRowHtml(row, gameId, gameLabel, sport) {
+function _pbRenderPlayerPropRowHtml(row, gameId, gameLabel, sport, away, home, teamMap) {
   var s = _pbNormalizePropSport(sport);
   var sportLabel = s.toUpperCase();
   var lines = row.lineList || [];
@@ -2958,7 +3165,8 @@ function _pbRenderPlayerPropRowHtml(row, gameId, gameLabel, sport) {
         _pbRenderPropOddsBtn(one.under, gameId, gameLabel, sportLabel, 'Under', one.line);
     }
   }
-  return '<div class="mc-prop-row" data-prop-team="' + _pbPropTeamBucket({ team: row.team }, '', '') + '" data-player-team="' + String(row.team || '').replace(/"/g, '&quot;') + '">' +
+  var bucket = _pbPropTeamBucket(row, away, home, teamMap);
+  return '<div class="mc-prop-row" data-prop-team="' + bucket + '" data-player-team="' + String(row.team || '').replace(/"/g, '&quot;') + '">' +
     '<div class="mc-prop-player">' +
       _pbPlayerPropAvatar(row.playerName, row.team, s) +
       '<div class="mc-prop-info"><div class="mc-prop-name">' + (row.playerName || '') + '</div></div>' +
@@ -3020,12 +3228,12 @@ function _pbGetPropsUiState(gameId) {
   return _pbPropsUiState[key];
 }
 
-function _pbRenderPropSectionHtml(section, gameId, gameLabel, sport, away, home, ui, secKey) {
-  var rows = _pbGroupPlayerPropRows(section.props);
+function _pbRenderPropSectionHtml(section, gameId, gameLabel, sport, away, home, ui, secKey, teamMap) {
+  var rows = _pbGroupPlayerPropRows(section.props, away, home, teamMap);
   var teamFilter = ui.team || 'all';
   if (teamFilter !== 'all') {
     rows = rows.filter(function(r) {
-      return _pbPropTeamBucket(r, away, home) === teamFilter;
+      return _pbPropTeamBucket(r, away, home, teamMap) === teamFilter;
     });
   }
   var showAll = !!(ui.showAll && ui.showAll[secKey]);
@@ -3039,7 +3247,7 @@ function _pbRenderPropSectionHtml(section, gameId, gameLabel, sport, away, home,
   if (!visibleRows.length) {
     html += '<div class="mc-props-empty" style="padding:8px 0">No props for this filter.</div>';
   } else {
-    html += visibleRows.map(function(r) { return _pbRenderPlayerPropRowHtml(r, gameId, gameLabel, sport); }).join('');
+    html += visibleRows.map(function(r) { return _pbRenderPlayerPropRowHtml(r, gameId, gameLabel, sport, away, home, teamMap); }).join('');
   }
   if (rows.length > _PB_PROP_SECTION_LIMIT) {
     html += '<button type="button" class="mc-prop-show-more" onclick="_pbTogglePropShowMore(this)">' +
@@ -3053,8 +3261,22 @@ function _pbRenderInlinePropsHtml(props, gameId, sport, meta) {
   var s = _pbNormalizePropSport(sport || _currentSport || 'mlb');
   var away = (meta && (meta.away || meta.away_team)) || '';
   var home = (meta && (meta.home || meta.home_team)) || '';
+  var parsed = _pbParseGameIdTeams(gameId) || _pbParseGameIdTeams(meta && meta.gameId);
+  if (parsed) {
+    if (!away) away = parsed.away;
+    if (!home) home = parsed.home;
+  }
+  if ((!away || !home) && props && props[0]) {
+    away = away || props[0].away || '';
+    home = home || props[0].home || '';
+  }
   var gameLabel = (away && home) ? (away + ' vs ' + home) : '';
   if (!props || !props.length) return '<div class="mc-props-empty">No player props for this game.</div>';
+
+  var inferred = _pbInferPlayerTeamMap(props, away, home);
+  var rosterMap = _pbGetPropsRosterMap(s, away, home);
+  var teamMap = _pbMergePropTeamMaps(rosterMap, inferred);
+  _pbAnnotatePropsTeams(props, away, home, teamMap);
 
   _pbPropsCache[String(gameId)] = { props: props, sport: s, meta: meta || props[0] || {}, away: away, home: home, gameLabel: gameLabel };
   var ui = _pbGetPropsUiState(gameId);
@@ -3063,7 +3285,6 @@ function _pbRenderInlinePropsHtml(props, gameId, sport, meta) {
 
   var tabProps = _pbFilterPropsForTab(props, ui.tab, s);
   var sections = _pbSectionizeProps(tabProps);
-  var hasTeamData = props.some(function(p) { return !!p.team; });
   var teamFilter = ui.team || 'all';
 
   var html = '<div class="mc-props-shell" data-props-game="' + String(gameId).replace(/"/g, '') + '">';
@@ -3075,7 +3296,7 @@ function _pbRenderInlinePropsHtml(props, gameId, sport, meta) {
   if (away && home) {
     html += '<div class="mc-prop-team-pills">' +
       '<button type="button" class="mc-prop-team-pill' + (teamFilter === 'all' ? ' active' : '') + '" onclick="_pbSetPropTeamFilter(this,\'all\')">All</button>' +
-      '<button type="button" class="mc-prop-team-pill' + (teamFilter === 'away' ? ' active' : '') + (hasTeamData ? '' : '') + '" onclick="_pbSetPropTeamFilter(this,\'away\')">' + _pbTeamShort(away) + '</button>' +
+      '<button type="button" class="mc-prop-team-pill' + (teamFilter === 'away' ? ' active' : '') + '" onclick="_pbSetPropTeamFilter(this,\'away\')">' + _pbTeamShort(away) + '</button>' +
       '<button type="button" class="mc-prop-team-pill' + (teamFilter === 'home' ? ' active' : '') + '" onclick="_pbSetPropTeamFilter(this,\'home\')">' + _pbTeamShort(home) + '</button>' +
       '</div>';
   }
@@ -3084,7 +3305,7 @@ function _pbRenderInlinePropsHtml(props, gameId, sport, meta) {
   } else {
     sections.forEach(function(sec) {
       var secKey = ui.tab + '::' + sec.title;
-      html += _pbRenderPropSectionHtml(sec, gameId, gameLabel, s, away, home, ui, secKey);
+      html += _pbRenderPropSectionHtml(sec, gameId, gameLabel, s, away, home, ui, secKey, teamMap);
     });
   }
   html += '</div></div>';
@@ -3208,9 +3429,19 @@ async function _pbLoadGameProps(gameId, sport, panel, card) {
       if (!meta.home) meta.home = card.getAttribute('data-home') || meta.home;
       if (!meta.away) meta.away = card.getAttribute('data-away') || meta.away;
     }
+    var parsed = _pbParseGameIdTeams(meta.gameId || gameId);
+    if (parsed) {
+      if (!meta.away) meta.away = parsed.away;
+      if (!meta.home) meta.home = parsed.home;
+    }
     panel.innerHTML = _pbRenderInlinePropsHtml(data.props, gameId, s, meta);
     _pbResyncBetSlipSelections();
     await _pbHydratePropHeadshots(panel, data.props, s);
+    if (meta.away && meta.home) {
+      _pbEnsurePropsRosterMap(s, meta.away, meta.home).then(function() {
+        if (_pbExpandedPropsGameId === String(gameId)) _pbRerenderPropsPanel(gameId);
+      });
+    }
   } catch (_e) {
     if (_pbExpandedPropsGameId === String(gameId)) {
       panel.innerHTML = '<div class="mc-props-empty">Could not load props.</div>';
@@ -3238,6 +3469,11 @@ async function _pbRefreshExpandedGameProps(opts) {
     var meta = data.props[0] || {};
     if (!meta.home) meta.home = card.getAttribute('data-home') || meta.home;
     if (!meta.away) meta.away = card.getAttribute('data-away') || meta.away;
+    var parsedRefresh = _pbParseGameIdTeams(meta.gameId || gameId);
+    if (parsedRefresh) {
+      if (!meta.away) meta.away = parsedRefresh.away;
+      if (!meta.home) meta.home = parsedRefresh.home;
+    }
     _pbPropsCache[String(gameId)] = {
       props: data.props,
       sport: s,
@@ -3253,6 +3489,11 @@ async function _pbRefreshExpandedGameProps(opts) {
       panel.innerHTML = _pbRenderInlinePropsHtml(data.props, gameId, s, meta);
       _pbResyncBetSlipSelections();
       await _pbHydratePropHeadshots(panel, data.props, s);
+    }
+    if (meta.away && meta.home) {
+      _pbEnsurePropsRosterMap(s, meta.away, meta.home).then(function() {
+        if (_pbExpandedPropsGameId === String(gameId)) _pbRerenderPropsPanel(gameId);
+      });
     }
   } catch (_e) {}
 }
