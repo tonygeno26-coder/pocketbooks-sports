@@ -2421,26 +2421,48 @@ async function _pbFetchEspnPlayerId(playerName, sport, team) {
 
   var searchSport = _ESPN_SEARCH_SPORT[sport] || sport;
   var wantLeague = _ESPN_LEAGUE_SLUG[sport] || sport;
-  var query = String(playerName || '').trim();
-  if (team) query = query + ' ' + String(team).trim();
-  var url = 'https://site.api.espn.com/apis/common/v3/search?query=' + encodeURIComponent(query) +
-    '&sport=' + encodeURIComponent(searchSport) + '&type=player&limit=8';
+  var queries = [];
+  if (sport === 'tennis') {
+    var tParts = String(playerName || '').trim().split(/\s+/).filter(Boolean);
+    var firstLast = tParts.length >= 2 ? (tParts[0] + ' ' + tParts[tParts.length - 1]) : String(playerName || '').trim();
+    queries.push(firstLast + ' tennis');
+    if (firstLast) queries.push(firstLast);
+  } else {
+    var query = String(playerName || '').trim();
+    if (team) query = query + ' ' + String(team).trim();
+    queries.push(query);
+    if (team) queries.push(String(playerName || '').trim());
+  }
   try {
-    var res = await fetch(url, { cache: 'force-cache' });
-    if (!res.ok) {
-      _espnPlayerCache[key] = { miss: true };
-      return _espnPlayerCache[key];
-    }
-    var data = await res.json();
-    var items = (data && data.items) || [];
     var pick = null;
-    for (var i = 0; i < items.length; i++) {
-      if (String(items[i].league || '').toLowerCase() === String(wantLeague).toLowerCase()) {
-        pick = items[i];
-        break;
+    for (var qi = 0; qi < queries.length && !pick; qi++) {
+      var q = queries[qi];
+      if (!q) continue;
+      var limit = sport === 'tennis' ? 3 : 8;
+      var url = 'https://site.api.espn.com/apis/common/v3/search?query=' + encodeURIComponent(q) +
+        '&sport=' + encodeURIComponent(searchSport) + '&type=player&limit=' + limit;
+      var res = await fetch(url, { cache: 'force-cache' });
+      if (!res.ok) continue;
+      var data = await res.json();
+      var items = (data && data.items) || [];
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        if (!it || !it.id) continue;
+        var itemSport = String(it.sport || '').toLowerCase();
+        var itemLeague = String(it.league || '').toLowerCase();
+        if (sport === 'tennis') {
+          if (itemSport && itemSport !== 'tennis') continue;
+          if (itemLeague && itemLeague !== 'atp' && itemLeague !== 'wta' && itemLeague !== 'tennis') continue;
+          pick = it;
+          break;
+        }
+        if (itemLeague === String(wantLeague).toLowerCase()) {
+          pick = it;
+          break;
+        }
       }
+      if (!pick && sport !== 'tennis' && items.length) pick = items[0];
     }
-    if (!pick && items.length) pick = items[0];
     if (!pick || !pick.id) {
       _espnPlayerCache[key] = { miss: true };
       return _espnPlayerCache[key];

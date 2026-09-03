@@ -385,6 +385,17 @@
   var _soccerPending = {};       // in-flight lookups
   var _soccerCacheWarmed = false;
   var _soccerWarmPromise = null;
+  var _verifiedSoccerSeeded = false;
+
+  function _seedVerifiedSoccerTeams() {
+    if (_verifiedSoccerSeeded) return;
+    var map = global.VERIFIED_SOCCER_TEAM_IDS;
+    if (!map) return;
+    Object.keys(map).forEach(function (name) {
+      _rememberSoccerTeam(name, map[name], '');
+    });
+    _verifiedSoccerSeeded = true;
+  }
 
   var _tennisIdByNorm = {};
   var _tennisMiss = {};
@@ -566,13 +577,22 @@
   }
 
   function _lookupSoccerIdSync(teamName) {
+    _seedVerifiedSoccerTeams();
     var k = _normKey(teamName);
     if (!k) return '';
     if (_soccerIdByNorm[k]) return _soccerIdByNorm[k];
+    var verified = global.VERIFIED_SOCCER_TEAM_IDS;
+    if (verified) {
+      if (verified[teamName] != null) return String(verified[teamName]);
+      var keys = Object.keys(verified);
+      for (var vi = 0; vi < keys.length; vi++) {
+        if (_normKey(keys[vi]) === k) return String(verified[keys[vi]]);
+      }
+    }
     // Fuzzy: substring match against known keys
-    var keys = Object.keys(_soccerIdByNorm);
-    for (var i = 0; i < keys.length; i++) {
-      var kk = keys[i];
+    var known = Object.keys(_soccerIdByNorm);
+    for (var i = 0; i < known.length; i++) {
+      var kk = known[i];
       if (kk === k || kk.indexOf(k) >= 0 || k.indexOf(kk) >= 0) return _soccerIdByNorm[kk];
     }
     return '';
@@ -771,18 +791,30 @@
     }
 
     _tennisPending[k] = (async function () {
-      var url = 'https://site.api.espn.com/apis/common/v3/search?query=' +
-        encodeURIComponent(String(playerName).trim()) +
-        '&sport=tennis&type=player&limit=1';
+      var parts = String(playerName || '').trim().split(/\s+/).filter(Boolean);
+      var firstLast = parts.length >= 2 ? (parts[0] + ' ' + parts[parts.length - 1]) : String(playerName || '').trim();
+      var queries = [firstLast + ' tennis', firstLast];
       try {
-        var res = await fetch(url, { cache: 'force-cache' });
-        if (!res.ok) {
-          _tennisMiss[k] = true;
-          return null;
+        var pick = null;
+        for (var qi = 0; qi < queries.length && !pick; qi++) {
+          var url = 'https://site.api.espn.com/apis/common/v3/search?query=' +
+            encodeURIComponent(queries[qi]) +
+            '&sport=tennis&type=player&limit=3';
+          var res = await fetch(url, { cache: 'force-cache' });
+          if (!res.ok) continue;
+          var data = await res.json();
+          var items = (data && data.items) || [];
+          for (var i = 0; i < items.length; i++) {
+            var it = items[i];
+            if (!it || !it.id) continue;
+            var sp = String(it.sport || '').toLowerCase();
+            var lg = String(it.league || '').toLowerCase();
+            if (sp && sp !== 'tennis') continue;
+            if (lg && lg !== 'atp' && lg !== 'wta' && lg !== 'tennis') continue;
+            pick = it;
+            break;
+          }
         }
-        var data = await res.json();
-        var items = (data && data.items) || [];
-        var pick = items[0];
         if (!pick || !pick.id) {
           _tennisMiss[k] = true;
           return null;
@@ -960,4 +992,5 @@
   global.getCountryFlagCode = getCountryFlagCode;
   global.warmSoccerTeamsCache = warmSoccerTeamsCache;
   global.hydrateEspnLobbyMedia = hydrateEspnLobbyMedia;
+  _seedVerifiedSoccerTeams();
 })(typeof window !== 'undefined' ? window : this);
