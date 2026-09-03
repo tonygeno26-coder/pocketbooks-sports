@@ -23,7 +23,7 @@
     americanfootball_nfl: 'nfl', nfl: 'nfl',
     icehockey_nhl: 'nhl', nhl: 'nhl',
     basketball_ncaab: 'ncaab', ncaab: 'ncaab',
-    americanfootball_ncaaf: 'ncaaf', ncaafb: 'ncaaf',
+    americanfootball_ncaaf: 'ncaafb', ncaaf: 'ncaafb', ncaafb: 'ncaafb',
     soccer: 'mls', soccer_mls: 'mls', mls: 'mls'
   };
 

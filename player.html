@@ -2075,6 +2075,7 @@ function _pbRenderGameCardHtml(g) {
     var sportRoute = _ODDS_ROUTE_KEY[sp.toLowerCase()] || sp.toLowerCase();
     var showPropsBtn = _pbSportSupportsProps(sportRoute);
     var showAltBtn = _pbGameHasAltLines(g);
+    var spreadLabel = _pbSpreadMarketLabel(sportRoute);
 
     function cell(id, top, odds, marketType, teamPick, teamName) {
       return _pbOddsCellHtml(g, aw, hw, sp, id, top, odds, marketType, teamPick, teamName);
@@ -2088,17 +2089,17 @@ function _pbRenderGameCardHtml(g) {
       '</div>' +
       liveScoreHtml +
       splitHtml +
-      '<div class="mc-cols"><div></div><div class="mc-col-label">Run Line</div><div class="mc-col-label">Total</div><div class="mc-col-label">To Win</div></div>' +
+      '<div class="mc-cols"><div></div><div class="mc-col-label">' + spreadLabel + '</div><div class="mc-col-label">Total</div><div class="mc-col-label">To Win</div></div>' +
       '<div class="mc-team-row">' +
         '<div class="mc-team">' + teamAvatar(aw, sp) + '<div><div class="mc-city">' + awC + '</div><div class="mc-name">' + awN + '</div></div></div>' +
-        cell(g.id + '-sp-aw', awSp ? (awSp.line > 0 ? '+' : '') + awSp.line : null, awSp ? awSp.odds : null, 'Run Line', aw + ' ' + (awSp ? (awSp.line > 0 ? '+' : '') + awSp.line : ''), aw) +
+        cell(g.id + '-sp-aw', awSp ? (awSp.line > 0 ? '+' : '') + awSp.line : null, awSp ? awSp.odds : null, spreadLabel, aw + ' ' + (awSp ? (awSp.line > 0 ? '+' : '') + awSp.line : ''), aw) +
         cell(g.id + '-ov', ov ? 'O ' + ov.line : null, ov ? ov.odds : null, 'Total', ov ? 'Over ' + ov.line : null) +
         cell(g.id + '-ml-aw', null, awML ? awML.odds : null, 'Moneyline', aw) +
       '</div>' +
       '<div class="mc-divider"></div>' +
       '<div class="mc-team-row">' +
         '<div class="mc-team">' + teamAvatar(hw, sp) + '<div><div class="mc-city">' + hwC + '</div><div class="mc-name">' + hwN + '</div></div></div>' +
-        cell(g.id + '-sp-hw', hwSp ? (hwSp.line > 0 ? '+' : '') + hwSp.line : null, hwSp ? hwSp.odds : null, 'Run Line', hw + ' ' + (hwSp ? (hwSp.line > 0 ? '+' : '') + hwSp.line : ''), hw) +
+        cell(g.id + '-sp-hw', hwSp ? (hwSp.line > 0 ? '+' : '') + hwSp.line : null, hwSp ? hwSp.odds : null, spreadLabel, hw + ' ' + (hwSp ? (hwSp.line > 0 ? '+' : '') + hwSp.line : ''), hw) +
         cell(g.id + '-un', un ? 'U ' + un.line : null, un ? un.odds : null, 'Total', un ? 'Under ' + un.line : null) +
         cell(g.id + '-ml-hw', null, hwML ? hwML.odds : null, 'Moneyline', hw) +
       '</div>' +
@@ -2215,9 +2216,22 @@ function _pbPropCellId(p, gameId) {
   return 'prop-' + gameId + '-' + String(p.playerName).replace(/\s+/g, '-') + '-' + p.side + '-' + p.line;
 }
 
+function _pbSpreadMarketLabel(sport) {
+  var s = String(sport || '').toLowerCase();
+  if (s === 'mlb' || s === 'baseball_mlb' || s === 'ncaabaseball') return 'Run Line';
+  if (s === 'nhl' || s === 'icehockey_nhl') return 'Puck Line';
+  return 'Spread';
+}
+
 function _pbNormalizePropSport(sport) {
   var s = String(sport || (typeof _currentSport !== 'undefined' ? _currentSport : 'mlb')).toLowerCase();
   if (s === 'ncaafb') return 'ncaaf';
+  if (s === 'americanfootball_nfl') return 'nfl';
+  if (s === 'americanfootball_ncaaf') return 'ncaaf';
+  if (s === 'baseball_mlb') return 'mlb';
+  if (s === 'basketball_nba') return 'nba';
+  if (s === 'basketball_wnba') return 'wnba';
+  if (s === 'icehockey_nhl') return 'nhl';
   return s;
 }
 
