@@ -8027,6 +8027,76 @@ window.loadPlayerDashboardFromDb  = loadPlayerDashboardFromDb;
 window.runPlayerDashboardDbAudit  = runPlayerDashboardDbAudit;
 // ────────────────────────────────────────────────────────────────────────────
 
+// ── Real-time balance / grade poll (60s) ─────────────────────────────────────
+var _pbGradePollPrevActive = null; // map ticketId -> true
+var _pbGradePollTimer = null;
+function _pbTicketLabel(t) {
+  try {
+    var sels = t.selections || t.legs || [];
+    for (var i = 0; i < sels.length; i++) {
+      var s = sels[i] || {};
+      var pick = s.pick || s.selection || s.label || s.team || '';
+      if (pick) return String(pick);
+      var home = s.home_team || s.homeTeam || '';
+      var away = s.away_team || s.awayTeam || '';
+      if (home || away) return (away && home) ? (away + ' @ ' + home) : (home || away);
+    }
+  } catch (_e) {}
+  return (t.type || 'bet').toString();
+}
+function _pbNotifyGradedTicket(t) {
+  var st = String(t.status || '').toLowerCase();
+  var label = _pbTicketLabel(t);
+  var profit = parseFloat(t.potential_profit != null ? t.potential_profit : t.potentialProfit) || 0;
+  if (st === 'won') {
+    try { showToast('🎉 Your bet on ' + label + ' WON! +$' + profit.toFixed(2) + ' added to your balance', 'success'); } catch (_e) {}
+  } else if (st === 'lost') {
+    try { showToast('Your bet on ' + label + ' lost.', 'info'); } catch (_e) {}
+  } else if (st === 'push' || st === 'pushed') {
+    try { showToast('Your bet on ' + label + ' pushed — stake returned.', 'info'); } catch (_e) {}
+  }
+}
+async function _pollPlayerDashboardForGrades() {
+  if (document.hidden) return;
+  try {
+    var data = await loadPlayerDashboardFromDb();
+    if (!data || !data.ok || !data.tickets) return;
+    var active = data.tickets.active || [];
+    var settled = data.tickets.settled || [];
+    var activeMap = {};
+    active.forEach(function(t){ if (t && t.id) activeMap[t.id] = true; });
+    if (_pbGradePollPrevActive) {
+      var settledById = {};
+      settled.forEach(function(t){ if (t && t.id) settledById[t.id] = t; });
+      Object.keys(_pbGradePollPrevActive).forEach(function(id) {
+        if (activeMap[id]) return;
+        var t = settledById[id];
+        if (t) _pbNotifyGradedTicket(t);
+      });
+    }
+    _pbGradePollPrevActive = activeMap;
+    try { renderMyBets(); } catch (_e) {}
+  } catch (e) {
+    console.warn('[grade-poll] dashboard refresh failed:', e && e.message || e);
+  }
+}
+(function _startPlayerGradePoll() {
+  if (_pbGradePollTimer) return;
+  _pbGradePollTimer = setInterval(_pollPlayerDashboardForGrades, 60000);
+  // Seed previous-active map shortly after load without toasting history
+  setTimeout(function() {
+    loadPlayerDashboardFromDb().then(function(data) {
+      if (!data || !data.ok || !data.tickets) return;
+      var m = {};
+      (data.tickets.active || []).forEach(function(t){ if (t && t.id) m[t.id] = true; });
+      _pbGradePollPrevActive = m;
+    }).catch(function(){});
+  }, 4000);
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) _pollPlayerDashboardForGrades();
+  });
+})();
+
 // ════════════════════════════════════════════════════════════════════════════
 // GRADE TODAY'S ACTIVE TICKETS — on-demand audit helper
 // Usage: gradeTodaysActiveTickets()   (also available as window.grade)
