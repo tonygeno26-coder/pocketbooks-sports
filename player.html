@@ -1426,7 +1426,7 @@ function calcAvailableBalance() {
   // _effective: canonical status for balance purposes.
   // Uses _isSettledTicket (5-guard: needs gradedAt + valid status).
   // Does NOT apply 12h cutoff — settled wins/losses are permanent
-  // regardless of age. The 12h rule is only for Results KPI display.
+  // regardless of age. Results weekly overview also uses the full week.
   function _effective(t){
     var s = String(t.status||'').toLowerCase();
     if (s === 'canceled' || s === 'voided' || s === 'deleted') return 'canceled';
@@ -11011,7 +11011,26 @@ function _resSundayMidnight(d){
   return x;
 }
 function _resGetTickets(){
+  // Prefer dashboard-hydrated betTickets over a possibly stale localStorage copy.
+  try {
+    if (typeof _playerTicketsFromDb !== 'undefined' && _playerTicketsFromDb && Array.isArray(betTickets)) {
+      return betTickets;
+    }
+    if (typeof betTickets !== 'undefined' && Array.isArray(betTickets) && betTickets.length) {
+      return betTickets;
+    }
+  } catch(_e){}
   try { return JSON.parse(localStorage.getItem('pb-tickets')||'[]'); } catch(_e){ return []; }
+}
+function _resTicketRisk(t){
+  if (!t) return 0;
+  var v = t.riskAmount != null ? t.riskAmount : t.risk_amount;
+  return parseFloat(v) || 0;
+}
+function _resTicketProfit(t){
+  if (!t) return 0;
+  var v = t.potentialProfit != null ? t.potentialProfit : t.potential_profit;
+  return parseFloat(v) || 0;
 }
 
 // Module-level state for the Results day-expansion. Holds a Mon-first
@@ -11037,15 +11056,15 @@ function _resTicketsForDay(dayStart, dayEnd){
     var isActive   = (s === 'active' || s === 'open');
     // Settled tickets: bucket by placedAt (when bet was placed)
     // Active/canceled: bucket by placedAt
-    var iso = t.placedAt || t.createdAt;
+    var iso = t.placedAt || t.placed_at || t.createdAt;
     var ts  = iso ? Date.parse(iso) : NaN;
     if (isNaN(ts)) continue;
     if (ts >= dsT && ts < deT) out.push(t);
   }
   // Newest first within the day.
   out.sort(function(a,b){
-    var ax = Date.parse(a.placedAt || a.createdAt) || 0;
-    var bx = Date.parse(b.placedAt || b.createdAt) || 0;
+    var ax = Date.parse(a.placedAt || a.placed_at || a.createdAt) || 0;
+    var bx = Date.parse(b.placedAt || b.placed_at || b.createdAt) || 0;
     return bx - ax;
   });
   return out;
@@ -11087,8 +11106,8 @@ function _renderResultsTicketCard(t){
     else oddsTxt = String(oddsRaw);
   }
 
-  var risk    = parseFloat(t.riskAmount)      || 0;
-  var profit  = parseFloat(t.potentialProfit) || 0;
+  var risk    = _resTicketRisk(t);
+  var profit  = _resTicketProfit(t);
   var payout  = (t.estimatedPayout != null && t.estimatedPayout !== '')
                   ? (parseFloat(t.estimatedPayout) || 0)
                   : Math.round((risk + profit) * 100) / 100;
@@ -11199,8 +11218,11 @@ try { _purgeMockTickets(); } catch(_e){}
 // Uses _displayStatus (same guard as My Bets) so Results and My Bets
 // always agree on what is settled vs active.
 
-// 12-hour TTL: settled tickets older than this are hidden from the
-// current-week KPI summary (same rule as My Bets lifecycle filter).
+// Weekly overview includes ALL tickets placed in the Sun–Sat week window
+// (settled + active + canceled). No age TTL — Results is the full-week
+// ledger; My Bets may still hide older settled cards separately.
+
+// Legacy helpers kept for any external callers / debug.
 var _RES_SETTLED_TTL_MS = 12 * 60 * 60 * 1000;
 
 function _resSettledAgeMs(t) {
@@ -11212,46 +11234,33 @@ function _resSettledAgeMs(t) {
   return isFinite(ms) ? (Date.now() - ms) : Number.POSITIVE_INFINITY;
 }
 
-// isVisibleInCurrentResultsSummary: true if ticket should contribute to
-// the TOP KPI cards (net, wagered, won, lost, settled count, chart bars).
-// Rule: active/canceled always included; settled only if within 12h of gradedAt.
-// Tickets outside the week window are excluded by the caller.
+// Always true for week-window tickets — Results overview no longer applies
+// a 12h settled TTL (that filter caused Wagered/Won/Lost to show $0 while
+// daily breakdown still listed the same tickets).
 function isVisibleInCurrentResultsSummary(t) {
-  var s = (typeof _displayStatus === 'function') ? _displayStatus(t) : (t.status||'').toLowerCase();
-  // Canceled/voided: included (for canceled count), but contributes $0 to net
-  if (s === 'canceled' || s === 'voided' || s === 'deleted') return true;
-  // Active/open/pending: always included (pending count, open risk)
-  if (s === 'active' || s === 'open' || s === 'pending' || s === '') return true;
-  // Settled (won/lost/push): only within 12h window
-  var ageMs = _resSettledAgeMs(t);
-  return ageMs <= _RES_SETTLED_TTL_MS;
+  return !!t;
 }
 window.isVisibleInCurrentResultsSummary = isVisibleInCurrentResultsSummary;
 
 function _resVisibleTickets(weekStart, weekEnd) {
-  var bets = _resGetTickets();
-  var wsT = weekStart.getTime(), weT = weekEnd.getTime();
-  return bets.filter(function(t) {
-    var ts = new Date(t.placedAt || t.createdAt || 0).getTime();
-    if (isNaN(ts) || ts < wsT || ts >= weT) return false;
-    return isVisibleInCurrentResultsSummary(t);
-  });
+  // Alias: weekly overview uses the full week window (no age filter).
+  return _resAllTicketsInWindow(weekStart, weekEnd);
 }
 
-// All tickets in window regardless of age — for full history/archive view
+// All tickets placed in [weekStart, weekEnd) — Sunday–Saturday window.
 function _resAllTicketsInWindow(weekStart, weekEnd) {
   var bets = _resGetTickets();
   var wsT = weekStart.getTime(), weT = weekEnd.getTime();
   return bets.filter(function(t) {
-    var ts = new Date(t.placedAt || t.createdAt || 0).getTime();
+    var ts = new Date(t.placedAt || t.placed_at || t.createdAt || 0).getTime();
     return !isNaN(ts) && ts >= wsT && ts < weT;
   });
 }
 
 function _resWeekAggregates(weekStart, weekEnd){
-  var wsT = weekStart.getTime(), weT = weekEnd.getTime();
-  // Use canonical pipeline — _displayStatus as source-of-truth
-  var bets = _resVisibleTickets(weekStart, weekEnd);
+  var wsT = weekStart.getTime();
+  // Full week window — settled + active (canceled counted separately, $0).
+  var bets = _resAllTicketsInWindow(weekStart, weekEnd);
   var totalWagered=0, totalWon=0, totalLost=0;
   var pendingCount=0, settledCount=0, canceledCount=0;
   var winCount=0, lossCount=0, pushCount=0;
@@ -11259,10 +11268,10 @@ function _resWeekAggregates(weekStart, weekEnd){
   var dayNets = [0,0,0,0,0,0,0]; // 0 = Sunday (storage order)
   var settledPnl = 0;
   bets.forEach(function(t){
-    var ts = new Date(t.placedAt || t.createdAt || 0).getTime();
+    var ts = new Date(t.placedAt || t.placed_at || t.createdAt || 0).getTime();
     totalBets++;
-    var risk   = parseFloat(t.riskAmount)||0;
-    var profit = parseFloat(t.potentialProfit)||0;
+    var risk   = _resTicketRisk(t);
+    var profit = _resTicketProfit(t);
     // CANONICAL: use _displayStatus so Results agrees with My Bets
     // This ensures tickets the settled-guard rejects (no gradedAt, invalid
     // finalScore shape, etc.) are treated as active here, not as won/lost.
@@ -11271,46 +11280,29 @@ function _resWeekAggregates(weekStart, weekEnd){
     // not gradedAt, so the day bar reflects when the bet happened.
     var dayIdx = Math.floor((ts - wsT) / 86400000);
     if (dayIdx < 0 || dayIdx > 6) dayIdx = 0;
-    // Determine net contribution — ONLY settled outcomes affect dayNets
-    var netContrib = 0;
-    var inNet = false;
-    var inPending = false;
-    var inCanceled = false;
-    var rawStatus = (t.status||'').toLowerCase();
-    var hidden12h = (rawStatus !== s); // true when guard demoted won/lost → active
-    var reason = '';
     if (s === 'won') {
+      // Wagered: risk; Won: potential_profit from won tickets
       totalWagered += risk; totalWon += profit;
       settledCount++; winCount++;
       settledPnl += profit;
       dayNets[dayIdx] += profit;
-      netContrib = profit; inNet = true;
-      reason = 'settled-won';
     } else if (s === 'lost') {
+      // Wagered + Lost: risk_amount from lost tickets
       totalWagered += risk; totalLost += risk;
       settledCount++; lossCount++;
       settledPnl -= risk;
       dayNets[dayIdx] -= risk;
-      netContrib = -risk; inNet = true;
-      reason = 'settled-lost';
     } else if (s === 'push' || s === 'pushed') {
       totalWagered += risk;
       settledCount++; pushCount++;
-      netContrib = 0; inNet = false;
-      reason = 'settled-push-no-net';
     } else if (s === 'canceled' || s === 'voided' || s === 'deleted') {
-      // Canceled: excluded from net, wagered, pending
+      // Canceled: count only — excluded from wagered / won / lost / pending
       canceledCount++;
-      netContrib = 0; inNet = false; inCanceled = true;
-      reason = 'canceled-excluded';
     } else { // active / open / pending
-      // Active: counts toward totalWagered (handle) but NOT dayNets
+      // Active: counts toward Wagered (handle) and Pending count
       totalWagered += risk;
       pendingCount++;
-      netContrib = 0; inNet = false; inPending = true;
-      reason = 'active-pending-no-net';
     }
-    
   });
   return {
     totalBets:    totalBets,
@@ -11343,14 +11335,8 @@ function renderPlayerResults(){
   var agg = _resWeekAggregates(ws, we);
   var net = agg.settledPnl; // player POV
 
-  // ── AGGREGATE SUMMARY AUDIT ──────────────────────────────────────────────
-  var _allTix = _resGetTickets();
+  // ── AGGREGATE SUMMARY ────────────────────────────────────────────────────
   var _allWeekTix = _resAllTicketsInWindow(ws, we);
-  var _weekTix = _resVisibleTickets(ws, we);
-  var _hidden12h = _allWeekTix.filter(function(t){ return !isVisibleInCurrentResultsSummary(t); });
-  var _excluded = _allTix.length - _weekTix.length;
-  var _sampleIncluded = _weekTix.slice(0,2).map(function(t){ return (t.id||'?')+':'+((typeof _displayStatus==='function')?_displayStatus(t):(t.status||'?')); }).join(', ') || 'none';
-  var _sampleExcluded = _hidden12h.slice(0,2).map(function(t){ return (t.id||'?')+':hidden-12h-'+(t.status||'?'); }).join(', ') || 'none';
   
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -11392,12 +11378,13 @@ function renderPlayerResults(){
   var _proofStrip = '<div style="font-family:monospace;font-size:0.58rem;color:#444;background:#0a0a0a;border-bottom:1px solid #1a1a1a;padding:4px 12px;display:flex;gap:12px;flex-wrap:wrap">'+
     '<span style="color:#666">sha:'+(window.PBS_BUILD_SHA||'old')+'</span>'+
     '<span>net:$'+net.toFixed(2)+'</span>'+
+    '<span>wagered:$'+agg.totalWagered.toFixed(2)+'</span>'+
+    '<span>won:$'+agg.totalWon.toFixed(2)+'</span>'+
+    '<span>lost:$'+agg.totalLost.toFixed(2)+'</span>'+
     '<span>settled:'+agg.settledCount+'</span>'+
     '<span>pending:'+agg.pendingCount+'</span>'+
     '<span>canceled:'+agg.canceledCount+'</span>'+
     '<span>inWindow:'+_allWeekTix.length+'</span>'+
-    '<span>hidden12h:'+_hidden12h.length+'</span>'+
-    '<span>used:'+_weekTix.length+'</span>'+
     '</div>';
   var topHtml = _proofStrip + '<div style="padding:20px 16px 4px">' +
     // Week selector — centered (host pattern)
