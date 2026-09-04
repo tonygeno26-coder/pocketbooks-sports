@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS clubs (
   max_bet       NUMERIC(12,2) DEFAULT 500,
   max_parlay    NUMERIC(12,2) DEFAULT 1000,
   active        BOOLEAN DEFAULT TRUE,
+  is_locked     BOOLEAN NOT NULL DEFAULT FALSE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
