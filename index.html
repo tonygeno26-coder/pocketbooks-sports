@@ -1248,20 +1248,64 @@ function _escAttr(s) {
   return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 }
 
-async function savePlayerStartingBalance(playerId, value) {
+function toggleStartBalEdit(playerId) {
+  var view = document.getElementById('startbal-view-'+playerId);
+  var edit = document.getElementById('startbal-edit-'+playerId);
+  if (!view || !edit) return;
+  var showing = edit.style.display !== 'none';
+  edit.style.display = showing ? 'none' : 'flex';
+  view.style.display = showing ? 'flex' : 'none';
+  if (!showing) {
+    var inp = edit.querySelector('input');
+    if (inp) { inp.focus(); inp.select(); }
+  }
+}
+
+async function savePlayerStartingBalance(playerId, value, username) {
   var amt = parseFloat(value);
-  if (isNaN(amt) || amt < 0) {
+  if (!Number.isFinite(amt)) {
     if (typeof showToastHost === 'function') showToastHost('Invalid starting balance');
     return;
   }
-  // Mirror into local creditLimit so Players tab stays consistent
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+  var cid = club.id || club.clubId || null;
+  if (!cid) {
+    if (typeof showToastHost === 'function') showToastHost('No club selected');
+    return;
+  }
+  var name = username || playerId;
   try {
-    var lim = (typeof getHostPlayerLimits === 'function') ? getHostPlayerLimits(playerId) : { creditLimit:0 };
-    lim.creditLimit = amt;
-    if (typeof saveHostPlayerLimits === 'function') saveHostPlayerLimits(playerId, lim);
-  } catch(_e){}
-  if (typeof showToastHost === 'function') showToastHost('Starting balance set to $'+amt.toFixed(2)+' (local)');
+    var resp = await (typeof _pbFetch === 'function'
+      ? _pbFetch('/api/host/player-credit', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ clubId:cid, playerId:playerId, balanceStart:amt })
+        })
+      : fetch('/api/host/player-credit', {
+          method:'POST',
+          headers: Object.assign({ 'Content-Type':'application/json' }, typeof _getActorHeaders==='function'?_getActorHeaders():{}),
+          body: JSON.stringify({ clubId:cid, playerId:playerId, balanceStart:amt })
+        }));
+    var data = await resp.json();
+    if (!data.ok) throw new Error((data.errors&&data.errors.join(', ')) || data.error || 'save_failed');
+    var newVal = data.newBalanceStart != null ? parseFloat(data.newBalanceStart) : amt;
+    // Mirror local creditLimit for Players tab consistency (display only)
+    try {
+      var lim = (typeof getHostPlayerLimits === 'function') ? getHostPlayerLimits(playerId) : { creditLimit:0 };
+      lim.creditLimit = newVal;
+      if (typeof saveHostPlayerLimits === 'function') saveHostPlayerLimits(playerId, lim);
+    } catch(_e){}
+    var amtEl = document.getElementById('startbal-amt-'+playerId);
+    if (amtEl) amtEl.textContent = '$'+newVal.toFixed(2);
+    var inp = document.querySelector('#startbal-edit-'+playerId+' input');
+    if (inp) inp.value = newVal.toFixed(2);
+    toggleStartBalEdit(playerId);
+    if (typeof showToastHost === 'function') showToastHost('Credit updated for '+name);
+  } catch(e) {
+    if (typeof showToastHost === 'function') showToastHost('Credit update failed: '+e.message);
+  }
 }
+window.toggleStartBalEdit = toggleStartBalEdit;
 
 async function renderSettlementPreviewFromDb() {
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
@@ -1377,12 +1421,22 @@ async function renderSettlementPreviewFromDb() {
           '<div><div style="font-size:0.5rem;color:#666;text-transform:uppercase">Lost</div><div style="font-size:0.72rem;font-weight:800;color:var(--red,#ff3d57)">$'+weekLost.toFixed(2)+'</div></div>' +
           '<div><div style="font-size:0.5rem;color:#666;text-transform:uppercase">Net</div><div style="font-size:0.72rem;font-weight:800;color:'+netColor+'">'+(weekNet>=0?'+':'−')+'$'+Math.abs(weekNet).toFixed(2)+'</div></div>' +
         '</div>' +
-        '<div style="display:flex;align-items:center;gap:8px">' +
+        '<div style="display:flex;align-items:center;gap:8px;min-height:34px">' +
           '<label style="font-size:0.58rem;color:#666;text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap">Starting bal</label>' +
-          '<input type="number" step="0.01" min="0" value="'+(startBal!=null?startBal.toFixed(2):'')+'"' +
-            ' data-balance-start="'+_escAttr(p.playerId)+'"' +
-            ' onchange="savePlayerStartingBalance(this.getAttribute(\'data-balance-start\'), this.value)"' +
-            ' style="flex:1;background:#0a0a0a;border:1px solid var(--border,#2a2a2a);border-radius:8px;padding:7px 10px;color:#fff;font-size:0.82rem;font-weight:700;outline:none;font-family:monospace">' +
+          '<div id="startbal-view-'+_escAttr(p.playerId)+'" style="display:flex;align-items:center;gap:6px;flex:1">' +
+            '<span id="startbal-amt-'+_escAttr(p.playerId)+'" style="font-size:0.82rem;font-weight:800;font-family:monospace;color:#fff">'+(startBal!=null?'$'+startBal.toFixed(2):'—')+'</span>' +
+            '<button type="button" title="Edit credit" onclick="toggleStartBalEdit('+JSON.stringify(String(p.playerId))+')"' +
+              ' style="background:transparent;border:1px solid var(--border,#2a2a2a);border-radius:6px;color:#888;cursor:pointer;padding:2px 7px;font-size:0.72rem;line-height:1.2">✎</button>' +
+          '</div>' +
+          '<div id="startbal-edit-'+_escAttr(p.playerId)+'" style="display:none;align-items:center;gap:6px;flex:1">' +
+            '<input type="number" step="0.01" value="'+(startBal!=null?startBal.toFixed(2):'')+'"' +
+              ' data-balance-start="'+_escAttr(p.playerId)+'"' +
+              ' style="flex:1;background:#0a0a0a;border:1px solid var(--border,#2a2a2a);border-radius:8px;padding:7px 10px;color:#fff;font-size:0.82rem;font-weight:700;outline:none;font-family:monospace">' +
+            '<button type="button" onclick="(function(el){var inp=el.parentNode.querySelector(\'input\');savePlayerStartingBalance(inp.getAttribute(\'data-balance-start\'),inp.value,'+JSON.stringify(String(p.username||p.playerId))+');})(this)"' +
+              ' style="font-size:0.65rem;font-weight:900;padding:7px 10px;border-radius:8px;border:none;background:var(--green,#00c853);color:#000;cursor:pointer">Save</button>' +
+            '<button type="button" onclick="toggleStartBalEdit('+JSON.stringify(String(p.playerId))+')"' +
+              ' style="font-size:0.65rem;font-weight:700;padding:7px 8px;border-radius:8px;border:1px solid var(--border,#2a2a2a);background:transparent;color:#888;cursor:pointer">✕</button>' +
+          '</div>' +
         '</div>' +
       '</div>';
     });
