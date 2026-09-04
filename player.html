@@ -5287,6 +5287,12 @@ function setRRSize(s) {
   if (btn) btn.classList.add('active');
   bsRenderLegs();
 }
+function selectRRSize(sz) {
+  activeRRSize = parseInt(sz, 10) || 2;
+  var fi = document.getElementById('bs-stake-inp');
+  if (fi) fi.value = rrStakes[activeRRSize] || '';
+  bsRenderLegs();
+}
 
 // ===== TEASER =====
 var teaserPts = 6;
@@ -5587,7 +5593,7 @@ function bsRenderLegs() {
         var rowEntry = perBet * cnt;
         var rowPay = perBet > 0 ? rrPayoutCalc(sz, perBet, betSlip) : 0; // sgpAdjust applied inside rrPayout
         return '<div class="dkslip-card" style="margin-bottom:8px;overflow:hidden">' +
-          '<div class="dkslip-card-hdr" style="'+(isActive?'background:#f0faf5':'')+'" onclick="activeRRSize=sz;var fi=document.getElementById(\'bs-stake-inp\');if(fi)fi.value=rrStakes[sz]||\'\'">' +
+          '<div class="dkslip-card-hdr" style="'+(isActive?'background:#f0faf5':'')+'" onclick="selectRRSize('+sz+')">' +
             '<span class="dkslip-card-title">'+(isActive?'● ':'')+sz+'-Pick Round Robin</span>' +
             '<span class="dkslip-card-odds" style="font-size:0.75rem;color:#555">'+cnt+'x</span>' +
           '</div>' +
