@@ -23,6 +23,21 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .icon-btn:hover{color:var(--green)}
 .buy-diamonds-nav-btn{background:transparent;border:1.5px solid rgba(0,255,136,0.45);color:#00ff88;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.05rem;cursor:pointer;padding:0;line-height:1;box-shadow:0 0 10px rgba(0,255,136,0.18)}
 .buy-diamonds-nav-btn:hover{border-color:#00ff88;background:rgba(0,255,136,0.08)}
+.notif-wrap{position:relative}
+.notif-bell{position:relative;background:none;border:none;padding:0;font-size:1.2rem;cursor:pointer;color:#888;line-height:1}
+.notif-bell:hover{color:var(--green)}
+.notif-badge{position:absolute;top:-4px;right:-6px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--red);color:#fff;font-size:0.58rem;font-weight:800;display:none;align-items:center;justify-content:center;line-height:1}
+.notif-badge.show{display:inline-flex}
+.notif-dd{display:none;position:absolute;right:0;top:calc(100% + 10px);width:300px;max-height:360px;overflow:auto;background:#161616;border:1px solid #2a2a2a;border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,0.55);z-index:200}
+.notif-dd.open{display:block}
+.notif-dd-hd{padding:12px 14px 8px;font-size:0.72rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.4px;border-bottom:1px solid #222}
+.notif-item{padding:12px 14px;border-bottom:1px solid #1e1e1e}
+.notif-item:last-child{border-bottom:none}
+.notif-item.unread{background:rgba(0,255,135,0.05)}
+.notif-item-title{font-size:0.82rem;font-weight:800;color:#fff;margin-bottom:4px}
+.notif-item-msg{font-size:0.72rem;color:#aaa;line-height:1.35}
+.notif-item-time{font-size:0.62rem;color:#555;margin-top:6px}
+.notif-empty{padding:24px 14px;text-align:center;color:#666;font-size:0.78rem}
 
 /* TOP TABS */
 .top-tabs{display:flex;gap:0;padding:4px 16px 0;border-bottom:1px solid var(--border)}
@@ -844,7 +859,14 @@ function _debugClearTickets() {
   <div class="h-right">
     <div style="display:flex;flex-direction:column;align-items:flex-end;line-height:1.2"><div style="font-size:0.52rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px">Balance</div><div id="player-balance-display" style="font-size:0.92rem;font-weight:900;color:#fff;text-shadow:0 0 8px rgba(255,255,255,0.25)">...</div></div>
     <button type="button" class="buy-diamonds-nav-btn" id="buy-diamonds-btn" onclick="openBuyDiamondsModal()" aria-label="Buy Diamonds" title="Buy Diamonds">💎</button>
-    <span class="icon-btn">🔔</span>
+    <div class="notif-wrap" id="notif-wrap">
+      <button type="button" class="notif-bell" id="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications" title="Notifications">🔔</button>
+      <span class="notif-badge" id="notif-badge"></span>
+      <div class="notif-dd" id="notif-dd">
+        <div class="notif-dd-hd">Notifications</div>
+        <div id="notif-list"><div class="notif-empty">Loading…</div></div>
+      </div>
+    </div>
     <span class="icon-btn" id="open-profile-btn" style="cursor:pointer" onclick="showPlayerSettings()">👤</span>
   </div>
 </div>
@@ -13947,6 +13969,105 @@ async function _checkMarketStatus() {
 window._checkMarketStatus = _checkMarketStatus;
 // ────────────────────────────────────────────────────────────────────────────
 
+// ── In-app notifications ─────────────────────────────────────────────────────
+var _notifOpen = false;
+
+function _notifEscHtml(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function _notifFmtTime(iso) {
+  if (!iso) return '';
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  var diff = Date.now() - d.getTime();
+  if (diff < 60000) return 'Just now';
+  if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+  if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function _notifUpdateBadge(count) {
+  var badge = document.getElementById('notif-badge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = count > 99 ? '99+' : String(count);
+    badge.classList.add('show');
+  } else {
+    badge.textContent = '';
+    badge.classList.remove('show');
+  }
+}
+
+function _notifRenderList(list) {
+  var el = document.getElementById('notif-list');
+  if (!el) return;
+  if (!list || !list.length) {
+    el.innerHTML = '<div class="notif-empty">No notifications yet</div>';
+    return;
+  }
+  el.innerHTML = list.map(function(n) {
+    var cls = n.read ? 'notif-item' : 'notif-item unread';
+    return '<div class="' + cls + '">' +
+      '<div class="notif-item-title">' + _notifEscHtml(n.title || '') + '</div>' +
+      '<div class="notif-item-msg">' + _notifEscHtml(n.message || '') + '</div>' +
+      '<div class="notif-item-time">' + _notifFmtTime(n.created_at) + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+async function _loadNotifications() {
+  try {
+    var resp = await (typeof _pbFetch === 'function'
+      ? _pbFetch(API + '/api/notifications')
+      : fetch(API + '/api/notifications', { headers: _getActorHeaders() }));
+    var d = await resp.json();
+    if (!d || !d.ok) return;
+    _notifUpdateBadge(d.unread || 0);
+    if (_notifOpen) _notifRenderList(d.notifications || []);
+  } catch (_e) {}
+}
+
+async function _markNotificationsRead() {
+  try {
+    var resp = await (typeof _pbFetch === 'function'
+      ? _pbFetch(API + '/api/notifications/read', { method: 'POST', body: {} })
+      : fetch(API + '/api/notifications/read', { method: 'POST', headers: _getActorHeaders(), body: '{}' }));
+    var d = await resp.json();
+    if (d && d.ok) {
+      _notifUpdateBadge(0);
+      document.querySelectorAll('.notif-item.unread').forEach(function(el) { el.classList.remove('unread'); });
+    }
+  } catch (_e) {}
+}
+
+function toggleNotifDropdown(ev) {
+  if (ev) ev.stopPropagation();
+  var dd = document.getElementById('notif-dd');
+  if (!dd) return;
+  _notifOpen = !_notifOpen;
+  if (_notifOpen) {
+    dd.classList.add('open');
+    _loadNotifications().then(function() { _markNotificationsRead(); });
+  } else {
+    dd.classList.remove('open');
+  }
+}
+
+function _initNotifications() {
+  document.addEventListener('click', function(e) {
+    var wrap = document.getElementById('notif-wrap');
+    if (wrap && !wrap.contains(e.target)) {
+      _notifOpen = false;
+      var dd = document.getElementById('notif-dd');
+      if (dd) dd.classList.remove('open');
+    }
+  });
+  _loadNotifications();
+  setInterval(_loadNotifications, 60000);
+}
+window.toggleNotifDropdown = toggleNotifDropdown;
+
 // Initialize grading authority badge + verify session on page load
 document.addEventListener('DOMContentLoaded', function() {
   _updateGradingSourceBadge(_GRADING_MODE === 'server_authoritative' ? 'Server' : 'BrowserFallback DEV');
@@ -13964,6 +14085,7 @@ document.addEventListener('DOMContentLoaded', function() {
   setInterval(_checkMarketStatus, 60000);
   // Phase T: start event poller
   if (typeof _startEventPoller === 'function') _startEventPoller();
+  _initNotifications();
 });
 
 </script>
