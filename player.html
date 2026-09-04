@@ -3097,9 +3097,39 @@ function _pbNormPropPlayerName(name) {
   return String(name || '')
     .toLowerCase()
     .replace(/[\u2019']/g, '')
+    .replace(/\((?:[a-z]{2,3}|[a-z .]+)\)/g, ' ') // strip "(LAD)" / team tags
     .replace(/\./g, '')
+    .replace(/\b(jr|sr|ii|iii|iv|v)\b/g, ' ')
+    .replace(/[^a-z0-9\s-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/** Extra keys so "J. T. Realmuto" matches roster "J.T. Realmuto" / "JT Realmuto". */
+function _pbPropPlayerNameKeys(name) {
+  var base = _pbNormPropPlayerName(name);
+  if (!base) return [];
+  var keys = [base];
+  var parts = base.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    var last = parts[parts.length - 1];
+    var given = parts.slice(0, -1);
+    // Collapse spaced single-letter initials: "j t realmuto" → "jt realmuto"
+    if (given.length >= 1 && given.every(function(p) { return p.length === 1; })) {
+      keys.push(given.join('') + ' ' + last);
+    }
+    // First initial + last: "christian yelich" → "c yelich"
+    if (given[0] && given[0].length) {
+      keys.push(given[0].charAt(0) + ' ' + last);
+    }
+    // Drop middle initials: "max p muncy" → "max muncy"
+    if (given.length >= 2) {
+      keys.push(given[0] + ' ' + last);
+    }
+  }
+  var out = {};
+  keys.forEach(function(k) { if (k) out[k] = true; });
+  return Object.keys(out);
 }
 
 function _pbParseGameIdTeams(gameId) {
@@ -3128,30 +3158,42 @@ function _pbSplitPropPlayerNames(playerName) {
     .filter(Boolean);
 }
 
-function _pbRosterCacheKey(sport, away, home) {
+function _pbRosterCacheKey(sport, away, home, gameId) {
+  var gid = String(gameId || '').trim();
+  if (gid) return [_pbNormalizePropSport(sport), 'game', gid].join('|');
   return [_pbNormalizePropSport(sport), String(away || '').trim().toLowerCase(), String(home || '').trim().toLowerCase()].join('|');
 }
 
-function _pbGetPropsRosterMap(sport, away, home) {
-  var entry = _pbPropsRosterCache[_pbRosterCacheKey(sport, away, home)];
+function _pbGetPropsRosterMap(sport, away, home, gameId) {
+  var entry = _pbPropsRosterCache[_pbRosterCacheKey(sport, away, home, gameId)];
   return (entry && entry.map) || {};
 }
 
-/** Infer player→away/home from any props that already carry a team field. */
+function _pbPutPlayerTeamMapKeys(map, name, bucket) {
+  if (!map || !bucket || !name) return;
+  _pbPropPlayerNameKeys(name).forEach(function(k) {
+    if (!k) return;
+    // Do not overwrite a conflicting assignment — leave for fuzzy / both fallback.
+    if (map[k] && map[k] !== bucket) return;
+    map[k] = bucket;
+  });
+}
+
+/** Infer player→away/home from single-player props that already carry a team field. */
 function _pbInferPlayerTeamMap(props, away, home) {
   var map = {};
   (props || []).forEach(function(p) {
     if (!p || !p.playerName) return;
     var team = p.team || p.playerTeam || p.teamName || '';
     if (!team) return;
+    // Skip combos — a shared team tag would poison the other player.
+    var names = _pbSplitPropPlayerNames(p.playerName);
+    if (names.length !== 1) return;
     var bucket = null;
     if (_pbTeamNameMatches(team, away)) bucket = 'away';
     else if (_pbTeamNameMatches(team, home)) bucket = 'home';
     if (!bucket) return;
-    _pbSplitPropPlayerNames(p.playerName).forEach(function(n) {
-      var k = _pbNormPropPlayerName(n);
-      if (k) map[k] = bucket;
-    });
+    _pbPutPlayerTeamMapKeys(map, names[0], bucket);
   });
   return map;
 }
@@ -3165,8 +3207,46 @@ function _pbMergePropTeamMaps(rosterMap, inferredMap) {
 }
 
 /**
+ * Look up a player in the team map with exact + fuzzy name keys
+ * ("F. Last" / "First Last" / Jr. / spaced initials).
+ */
+function _pbLookupPlayerTeamInMap(playerName, teamMap) {
+  if (!playerName || !teamMap) return null;
+  var keys = _pbPropPlayerNameKeys(playerName);
+  var i;
+  for (i = 0; i < keys.length; i++) {
+    if (teamMap[keys[i]]) return teamMap[keys[i]];
+  }
+  var parts = (_pbNormPropPlayerName(playerName) || '').split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return null;
+  var last = parts[parts.length - 1];
+  var first = parts[0];
+  var firstInitial = first.charAt(0);
+  var candidates = [];
+  Object.keys(teamMap).forEach(function(rk) {
+    var rp = String(rk || '').split(/\s+/).filter(Boolean);
+    if (rp.length < 2) return;
+    if (rp[rp.length - 1] !== last) return;
+    var rf = rp[0];
+    if (
+      rf === first ||
+      rf === firstInitial ||
+      first === rf.charAt(0) ||
+      (first.length === 1 && rf.indexOf(first) === 0) ||
+      (rf.length === 1 && first.indexOf(rf) === 0)
+    ) {
+      candidates.push(teamMap[rk]);
+    }
+  });
+  if (!candidates.length) return null;
+  var uniq = candidates.filter(function(b, idx) { return candidates.indexOf(b) === idx; });
+  return uniq.length === 1 ? uniq[0] : null;
+}
+
+/**
  * Resolve a prop/row to 'away' | 'home' | null.
  * Prefer any team field; else playerName→team map (roster / inferred).
+ * null means unknown / mixed — callers should show under both team filters.
  */
 function _pbResolvePropTeamBucket(p, away, home, teamMap) {
   if (!p) return null;
@@ -3176,10 +3256,10 @@ function _pbResolvePropTeamBucket(p, away, home, teamMap) {
     if (_pbTeamNameMatches(team, home)) return 'home';
   }
   var names = _pbSplitPropPlayerNames(p.playerName);
-  if (!names.length || !teamMap) return null;
+  if (!names.length) return null;
   var buckets = [];
   names.forEach(function(n) {
-    var b = teamMap[_pbNormPropPlayerName(n)];
+    var b = _pbLookupPlayerTeamInMap(n, teamMap);
     if (b) buckets.push(b);
   });
   if (!buckets.length) return null;
@@ -3189,7 +3269,16 @@ function _pbResolvePropTeamBucket(p, away, home, teamMap) {
 }
 
 function _pbPropTeamBucket(p, away, home, teamMap) {
-  return _pbResolvePropTeamBucket(p, away, home, teamMap) || 'unknown';
+  return _pbResolvePropTeamBucket(p, away, home, teamMap) || 'both';
+}
+
+/** True when a row should appear for the active away/home pill. */
+function _pbPropMatchesTeamFilter(p, away, home, teamMap, teamFilter) {
+  if (!teamFilter || teamFilter === 'all') return true;
+  var bucket = _pbResolvePropTeamBucket(p, away, home, teamMap);
+  // Unknown / mixed-team combos → show under both away and home.
+  if (!bucket) return true;
+  return bucket === teamFilter;
 }
 
 function _pbFillPropTeamFromBucket(p, bucket, away, home) {
@@ -3201,6 +3290,8 @@ function _pbFillPropTeamFromBucket(p, bucket, away, home) {
 function _pbAnnotatePropsTeams(props, away, home, teamMap) {
   (props || []).forEach(function(p) {
     if (!p || p.team) return;
+    // Only annotate single-player props — combos may span both teams.
+    if (_pbSplitPropPlayerNames(p.playerName).length !== 1) return;
     _pbFillPropTeamFromBucket(p, _pbResolvePropTeamBucket(p, away, home, teamMap), away, home);
   });
   return props;
@@ -3225,6 +3316,10 @@ async function _pbFetchEspnTeamsIndex(sport) {
       var entry = { id: String(t.id), displayName: t.displayName || t.name || '' };
       var names = [t.displayName, t.name, t.shortDisplayName, t.nickname, t.location, t.abbreviation];
       if (t.location && t.name) names.push(String(t.location) + ' ' + String(t.name));
+      // Athletics dropped "Oakland" in ESPN displayName but props still use it.
+      if (/athletics/i.test(String(t.displayName || t.name || ''))) {
+        names.push('Oakland Athletics', "Oakland A's", "A's");
+      }
       names.forEach(function(n) {
         if (!n) return;
         idx[_pbNormPropPlayerName(n)] = entry;
@@ -3256,6 +3351,9 @@ async function _pbFetchEspnRosterPlayerNames(sport, teamName) {
       items.forEach(function(a) {
         var n = a.displayName || a.fullName || ((a.firstName || '') + ' ' + (a.lastName || '')).trim();
         if (n) names.push(n);
+        if (a.shortName) names.push(a.shortName);
+        var fl = ((a.firstName || '') + ' ' + (a.lastName || '')).trim();
+        if (fl) names.push(fl);
       });
     });
     return names;
@@ -3264,8 +3362,8 @@ async function _pbFetchEspnRosterPlayerNames(sport, teamName) {
   }
 }
 
-async function _pbEnsurePropsRosterMap(sport, away, home) {
-  var key = _pbRosterCacheKey(sport, away, home);
+async function _pbEnsurePropsRosterMap(sport, away, home, gameId) {
+  var key = _pbRosterCacheKey(sport, away, home, gameId);
   var existing = _pbPropsRosterCache[key];
   if (existing && existing.ready) return existing.map;
   if (existing && existing.loading && existing.promise) return existing.promise;
@@ -3276,14 +3374,8 @@ async function _pbEnsurePropsRosterMap(sport, away, home) {
     _pbFetchEspnRosterPlayerNames(sport, home)
   ]).then(function(results) {
     var map = {};
-    (results[0] || []).forEach(function(n) {
-      var k = _pbNormPropPlayerName(n);
-      if (k) map[k] = 'away';
-    });
-    (results[1] || []).forEach(function(n) {
-      var k = _pbNormPropPlayerName(n);
-      if (k) map[k] = 'home';
-    });
+    (results[0] || []).forEach(function(n) { _pbPutPlayerTeamMapKeys(map, n, 'away'); });
+    (results[1] || []).forEach(function(n) { _pbPutPlayerTeamMapKeys(map, n, 'home'); });
     entry.map = map;
     entry.ready = true;
     entry.loading = false;
@@ -3468,7 +3560,7 @@ function _pbRenderPropSectionHtml(section, gameId, gameLabel, sport, away, home,
   var teamFilter = ui.team || 'all';
   if (teamFilter !== 'all') {
     rows = rows.filter(function(r) {
-      return _pbPropTeamBucket(r, away, home, teamMap) === teamFilter;
+      return _pbPropMatchesTeamFilter(r, away, home, teamMap, teamFilter);
     });
   }
   var showAll = !!(ui.showAll && ui.showAll[secKey]);
@@ -3492,28 +3584,47 @@ function _pbRenderPropSectionHtml(section, gameId, gameLabel, sport, away, home,
   return html;
 }
 
-function _pbRenderInlinePropsHtml(props, gameId, sport, meta) {
-  var s = _pbNormalizePropSport(sport || _currentSport || 'mlb');
+function _pbResolvePropsGameTeams(gameId, sport, meta, props) {
   var away = (meta && (meta.away || meta.away_team)) || '';
   var home = (meta && (meta.home || meta.home_team)) || '';
-  var parsed = _pbParseGameIdTeams(gameId) || _pbParseGameIdTeams(meta && meta.gameId);
+  // Prefer canonical mlb:Away@Home-YYYYMMDD when present (card ids are often numeric).
+  var parsed = _pbParseGameIdTeams(meta && meta.gameId)
+    || _pbParseGameIdTeams(props && props[0] && props[0].gameId)
+    || _pbParseGameIdTeams(gameId);
   if (parsed) {
-    if (!away) away = parsed.away;
-    if (!home) home = parsed.home;
+    away = parsed.away || away;
+    home = parsed.home || home;
   }
   if ((!away || !home) && props && props[0]) {
     away = away || props[0].away || '';
     home = home || props[0].home || '';
   }
+  return { away: away, home: home, sport: _pbNormalizePropSport(sport || _currentSport || 'mlb') };
+}
+
+function _pbRenderInlinePropsHtml(props, gameId, sport, meta) {
+  var resolved = _pbResolvePropsGameTeams(gameId, sport, meta, props);
+  var s = resolved.sport;
+  var away = resolved.away;
+  var home = resolved.home;
   var gameLabel = (away && home) ? (away + ' vs ' + home) : '';
   if (!props || !props.length) return '<div class="mc-props-empty">No player props for this game.</div>';
 
+  var rosterGameId = (meta && meta.gameId) || (props[0] && props[0].gameId) || gameId;
   var inferred = _pbInferPlayerTeamMap(props, away, home);
-  var rosterMap = _pbGetPropsRosterMap(s, away, home);
+  var rosterMap = _pbGetPropsRosterMap(s, away, home, rosterGameId);
   var teamMap = _pbMergePropTeamMaps(rosterMap, inferred);
   _pbAnnotatePropsTeams(props, away, home, teamMap);
 
-  _pbPropsCache[String(gameId)] = { props: props, sport: s, meta: meta || props[0] || {}, away: away, home: home, gameLabel: gameLabel };
+  _pbPropsCache[String(gameId)] = {
+    props: props,
+    sport: s,
+    meta: meta || props[0] || {},
+    away: away,
+    home: home,
+    gameLabel: gameLabel,
+    rosterGameId: rosterGameId
+  };
   var ui = _pbGetPropsUiState(gameId);
   var tabs = _pbBuildVisibleTabs(props, s);
   if (!tabs.some(function(t) { return t.id === ui.tab; })) ui.tab = tabs[0] ? tabs[0].id : 'popular';
@@ -3664,19 +3775,19 @@ async function _pbLoadGameProps(gameId, sport, panel, card) {
       if (!meta.home) meta.home = card.getAttribute('data-home') || meta.home;
       if (!meta.away) meta.away = card.getAttribute('data-away') || meta.away;
     }
-    var parsed = _pbParseGameIdTeams(meta.gameId || gameId);
-    if (parsed) {
-      if (!meta.away) meta.away = parsed.away;
-      if (!meta.home) meta.home = parsed.home;
+    var resolved = _pbResolvePropsGameTeams(gameId, s, meta, data.props);
+    meta.away = resolved.away;
+    meta.home = resolved.home;
+    var rosterGameId = meta.gameId || (data.props[0] && data.props[0].gameId) || gameId;
+    // Cache roster once per game before first paint so Away/Home do not flash empty.
+    if (meta.away && meta.home) {
+      try { await _pbEnsurePropsRosterMap(s, meta.away, meta.home, rosterGameId); }
+      catch (_rosterErr) {}
     }
+    if (_pbExpandedPropsGameId !== String(gameId)) return;
     panel.innerHTML = _pbRenderInlinePropsHtml(data.props, gameId, s, meta);
     _pbResyncBetSlipSelections();
     await _pbHydratePropHeadshots(panel, data.props, s);
-    if (meta.away && meta.home) {
-      _pbEnsurePropsRosterMap(s, meta.away, meta.home).then(function() {
-        if (_pbExpandedPropsGameId === String(gameId)) _pbRerenderPropsPanel(gameId);
-      });
-    }
   } catch (_e) {
     if (_pbExpandedPropsGameId === String(gameId)) {
       panel.innerHTML = '<div class="mc-props-empty">Could not load props.</div>';
@@ -3704,18 +3815,23 @@ async function _pbRefreshExpandedGameProps(opts) {
     var meta = data.props[0] || {};
     if (!meta.home) meta.home = card.getAttribute('data-home') || meta.home;
     if (!meta.away) meta.away = card.getAttribute('data-away') || meta.away;
-    var parsedRefresh = _pbParseGameIdTeams(meta.gameId || gameId);
-    if (parsedRefresh) {
-      if (!meta.away) meta.away = parsedRefresh.away;
-      if (!meta.home) meta.home = parsedRefresh.home;
+    var resolvedRefresh = _pbResolvePropsGameTeams(gameId, s, meta, data.props);
+    meta.away = resolvedRefresh.away;
+    meta.home = resolvedRefresh.home;
+    var rosterGameId = meta.gameId || (data.props[0] && data.props[0].gameId) || gameId;
+    if (meta.away && meta.home) {
+      try { await _pbEnsurePropsRosterMap(s, meta.away, meta.home, rosterGameId); }
+      catch (_rosterErr) {}
     }
+    if (_pbExpandedPropsGameId !== String(gameId)) return;
     _pbPropsCache[String(gameId)] = {
       props: data.props,
       sport: s,
       meta: meta,
       away: meta.away,
       home: meta.home,
-      gameLabel: (meta.away && meta.home) ? (meta.away + ' vs ' + meta.home) : ''
+      gameLabel: (meta.away && meta.home) ? (meta.away + ' vs ' + meta.home) : '',
+      rosterGameId: rosterGameId
     };
     if (panel.querySelector('.mc-props-shell') || panel.querySelector('.mc-prop-row')) {
       _pbSyncInlinePropsInPlace(data.props, gameId);
@@ -3724,11 +3840,6 @@ async function _pbRefreshExpandedGameProps(opts) {
       panel.innerHTML = _pbRenderInlinePropsHtml(data.props, gameId, s, meta);
       _pbResyncBetSlipSelections();
       await _pbHydratePropHeadshots(panel, data.props, s);
-    }
-    if (meta.away && meta.home) {
-      _pbEnsurePropsRosterMap(s, meta.away, meta.home).then(function() {
-        if (_pbExpandedPropsGameId === String(gameId)) _pbRerenderPropsPanel(gameId);
-      });
     }
   } catch (_e) {}
 }
