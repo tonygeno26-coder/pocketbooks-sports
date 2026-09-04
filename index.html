@@ -710,7 +710,7 @@ function renderAdminCrypto() {
     <div class="stat-lbl">Active Bets</div>
   </div>
   <div class="stat-card">
-    <div class="stat-val" style="color:var(--red);font-size:0.95rem" id="stat-active-risk" title="What host owes if all active bets win">$0</div>
+    <div class="stat-val" style="color:var(--red);font-size:0.95rem" id="stat-active-risk" title="Sum of risk_amount on all active tickets">$0</div>
     <div class="stat-lbl">At Risk</div>
   </div>
 </div>
@@ -1070,6 +1070,35 @@ function _validateHostStats(s) {
   return { safe: w.length===0, warnings: w };
 }
 
+function _applyHostDbStatsToDom(cache) {
+  if (!cache) return;
+  function _fmtUSD(v){ return '$'+Math.abs(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function _set(id,val){ var el=document.getElementById(id); if(el) el.textContent=val; }
+  var holdPct = cache.holdPct;
+  var profitVal = cache.profit || 0;
+  _set('stat-handle',       _fmtUSD(cache.handle));
+  _set('stat-hold',         holdPct!=null ? Number(holdPct).toFixed(1)+'%' : '—');
+  _set('stat-profit',       (profitVal>=0?'+':'-')+_fmtUSD(profitVal));
+  _set('stat-active-risk',  _fmtUSD(cache.atRisk));
+  _set('stat-active-bets',  String(cache.activeBetCount != null ? cache.activeBetCount : 0));
+  var ac = cache.activeBetCount != null ? cache.activeBetCount : 0;
+  _set('host-bets-count',   ac+' bet'+(ac!==1?'s':''));
+  _set('stat-players-owe',  _fmtUSD(cache.playersOwe));
+  _set('stat-host-owes',    _fmtUSD(cache.hostOwes));
+  _set('total-owes-you',    _fmtUSD(cache.playersOwe));
+  _set('total-you-owe',     _fmtUSD(cache.hostOwes));
+  var profitEl = document.getElementById('stat-profit');
+  if (profitEl) profitEl.style.color = profitVal>=0 ? 'var(--green,#00ff88)' : 'var(--red,#ff3d57)';
+  var wk = cache.weekly || {};
+  _set('settle-week-net',    ((wk.net||0)>=0?'+':'-')+_fmtUSD(wk.net||0));
+  _set('settle-week-handle', _fmtUSD(wk.handle||0));
+  _set('settle-week-bets',   String(wk.settledCount != null ? wk.settledCount : 0));
+  var at = cache.allTime || {};
+  var atNet = at.net != null ? at.net : profitVal;
+  _set('settle-all-net',     (atNet>=0?'+':'-')+_fmtUSD(atNet));
+  _set('settle-all-handle',  _fmtUSD(at.handle != null ? at.handle : cache.handle || 0));
+}
+
 async function loadHostDashboardFromDb(trigger) {
   trigger = trigger || 'manual';
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
@@ -1087,35 +1116,34 @@ async function loadHostDashboardFromDb(trigger) {
     if (!data.ok || !data.stats) throw new Error(data.error || 'missing stats');
     var valid = _validateHostStats(data.stats);
     if (!valid.safe) throw new Error('invalid_stats:'+valid.warnings.join(','));
-    // Render stats from DB (summary aliases kept for newer clients)
+    // Prefer /api/host/dashboard summary — never derive overview from localStorage.
     var s = data.stats;
     var summary = data.summary || {};
     var activeCount = summary.activeBetCount != null ? summary.activeBetCount : s.activeBetCount;
-    var atRisk = summary.atRisk != null ? summary.atRisk : s.hostAtRisk;
-    function _fmtUSD(v){ return '$'+Math.abs(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-    function _set(id,val){ var el=document.getElementById(id); if(el) el.textContent=val; }
-    _set('stat-handle',       _fmtUSD(s.handle));
-    _set('stat-hold',         s.holdPct!==null ? s.holdPct.toFixed(1)+'%' : '—');
-    _set('stat-profit',       (s.profit>=0?'+':'-')+_fmtUSD(s.profit));
-    _set('stat-active-risk',  _fmtUSD(atRisk));
-    _set('stat-active-bets',  String(activeCount));
-    _set('host-bets-count',   activeCount+' bet'+(activeCount!==1?'s':''));
-    var _playersOwe = s.playersOwe != null ? s.playersOwe : (s.settledGain || 0);
-    var _hostOwes   = s.hostOwes != null ? s.hostOwes : (s.settledLoss || 0);
-    _set('stat-players-owe',  _fmtUSD(_playersOwe));
-    _set('stat-host-owes',    _fmtUSD(_hostOwes));
-    _set('total-owes-you',    _fmtUSD(_playersOwe));
-    _set('total-you-owe',     _fmtUSD(_hostOwes));
-    var profitEl = document.getElementById('stat-profit');
-    if (profitEl) profitEl.style.color = s.profit>=0 ? 'var(--green,#00ff88)' : 'var(--red,#ff3d57)';
-    // Settlement section (weekly)
-    var wk = s.weekly || {};
-    _set('settle-week-net',    (wk.net>=0?'+':'-')+_fmtUSD(wk.net||0));
-    _set('settle-week-handle', _fmtUSD(wk.handle||0));
-    _set('settle-week-bets',   String(wk.settledCount != null ? wk.settledCount : 0));
-    var at = s.allTime || {};
-    _set('settle-all-net',     ( (at.net!=null?at.net:s.profit||0) >=0 ?'+':'-')+_fmtUSD(at.net!=null?at.net:s.profit||0));
-    _set('settle-all-handle',  _fmtUSD(at.handle != null ? at.handle : s.handle || 0));
+    // At Risk = sum of active risk_amount (activeRisk), not potential_profit.
+    var atRisk = summary.atRisk != null ? summary.atRisk
+      : (s.activeRisk != null ? s.activeRisk : s.hostAtRisk);
+    // Handle = all-time risk (active + settled). Prefer summary/handleAll over settled-only.
+    var handleVal = summary.handle != null ? summary.handle
+      : (s.handleAll != null ? s.handleAll : s.handle);
+    var holdPct = summary.holdPct != null ? summary.holdPct : s.holdPct;
+    var profitVal = summary.profit != null ? summary.profit : s.profit;
+    var _playersOwe = summary.playersOwe != null ? summary.playersOwe
+      : (s.playersOwe != null ? s.playersOwe : (s.settledGain || 0));
+    var _hostOwes = summary.hostOwes != null ? summary.hostOwes
+      : (s.hostOwes != null ? s.hostOwes : (s.settledLoss || 0));
+    _hostDbStatsCache = {
+      handle: handleVal,
+      holdPct: holdPct,
+      profit: profitVal,
+      atRisk: atRisk,
+      activeBetCount: activeCount,
+      playersOwe: _playersOwe,
+      hostOwes: _hostOwes,
+      weekly: s.weekly || {},
+      allTime: s.allTime || {}
+    };
+    _applyHostDbStatsToDom(_hostDbStatsCache);
     try { _applyHostDashboardTickets(data); } catch(_te) {}
     _updateHostSourceBadge('db', data.warnings||[]);
     _setHostDbPrimary(true);  // Lock DOM authority to DB
@@ -1123,12 +1151,15 @@ async function loadHostDashboardFromDb(trigger) {
     try { renderHostBets(); } catch(_rb) {}
     try { renderPlayersTab(); } catch(_rp) {}
     _hostRenderQuiet = false;
+    // Re-apply after bets render — loadHostActiveBets used to clobber these with localStorage $0.
+    _applyHostDbStatsToDom(_hostDbStatsCache);
     
     return { source:'db', stats:s, summary:summary, warnings:data.warnings||[], activeTickets:data.activeTickets||[], players:data.players||[] };
   } catch(e) {
     // Fallback to localStorage calculation
     console.warn('[host db read] fallback to localStorage: '+e.message);
     _hostPlayersFetchDone = true;
+    _hostDbStatsCache = null;
     _setHostDbPrimary(false); // Release DOM authority back to localStorage
     _updateHostSourceBadge('localStorage', [e.message]);
     refreshHostDashboardStats('db_fallback:'+trigger);
@@ -1673,7 +1704,11 @@ window.checkHostDbPrimaryStatus   = function(){ return { enabled: _HOST_DB_PRIMA
 // ════════════════════════════════════════════════════════════════════════════
 
 function renderHostStats(trigger) {
-  // Delegate to canonical refresh function
+  // When DB is authoritative, never overwrite overview cards from localStorage.
+  if (typeof _HOST_DB_PRIMARY !== 'undefined' && _HOST_DB_PRIMARY && _hostDbStatsCache) {
+    _applyHostDbStatsToDom(_hostDbStatsCache);
+    return _hostDbStatsCache;
+  }
   refreshHostDashboardStats(trigger || 'renderHostStats');
 }
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1947,6 +1982,8 @@ var _hostBetsFilterStatus = '';
 var _hostBetsFilterDate = '7';
 var _hostBetsUiWired = false;
 var _hostDbRecentSettledTickets = null;
+var _hostDbStatsCache = null;
+var _hostBetsExpandedPlayer = null; // accordion: only one player open at a time
 
 function _normalizeHostTicket(t) {
   if (!t || typeof t !== 'object') return t;
@@ -2108,18 +2145,20 @@ function _hostAllTicketsDeduped(){
 function loadHostActiveBets(){
   var tickets=_hostAllTicketsDeduped();
   var active=tickets.filter(_hostTicketIsActive);
-  // HOST EXPOSURE = potentialProfit (what host owes if player wins)
-  // NOT riskAmount (that is the player's wager, not host liability)
+  _updateHostBetsTabCounts(tickets);
+  // When DB owns the overview, do not recompute Handle/At Risk/Profit from localStorage.
+  if (typeof _HOST_DB_PRIMARY !== 'undefined' && _HOST_DB_PRIMARY && _hostDbStatsCache) {
+    _applyHostDbStatsToDom(_hostDbStatsCache);
+    return active;
+  }
+  // HOST EXPOSURE fallback (local only): At Risk = sum of risk_amount on active tickets
   var totalRisk=active.reduce(function(s,t){
-    var exposure = parseFloat(t.potentialProfit||0);
-    return s+exposure;
+    return s + (parseFloat(t.riskAmount||0));
   },0);
   var el=document.getElementById('stat-active-bets');
   var el2=document.getElementById('stat-active-risk');
   if(el) el.textContent=active.length;
   if(el2) el2.textContent='$'+totalRisk.toFixed(2);
-  _updateHostBetsTabCounts(tickets);
-  // Recalculate full host stats whenever active bets are loaded
   renderHostStats();
   return active;
 }
@@ -2438,104 +2477,91 @@ function renderHostBets(){
   if(!list.length){
     var emptyMsg = _hostBetsTab==='settled' ? 'No settled bets in the last 7 days'
       : (_hostBetsTab==='canceled' ? 'No canceled bets'
-      : (_hostBetsTab==='all' ? 'No bets found' : 'No active bets yet'));
+      : (_hostBetsTab==='all' ? 'No bets found' : 'No active bets'));
     el.innerHTML = delSection + '<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">'+emptyMsg+'</div>';
     return;
   }
 
-  if (!window._hostBetsExpanded) window._hostBetsExpanded = {};
+  // Group tickets by player — accordion rows (one expanded at a time).
   var groups = {};
   list.forEach(function(t) {
-    var pid = t.playerId || (t.playerUsername||t.playerName||'unknown');
+    var pid = String(t.playerId || t.playerUsername || t.playerName || 'unknown');
     var dbp = (_hostDbPlayersById && t.playerId && _hostDbPlayersById[String(t.playerId)]) || null;
     var resolvedName = (dbp && (dbp.username || dbp.playerName)) || t.playerUsername || t.playerName || 'Player';
     if (resolvedName === t.playerId) resolvedName = (dbp && dbp.username) || 'Player';
     if (!groups[pid]) {
       groups[pid] = {
-        playerId:    t.playerId || '',
+        playerId:    String(t.playerId || ''),
         playerName:  resolvedName,
         playerReal:  t.playerRealName || '',
         bets:        [],
-        risk:        0,
-        exposure:    0,
-        payout:      0,
+        activeCount: 0,
+        openRisk:    0,
+        balance:     dbp && dbp.availableBalance != null ? dbp.availableBalance : null
       };
     }
     var g = groups[pid];
     if (g.playerName === 'Player' && resolvedName !== 'Player') g.playerName = resolvedName;
+    if (g.balance == null && dbp && dbp.availableBalance != null) g.balance = dbp.availableBalance;
     g.bets.push(t);
-    g.risk     += parseFloat(t.riskAmount||0);
-    g.exposure += parseFloat(t.potentialProfit||0);
-    g.payout   += parseFloat((_hostTicketPayoutLabel(t).value)||0);
+    if (_hostTicketIsActive(t)) {
+      g.activeCount++;
+      g.openRisk += parseFloat(t.riskAmount||0);
+    }
+  });
+  // Prefer DB player openRisk / activeBetCount when available for the row summary.
+  Object.keys(groups).forEach(function(pid) {
+    var g = groups[pid];
+    var dbp = (_hostDbPlayersById && g.playerId && _hostDbPlayersById[g.playerId]) || null;
+    if (!dbp) return;
+    if (dbp.openRisk != null && _hostBetsTab === 'active') g.openRisk = parseFloat(dbp.openRisk)||0;
+    if (dbp.activeBetCount != null && _hostBetsTab === 'active') g.activeCount = parseInt(dbp.activeBetCount,10)||g.activeCount;
+    if (dbp.availableBalance != null) g.balance = dbp.availableBalance;
   });
   var groupArr = Object.keys(groups).map(function(k){ return groups[k]; })
-    .sort(function(a,b){ return b.exposure - a.exposure; });
+    .sort(function(a,b){ return (b.openRisk - a.openRisk) || (b.activeCount - a.activeCount) || String(a.playerName).localeCompare(String(b.playerName)); });
 
   function fmt$(n){ return '$'+(parseFloat(n)||0).toFixed(2); }
   function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 
   var groupsHtml = groupArr.map(function(g) {
     var key = String(g.playerId || g.playerName);
-    if (window._hostBetsExpanded[key] === undefined) window._hostBetsExpanded[key] = true;
-    var open = window._hostBetsExpanded[key] !== false;
-    var initials = (g.playerName||'?').split(/\s+/).map(function(w){return (w[0]||'').toUpperCase();}).slice(0,2).join('') || '?';
+    var open = _hostBetsExpandedPlayer === key;
+    var initials = (g.playerName||'?').split(/[\s._-]+/).map(function(w){return (w[0]||'').toUpperCase();}).filter(Boolean).slice(0,2).join('') || '?';
+    var balTxt = g.balance != null ? fmt$(g.balance) : '—';
     var betsHtml = '';
     if (open) {
       betsHtml = '<div style="border-top:1px solid var(--border);padding:8px 14px 4px;background:#0c0c0c">' +
         g.bets.map(function(t) {
           var d=new Date(t.placedAt);
           var dt=isNaN(d)?(t.placedAt||'') : d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
-          var settledDt = '';
-          if (t.gradedAt) {
-            var gd = new Date(t.gradedAt);
-            settledDt = isNaN(gd) ? String(t.gradedAt) : gd.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+          var first = (t.selections && t.selections[0]) || {};
+          var game = t.game || t.matchup || first.matchup || (first.awayTeam && first.homeTeam ? first.awayTeam+' @ '+first.homeTeam : '') || '—';
+          var pick = t.pick || first.pick || ((t.selections||[]).map(function(s){return s.pick;}).filter(Boolean).join(' / ')) || '—';
+          var oddsStr = t.odds || first.odds || '';
+          if (oddsStr != null && oddsStr !== '' && !(String(oddsStr)[0]==='+'||String(oddsStr)[0]==='-')) {
+            var on = parseFloat(oddsStr); oddsStr = isNaN(on) ? oddsStr : ((on>0?'+':'')+on);
           }
-          var picks = (t.selections||[]).map(function(s, idx){
-            var od = s.odds;
-            if (od != null && od !== '' && !(String(od)[0]==='+'||String(od)[0]==='-')) {
-              var n = parseFloat(od); od = isNaN(n) ? od : ((n>0?'+':'')+n);
-            }
-            var matchup = s.matchup || (s.awayTeam && s.homeTeam ? s.awayTeam+' @ '+s.homeTeam : '');
-            var legSport = s.sport || t.sport || 'mlb';
-            var pickTeam = (typeof extractTeamFromPick === 'function')
-              ? extractTeamFromPick(s.pick || '', s.homeTeam || '', s.awayTeam || '', legSport)
-              : (s.pick || '');
-            var legLogo = (typeof getTeamLogoImg === 'function' && pickTeam)
-              ? '<span style="display:inline-flex;vertical-align:middle;margin-right:6px">' + getTeamLogoImg(pickTeam, legSport, 22) + '</span>'
-              : '';
-            var legPrefix = (t.selections||[]).length > 1 ? ('<span style="color:#555;font-weight:800;margin-right:4px">L'+(idx+1)+'</span>') : '';
-            return '<div style="font-size:0.72rem;color:#bbb;padding:4px 0;border-bottom:1px solid #1a1a1a;display:flex;align-items:flex-start;gap:4px">'
-              + legLogo
-              + '<div style="flex:1;min-width:0">'
-              + legPrefix
-              +(matchup?'<div style="font-size:0.62rem;color:#777;margin-bottom:1px">'+esc(matchup)+'</div>':'')
-              +'<span style="font-weight:700">'+esc(s.pick||'—')+'</span> '
-              +'<span style="color:var(--cyan);font-weight:700">'+esc(od||'')+'</span>'
-              +'<span style="color:#555"> · '+esc(s.market||'')+'</span></div></div>';
-          }).join('') || '<div style="font-size:0.72rem;color:#666;padding:4px 0">No selections</div>';
           var statusBadge = t.deleteRequestStatus==='pending'
             ? '<span style="font-size:0.55rem;font-weight:800;color:#f59e0b;background:rgba(245,158,11,0.12);padding:2px 8px;border-radius:10px;border:1px solid #f59e0b">DEL?</span>'
             : _hostStatusBadge(t.status);
           var canCancel = _hostTicketIsActive(t);
-          var pay = _hostTicketPayoutLabel(t);
-          var oddsStr = t.odds || ((t.selections&&t.selections[0]&&t.selections[0].odds)||'');
+          var multiHint = (t.selections||[]).length > 1
+            ? '<div style="font-size:0.58rem;color:#666;margin-top:2px">'+(t.type||'Parlay')+' · '+(t.selections.length)+' legs</div>'
+            : '';
           return '<div style="background:#141414;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap">' +
-              '<div style="font-size:0.78rem;font-weight:800">'+esc(t.type||'Single')+' · <span style="color:#777;font-weight:700;font-size:0.65rem">'+esc(t.id)+'</span></div>' +
+            '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">' +
+              '<div style="min-width:0;flex:1">' +
+                '<div style="font-size:0.62rem;color:#777;margin-bottom:2px">'+esc(game)+'</div>' +
+                '<div style="font-size:0.82rem;font-weight:800;color:#fff">'+esc(pick)+'</div>' +
+                multiHint +
+              '</div>' +
               statusBadge +
             '</div>' +
-            '<div style="font-size:0.62rem;color:#666;margin-bottom:4px">'+esc(g.playerName)+'</div>' +
-            picks +
-            '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:6px;border-top:1px solid #222;font-size:0.65rem;color:#777;gap:8px;flex-wrap:wrap">' +
-              '<span>Placed '+esc(dt)+'</span>' +
-              (settledDt ? '<span>Settled '+esc(settledDt)+'</span>' : '') +
-              '<span>Result <span style="color:#fff;font-weight:800;text-transform:uppercase">'+esc(t.status||'—')+'</span></span>' +
-              '<span>Odds <span style="color:var(--cyan);font-weight:800">'+esc(oddsStr||'—')+'</span></span>' +
-            '</div>' +
-            '<div class="host-bet-metrics" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px">' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:4px">' +
+              '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Odds</div><div style="font-size:0.78rem;font-weight:800;color:var(--cyan)">'+esc(oddsStr||'—')+'</div></div>' +
               '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Stake</div><div style="font-size:0.78rem;font-weight:800">'+fmt$(t.riskAmount)+'</div></div>' +
-              '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">'+(canCancel?'Host Exp.':'Profit')+'</div><div style="font-size:0.78rem;font-weight:800;color:'+(canCancel?'#ff6b6b':'#ccc')+'">'+fmt$(t.potentialProfit)+'</div></div>' +
-              '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">'+esc(pay.label)+'</div><div style="font-size:0.78rem;font-weight:800;color:var(--cyan)">'+fmt$(pay.value)+'</div></div>' +
+              '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Placed</div><div style="font-size:0.68rem;font-weight:700;color:#aaa">'+esc(dt||'—')+'</div></div>' +
             '</div>' +
             (canCancel ? '<button data-host-cancel="'+esc(t.id)+'" style="width:100%;margin-top:10px;padding:8px;background:transparent;border:1px solid #cc0000;border-radius:8px;color:#ff6b6b;font-size:0.7rem;font-weight:800;cursor:pointer;letter-spacing:0.3px">Cancel Bet</button>' : '') +
           '</div>';
@@ -2546,21 +2572,12 @@ function renderHostBets(){
       '<div data-host-group="'+esc(key)+'" style="padding:14px;cursor:pointer;display:flex;align-items:center;gap:12px;user-select:none">' +
         '<div style="width:38px;height:38px;border-radius:50%;background:rgba(0,194,255,0.12);color:var(--cyan);display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:900;border:1.5px solid var(--cyan);flex-shrink:0">'+esc(initials)+'</div>' +
         '<div style="flex:1;min-width:0">' +
-          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">' +
-            '<span style="font-size:0.92rem;font-weight:900">'+esc(g.playerName)+'</span>' +
-            (g.playerReal?'<span style="font-size:0.65rem;color:var(--gray)">('+esc(g.playerReal)+')</span>':'') +
-          '</div>' +
-          '<div style="font-size:0.6rem;color:#666">'+g.bets.length+' bet'+(g.bets.length!==1?'s':'')+'</div>' +
-        '</div>' +
-        '<div style="text-align:right">' +
-          '<div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">'+(_hostBetsTab==='active'?'Exposure':'Stake')+'</div>' +
-          '<div style="font-size:0.95rem;font-weight:900;color:'+(_hostBetsTab==='active'?'#ff6b6b':'#fff')+'">'+fmt$(_hostBetsTab==='active'?g.exposure:g.risk)+'</div>' +
+          '<div style="font-size:0.92rem;font-weight:900;margin-bottom:2px">'+esc(g.playerName)+'</div>' +
+          '<div style="font-size:0.62rem;color:#888">Balance <span style="color:#fff;font-weight:700">'+balTxt+'</span>' +
+            ' · <span style="color:var(--cyan);font-weight:700">'+g.activeCount+'</span> active' +
+            ' · Open risk <span style="color:#ff6b6b;font-weight:700">'+fmt$(g.openRisk)+'</span></div>' +
         '</div>' +
         '<div style="font-size:0.85rem;color:var(--gray);transition:transform 0.15s;'+(open?'transform:rotate(90deg)':'')+'">›</div>' +
-      '</div>' +
-      '<div style="display:'+(open?'grid':'none')+';grid-template-columns:1fr 1fr;gap:6px;padding:0 14px 12px;font-size:0.65rem;color:#777">' +
-        '<div><span style="color:#555">Total Stake: </span><span style="color:#fff;font-weight:700">'+fmt$(g.risk)+'</span></div>' +
-        '<div><span style="color:#555">Total Payout: </span><span style="color:var(--cyan);font-weight:700">'+fmt$(g.payout)+'</span></div>' +
       '</div>' +
       betsHtml +
     '</div>';
@@ -2570,7 +2587,7 @@ function renderHostBets(){
   Array.prototype.forEach.call(el.querySelectorAll('[data-host-group]'), function(hd) {
     hd.addEventListener('click', function() {
       var k = hd.dataset.hostGroup;
-      window._hostBetsExpanded[k] = !window._hostBetsExpanded[k];
+      _hostBetsExpandedPlayer = (_hostBetsExpandedPlayer === k) ? null : k;
       renderHostBets();
     });
   });
