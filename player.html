@@ -141,7 +141,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .mc-alt-slider-selected{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;padding:10px 12px;background:#1e1e1e;border:1px solid #2e2e2e;border-radius:12px}
 .mc-alt-slider-line{font-size:0.95rem;font-weight:900;color:#fff;letter-spacing:-0.2px}
 .mc-alt-slider-meta{font-size:0.58rem;color:#666;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:2px}
-.mc-alt-slider{width:100%;-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;background:#333;outline:none;margin:8px 0 4px}
+.mc-alt-slider{width:100%;-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;background:#333;outline:none;margin:8px 0 4px;cursor:pointer;touch-action:none}
 .mc-alt-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;background:var(--green);border:2px solid #0a0a0a;cursor:pointer;box-shadow:0 0 8px rgba(0,255,135,0.45)}
 .mc-alt-slider::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--green);border:2px solid #0a0a0a;cursor:pointer}
 .mc-alt-slider-range{display:flex;justify-content:space-between;font-size:0.55rem;color:#555;font-weight:700;padding:0 2px}
@@ -2046,6 +2046,80 @@ function _pbFmtSignedLine(line) {
   if (isNaN(n)) return String(line);
   return (n > 0 ? '+' : '') + n;
 }
+function _pbAltLineNum(line) {
+  if (line == null || line === '') return null;
+  var n = Number(line);
+  return isNaN(n) ? null : n;
+}
+function _pbAltSpreadGroups(altSp) {
+  var spreadTeams = [];
+  var byTeam = {};
+  (Array.isArray(altSp) ? altSp : []).forEach(function(s) {
+    var line = _pbAltLineNum(s && s.line);
+    if (line == null || !s || !s.team) return;
+    if (!byTeam[s.team]) {
+      byTeam[s.team] = [];
+      spreadTeams.push(s.team);
+    }
+    byTeam[s.team].push({ team: s.team, line: line, odds: s.odds, market: s.market || 'spread' });
+  });
+  var groups = [];
+  spreadTeams.forEach(function(team) {
+    var rows = byTeam[team].slice().sort(function(a, b) { return a.line - b.line; });
+    var uniq = [];
+    var seen = {};
+    rows.forEach(function(r) {
+      var k = String(r.line);
+      if (seen[k]) return;
+      seen[k] = true;
+      uniq.push(r);
+    });
+    groups.push({ team: team, lines: uniq });
+  });
+  return groups;
+}
+function _pbAltTotalGroups(altTot) {
+  var byLine = {};
+  (Array.isArray(altTot) ? altTot : []).forEach(function(t) {
+    var line = _pbAltLineNum(t && t.line);
+    if (line == null || !t) return;
+    var k = String(line);
+    if (!byLine[k]) byLine[k] = { line: line, over: null, under: null };
+    var row = { name: t.name, line: line, odds: t.odds, market: t.market || 'total' };
+    if (String(t.name || '').toLowerCase() === 'under') byLine[k].under = row;
+    else byLine[k].over = row;
+  });
+  return Object.keys(byLine).map(function(k) { return byLine[k]; })
+    .sort(function(a, b) { return a.line - b.line; });
+}
+function _pbAltSpreadSliderId(gid, team) {
+  return 'sp-' + gid + '-' + String(team).replace(/\s+/g, '-');
+}
+function _pbAltTotalSliderId(gid) {
+  return 'tot-' + gid;
+}
+function _pbExpectedAltSliderCount(g) {
+  var n = 0;
+  _pbAltSpreadGroups(g && g.alt_spreads).forEach(function(grp) {
+    if (grp.lines.length >= 2) n += 1;
+  });
+  if (_pbAltTotalGroups(g && g.alt_totals).length >= 2) n += 1;
+  return n;
+}
+function _pbPopulateAltSliderData(g, sp, gid) {
+  window._pbAltSliderData = window._pbAltSliderData || {};
+  var sport = sp || (g && g.sport) || '';
+  _pbAltSpreadGroups(g && g.alt_spreads).forEach(function(grp) {
+    if (grp.lines.length < 2) return;
+    var sid = _pbAltSpreadSliderId(gid, grp.team);
+    window._pbAltSliderData[sid] = { kind: 'spread', team: grp.team, gid: String(gid), sport: sport, lines: grp.lines };
+  });
+  var totLines = _pbAltTotalGroups(g && g.alt_totals);
+  if (totLines.length >= 2) {
+    var tSid = _pbAltTotalSliderId(gid);
+    window._pbAltSliderData[tSid] = { kind: 'total', gid: String(gid), sport: sport, lines: totLines };
+  }
+}
 
 function _pbAltSliderSectionHtml(opts) {
   var title = opts.title;
@@ -2074,27 +2148,11 @@ function _pbRenderAltLinesPanelHtml(g, sp, aw, hw, gid, cellFn) {
   var altSp = Array.isArray(g.alt_spreads) ? g.alt_spreads.slice() : [];
   var altTot = Array.isArray(g.alt_totals) ? g.alt_totals.slice() : [];
   if (!altSp.length && !altTot.length) return '';
+  gid = String(gid);
   var html = '<div class="mc-alt-panel">';
-  var spreadTeams = [];
-  var byTeam = {};
-  altSp.forEach(function(s) {
-    if (!s || typeof s.line !== 'number' || !s.team) return;
-    if (!byTeam[s.team]) {
-      byTeam[s.team] = [];
-      spreadTeams.push(s.team);
-    }
-    byTeam[s.team].push(s);
-  });
-  spreadTeams.forEach(function(team) {
-    var rows = byTeam[team].slice().sort(function(a, b) { return (a.line || 0) - (b.line || 0); });
-    var uniq = [];
-    var seen = {};
-    rows.forEach(function(r) {
-      var k = String(r.line);
-      if (seen[k]) return;
-      seen[k] = true;
-      uniq.push(r);
-    });
+  _pbAltSpreadGroups(altSp).forEach(function(grp) {
+    var team = grp.team;
+    var uniq = grp.lines;
     if (uniq.length < 2) {
       html += '<div class="mc-alt-section"><div class="mc-alt-title">' + team + ' ' + _pbSpreadMarketLabel(sp) + '</div>';
       uniq.forEach(function(s) {
@@ -2107,7 +2165,7 @@ function _pbRenderAltLinesPanelHtml(g, sp, aw, hw, gid, cellFn) {
       return;
     }
     var mid = Math.floor(uniq.length / 2);
-    var sliderId = 'sp-' + gid + '-' + String(team).replace(/\s+/g, '-');
+    var sliderId = _pbAltSpreadSliderId(gid, team);
     window._pbAltSliderData = window._pbAltSliderData || {};
     window._pbAltSliderData[sliderId] = { kind: 'spread', team: team, gid: gid, sport: sp, lines: uniq };
     html += _pbAltSliderSectionHtml({
@@ -2126,19 +2184,10 @@ function _pbRenderAltLinesPanelHtml(g, sp, aw, hw, gid, cellFn) {
   });
 
   if (altTot.length) {
-    var byLine = {};
-    altTot.forEach(function(t) {
-      if (!t || typeof t.line !== 'number') return;
-      var k = String(t.line);
-      if (!byLine[k]) byLine[k] = { line: t.line, over: null, under: null };
-      if (String(t.name || '').toLowerCase() === 'under') byLine[k].under = t;
-      else byLine[k].over = t;
-    });
-    var totLines = Object.keys(byLine).map(function(k) { return byLine[k]; })
-      .sort(function(a, b) { return a.line - b.line; });
+    var totLines = _pbAltTotalGroups(altTot);
     if (totLines.length >= 2) {
       var tMid = Math.floor(totLines.length / 2);
-      var tSid = 'tot-' + gid;
+      var tSid = _pbAltTotalSliderId(gid);
       window._pbAltSliderData = window._pbAltSliderData || {};
       window._pbAltSliderData[tSid] = { kind: 'total', gid: gid, sport: sp, lines: totLines };
       html += _pbAltSliderSectionHtml({
@@ -2179,16 +2228,26 @@ function _pbOnAltSliderInput(slider) {
   var sid = slider.getAttribute('data-alt-slider');
   var data = window._pbAltSliderData && window._pbAltSliderData[sid];
   if (!data || !data.lines || !data.lines.length) return;
-  var idx = parseInt(slider.value, 10) || 0;
+  var idx = parseInt(slider.value, 10);
+  if (isNaN(idx)) idx = 0;
   idx = Math.max(0, Math.min(data.lines.length - 1, idx));
+  slider.value = String(idx);
+  var maxAttr = String(Math.max(0, data.lines.length - 1));
+  if (slider.getAttribute('max') !== maxAttr) {
+    slider.setAttribute('max', maxAttr);
+    slider.max = maxAttr;
+  }
   var sel = data.lines[idx];
+  if (!sel) return;
   var wrap = slider.closest('.mc-alt-slider-wrap');
   if (!wrap) return;
   var lineEl = wrap.querySelector('[data-alt-line-display]');
   var slot = wrap.querySelector('[data-alt-odds-slot]');
   var card = slider.closest('.market-card');
-  var gid = data.gid;
-  var g = (window.gamesCache && window.gamesCache[gid]) || (card && window.gamesCache && window.gamesCache[card.getAttribute('data-game-id')]) || { id: gid };
+  var gid = String(data.gid || '');
+  var g = (window.gamesCache && (window.gamesCache[gid] || window.gamesCache[data.gid])) ||
+    (card && window.gamesCache && window.gamesCache[card.getAttribute('data-game-id')]) ||
+    { id: gid };
   var aw = (g.away || g.away_team) || (card && card.getAttribute('data-away')) || '';
   var hw = (g.home || g.home_team) || (card && card.getAttribute('data-home')) || '';
   var sp = data.sport || g.sport || (_currentSport || '');
@@ -2284,6 +2343,8 @@ function _pbUpdateGameCardInPlace(card, g) {
   if (!d || !d.gid) return;
   window.gamesCache = window.gamesCache || {};
   window.gamesCache[g.id] = g;
+  window.gamesCache[String(g.id)] = g;
+  if (g.providerGameId != null) window.gamesCache[String(g.providerGameId)] = g;
   var isLive = _pbMarketIsLive(g);
   var aw = d.aw, hw = d.hw, gid = d.gid;
   function spreadPick(team, sp) {
@@ -2349,15 +2410,31 @@ function _pbEnsureAltLinesOnCard(card, g) {
     return;
   }
   var missing = !panel;
+  var expectSliders = _pbExpectedAltSliderCount(g);
   if (panel) {
-    (Array.isArray(g.alt_spreads) ? g.alt_spreads : []).forEach(function(s) {
-      if (!s || typeof s.line !== 'number') return;
-      if (!document.getElementById('c-' + _pbAltSpreadCellId(gid, s.team, s.line))) missing = true;
-    });
-    (Array.isArray(g.alt_totals) ? g.alt_totals : []).forEach(function(t) {
-      if (!t || typeof t.line !== 'number') return;
-      if (!document.getElementById('c-' + _pbAltTotalCellId(gid, t.name || 'Over', t.line))) missing = true;
-    });
+    var actualSliders = panel.querySelectorAll('input.mc-alt-slider[data-alt-slider]').length;
+    // Slider UI only mounts the currently selected line's odds cells. Never treat
+    // non-selected alt lines as "missing" or every odds poll will rebuild/reset the slider.
+    if (actualSliders > 0) {
+      if (actualSliders !== expectSliders) missing = true;
+      else {
+        _pbPopulateAltSliderData(g, sport, gid);
+        panel.querySelectorAll('input.mc-alt-slider[data-alt-slider]').forEach(function(sl) {
+          _pbOnAltSliderInput(sl);
+        });
+      }
+    } else if (expectSliders > 0) {
+      missing = true;
+    } else {
+      (Array.isArray(g.alt_spreads) ? g.alt_spreads : []).forEach(function(s) {
+        if (!s || _pbAltLineNum(s.line) == null) return;
+        if (!document.getElementById('c-' + _pbAltSpreadCellId(gid, s.team, s.line))) missing = true;
+      });
+      (Array.isArray(g.alt_totals) ? g.alt_totals : []).forEach(function(t) {
+        if (!t || _pbAltLineNum(t.line) == null) return;
+        if (!document.getElementById('c-' + _pbAltTotalCellId(gid, t.name || 'Over', t.line))) missing = true;
+      });
+    }
   }
   if (missing) {
     var html = _pbRenderAltLinesPanelHtml(g, sport, aw, hw, gid, cellFn);
@@ -11146,8 +11223,8 @@ document.addEventListener('click', function(e) {
         replaced = true;
         return false;
       }
-      // Spread same exact pick = remove (same cell re-click handled by toggle)
-      if (isSpread && bIsSpread && b.cellId === cellId) {
+      // Two spreads same game = conflict → remove old (re-click handled by toggle above)
+      if (isSpread && bIsSpread) {
         var oldCell = document.getElementById('c-' + b.cellId);
         if (oldCell) oldCell.classList.remove('selected', 'sel');
         replaced = true;
