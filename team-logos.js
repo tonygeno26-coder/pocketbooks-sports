@@ -105,29 +105,102 @@
     'Toronto FC': 'tor', 'Vancouver Whitecaps FC': 'van'
   };
 
-  // Major NCAAF programs (ESPN NCAA abbrev keys)
+  // Major NCAAF programs — ESPN numeric team IDs (ncaa/500/{id}.png).
+  // Abbrev slugs 404 on the CDN; IDs verified via ESPN search + HTTP 200 on logo URL.
   var NCAAF_FULL = {
-    'Alabama Crimson Tide': 'ala', 'Arizona State Sun Devils': 'asu', 'Arizona Wildcats': 'ariz',
-    'Arkansas Razorbacks': 'ark', 'Auburn Tigers': 'aub', 'Baylor Bears': 'bay',
-    'Boise State Broncos': 'boise', 'Boston College Eagles': 'bc', 'BYU Cougars': 'byu',
-    'California Golden Bears': 'cal', 'Cincinnati Bearcats': 'cin', 'Clemson Tigers': 'clem',
-    'Colorado Buffaloes': 'col', 'Duke Blue Devils': 'duke', 'Florida Gators': 'fla',
-    'Florida State Seminoles': 'fsu', 'Georgia Bulldogs': 'uga', 'Georgia Tech Yellow Jackets': 'gt',
-    'Iowa Hawkeyes': 'iowa', 'Iowa State Cyclones': 'isu', 'Kansas Jayhawks': 'ku',
-    'Kansas State Wildcats': 'ksu', 'Kentucky Wildcats': 'uk', 'Louisville Cardinals': 'lou',
-    'LSU Tigers': 'lsu', 'Maryland Terrapins': 'md', 'Miami Hurricanes': 'mia',
-    'Michigan State Spartans': 'msu', 'Michigan Wolverines': 'mich', 'Minnesota Golden Gophers': 'minn',
-    'Mississippi State Bulldogs': 'msst', 'Missouri Tigers': 'mizz', 'Nebraska Cornhuskers': 'neb',
-    'North Carolina Tar Heels': 'unc', 'North Carolina State Wolfpack': 'ncst',
-    'Notre Dame Fighting Irish': 'nd', 'Ohio State Buckeyes': 'ohio-st', 'Oklahoma Sooners': 'okla',
-    'Oklahoma State Cowboys': 'okst', 'Oregon Ducks': 'ore', 'Oregon State Beavers': 'orst',
-    'Penn State Nittany Lions': 'psu', 'Pittsburgh Panthers': 'pitt', 'Purdue Boilermakers': 'purdue',
-    'Rutgers Scarlet Knights': 'rutgers', 'South Carolina Gamecocks': 'sc', 'Stanford Cardinal': 'stan',
-    'TCU Horned Frogs': 'tcu', 'Tennessee Volunteers': 'tenn', 'Texas A&M Aggies': 'tam',
-    'Texas Longhorns': 'tex', 'Texas Tech Red Raiders': 'ttu', 'UCLA Bruins': 'ucla',
-    'USC Trojans': 'usc', 'Utah Utes': 'utah', 'Virginia Cavaliers': 'uva',
-    'Virginia Tech Hokies': 'vt', 'Washington Huskies': 'wash', 'Washington State Cougars': 'wsu',
-    'West Virginia Mountaineers': 'wvu', 'Wisconsin Badgers': 'wisc'
+    'Alabama Crimson Tide': '333', 'Arizona State Sun Devils': '9', 'Arizona Wildcats': '12',
+    'Arkansas Razorbacks': '8', 'Auburn Tigers': '2', 'Baylor Bears': '239',
+    'Boise State Broncos': '68', 'Boston College Eagles': '103', 'BYU Cougars': '252',
+    'California Golden Bears': '25', 'Cincinnati Bearcats': '2132', 'Clemson Tigers': '228',
+    'Colorado Buffaloes': '38', 'Duke Blue Devils': '150', 'Florida Gators': '57',
+    'Florida State Seminoles': '52', 'Georgia Bulldogs': '61', 'Georgia Tech Yellow Jackets': '59',
+    'Houston Cougars': '248', 'Illinois Fighting Illini': '356', 'Indiana Hoosiers': '84',
+    'Iowa Hawkeyes': '2294', 'Iowa State Cyclones': '66', 'Kansas Jayhawks': '2305',
+    'Kansas State Wildcats': '2306', 'Kentucky Wildcats': '96', 'Louisville Cardinals': '97',
+    'LSU Tigers': '99', 'Maryland Terrapins': '120', 'Miami Hurricanes': '2390',
+    'Michigan State Spartans': '127', 'Michigan Wolverines': '130', 'Minnesota Golden Gophers': '135',
+    'Mississippi State Bulldogs': '344', 'Missouri Tigers': '142', 'Nebraska Cornhuskers': '158',
+    'North Carolina Tar Heels': '153', 'North Carolina State Wolfpack': '152',
+    'Northwestern Wildcats': '77', 'Notre Dame Fighting Irish': '87', 'Ohio State Buckeyes': '194',
+    'Oklahoma Sooners': '201', 'Oklahoma State Cowboys': '197', 'Ole Miss Rebels': '145',
+    'Oregon Ducks': '2483', 'Oregon State Beavers': '204', 'Penn State Nittany Lions': '213',
+    'Pittsburgh Panthers': '221', 'Purdue Boilermakers': '2509', 'Rutgers Scarlet Knights': '164',
+    'SMU Mustangs': '2567', 'South Carolina Gamecocks': '2579', 'Stanford Cardinal': '24',
+    'Syracuse Orange': '183', 'TCU Horned Frogs': '2628', 'Tennessee Volunteers': '2633',
+    'Texas A&M Aggies': '245', 'Texas Longhorns': '251', 'Texas Tech Red Raiders': '2641',
+    'UCF Knights': '2116', 'UCLA Bruins': '26', 'USC Trojans': '30', 'Utah Utes': '254',
+    'Vanderbilt Commodores': '238', 'Virginia Cavaliers': '258', 'Virginia Tech Hokies': '259',
+    'Wake Forest Demon Deacons': '154', 'Washington Huskies': '264',
+    'Washington State Cougars': '265', 'West Virginia Mountaineers': '277', 'Wisconsin Badgers': '275'
+  };
+
+  var NCAAF_SHORT_ALIASES = {
+    'Alabama': 'Alabama Crimson Tide', 'ALA': 'Alabama Crimson Tide',
+    'Arkansas': 'Arkansas Razorbacks', 'ARK': 'Arkansas Razorbacks',
+    'Auburn': 'Auburn Tigers', 'AUB': 'Auburn Tigers',
+    'Florida': 'Florida Gators', 'FLA': 'Florida Gators',
+    'Georgia': 'Georgia Bulldogs', 'UGA': 'Georgia Bulldogs',
+    'Kentucky': 'Kentucky Wildcats', 'UK': 'Kentucky Wildcats',
+    'LSU': 'LSU Tigers', 'Mississippi State': 'Mississippi State Bulldogs', 'MSST': 'Mississippi State Bulldogs',
+    'Missouri': 'Missouri Tigers', 'MIZ': 'Missouri Tigers', 'Mizzou': 'Missouri Tigers',
+    'Ole Miss': 'Ole Miss Rebels', 'MISS': 'Ole Miss Rebels',
+    'Oklahoma': 'Oklahoma Sooners', 'OU': 'Oklahoma Sooners',
+    'South Carolina': 'South Carolina Gamecocks', 'SC': 'South Carolina Gamecocks',
+    'Tennessee': 'Tennessee Volunteers', 'TENN': 'Tennessee Volunteers',
+    'Texas': 'Texas Longhorns', 'TEX': 'Texas Longhorns',
+    'Texas A&M': 'Texas A&M Aggies', 'TAMU': 'Texas A&M Aggies', 'TA&M': 'Texas A&M Aggies',
+    'Vanderbilt': 'Vanderbilt Commodores', 'VAN': 'Vanderbilt Commodores',
+    'Illinois': 'Illinois Fighting Illini', 'ILL': 'Illinois Fighting Illini',
+    'Indiana': 'Indiana Hoosiers', 'IU': 'Indiana Hoosiers',
+    'Iowa': 'Iowa Hawkeyes', 'IOWA': 'Iowa Hawkeyes',
+    'Maryland': 'Maryland Terrapins', 'MD': 'Maryland Terrapins',
+    'Michigan State': 'Michigan State Spartans', 'MSU': 'Michigan State Spartans',
+    'Michigan': 'Michigan Wolverines', 'MICH': 'Michigan Wolverines',
+    'Minnesota': 'Minnesota Golden Gophers', 'MINN': 'Minnesota Golden Gophers',
+    'Nebraska': 'Nebraska Cornhuskers', 'NEB': 'Nebraska Cornhuskers',
+    'Northwestern': 'Northwestern Wildcats', 'NU': 'Northwestern Wildcats',
+    'Ohio State': 'Ohio State Buckeyes', 'OSU': 'Ohio State Buckeyes',
+    'Oregon': 'Oregon Ducks', 'ORE': 'Oregon Ducks',
+    'Penn State': 'Penn State Nittany Lions', 'PSU': 'Penn State Nittany Lions',
+    'Purdue': 'Purdue Boilermakers', 'PUR': 'Purdue Boilermakers',
+    'Rutgers': 'Rutgers Scarlet Knights', 'RUTG': 'Rutgers Scarlet Knights',
+    'UCLA': 'UCLA Bruins', 'USC': 'USC Trojans',
+    'Washington': 'Washington Huskies', 'WASH': 'Washington Huskies',
+    'Wisconsin': 'Wisconsin Badgers', 'WIS': 'Wisconsin Badgers',
+    'Arizona State': 'Arizona State Sun Devils', 'ASU': 'Arizona State Sun Devils',
+    'Arizona': 'Arizona Wildcats', 'ARIZ': 'Arizona Wildcats',
+    'Baylor': 'Baylor Bears', 'BAY': 'Baylor Bears',
+    'BYU': 'BYU Cougars', 'Cincinnati': 'Cincinnati Bearcats', 'CIN': 'Cincinnati Bearcats',
+    'Colorado': 'Colorado Buffaloes', 'COLO': 'Colorado Buffaloes',
+    'Houston': 'Houston Cougars', 'HOU': 'Houston Cougars',
+    'Iowa State': 'Iowa State Cyclones', 'ISU': 'Iowa State Cyclones',
+    'Kansas': 'Kansas Jayhawks', 'KU': 'Kansas Jayhawks',
+    'Kansas State': 'Kansas State Wildcats', 'KSU': 'Kansas State Wildcats',
+    'Oklahoma State': 'Oklahoma State Cowboys', 'OKST': 'Oklahoma State Cowboys',
+    'TCU': 'TCU Horned Frogs', 'Texas Tech': 'Texas Tech Red Raiders', 'TTU': 'Texas Tech Red Raiders',
+    'UCF': 'UCF Knights', 'Utah': 'Utah Utes', 'UTAH': 'Utah Utes',
+    'West Virginia': 'West Virginia Mountaineers', 'WVU': 'West Virginia Mountaineers',
+    'Boston College': 'Boston College Eagles', 'BC': 'Boston College Eagles',
+    'California': 'California Golden Bears', 'Cal': 'California Golden Bears', 'CAL': 'California Golden Bears',
+    'Clemson': 'Clemson Tigers', 'CLEM': 'Clemson Tigers',
+    'Duke': 'Duke Blue Devils', 'DUKE': 'Duke Blue Devils',
+    'Florida State': 'Florida State Seminoles', 'FSU': 'Florida State Seminoles',
+    'Georgia Tech': 'Georgia Tech Yellow Jackets', 'GT': 'Georgia Tech Yellow Jackets',
+    'Louisville': 'Louisville Cardinals', 'LOU': 'Louisville Cardinals',
+    'Miami': 'Miami Hurricanes', 'MIA': 'Miami Hurricanes',
+    'North Carolina': 'North Carolina Tar Heels', 'UNC': 'North Carolina Tar Heels',
+    'NC State': 'North Carolina State Wolfpack', 'NC State Wolfpack': 'North Carolina State Wolfpack',
+    'NCSU': 'North Carolina State Wolfpack',
+    'Pittsburgh': 'Pittsburgh Panthers', 'Pitt': 'Pittsburgh Panthers', 'PITT': 'Pittsburgh Panthers',
+    'SMU': 'SMU Mustangs', 'Stanford': 'Stanford Cardinal', 'STAN': 'Stanford Cardinal',
+    'Syracuse': 'Syracuse Orange', 'SYR': 'Syracuse Orange',
+    'Virginia': 'Virginia Cavaliers', 'UVA': 'Virginia Cavaliers',
+    'Virginia Tech': 'Virginia Tech Hokies', 'VT': 'Virginia Tech Hokies',
+    'Wake Forest': 'Wake Forest Demon Deacons', 'WAKE': 'Wake Forest Demon Deacons',
+    'Notre Dame': 'Notre Dame Fighting Irish', 'ND': 'Notre Dame Fighting Irish',
+    'Boise State': 'Boise State Broncos', 'BOIS': 'Boise State Broncos',
+    'Oregon State': 'Oregon State Beavers', 'ORST': 'Oregon State Beavers',
+    'Washington State': 'Washington State Cougars', 'WSU': 'Washington State Cougars'
   };
 
   // Major NCAAB programs
@@ -204,7 +277,7 @@
     }),
     wnba: _buildMaps(WNBA_FULL, _aliasFromFull(WNBA_FULL), {}),
     mls: _buildMaps(MLS_FULL, _aliasFromFull(MLS_FULL), {}),
-    ncaafb: _buildMaps(NCAAF_FULL, _aliasFromFull(NCAAF_FULL), {}),
+    ncaafb: _buildMaps(NCAAF_FULL, _aliasFromFull(NCAAF_FULL, NCAAF_SHORT_ALIASES), {}),
     ncaab: _buildMaps(NCAAB_FULL, _aliasFromFull(NCAAB_FULL), {})
   };
 
@@ -242,13 +315,37 @@
     return n;
   }
 
+  function _lookupVerifiedNcaafId(teamName) {
+    var map = global.VERIFIED_NCAAF_TEAM_IDS;
+    if (!map || !teamName) return '';
+    if (map[teamName] != null) return String(map[teamName]);
+    var want = String(teamName).toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!want) return '';
+    var keys = Object.keys(map);
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      var nk = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (nk === want) return String(map[k]);
+    }
+    return '';
+  }
+
   function getTeamAbbrev(teamName, sport) {
     sport = normalizeSport(sport);
+    // NCAAF logos require ESPN numeric IDs (abbrev slugs 404 on ncaa/500 CDN).
+    if (sport === 'ncaafb') {
+      var verifiedId = _lookupVerifiedNcaafId(teamName);
+      if (verifiedId) return verifiedId;
+    }
     var data = TEAM_DATA[sport];
     if (!data) return '';
     var key = resolveTeamName(teamName, sport);
     var ab = data.fullToAbbrev[key];
     if (ab) return ab;
+    if (sport === 'ncaafb') {
+      verifiedId = _lookupVerifiedNcaafId(key);
+      if (verifiedId) return verifiedId;
+    }
     var parts = String(teamName || '').trim().split(/\s+/);
     return (parts[parts.length - 1] || '?').slice(0, 3).toLowerCase();
   }
