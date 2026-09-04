@@ -1692,6 +1692,32 @@ async function loadMyClubs() {
     }
     if (userClubs.length && !activeClub) setActiveClub(userClubs[0]);
     updateClubsTilePreview();
+    // Show host-facing join-request count on Requests badge when applicable
+    try {
+      var jr = JSON.parse(localStorage.getItem('pb-join-requests')||'[]');
+      var isHost = userClubs.some(function(c){
+        var role = String(c.role||'').toLowerCase();
+        return role==='host'||role==='owner'||role==='admin'||role==='full_admin';
+      });
+      if (isHost && jr.length) {
+        var badge = document.getElementById('pending-badge');
+        if (badge) { badge.textContent = String(jr.length); badge.style.display = 'inline-block'; }
+      }
+    } catch(_jr){}
+    // Player notification: club join approved
+    try {
+      var me = JSON.parse(localStorage.getItem('pb-player')||'{}');
+      var myId = me.id || me.userId || null;
+      var notes = JSON.parse(localStorage.getItem('pb-notifications')||'[]');
+      var unread = notes.filter(function(n){
+        return n && !n.read && n.type==='club_approved' && (!myId || String(n.playerId)===String(myId));
+      });
+      if (unread.length) {
+        showToast(unread[0].body || unread[0].title || 'You were approved to join a club');
+        notes.forEach(function(n){ if (unread.indexOf(n)>=0) n.read = true; });
+        localStorage.setItem('pb-notifications', JSON.stringify(notes));
+      }
+    } catch(_n){}
   } catch(e) { renderClubsList(); }
 }
 
@@ -2002,8 +2028,131 @@ async function createClub() {
   }
 }
 
-// Helpers
-function showSection(s) { showToast(s + ' coming soon!'); }
+// Helpers — host Requests section shows pending club join applicants
+function showSection(s) {
+  if (s === 'pending' || s === 'requests') {
+    renderLobbyHostRequests();
+    return;
+  }
+  if (s === 'my-clubs' || s === 'myclubs') {
+    var el = document.getElementById('section-my-clubs');
+    if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    return;
+  }
+  showToast(s + ' coming soon!');
+}
+
+function _lobbyLoadJoinRequests(){
+  try { return JSON.parse(localStorage.getItem('pb-join-requests')||'[]'); } catch(_e){ return []; }
+}
+
+function renderLobbyHostRequests(){
+  var hosted = (typeof userClubs !== 'undefined' ? userClubs : []).filter(function(c){
+    var role = String(c.role||'').toLowerCase();
+    return role === 'host' || role === 'owner' || role === 'admin' || role === 'full_admin';
+  });
+  var reqs = _lobbyLoadJoinRequests();
+  // Prefer live API for first hosted club when signed in
+  var finish = function(list){
+    var html = '<div style="background:#0a0a0a;min-height:100%">'
+      + '<div style="padding:14px 16px;background:rgba(5,8,20,0.97);border-bottom:1px solid #1a1a1a;font-size:1rem;font-weight:900;position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center">'
+      + '<span>Join Requests</span>'
+      + '<button onclick="document.getElementById(\'preview-screen\').style.display=\'none\'" style="background:none;border:none;color:#888;font-size:1.1rem;cursor:pointer">✕</button>'
+      + '</div><div style="padding:14px">';
+    if (!list.length) {
+      html += '<div style="text-align:center;padding:40px 16px;color:#555;font-size:0.85rem">No pending join requests'
+        + (hosted.length?'':' — create or open a club as host to receive requests')+'</div>';
+    } else {
+      html += '<div style="font-size:0.7rem;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-weight:800">Pending join requests</div>';
+      html += list.map(function(r){
+        var initials = String(r.playerName||'??').replace(/[^A-Za-z0-9 ]/g,'').split(/\s+/).filter(Boolean).slice(0,2).map(function(w){return (w[0]||'').toUpperCase();}).join('') || '?';
+        var when = r.requestedAt ? new Date(r.requestedAt).toLocaleString() : '';
+        var payload = encodeURIComponent(JSON.stringify(r));
+        return '<div style="background:#141414;border:1px solid #252525;border-radius:11px;padding:11px 13px;margin-bottom:7px;display:flex;align-items:center;justify-content:space-between;gap:8px">'
+          + '<div style="display:flex;align-items:center;gap:9px;min-width:0">'
+          + '<div style="width:34px;height:34px;border-radius:50%;background:rgba(0,194,255,0.12);color:#00c2ff;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:900;flex-shrink:0">'+initials+'</div>'
+          + '<div style="min-width:0"><div style="font-size:0.84rem;font-weight:800">'+(r.playerName||'Player')+'</div>'
+          + '<div style="font-size:0.6rem;color:#555">'+(r.clubName||'Club')+(when?' · '+when:'')+'</div></div></div>'
+          + '<div style="display:flex;gap:6px;flex-shrink:0">'
+          + '<button data-req="'+payload+'" onclick="lobbyOpenApprove(this.dataset.req)" style="padding:7px 12px;background:#00ff88;color:#000;border:none;border-radius:8px;font-size:0.7rem;font-weight:900;cursor:pointer">Approve</button>'
+          + '<button data-pid="'+String(r.playerId||'').replace(/"/g,'')+'" onclick="lobbyDenyRequest(this.dataset.pid)" style="padding:7px 12px;background:transparent;color:#ff3d57;border:1px solid #ff3d57;border-radius:8px;font-size:0.7rem;font-weight:900;cursor:pointer">Deny</button>'
+          + '</div></div>';
+      }).join('');
+    }
+    html += '<div style="font-size:0.68rem;color:#444;margin-top:14px;line-height:1.5">Approve opens the host dashboard so you can set starting balance and player limits.</div></div></div>';
+    var ps = document.getElementById('preview-screen');
+    if (!ps) {
+      ps = document.createElement('div');
+      ps.id = 'preview-screen';
+      ps.style.cssText = 'position:fixed;inset:0;z-index:80;background:#0a0a0a;overflow:auto';
+      document.body.appendChild(ps);
+    }
+    ps.innerHTML = html;
+    ps.style.display = 'block';
+    var badge = document.getElementById('pending-badge');
+    if (badge) {
+      if (list.length) { badge.textContent = String(list.length); badge.style.display = 'inline-block'; }
+      else badge.style.display = 'none';
+    }
+  };
+  if (TOKEN && hosted.length) {
+    var clubId = hosted[0].id || hosted[0].clubId;
+    fetch(API+'/api/clubs/'+encodeURIComponent(clubId)+'/requests', {
+      headers: { 'Authorization':'Bearer '+TOKEN, 'Content-Type':'application/json' }
+    }).then(function(r){ return r.json(); }).then(function(data){
+      var arr = Array.isArray(data) ? data : (data && data.requests) || [];
+      if (arr.length) {
+        finish(arr.map(function(r){
+          return {
+            playerId: r.player_id || r.actor_id || r.playerId,
+            playerName: r.name || r.username || r.playerName || 'Player',
+            clubId: clubId,
+            clubName: hosted[0].name || '',
+            membershipId: r.id,
+            requestedAt: r.joined_at || r.requestedAt
+          };
+        }));
+      } else finish(reqs);
+    }).catch(function(){ finish(reqs); });
+  } else {
+    finish(reqs);
+  }
+}
+
+function lobbyOpenApprove(encoded){
+  try {
+    var req = JSON.parse(decodeURIComponent(encoded));
+    // Persist for host dashboard modal, then route host into Players applicants flow
+    var jr = _lobbyLoadJoinRequests();
+    if (req.playerId && !jr.some(function(x){ return String(x.playerId)===String(req.playerId); })) {
+      jr.unshift(req);
+      localStorage.setItem('pb-join-requests', JSON.stringify(jr));
+    }
+    localStorage.setItem('pb-open-approve', JSON.stringify(req));
+    window.location.href = 'index.html?tab=players&applicants=1';
+  } catch(e) { showToast('Could not open approve'); }
+}
+
+function lobbyDenyRequest(pid){
+  var jr = _lobbyLoadJoinRequests().filter(function(r){ return String(r.playerId)!==String(pid); });
+  localStorage.setItem('pb-join-requests', JSON.stringify(jr));
+  if (TOKEN) {
+    var hosted = (userClubs||[]).filter(function(c){
+      var role = String(c.role||'').toLowerCase();
+      return role === 'host' || role === 'owner' || role === 'admin';
+    });
+    var clubId = hosted[0] && (hosted[0].id || hosted[0].clubId);
+    if (clubId && pid) {
+      fetch(API+'/api/club/members/deny', {
+        method:'POST',
+        headers:{ 'Authorization':'Bearer '+TOKEN, 'Content-Type':'application/json' },
+        body: JSON.stringify({ clubId:clubId, targetActorId:String(pid), playerId:String(pid) })
+      }).catch(function(){});
+    }
+  }
+  showToast('Request denied');
+  renderLobbyHostRequests();
+}
 function clubsLockedGuard() {
   if (!CLUBS_LOCKED) return false;
   showToast(CLUBS_LOCKED_MSG);

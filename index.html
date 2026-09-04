@@ -760,6 +760,44 @@ function renderAdminCrypto() {
   </div>
 </div>
 
+<!-- APPROVE PLAYER MODAL (join request + limits) -->
+<div id="modal-approve-player" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:320;align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeApprovePlayerModal()">
+  <div style="background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:430px;padding:24px;padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <span style="font-size:1.1rem;font-weight:900">Approve Player</span>
+      <button onclick="closeApprovePlayerModal()" style="background:none;border:none;color:var(--gray);font-size:1.3rem;cursor:pointer">✕</button>
+    </div>
+    <div id="appr-username" style="font-size:0.9rem;font-weight:800;color:var(--cyan);margin-bottom:4px"></div>
+    <div style="font-size:0.72rem;color:var(--gray);margin-bottom:16px">Set starting credit and risk limits, then approve or deny.</div>
+    <div style="margin-bottom:12px">
+      <div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Starting Balance / Credit</div>
+      <input id="appr-balance" type="number" placeholder="1000" value="1000" style="width:100%;padding:12px 14px;background:var(--card2);border:1.5px solid var(--border);border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div>
+        <div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Max Bet</div>
+        <input id="appr-maxbet" type="number" placeholder="100" value="100" style="width:100%;padding:12px 14px;background:var(--card2);border:1.5px solid var(--border);border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
+      </div>
+      <div>
+        <div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Max Daily Risk</div>
+        <input id="appr-daily" type="number" placeholder="500" value="500" style="width:100%;padding:12px 14px;background:var(--card2);border:1.5px solid var(--border);border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
+      </div>
+      <div>
+        <div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Max Payout</div>
+        <input id="appr-payout" type="number" placeholder="2000" value="2000" style="width:100%;padding:12px 14px;background:var(--card2);border:1.5px solid var(--border);border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
+      </div>
+      <div>
+        <div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Max Open Risk</div>
+        <input id="appr-openrisk" type="number" placeholder="optional" style="width:100%;padding:12px 14px;background:var(--card2);border:1.5px solid var(--border);border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:8px">
+      <button onclick="denyApprovePlayerModal()" style="flex:1;padding:14px;background:transparent;color:var(--red);border:1.5px solid rgba(255,61,87,0.45);border-radius:12px;font-size:0.9rem;font-weight:900;cursor:pointer">Deny</button>
+      <button onclick="confirmApprovePlayerModal()" style="flex:2;padding:14px;background:var(--green);color:#000;border:none;border-radius:12px;font-size:0.95rem;font-weight:900;cursor:pointer">Approve →</button>
+    </div>
+  </div>
+</div>
+
 <div class="sec-hdr">
   <span class="sec-title">Your Players</span>
   <!-- "+ Add Player" button removed from Players-tab header per host UX cleanup.
@@ -2838,7 +2876,7 @@ function setBN(el,tab){
   } else if(tab==='players'){
     var s=document.getElementById('players-section');
     if(s)s.style.display='block';
-    renderPlayersTab();
+    loadRequests().then(function(){ renderPlayersTab(); }).catch(function(){ renderPlayersTab(); });
     loadHostDashboardFromDb('players_tab');
   } else if(tab==='crypto'){
     var s=document.getElementById('crypto-section');
@@ -2928,31 +2966,272 @@ function getAvailCredit(pid){
 }
 
 function approveRequest(req){
-  var requests=loadJoinRequests().filter(function(r){return r.playerId!==req.playerId;});
+  openApprovePlayerModal(req);
+}
+
+var _pendingApproveReq = null;
+var pendingRequests = [];
+var editingLimitsFor = null;
+
+function openApprovePlayerModal(req){
+  if (!req) return;
+  _pendingApproveReq = req;
+  var name = req.playerName || req.username || req.name || 'Player';
+  var el = document.getElementById('appr-username');
+  if (el) el.textContent = name;
+  var bal = document.getElementById('appr-balance');
+  var mb = document.getElementById('appr-maxbet');
+  var md = document.getElementById('appr-daily');
+  var mp = document.getElementById('appr-payout');
+  var mo = document.getElementById('appr-openrisk');
+  if (bal) bal.value = '1000';
+  if (mb) mb.value = '100';
+  if (md) md.value = '500';
+  if (mp) mp.value = '2000';
+  if (mo) mo.value = '';
+  var modal = document.getElementById('modal-approve-player');
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeApprovePlayerModal(){
+  var modal = document.getElementById('modal-approve-player');
+  if (modal) modal.style.display = 'none';
+  _pendingApproveReq = null;
+}
+
+function _notifyPlayerApproved(playerId, clubName, limits){
+  try {
+    var key = 'pb-notifications';
+    var arr = JSON.parse(localStorage.getItem(key)||'[]');
+    arr.unshift({
+      id: 'appr_'+Date.now(),
+      playerId: String(playerId),
+      type: 'club_approved',
+      title: 'You were approved',
+      body: 'You were approved'+(clubName?(' to join '+clubName):'')+'. Limits are set — you can place bets.',
+      limits: limits || null,
+      read: false,
+      createdAt: new Date().toISOString()
+    });
+    localStorage.setItem(key, JSON.stringify(arr.slice(0,50)));
+  } catch(_e){}
+}
+
+async function confirmApprovePlayerModal(){
+  var req = _pendingApproveReq;
+  if (!req) return;
+  var pid = req.playerId || req.actor_id || req.player_id || req.user_id;
+  var pname = req.playerName || req.username || req.name || 'Player';
+  var clubId = (req.clubId || req.club_id || (currentClub && currentClub.id) || null);
+  var memberId = req.membershipId || req.memberId || req.id || null;
+  var balance = parseFloat(document.getElementById('appr-balance').value);
+  if (!Number.isFinite(balance)) balance = 1000;
+  var max_bet = parseFloat(document.getElementById('appr-maxbet').value)||100;
+  var max_daily_risk = parseFloat(document.getElementById('appr-daily').value)||500;
+  var max_payout = parseFloat(document.getElementById('appr-payout').value)||2000;
+  var openRaw = document.getElementById('appr-openrisk').value;
+  var max_open_risk = openRaw === '' ? null : parseFloat(openRaw);
+  var limitsPayload = { max_bet:max_bet, max_daily_risk:max_daily_risk, max_payout:max_payout };
+  if (Number.isFinite(max_open_risk)) limitsPayload.max_open_risk = max_open_risk;
+
+  var apiOk = false;
+  if (TOKEN && clubId && pid) {
+    try {
+      var body = Object.assign({
+        clubId: clubId,
+        targetActorId: String(pid),
+        playerId: String(pid),
+        balanceStart: balance,
+        credit_limit: balance
+      }, limitsPayload);
+      var r = await apiCall('POST', '/api/club/members/approve', body);
+      if (r && (r.ok || r.status === 'approved' || r.status === 'active')) apiOk = true;
+    } catch(_e1) {}
+    if (!apiOk && memberId) {
+      try {
+        await apiCall('PATCH', '/api/clubs/'+clubId+'/requests/'+memberId, Object.assign({
+          action:'approve', balanceStart:balance, credit_limit:balance
+        }, limitsPayload));
+        apiOk = true;
+      } catch(_e2) {}
+    }
+    if (apiOk) {
+      try {
+        await apiCall('POST', '/api/club/player-limits', Object.assign({
+          clubId:clubId, playerId:String(pid)
+        }, limitsPayload));
+      } catch(_e3) {}
+    }
+  }
+
+  // Local mirror (works offline / when API unavailable)
+  var requests = loadJoinRequests().filter(function(r){ return String(r.playerId)!==String(pid); });
   saveJoinRequests(requests);
-  var players=loadClubPlayers();
-  var existing=players.find(function(p){return p.playerId===req.playerId;});
-  if(!existing){
-    players.push({playerId:req.playerId,playerName:req.playerName,clubId:req.clubId,status:'approved',joinedAt:new Date().toISOString()});
+  pendingRequests = requests;
+  var players = loadClubPlayers();
+  var existing = players.find(function(p){ return String(p.playerId)===String(pid); });
+  if (!existing) {
+    players.push({
+      playerId:pid, playerName:pname, clubId:clubId, status:'approved',
+      joinedAt:new Date().toISOString()
+    });
+    saveClubPlayers(players);
+  } else {
+    existing.status = 'approved';
     saveClubPlayers(players);
   }
-  var lim=getHostPlayerLimits(req.playerId);
-  var creditInput=prompt('Set credit limit for '+req.playerName+' ($)', '100');
-  var credit=parseFloat(creditInput)||0;
-  lim.creditLimit=credit;
-  saveHostPlayerLimits(req.playerId,lim);
-  // Seed per-player balance-start so player.html sees the assigned limit immediately.
-  if (credit > 0) localStorage.setItem('pb-balance-start:'+req.playerId, String(credit));
-  // Bump tickets version so player tab refreshes balance/limit on next poll.
+  var lim = getHostPlayerLimits(pid);
+  lim.creditLimit = balance;
+  lim.maxBet = max_bet;
+  lim.maxDailyRisk = max_daily_risk;
+  lim.maxPayout = max_payout;
+  if (Number.isFinite(max_open_risk)) lim.maxOpenRisk = max_open_risk;
+  saveHostPlayerLimits(pid, lim);
+  if (balance > 0) {
+    try { localStorage.setItem('pb-balance-start:'+pid, String(balance)); } catch(_e){}
+  }
   try {
     var v = parseInt(localStorage.getItem('pb-tickets-version')||'0',10)||0;
     localStorage.setItem('pb-tickets-version', String(v+1));
   } catch(_e){}
+  _notifyPlayerApproved(pid, req.clubName || (currentClub && currentClub.name), limitsPayload);
+  closeApprovePlayerModal();
+  _updateReqBadge();
   renderPlayersTab();
-  showToastHost('Approved: '+req.playerName+' · Credit: $'+credit);
+  showToastHost('Approved: '+pname+' · Credit: $'+balance+(apiOk?'':' (local)'));
+}
+
+async function denyApprovePlayerModal(){
+  var req = _pendingApproveReq;
+  if (!req) { closeApprovePlayerModal(); return; }
+  var pid = req.playerId || req.actor_id || req.player_id || req.user_id;
+  var clubId = (req.clubId || req.club_id || (currentClub && currentClub.id) || null);
+  var memberId = req.membershipId || req.memberId || req.id || null;
+  if (TOKEN && clubId && pid) {
+    try {
+      await apiCall('POST', '/api/club/members/deny', { clubId:clubId, targetActorId:String(pid), playerId:String(pid) });
+    } catch(_e1) {
+      if (memberId) {
+        try { await apiCall('PATCH', '/api/clubs/'+clubId+'/requests/'+memberId, { action:'reject' }); } catch(_e2){}
+      }
+    }
+  }
+  declineRequest(pid);
+  closeApprovePlayerModal();
+  showToastHost('Request denied');
+}
+
+function _updateReqBadge(){
+  var n = (pendingRequests && pendingRequests.length) || loadJoinRequests().length || 0;
+  var badge = document.getElementById('req-badge');
+  if (!badge) return;
+  if (n > 0) { badge.textContent = String(n); badge.style.display = 'inline'; }
+  else badge.style.display = 'none';
+}
+
+async function loadRequests(){
+  if (!TOKEN) {
+    pendingRequests = loadJoinRequests();
+    _updateReqBadge();
+    return pendingRequests;
+  }
+  var clubId = (currentClub && currentClub.id) || null;
+  try {
+    var club = JSON.parse(localStorage.getItem('pb-club')||'{}');
+    if (!clubId) clubId = club.id || club.clubId || null;
+  } catch(_e){}
+  var reqs = [];
+  if (clubId) {
+    try {
+      var data = await apiCall('GET', '/api/clubs/'+clubId+'/requests');
+      if (Array.isArray(data)) reqs = data;
+      else if (data && Array.isArray(data.requests)) reqs = data.requests;
+    } catch(_e1) {}
+    if (!reqs.length) {
+      try {
+        var mem = await apiCall('GET', '/api/club/members', null);
+        // apiCall with GET may need query — try path with query string
+      } catch(_e2) {}
+      try {
+        var r = await fetch(API+'/api/club/members?clubId='+encodeURIComponent(clubId), {
+          headers: Object.assign({ 'Content-Type':'application/json' }, TOKEN?{'Authorization':'Bearer '+TOKEN}:{})
+        });
+        var j = await r.json();
+        var members = (j && j.members) || [];
+        reqs = members.filter(function(m){
+          return String(m.status||'').toLowerCase()==='pending';
+        });
+      } catch(_e3) {}
+    }
+  }
+  if (reqs.length) {
+    pendingRequests = reqs.map(function(r){
+      return {
+        playerId: r.playerId || r.player_id || r.actor_id || r.user_id,
+        playerName: r.playerName || r.username || r.name || r.email || 'Player',
+        clubId: clubId,
+        clubName: (currentClub && currentClub.name) || '',
+        membershipId: r.id || r.membership_id || r.membershipId,
+        email: r.email || '',
+        joined_at: r.joined_at || r.joinedAt || r.requestedAt,
+        requestedAt: r.joined_at || r.joinedAt || r.requestedAt || new Date().toISOString()
+      };
+    }).filter(function(r){ return !!r.playerId; });
+    saveJoinRequests(pendingRequests);
+  } else {
+    pendingRequests = loadJoinRequests();
+  }
+  var sec = document.getElementById('requests-section');
+  if (sec) {
+    if (pendingRequests.length) {
+      sec.style.display = 'block';
+      var cnt = document.getElementById('req-count');
+      if (cnt) cnt.textContent = pendingRequests.length + ' pending';
+      var list = document.getElementById('requests-list');
+      if (list) {
+        list.innerHTML = pendingRequests.map(function(r){
+          return '<div style="background:var(--card);border:1px solid rgba(255,61,87,0.2);border-radius:14px;padding:13px 15px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">'
+            +'<div><div style="font-size:0.9rem;font-weight:800">'+(r.playerName||'Player')+'</div>'
+            +'<div style="font-size:0.7rem;color:var(--gray);margin-top:2px">'+(r.email?r.email+' · ':'')+'Wants to join</div></div>'
+            +'<div style="display:flex;gap:8px">'
+            +'<button data-req="'+encodeURIComponent(JSON.stringify(r))+'" onclick="openApprovePlayerModal(JSON.parse(decodeURIComponent(this.dataset.req)))" style="padding:7px 14px;background:rgba(0,255,136,0.15);border:1px solid var(--green);color:var(--green);border-radius:8px;font-size:0.75rem;font-weight:800;cursor:pointer">Approve</button>'
+            +'<button data-pid="'+r.playerId+'" onclick="declineRequest(this.dataset.pid);loadRequests()" style="padding:7px 14px;background:rgba(255,61,87,0.1);border:1px solid var(--red);color:var(--red);border-radius:8px;font-size:0.75rem;font-weight:800;cursor:pointer">Deny</button>'
+            +'</div></div>';
+        }).join('');
+      }
+    } else {
+      sec.style.display = 'none';
+    }
+  }
+  _updateReqBadge();
+  return pendingRequests;
+}
+
+async function handleRequest(memberId, action){
+  if (!currentClub || !TOKEN) return;
+  try {
+    if (action === 'approve') {
+      var req = (pendingRequests||[]).find(function(r){ return String(r.membershipId||r.id)===String(memberId); });
+      if (req) { openApprovePlayerModal(req); return; }
+    }
+    await apiCall('PATCH', '/api/clubs/'+currentClub.id+'/requests/'+memberId, { action:action });
+    showToast(action === 'approve' ? '✅ Player approved!' : '❌ Request rejected');
+    await loadRequests();
+    renderPlayersTab();
+  } catch(e) { showToast('❌ '+(e.message||'failed')); }
 }
 function declineRequest(pid){
-  saveJoinRequests(loadJoinRequests().filter(function(r){return r.playerId!==pid;}));
+  var clubId = (currentClub && currentClub.id) || null;
+  try {
+    var club = JSON.parse(localStorage.getItem('pb-club')||'{}');
+    if (!clubId) clubId = club.id || club.clubId || null;
+  } catch(_e){}
+  if (TOKEN && clubId && pid) {
+    apiCall('POST', '/api/club/members/deny', { clubId:clubId, targetActorId:String(pid), playerId:String(pid) }).catch(function(){});
+  }
+  saveJoinRequests(loadJoinRequests().filter(function(r){return String(r.playerId)!==String(pid);}));
+  pendingRequests = loadJoinRequests();
+  _updateReqBadge();
   renderPlayersTab();
 }
 function blockPlayer(pid){
@@ -3076,7 +3355,9 @@ function renderPlayersTab(){
   var el = document.getElementById('players-section');
   if (!el) return;
   var requests = [];
-  try { requests = loadJoinRequests(); } catch(_jr) { requests = []; }
+  try {
+    requests = (pendingRequests && pendingRequests.length) ? pendingRequests : loadJoinRequests();
+  } catch(_jr) { requests = []; }
   var dbReady = Array.isArray(_hostDbPlayers) || !!_hostPlayersFetchDone;
   var players  = _hostPlayersFromDbOrLocal();
 
@@ -3158,7 +3439,7 @@ function renderPlayersTab(){
       +'</div>'
       +'<div style="display:flex;gap:6px">'
         +'<button data-pid="'+r.playerId+'" onclick="event.stopPropagation();declineRequest(this.dataset.pid)" style="padding:6px 10px;background:rgba(255,61,87,0.1);border:1px solid rgba(255,61,87,0.3);border-radius:8px;color:#ff3d57;font-size:0.72rem;font-weight:700;cursor:pointer">✕</button>'
-        +'<button data-req="'+encodeURIComponent(JSON.stringify(r))+'" onclick="event.stopPropagation();approveRequest(JSON.parse(decodeURIComponent(this.dataset.req)))" style="padding:6px 12px;background:#00ff88;border:none;border-radius:8px;color:#000;font-size:0.72rem;font-weight:900;cursor:pointer">✓ Approve</button>'
+        +'<button data-req="'+encodeURIComponent(JSON.stringify(r))+'" onclick="event.stopPropagation();openApprovePlayerModal(JSON.parse(decodeURIComponent(this.dataset.req)))" style="padding:6px 12px;background:#00ff88;border:none;border-radius:8px;color:#000;font-size:0.72rem;font-weight:900;cursor:pointer">✓ Approve</button>'
       +'</div>'
     +'</div>';
   }
@@ -5614,6 +5895,29 @@ document.addEventListener('DOMContentLoaded', function() {
   setInterval(_fetchSysHealth, 90000);
   // Phase U: admin panel — show collapsed label if full_admin+
   if (_adminRank() >= 4) _adminRender();
+
+  // Deep-link from lobby Requests → open Players / approve modal
+  try {
+    var _qs = new URLSearchParams(window.location.search);
+    if (_qs.get('tab') === 'players' || _qs.get('applicants') === '1') {
+      _playersActiveTab = _qs.get('applicants') === '1' ? 'applicants' : (_playersActiveTab || 'all');
+      var _playersBn = document.querySelector('.bn[onclick*="players"]') || Array.prototype.find.call(document.querySelectorAll('.bn'), function(n){
+        return (n.textContent||'').indexOf('Players') >= 0;
+      });
+      if (_playersBn && typeof setBN === 'function') setBN(_playersBn, 'players');
+      else {
+        var _ps = document.getElementById('players-section');
+        if (_ps) _ps.style.display = 'block';
+        loadRequests().then(function(){ renderPlayersTab(); }).catch(function(){ renderPlayersTab(); });
+      }
+    }
+    var _openAppr = localStorage.getItem('pb-open-approve');
+    if (_openAppr) {
+      localStorage.removeItem('pb-open-approve');
+      var _req = JSON.parse(_openAppr);
+      setTimeout(function(){ openApprovePlayerModal(_req); }, 400);
+    }
+  } catch(_deeplink) {}
 });
 // ────────────────────────────────────────────────────────────────────────────
 </script>
