@@ -1052,9 +1052,32 @@ function refreshHostDashboardStats(trigger) {
   var profitEl = document.getElementById('stat-profit');
   if (profitEl) profitEl.style.color = hostProfit >= 0 ? 'var(--green, #00ff88)' : 'var(--red, #ff3d57)';
 
-  
+  // Week Net/Handle/Bets — local fallback so cards are not stuck at HTML $0
+  var _wStart = new Date(); _wStart.setUTCHours(0,0,0,0);
+  _wStart.setUTCDate(_wStart.getUTCDate() - ((_wStart.getUTCDay()+6)%7));
+  var _wStartMs = _wStart.getTime();
+  var weekNet = 0, weekHandle = 0, weekSettledCount = 0;
+  allTickets.forEach(function(t) {
+    var s = (t.status || '').toLowerCase();
+    if (s !== 'won' && s !== 'lost') return;
+    var ts = new Date(t.gradedAt || t.graded_at || t.placedAt || t.placed_at || 0).getTime();
+    if (!ts || ts < _wStartMs) return;
+    var risk = parseFloat(t.riskAmount || t.risk_amount) || 0;
+    var profitAmt = parseFloat(t.potentialProfit || t.potential_profit) || 0;
+    weekHandle += risk;
+    weekSettledCount++;
+    if (s === 'lost') weekNet += risk;
+    else weekNet -= profitAmt;
+  });
+  weekNet = Math.round(weekNet * 100) / 100;
+  weekHandle = Math.round(weekHandle * 100) / 100;
+  _set('settle-week-net',    (weekNet>=0?'+':'-')+_fmtUSD(weekNet));
+  _set('settle-week-handle', _fmtUSD(weekHandle));
+  _set('settle-week-bets',   String(weekSettledCount));
+  _set('settle-all-net',     (hostProfit>=0?'+':'-')+_fmtUSD(hostProfit));
+  _set('settle-all-handle',  _fmtUSD(handle));
 
-  return { handle, atRisk, hostProfit, holdPct, active: active.length, settled: settled.length, playersOwe, hostOwes };
+  return { handle, atRisk, hostProfit, holdPct, active: active.length, settled: settled.length, playersOwe, hostOwes, weekly: { net: weekNet, handle: weekHandle, settledCount: weekSettledCount } };
 }
 window.refreshHostDashboardStats = refreshHostDashboardStats;
 
@@ -1090,8 +1113,10 @@ function _applyHostDbStatsToDom(cache) {
   var profitEl = document.getElementById('stat-profit');
   if (profitEl) profitEl.style.color = profitVal>=0 ? 'var(--green,#00ff88)' : 'var(--red,#ff3d57)';
   var wk = cache.weekly || {};
-  _set('settle-week-net',    ((wk.net||0)>=0?'+':'-')+_fmtUSD(wk.net||0));
-  _set('settle-week-handle', _fmtUSD(wk.handle||0));
+  var wkNet = wk.net != null ? Number(wk.net) : 0;
+  if (isNaN(wkNet)) wkNet = 0;
+  _set('settle-week-net',    (wkNet>=0?'+':'-')+_fmtUSD(wkNet));
+  _set('settle-week-handle', _fmtUSD(wk.handle != null ? wk.handle : 0));
   _set('settle-week-bets',   String(wk.settledCount != null ? wk.settledCount : 0));
   var at = cache.allTime || {};
   var atNet = at.net != null ? at.net : profitVal;
@@ -1140,8 +1165,9 @@ async function loadHostDashboardFromDb(trigger) {
       activeBetCount: activeCount,
       playersOwe: _playersOwe,
       hostOwes: _hostOwes,
-      weekly: s.weekly || {},
-      allTime: s.allTime || {}
+      // Prefer summary.weekly so week cards populate even if stats shape drifts.
+      weekly: summary.weekly || s.weekly || {},
+      allTime: summary.allTime || s.allTime || {}
     };
     _applyHostDbStatsToDom(_hostDbStatsCache);
     try { _applyHostDashboardTickets(data); } catch(_te) {}
@@ -2093,7 +2119,11 @@ function _applyHostDashboardPlayers(players) {
         playerId: pid,
         playerName: dp.username || dp.playerName || prev.playerName || pid,
         status: prev.status || 'approved',
-        realName: prev.realName || ((dp.playerName && dp.playerName !== dp.username) ? dp.playerName : '')
+        realName: prev.realName || ((dp.playerName && dp.playerName !== dp.username) ? dp.playerName : ''),
+        availableBalance: dp.availableBalance != null ? dp.availableBalance : prev.availableBalance,
+        openRisk: dp.openRisk != null ? dp.openRisk : prev.openRisk,
+        activeBetCount: dp.activeBetCount != null ? dp.activeBetCount : prev.activeBetCount,
+        balanceSource: dp.balanceSource || prev.balanceSource || null
       });
     });
     localStorage.setItem('pb-club-players', JSON.stringify(Object.keys(byId).map(function(k){ return byId[k]; })));
@@ -2117,7 +2147,8 @@ function _hostPlayersFromDbOrLocal(){
         realName: (dp.playerName && dp.playerName !== dp.username) ? dp.playerName : '',
         availableBalance: dp.availableBalance,
         openRisk: dp.openRisk,
-        activeBetCount: dp.activeBetCount
+        activeBetCount: dp.activeBetCount,
+        balanceSource: dp.balanceSource || null
       };
     }).filter(Boolean);
   }
@@ -2910,9 +2941,12 @@ function renderPlayersTab(){
   function playerRow(p){
     var dbp = (_hostDbPlayersById && _hostDbPlayersById[String(p.playerId)]) || null;
     var uname = (dbp && dbp.username) ? dbp.username : (p.username || p.playerName || p.playerId);
-    var avail = (dbp && dbp.availableBalance != null && !isNaN(dbp.availableBalance))
-      ? Number(dbp.availableBalance)
-      : (p.availableBalance != null && !isNaN(p.availableBalance) ? Number(p.availableBalance) : getAvailCredit(p.playerId));
+    // Prefer DB ledger/ticket availableBalance (0 is valid — do not fall through to creditLimit).
+    var availRaw = (dbp && dbp.availableBalance != null) ? dbp.availableBalance
+      : (p.availableBalance != null ? p.availableBalance : null);
+    var avail = (availRaw != null && !isNaN(Number(availRaw)))
+      ? Number(availRaw)
+      : getAvailCredit(p.playerId);
     var openRisk = (dbp && dbp.openRisk != null && !isNaN(dbp.openRisk))
       ? Number(dbp.openRisk)
       : (p.openRisk != null && !isNaN(p.openRisk) ? Number(p.openRisk) : getOpenRiskAmt(p.playerId));
