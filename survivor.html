@@ -852,6 +852,9 @@ function mergeEspnRecords(oddsList, espnList){
   });
 }
 function isPreseasonTestMode(){
+  // Regular-season Week 1+ slate from ESPN means we are past preseason testing.
+  if (nflGames && nflGames.length) return false;
+  if (espnCache[1] && (espnCache[1].games||[]).length) return false;
   return !oddsGames.length;
 }
 async function loadBrowseWeekGames(){
@@ -863,9 +866,10 @@ async function loadBrowseWeekGames(){
     nflGames = mergeEspnRecords(oddsGames, espn.games);
     scheduleLocked = false;
   } else if (onPoolWeek) {
-    // Preseason / offseason: ESPN regular-season slate is pickable for testing.
+    // ESPN regular-season slate is the pick source when odds cache is empty.
     nflGames = espn.games || [];
     scheduleLocked = false;
+    if (nflGames.length) picksOpen = true;
   } else {
     nflGames = espn.games || [];
     scheduleLocked = true;
@@ -1027,11 +1031,6 @@ function pickBannerHtml(){
   } else if (!scheduleLocked && onPoolWeek){
     html += '<div class="pick-banner">'+esc(weekTitle(browseWeek))+' — Pick deadline: Sunday 1:00 PM ET</div>';
     html += '<div class="pick-countdown" id="pick-countdown">Locks in …</div>';
-    if (isPreseasonTestMode()){
-      html += '<div class="pick-banner warn">⚠️ Preseason test mode — picks are for testing only</div>';
-    }
-  } else if (!scheduleLocked && isPreseasonTestMode()){
-    html += '<div class="pick-banner warn">⚠️ Preseason test mode — picks are for testing only</div>';
   } else {
     var when = week1OpenLabel || NFL_2026_WEEK1_OPEN;
     if (browseWeek === 1) {
@@ -1233,7 +1232,8 @@ function openPickConfirm(game, team, side){
   document.getElementById('pick-confirm-name').textContent = team;
   document.getElementById('pick-confirm-vs').textContent = opponent ? ('vs ' + opponent) : '';
   document.getElementById('pick-confirm-time').textContent = fmtGameTime(game.time || game.scheduledStart || game.commence_time) || '';
-  document.getElementById('pick-confirm-warn').classList.toggle('hidden', !isPreseasonTestMode());
+  document.getElementById('pick-confirm-warn').classList.add('hidden');
+  document.getElementById('pick-confirm-warn').textContent = '';
   var used = currentDetail ? usedMapForWeek(currentDetail, currentDetail.pool.currentWeek) : {};
   var usedWeek = used[canonicalTeam(team)];
   var usedEl = document.getElementById('pick-confirm-used');
