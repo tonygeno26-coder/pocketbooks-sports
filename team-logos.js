@@ -176,6 +176,7 @@
     'Washington': 'Washington Wizards'
   };
 
+  // Complete NHL — ESPN hockey/nhl/teams (32 clubs incl. Utah Mammoth).
   var NHL_FULL = {
     'Anaheim Ducks': 'ana', 'Boston Bruins': 'bos', 'Buffalo Sabres': 'buf',
     'Calgary Flames': 'cgy', 'Carolina Hurricanes': 'car', 'Chicago Blackhawks': 'chi',
@@ -186,8 +187,75 @@
     'New York Rangers': 'nyr', 'Ottawa Senators': 'ott', 'Philadelphia Flyers': 'phi',
     'Pittsburgh Penguins': 'pit', 'San Jose Sharks': 'sj', 'Seattle Kraken': 'sea',
     'St. Louis Blues': 'stl', 'Tampa Bay Lightning': 'tb', 'Toronto Maple Leafs': 'tor',
-    'Utah Hockey Club': 'uta', 'Vancouver Canucks': 'van', 'Vegas Golden Knights': 'vgk',
+    'Utah Mammoth': 'utah', 'Utah Hockey Club': 'utah',
+    'Vancouver Canucks': 'van', 'Vegas Golden Knights': 'vgk',
     'Washington Capitals': 'wsh', 'Winnipeg Jets': 'wpg'
+  };
+
+  var NHL_SHORT_ALIASES = {
+    'Vegas': 'Vegas Golden Knights',
+    'Vegas Golden Knights': 'Vegas Golden Knights',
+    'Golden Knights': 'Vegas Golden Knights',
+    'VGK': 'Vegas Golden Knights',
+    'Seattle': 'Seattle Kraken',
+    'Kraken': 'Seattle Kraken',
+    'SEA': 'Seattle Kraken',
+    'TB Lightning': 'Tampa Bay Lightning',
+    'Tampa Bay': 'Tampa Bay Lightning',
+    'Lightning': 'Tampa Bay Lightning',
+    'TB': 'Tampa Bay Lightning',
+    'TBL': 'Tampa Bay Lightning',
+    'NJ Devils': 'New Jersey Devils',
+    'New Jersey': 'New Jersey Devils',
+    'Devils': 'New Jersey Devils',
+    'NJD': 'New Jersey Devils',
+    'NJ': 'New Jersey Devils',
+    'NY Rangers': 'New York Rangers',
+    'Rangers': 'New York Rangers',
+    'NYR': 'New York Rangers',
+    'NY Islanders': 'New York Islanders',
+    'Islanders': 'New York Islanders',
+    'NYI': 'New York Islanders',
+    'Utah': 'Utah Mammoth',
+    'Mammoth': 'Utah Mammoth',
+    'UTA': 'Utah Mammoth',
+    'Ducks': 'Anaheim Ducks',
+    'Bruins': 'Boston Bruins',
+    'Sabres': 'Buffalo Sabres',
+    'Flames': 'Calgary Flames',
+    'Hurricanes': 'Carolina Hurricanes',
+    'Canes': 'Carolina Hurricanes',
+    'Blackhawks': 'Chicago Blackhawks',
+    'Hawks': 'Chicago Blackhawks',
+    'Avalanche': 'Colorado Avalanche',
+    'Avs': 'Colorado Avalanche',
+    'Blue Jackets': 'Columbus Blue Jackets',
+    'Jackets': 'Columbus Blue Jackets',
+    'Stars': 'Dallas Stars',
+    'Red Wings': 'Detroit Red Wings',
+    'Wings': 'Detroit Red Wings',
+    'Oilers': 'Edmonton Oilers',
+    'Panthers': 'Florida Panthers',
+    'Kings': 'Los Angeles Kings',
+    'LA Kings': 'Los Angeles Kings',
+    'Wild': 'Minnesota Wild',
+    'Canadiens': 'Montreal Canadiens',
+    'Habs': 'Montreal Canadiens',
+    'Predators': 'Nashville Predators',
+    'Preds': 'Nashville Predators',
+    'Senators': 'Ottawa Senators',
+    'Sens': 'Ottawa Senators',
+    'Flyers': 'Philadelphia Flyers',
+    'Penguins': 'Pittsburgh Penguins',
+    'Pens': 'Pittsburgh Penguins',
+    'Sharks': 'San Jose Sharks',
+    'Blues': 'St. Louis Blues',
+    'Maple Leafs': 'Toronto Maple Leafs',
+    'Leafs': 'Toronto Maple Leafs',
+    'Canucks': 'Vancouver Canucks',
+    'Capitals': 'Washington Capitals',
+    'Caps': 'Washington Capitals',
+    'Jets': 'Winnipeg Jets'
   };
 
   var WNBA_FULL = {
@@ -671,7 +739,7 @@
       'Boston Celtics': { bg: '#007A33', fg: '#BA9653' },
       'Golden State Warriors': { bg: '#1D428A', fg: '#FFC72C' }
     }),
-    nhl: _buildMaps(NHL_FULL, _aliasFromFull(NHL_FULL), {
+    nhl: _buildMaps(NHL_FULL, _aliasFromFull(NHL_FULL, NHL_SHORT_ALIASES), {
       'Toronto Maple Leafs': { bg: '#00205B', fg: '#FFFFFF' },
       'Boston Bruins': { bg: '#FFB81C', fg: '#000000' },
       'Vegas Golden Knights': { bg: '#B4975A', fg: '#333F42' }
