@@ -2878,6 +2878,7 @@ function setBN(el,tab){
     if(s)s.style.display='block';
     loadRequests().then(function(){ renderPlayersTab(); }).catch(function(){ renderPlayersTab(); });
     loadHostDashboardFromDb('players_tab');
+    try { loadClubLockStatus(); } catch(_e) {}
   } else if(tab==='crypto'){
     var s=document.getElementById('crypto-section');
     if(s)s.style.display='block';
@@ -3475,6 +3476,13 @@ function renderPlayersTab(){
     // Header
     '<div style="padding:14px 16px 0;position:sticky;top:0;background:#0a0a0a;z-index:10">'
       +'<div style="font-size:1.1rem;font-weight:900;margin-bottom:12px">Your Players</div>'
+      +'<div id="club-lock-toggle-wrap" style="margin-bottom:12px;background:#141414;border:1px solid #252525;border-radius:12px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px">'
+        +'<div style="min-width:0;flex:1">'
+          +'<div id="club-lock-status-label" style="font-size:0.82rem;font-weight:800">'+( _clubIsLocked ? '🔒 Club locked' : '🔓 Open to new members' )+'</div>'
+          +'<div style="font-size:0.65rem;color:#666;margin-top:2px">'+( _clubIsLocked ? 'Join requests are blocked' : 'Anyone with your code can request to join' )+'</div>'
+        +'</div>'
+        +'<button type="button" id="club-lock-toggle-btn" onclick="toggleClubLock()" style="flex-shrink:0;padding:10px 14px;border-radius:10px;border:1px solid '+( _clubIsLocked ? 'rgba(0,255,136,0.4)' : 'rgba(255,61,87,0.4)' )+';background:'+( _clubIsLocked ? 'rgba(0,255,136,0.12)' : 'rgba(255,61,87,0.1)' )+';color:'+( _clubIsLocked ? '#00ff88' : '#ff3d57' )+';font-size:0.72rem;font-weight:900;cursor:pointer">'+( _clubIsLocked ? 'Unlock' : 'Lock' )+'</button>'
+      +'</div>'
       // Search
       +'<div style="display:flex;align-items:center;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:10px 14px;margin-bottom:10px;gap:8px">'
         +'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>'
@@ -3689,6 +3697,98 @@ async function saveLimits() {
 // CLUBS
 let currentClub = null;
 let clubs = [];
+var _clubIsLocked = false;
+var _clubLockBusy = false;
+
+function _resolveHostClubId() {
+  if (currentClub && currentClub.id) return String(currentClub.id);
+  try {
+    var club = JSON.parse(localStorage.getItem('pb-club')||localStorage.getItem('pb-active-club')||'{}') || {};
+    if (club.id != null) return String(club.id);
+    if (club.clubId != null) return String(club.clubId);
+  } catch(_e){}
+  try {
+    var acId = localStorage.getItem('pb-active-club-id');
+    if (acId) return String(acId);
+  } catch(_e2){}
+  return null;
+}
+
+function _paintClubLockUi() {
+  var label = document.getElementById('club-lock-status-label');
+  var btn = document.getElementById('club-lock-toggle-btn');
+  if (label) label.textContent = _clubIsLocked ? '🔒 Club locked' : '🔓 Open to new members';
+  if (btn) {
+    btn.textContent = _clubIsLocked ? 'Unlock' : 'Lock';
+    btn.style.border = '1px solid ' + (_clubIsLocked ? 'rgba(0,255,136,0.4)' : 'rgba(255,61,87,0.4)');
+    btn.style.background = _clubIsLocked ? 'rgba(0,255,136,0.12)' : 'rgba(255,61,87,0.1)';
+    btn.style.color = _clubIsLocked ? '#00ff88' : '#ff3d57';
+    btn.disabled = !!_clubLockBusy;
+  }
+  var sub = label && label.nextElementSibling;
+  if (sub) sub.textContent = _clubIsLocked ? 'Join requests are blocked' : 'Anyone with your code can request to join';
+}
+
+async function loadClubLockStatus() {
+  var clubId = _resolveHostClubId();
+  if (!clubId) return;
+  try {
+    var resp = await (typeof _pbFetch === 'function'
+      ? _pbFetch(API + '/api/club/' + encodeURIComponent(clubId))
+      : fetch(API + '/api/club/' + encodeURIComponent(clubId)));
+    var data = await resp.json();
+    if (data && (data.ok || data.id)) {
+      _clubIsLocked = !!data.is_locked;
+      if (currentClub) currentClub.is_locked = _clubIsLocked;
+      _paintClubLockUi();
+    }
+  } catch(_e) {}
+}
+
+async function toggleClubLock() {
+  if (_clubLockBusy) return;
+  var clubId = _resolveHostClubId();
+  if (!clubId) {
+    if (typeof showToastHost === 'function') showToastHost('No club selected');
+    else if (typeof showToast === 'function') showToast('No club selected');
+    return;
+  }
+  _clubLockBusy = true;
+  _paintClubLockUi();
+  try {
+    var resp = await (typeof _pbFetch === 'function'
+      ? _pbFetch(API + '/api/club/toggle-lock', {
+          method: 'POST',
+          body: JSON.stringify({ clubId: clubId })
+        })
+      : fetch(API + '/api/club/toggle-lock', {
+          method: 'POST',
+          headers: _getActorHeaders(),
+          body: JSON.stringify({ clubId: clubId })
+        }));
+    var data = await resp.json();
+    if (!data || !data.ok) {
+      var err = (data && (data.message || data.error)) || 'toggle failed';
+      if (typeof showToastHost === 'function') showToastHost(String(err).replace(/_/g,' '));
+      else if (typeof showToast === 'function') showToast('❌ ' + String(err).replace(/_/g,' '));
+      return;
+    }
+    _clubIsLocked = !!data.is_locked;
+    if (currentClub) currentClub.is_locked = _clubIsLocked;
+    _paintClubLockUi();
+    var msg = data.message || (_clubIsLocked ? 'Club is now locked' : 'Club is now open');
+    if (typeof showToastHost === 'function') showToastHost(msg);
+    else if (typeof showToast === 'function') showToast(msg);
+  } catch(e) {
+    if (typeof showToastHost === 'function') showToastHost('Lock toggle failed');
+    else if (typeof showToast === 'function') showToast('❌ Lock toggle failed');
+  } finally {
+    _clubLockBusy = false;
+    _paintClubLockUi();
+  }
+}
+window.toggleClubLock = toggleClubLock;
+window.loadClubLockStatus = loadClubLockStatus;
 
 async function loadClubs() {
   try {
@@ -3761,9 +3861,11 @@ function switchClub(id) {
   const codeEl = document.getElementById('club-code-display');
   if (currentClub) {
     codeEl.textContent = currentClub.code;
+    _clubIsLocked = !!currentClub.is_locked;
     _renderActiveClubIdentity();
     loadClubMembers(id);
     loadRequests();
+    loadClubLockStatus();
   } else {
     codeEl.textContent = 'Copy Code';
     _renderActiveClubIdentity();
@@ -3830,12 +3932,12 @@ function copyInviteLink() {
   showToast('✅ Invite link copied!');
 }
 
-function openCreateClub() { showToast('Club creation is paused. Use Survivor Pool.'); }
+function openCreateClub() { document.getElementById('modal-create-club').style.display = 'flex'; }
 function closeCreateClub() { document.getElementById('modal-create-club').style.display = 'none'; }
 
 async function createClub() {
-  showToast('Club creation is paused. Use Survivor Pool.');
-  return;
+  const name = (document.getElementById('cc-name') && document.getElementById('cc-name').value || '').trim();
+  if (!name) { showToast('Enter a club name'); return; }
   const max_bet = parseFloat(document.getElementById('cc-maxbet').value)||500;
   const max_parlay = parseFloat(document.getElementById('cc-maxparlay').value)||1000;
   const desc = document.getElementById('cc-desc').value.trim();
@@ -3851,7 +3953,7 @@ async function createClub() {
     showToast('✅ Club created! Code: ' + club.code);
   } catch(e) {
     // Demo mode - create locally
-    const demoClub = { id: Date.now(), name, code: Math.random().toString(36).substring(2,8).toUpperCase(), member_count: 0 };
+    const demoClub = { id: Date.now(), name, code: Math.random().toString(36).substring(2,8).toUpperCase(), member_count: 0, is_locked: false };
     clubs.unshift(demoClub);
     const sel = document.getElementById('club-select');
     sel.innerHTML = '<option value="">— Select Club —</option>' +
