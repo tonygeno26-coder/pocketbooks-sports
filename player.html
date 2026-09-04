@@ -5237,6 +5237,22 @@ function amToDecimal(o){
   if (!n || isNaN(n)) return 1;
   return n > 0 ? n/100+1 : 100/Math.abs(n)+1;
 }
+function slipIsSGPEligible() {
+  if (!Array.isArray(betSlip) || betSlip.length < 2) return false;
+  var game = betSlip[0].game;
+  if (!game) return false;
+  return betSlip.every(function(b){ return b.game === game; });
+}
+function sgpDecimalOdds(legs) {
+  var d = legs.reduce(function(p,b){ return p * amToDecimal(b.odds); }, 1);
+  return d * 0.85;
+}
+function sgpAmericanOdds(legs) {
+  var d = sgpDecimalOdds(legs);
+  if (d <= 1 || isNaN(d)) return '--';
+  var a = amer(d);
+  return (a > 0 ? '+' : '') + a;
+}
 // SGP correlation reducer: if a combo has 2+ legs from same game, apply discount
 function comboHasSGP(combo) {
   var gc = {};
@@ -5256,6 +5272,9 @@ function parlayAdjust(d, legs) {
 
 function calcPayout(stake, legs, type) {
   if (!stake || !legs.length) return 0;
+  if (type === 'sgp') {
+    return stake * sgpDecimalOdds(legs);
+  }
   if (type === 'parlay') {
     var d = legs.reduce(function(p,b){ return p * amToDecimal(b.odds); }, 1);
     return stake * parlayAdjust(d, legs);
@@ -5288,6 +5307,7 @@ function bsSetType(t) {
   
   if (t === 'rr' && betSlip.length < 3) { showToast('Need 3+ picks for Round Robin', 'warning'); return; }
   if (t === 'teaser' && getTeaserLegs().length < 2) { showToast('Need 2+ spread/total picks for Teaser', 'warning'); return; }
+  if (t === 'sgp' && !slipIsSGPEligible()) { showToast('Need 2+ picks from the same game for SGP', 'warning'); return; }
   bsType = t;
   document.querySelectorAll('.dkslip-tab').forEach(function(el){ el.classList.remove('active'); });
   var tab = document.getElementById('bs-tab-'+t);
@@ -5302,7 +5322,7 @@ function bsSetType(t) {
   var inp = document.getElementById('bs-stake-inp');
   if (inp) inp.value = '';
   bsStake = 0;
-  if (t === 'parlay' || t === 'teaser' || t === 'rr') {
+  if (t === 'parlay' || t === 'teaser' || t === 'rr' || t === 'sgp') {
     bsStakes = {};   // singles' per-card stakes are meaningless on these tabs
   }
   bsSyncPlaceBtn();
@@ -5505,8 +5525,8 @@ function bsTeamAbbr(pickStr, game) {
 function bsValidate() {
   var warnings = [];
 
-  // SGP leg validity: flag invalid same-game combinations in parlay/rr
-  if (bsType === 'parlay' || bsType === 'rr') {
+  // SGP leg validity: flag invalid same-game combinations in parlay/rr/sgp
+  if (bsType === 'parlay' || bsType === 'rr' || bsType === 'sgp') {
     var _sgpViolations = _validateSlipSGP(betSlip);
     _sgpViolations.forEach(function(v){
       var label = (v.leg1.game || v.gameKey).split('|').slice(0,3).join(' ');
@@ -5601,7 +5621,7 @@ function bsRenderLegs() {
   if (!el) return;
   if (!betSlip.length) { el.innerHTML = '<div style="text-align:center;padding:24px;color:#555;font-size:0.82rem">Tap odds to add selections</div>'; return; }
   var warnings = bsValidate();
-  var warningHtml = warnings.length && bsType==='parlay' ? warnings.map(function(w){
+  var warningHtml = warnings.length && (bsType==='parlay' || bsType==='sgp') ? warnings.map(function(w){
     return '<div style="margin:0 14px 6px;padding:8px 12px;background:rgba(255,61,87,0.08);border:1px solid rgba(255,61,87,0.2);border-radius:8px;font-size:0.7rem;color:#ff6b7a">⚠️ '+w+'</div>';
   }).join('') : '';
 
@@ -5737,6 +5757,47 @@ function bsRenderLegs() {
       : '<div style="text-align:center;padding:20px;color:#bbb;font-size:0.82rem">Add spread or total picks to build a teaser</div>';
 
     legs = ptPills + hdrCard + warn + tableCard;
+  } else if (bsType === 'sgp') {
+    legs = (function(){
+      var validLegs = betSlip.filter(function(b){ return b.odds && !isNaN(b.odds); });
+      var d = sgpDecimalOdds(validLegs);
+      var co = (validLegs.length < 2) ? '--' : sgpAmericanOdds(validLegs);
+      var sgpPayout = bsStake > 0 ? fmtDollar(bsStake * d) : null;
+      var legLimitHtml = '<div class="dkslip-leg-limit">' + betSlip.length + ' / ' + _MAX_PARLAY_LEGS + ' legs</div>';
+      return legLimitHtml + '<div class="dkslip-card">' +
+        '<div class="dkslip-card-hdr">' +
+          '<span class="dkslip-card-title">Same Game Parlay</span>' +
+          '<span style="display:flex;align-items:center;gap:6px">' +
+            (validLegs.length >= 2 ? '<button type="button" class="dkslip-share-btn" onclick="event.stopPropagation();shareParlaySlip()">Share</button>' : '') +
+            '<span class="dkslip-card-odds">'+co+'</span>' +
+          '</span>' +
+        '</div>' +
+        '<div style="padding:4px 14px 8px;font-size:0.65rem;color:#888">Correlation-adjusted odds (×0.85)</div>' +
+        betSlip.map(function(b,i){
+          var pm = b.market||'Market', pp = b.pick||'Unknown Selection', pg = b.game||'';
+          var pteams = pg.split(' vs ');
+          var pshort = pteams.length===2 ? pteams[0].split(' ').pop()+' vs '+pteams[1].split(' ').pop() : pg;
+          var legSport = b.sport || _currentSport || 'mlb';
+          var pteam = (typeof extractTeamFromPick === 'function') ? extractTeamFromPick(pp, pteams[1]||'', pteams[0]||'', legSport) : pp;
+          var _plogo = (typeof _pbLobbyLogoImg === 'function') ? _pbLobbyLogoImg(pteam || pp, legSport, 36) : '';
+          var plogoHtml = _plogo
+            ? '<div class="dkslip-leg-logo">' + _plogo + '</div>'
+            : '<div class="dkslip-leg-logo">' + bsTeamAbbr(pp, pg) + '</div>';
+          return '<div class="dkslip-leg" data-cell-id="'+b.cellId+'">' +
+            plogoHtml +
+            '<div style="flex:1">' +
+              '<div class="dkslip-leg-matchup">'+pshort+'</div>' +
+              '<div class="dkslip-leg-pick">'+pp+'</div>' +
+              '<div class="dkslip-leg-mkt">'+pm+'</div>' +
+            '</div>' +
+            '<div style="display:flex;align-items:center;gap:6px">' +
+              '<span class="dkslip-leg-odds">'+fmtOdds(b.odds)+'</span>' +
+              '<button class="dkslip-leg-rm" onclick="event.stopPropagation();bsRemove(\''+b.cellId+'\')">✕</button>' +
+            '</div></div>';
+        }).join('') +
+        (sgpPayout ? '<div style="padding:8px 14px 10px;display:flex;justify-content:space-between;font-size:0.78rem;border-top:1px solid #f0f0f0"><span style="color:#888">Est. Payout</span><span style="font-weight:900;color:#00c853">'+sgpPayout+'</span></div>' : '') +
+        '</div>';
+    })();
   } else legs = bsType === 'parlay' ?
     // Parlay: compute combined odds first, then render all legs
     (function(){
@@ -6006,7 +6067,7 @@ function openBetConfirm() {
   _pendingRisk   = risk;
   _pendingPayout = payout;
   _pendingProfit = toWin;
-  var typeLabel = {straight:'Singles',parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[bsType] || bsType;
+  var typeLabel = {straight:'Singles',parlay:'Parlay',rr:'Round Robin',teaser:'Teaser',sgp:'SGP'}[bsType] || bsType;
 
   // ═══ BUG #5 SNAPSHOT ══════════════════════════════════════════════════════════════════════
   // Freeze every input that confirmBet will read. Each entry is a fresh
@@ -6689,7 +6750,7 @@ async function confirmBet() {
       });
     });
   } else {
-    var _tLabel = {parlay:'Parlay',rr:'Round Robin',teaser:'Teaser'}[snap.type] || snap.type;
+    var _tLabel = {parlay:'Parlay',rr:'Round Robin',teaser:'Teaser',sgp:'SGP'}[snap.type] || snap.type;
     newTickets.push({
       id:'T'+Date.now(),
       playerId:pl.id, playerUsername:pl.name, playerRealName:pl.realName,
@@ -6697,6 +6758,7 @@ async function confirmBet() {
       type:_tLabel, status:'active', source:'player', placedAt:now,
       selections:snap.legs.map(_makeSelection),
       odds:(function(){
+        if (snap.type === 'sgp') return sgpAmericanOdds(snap.legs);
         var d=snap.legs.reduce(function(a,b){return a*amToDecimal(b.odds);},1);
         var r=Math.round((d-1)*100);
         return isNaN(r)?'--':(r>0?'+'+r:''+Math.round(-100/(d-1)));
@@ -6779,7 +6841,7 @@ async function confirmBet() {
     var _iKey = 'BET_'+(_pid||'?')+'_'+now.replace(/[^0-9]/g,'').slice(0,14);
     var _dbPayload = {
       clubId:_cid, playerId:_pid, playerUsername:_lspl.username||_pid,
-      betType: snap.type==='straight'?'Single':snap.type==='parlay'?'Parlay':snap.type==='rr'?'RoundRobin':'Teaser',
+      betType: snap.type==='straight'?'Single':snap.type==='parlay'?'Parlay':snap.type==='rr'?'RoundRobin':snap.type==='sgp'?'SGP':'Teaser',
       stake:snap.risk, payout:snap.payout, potentialProfit:snap.profit,
       idempotencyKey:_iKey,
       // RR: include rrStakes so the backend can expand combos server-side.
@@ -10827,7 +10889,7 @@ function bsAddStake(a) {
     bsSyncPlaceBtn();
     return;
   }
-  if (bsType === 'parlay' || bsType === 'teaser') {
+  if (bsType === 'parlay' || bsType === 'teaser' || bsType === 'sgp') {
     bsStake = (bsStake || 0) + a;
     var inp = document.getElementById('bs-stake-inp');
     if (inp) { inp.value = bsStake; }
@@ -10860,6 +10922,18 @@ function bsAddStake(a) {
   // Enable/disable tabs based on selections
   var rrTab = document.getElementById('bs-tab-rr');
   var teaserTab = document.getElementById('bs-tab-teaser');
+  var sgpTab = document.getElementById('bs-tab-sgp');
+  if (sgpTab) {
+    var sgpOk = slipIsSGPEligible();
+    sgpTab.style.display = sgpOk ? '' : 'none';
+    sgpTab.style.opacity = sgpOk ? '1' : '0.35';
+    sgpTab.disabled = !sgpOk;
+    sgpTab.style.cursor = sgpOk ? 'pointer' : 'not-allowed';
+    sgpTab.title = sgpOk ? '' : 'Add 2+ picks from the same game for SGP';
+    if (!sgpOk && typeof bsType !== 'undefined' && bsType === 'sgp') {
+      try { bsSetType(betSlip.length >= 2 ? 'parlay' : 'straight'); } catch (_e) {}
+    }
+  }
   if (rrTab) {
     var rrOk = betSlip.length >= 3;
     rrTab.style.opacity = rrOk ? '1' : '0.5';
@@ -11019,9 +11093,9 @@ function bsSyncPlaceBtn() {
   var _stakeInp     = document.getElementById('bs-stake-inp');
   var _stakeInpRaw  = _stakeInp ? _stakeInp.value : '';
   var _stakeInpNum  = parseFloat(String(_stakeInpRaw).replace(/[^0-9.]/g,'')) || 0;
-  if ((bsType === 'parlay' || bsType === 'teaser') && _stakeInpNum > 0 && bsStake !== _stakeInpNum) {
+  if ((bsType === 'parlay' || bsType === 'teaser' || bsType === 'sgp') && _stakeInpNum > 0 && bsStake !== _stakeInpNum) {
     bsStake = _stakeInpNum;
-  } else if ((bsType === 'parlay' || bsType === 'teaser') && _stakeInpNum === 0 && bsStake > 0) {
+  } else if ((bsType === 'parlay' || bsType === 'teaser' || bsType === 'sgp') && _stakeInpNum === 0 && bsStake > 0) {
     // Input was cleared (e.g. bsSetType tab switch). Keep bsStake matching the
     // visible state so the user can't accidentally place a bet with no
     // visible stake.
@@ -11031,6 +11105,8 @@ function bsSyncPlaceBtn() {
   // Valid = has picks AND has a non-zero stake
   var valid = bsType === 'parlay'
     ? (betSlip.length >= 2 && bsStake > 0)
+    : bsType === 'sgp'
+      ? (slipIsSGPEligible() && bsStake > 0)
     : bsType === 'rr'
       ? (betSlip.length >= 3 && bsStake > 0)
       : (betSlip.length > 0 && bsStake > 0);
@@ -11052,7 +11128,7 @@ function bsSyncPlaceBtn() {
   }
 
   // ── SGP validity gate: disable Place Bet on invalid SGP combinations ──
-  if (valid && (bsType === 'parlay' || bsType === 'rr')) {
+  if (valid && (bsType === 'parlay' || bsType === 'rr' || bsType === 'sgp')) {
     var _sgpV = _validateSlipSGP(betSlip);
     if (_sgpV.length > 0) {
       if (btn) {
@@ -11143,7 +11219,7 @@ function bsSyncPlaceBtn() {
   // button was display:none when invalid, which made it look broken — the
   // regression Tony reported.)
   if (btn) {
-    var hasPicks = (bsType === 'parlay') ? (betSlip.length >= 2)
+    var hasPicks = (bsType === 'parlay' || bsType === 'sgp') ? (bsType === 'sgp' ? slipIsSGPEligible() : betSlip.length >= 2)
                  : (bsType === 'rr')     ? (betSlip.length >= 3)
                  : (betSlip.length > 0);
     btn.style.display = 'block';
@@ -11155,6 +11231,7 @@ function bsSyncPlaceBtn() {
       btn.style.opacity     = '1';
       btn.style.pointerEvents = 'auto';
       var label = bsType === 'rr' ? 'Place Round Robin'
+        : bsType === 'sgp' ? 'Place SGP'
         : bsType === 'parlay' ? 'Place Parlay'
         : bsType === 'straight' && betSlip.length > 1 ? 'Place ' + betSlip.length + ' Bets'
         : 'Place Bet';
@@ -11169,6 +11246,7 @@ function bsSyncPlaceBtn() {
       btn.style.pointerEvents = 'none';
       btn.textContent = !hasPicks
         ? (bsType === 'parlay' ? 'Add 2+ picks for a parlay'
+          : bsType === 'sgp'   ? 'Add 2+ same-game picks for SGP'
           : bsType === 'rr'    ? 'Add 3+ picks for a round robin'
           : 'Add picks to continue')
         : 'Enter stake to continue';
@@ -11188,7 +11266,7 @@ function bsSyncPlaceBtn() {
   // Diagnostic: one-line snapshot of the parlay/teaser/rr footer state.
   // Used to debug "input shows $X but button says Enter stake to continue"
   // reports. Combined-odds string is derived from the live slip legs.
-  if (bsType === 'parlay' || bsType === 'teaser' || bsType === 'rr') {
+  if (bsType === 'parlay' || bsType === 'teaser' || bsType === 'rr' || bsType === 'sgp') {
     try {
       var _combinedDec = (Array.isArray(betSlip) ? betSlip : [])
         .filter(function(b){ return b && b.odds && !isNaN(b.odds); })
@@ -11234,7 +11312,7 @@ function _bsRemoveCore(idx) {
     : parseFloat(currentStakeInput) || bsStake;
   if (!betSlip.length) { bsStake = 0; bsStakes = {}; rrStakes = {}; }
   // If parlay and fewer than 2 legs, auto-switch to straight
-  if ((bsType === 'parlay' || bsType === 'teaser') && betSlip.length < 2) {
+  if ((bsType === 'parlay' || bsType === 'teaser' || bsType === 'sgp') && betSlip.length < 2) {
     bsType = 'straight';
     document.querySelectorAll('.dkslip-tab').forEach(function(t){ t.classList.remove('active'); });
     var st = document.getElementById('bs-tab-straight'); if (st) st.classList.add('active');
@@ -13534,6 +13612,7 @@ window.openGradingConsole = openGradingConsole;
   <div class="dkslip-tabs">
     <button id="bs-tab-straight" class="dkslip-tab active" onclick="bsSetType('straight')">Singles</button>
     <button id="bs-tab-parlay"   class="dkslip-tab"        onclick="bsSetType('parlay')">Parlay</button>
+    <button id="bs-tab-sgp"      class="dkslip-tab"        onclick="bsSetType('sgp')" style="display:none">SGP</button>
     <button id="bs-tab-teaser"   class="dkslip-tab"        onclick="bsSetType('teaser')">Teaser</button>
     <button id="bs-tab-rr"       class="dkslip-tab"        onclick="bsSetType('rr')">R.Robin</button>
   </div>
