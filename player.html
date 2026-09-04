@@ -5374,15 +5374,25 @@ function getTeaserLegs() {
 }
 
 // Teaser fixed odds table (American)
+// NFL/NCAAF: 6 / 6.5 / 7 pt. NBA/NCAAB: 4 / 4.5 / 5 pt (standard books).
 var TEASER_ODDS = {
-  2: { 6: -110, 6.5: -120, 7: -130 },
-  3: { 6: +160, 6.5: +140, 7: +120 },
-  4: { 6: +260, 6.5: +240, 7: +200 }
+  2: { 4: -110, 4.5: -120, 5: -130, 6: -110, 6.5: -120, 7: -130 },
+  3: { 4: +150, 4.5: +130, 5: +110, 6: +160, 6.5: +140, 7: +120 },
+  4: { 4: +240, 4.5: +220, 5: +200, 6: +260, 6.5: +240, 7: +200 }
 };
+function _teaserDefaultPtsForSlip() {
+  var legs = getTeaserLegs();
+  if (!legs.length) return teaserPts;
+  var allNba = legs.every(function(b){
+    var s = _teaserSportKey(b);
+    return !!(TEASER_SPORTS_LINEONLY && TEASER_SPORTS_LINEONLY[s]);
+  });
+  return allNba ? 4 : 6;
+}
 function getTeaserOdds(legs, pts) {
   var table = TEASER_ODDS[Math.min(legs, 4)];
   if (!table) return -110;
-  return table[pts] || table[6];
+  return table[pts] != null ? table[pts] : (table[6] != null ? table[6] : -110);
 }
 function adjustTeaserLine(b, pts) {
   // Extract numeric line from pick string
@@ -5611,12 +5621,17 @@ function bsRenderLegs() {
   } else if (bsType === 'teaser') {
     var tLegs = getTeaserLegs();
     var ineligible = betSlip.filter(function(b){ return !isTeaserEligible(b); });
+    // Auto-select NBA 4-pt / NFL 6-pt when slip sport changes
+    var _defPts = _teaserDefaultPtsForSlip();
+    if ([4,4.5,5,6,6.5,7].indexOf(teaserPts) < 0) teaserPts = _defPts;
+    else if ((_defPts === 4 && teaserPts >= 6) || (_defPts === 6 && teaserPts <= 5)) teaserPts = _defPts;
     var tOdds = getTeaserOdds(tLegs.length, teaserPts);
     var tOddsFmt = (tOdds > 0 ? '+' : '') + tOdds;
 
-    // Point selector pills
+    // Point selector pills — NFL 6/6.5/7, NBA 4/4.5/5
+    var ptOptions = _defPts === 4 ? [4,4.5,5] : [6,6.5,7];
     var ptPills = '<div style="display:flex;gap:6px;margin-bottom:12px">' +
-      [6,6.5,7].map(function(p){
+      ptOptions.map(function(p){
         var o = getTeaserOdds(tLegs.length, p);
         var of = (o>0?'+':'')+o;
         var active = p === teaserPts;
