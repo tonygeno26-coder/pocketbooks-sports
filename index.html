@@ -1238,7 +1238,30 @@ async function runHostDbReadAudit() {
 window.loadHostDashboardFromDb    = loadHostDashboardFromDb;
 window.runHostDbReadAudit         = runHostDbReadAudit;
 
-// ── SETTLEMENT PREVIEW FROM DB (Phase C Step 3, read-only) ────────────────────────
+// ── SETTLEMENT PREVIEW FROM DB (Phase C Step 3) ───────────────────────────────────
+
+function _money(n) {
+  n = parseFloat(n)||0;
+  return (n<0?'−':'' )+'$'+Math.abs(n).toFixed(2);
+}
+function _escAttr(s) {
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+}
+
+async function savePlayerStartingBalance(playerId, value) {
+  var amt = parseFloat(value);
+  if (isNaN(amt) || amt < 0) {
+    if (typeof showToastHost === 'function') showToastHost('Invalid starting balance');
+    return;
+  }
+  // Mirror into local creditLimit so Players tab stays consistent
+  try {
+    var lim = (typeof getHostPlayerLimits === 'function') ? getHostPlayerLimits(playerId) : { creditLimit:0 };
+    lim.creditLimit = amt;
+    if (typeof saveHostPlayerLimits === 'function') saveHostPlayerLimits(playerId, lim);
+  } catch(_e){}
+  if (typeof showToastHost === 'function') showToastHost('Starting balance set to $'+amt.toFixed(2)+' (local)');
+}
 
 async function renderSettlementPreviewFromDb() {
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
@@ -1247,48 +1270,119 @@ async function renderSettlementPreviewFromDb() {
 
   try {
     var qs   = cid ? '?clubId='+encodeURIComponent(cid) : '';
-    var resp = await fetch('/api/host/settlements-preview'+qs);
+    var resp = await (typeof _pbFetch === 'function' ? _pbFetch('/api/host/settlements-preview'+qs) : fetch('/api/host/settlements-preview'+qs));
     var data = await resp.json();
-    if (!data.ok) throw new Error(data.error || 'db_error');
+    if (!data.ok) throw new Error(data.error || data.source || 'db_error');
 
     var players = data.players || [];
     var totals  = data.totals  || {};
+    var playersOwe = parseFloat(totals.playersOwe)||0;
+    var hostOwesTot = parseFloat(totals.hostOwes)||0;
+    var netTot = parseFloat(totals.net);
+    if (isNaN(netTot)) netTot = playersOwe - hostOwesTot;
 
-    // Build HTML
-    var html = '<div style="background:var(--card,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:14px;padding:16px;margin-bottom:16px">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
+    // If API lacks week wagered/won/lost, derive from hostActiveBets in memory
+    var _needWeekDerive = players.some(function(p) {
+      return p.weekWagered == null && p.weekWon == null && p.weekLost == null;
+    });
+    if (_needWeekDerive) {
+      var _bets = [];
+      try { _bets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]'); } catch(_e){}
+      var _wkStart = new Date(); _wkStart.setHours(0,0,0,0);
+      _wkStart.setDate(_wkStart.getDate() - _wkStart.getDay()); // Sunday
+      var _wkMs = _wkStart.getTime();
+      var byPid = {};
+      _bets.forEach(function(t) {
+        var pid = String(t.playerId||'');
+        if (!pid) return;
+        if (cid && t.clubId && t.clubId !== cid) return;
+        var ts = new Date(t.placedAt||t.gradedAt||0).getTime();
+        if (!ts || ts < _wkMs) return;
+        if (!byPid[pid]) byPid[pid] = { wagered:0, won:0, lost:0 };
+        var risk = parseFloat(t.riskAmount||t.risk_amount)||0;
+        var prof = parseFloat(t.potentialProfit||t.potential_profit)||0;
+        var st = String(t.status||'').toLowerCase();
+        if (st==='canceled'||st==='voided'||st==='deleted'||st==='push'||st==='pushed') return;
+        byPid[pid].wagered += risk;
+        if (st==='won') byPid[pid].won += prof;
+        if (st==='lost') byPid[pid].lost += risk;
+      });
+      players.forEach(function(p) {
+        var d = byPid[String(p.playerId)] || { wagered:0, won:0, lost:0 };
+        if (p.weekWagered == null) p.weekWagered = Math.round(d.wagered*100)/100;
+        if (p.weekWon == null) p.weekWon = Math.round(d.won*100)/100;
+        if (p.weekLost == null) p.weekLost = Math.round(d.lost*100)/100;
+        if (p.weekNet == null) p.weekNet = Math.round((d.won - d.lost)*100)/100;
+      });
+    }
+
+    var html = '<div style="padding:12px 16px 4px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px;flex-wrap:wrap">' +
         '<div>' +
-          '<div style="font-size:0.95rem;font-weight:900">Settlement Preview</div>' +
-          '<div style="font-size:0.6rem;color:#555;margin-top:2px">📅 '+_currentISOWeek()+'</div>' +
+          '<div style="font-size:0.95rem;font-weight:900">Settlements</div>' +
+          '<div style="font-size:0.6rem;color:#555;margin-top:2px">'+_currentISOWeek()+' · live from DB</div>' +
         '</div>' +
         '<div style="display:flex;gap:8px;align-items:center">' +
-          '<span style="font-size:0.6rem;font-weight:700;padding:3px 8px;border-radius:10px;background:rgba(22,163,74,0.12);border:1px solid #16a34a;color:#86efac">💰 DB</span>' +
-          '<button onclick="createWeeklyRollover(false)" style="font-size:0.65rem;font-weight:800;padding:4px 10px;border-radius:10px;border:1px solid #2563eb;background:transparent;color:#60a5fa;cursor:pointer">Close Week</button>' +
+          '<span style="font-size:0.6rem;font-weight:700;padding:3px 8px;border-radius:10px;background:rgba(22,163,74,0.12);border:1px solid #16a34a;color:#86efac">DB</span>' +
+          '<button onclick="createWeeklyRollover(false)" style="font-size:0.7rem;font-weight:900;padding:8px 14px;border-radius:10px;border:none;background:var(--green,#00c853);color:#000;cursor:pointer">Settle All</button>' +
         '</div>' +
       '</div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;margin-bottom:14px;background:rgba(255,255,255,0.02);border-radius:10px;padding:10px">' +
-        '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Players Owe</div><div style="font-size:0.95rem;font-weight:900;color:var(--green,#00ff88)">$'+totals.playersOwe.toFixed(2)+'</div></div>' +
-        '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Host Owes</div><div style="font-size:0.95rem;font-weight:900;color:var(--red,#ff3d57)">$'+totals.hostOwes.toFixed(2)+'</div></div>' +
-        '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Net</div><div style="font-size:0.95rem;font-weight:900;color:'+(totals.net>=0?'var(--green,#00ff88)':'var(--red,#ff3d57)')+'">'+(totals.net>=0?'+':'−')+'$'+Math.abs(totals.net).toFixed(2)+'</div></div>' +
-      '</div>';
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;margin-bottom:14px;background:var(--card,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:14px;padding:12px">' +
+        '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Players Owe</div><div style="font-size:0.95rem;font-weight:900;color:var(--red,#ff3d57)">$'+playersOwe.toFixed(2)+'</div></div>' +
+        '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Host Owes</div><div style="font-size:0.95rem;font-weight:900;color:var(--green,#00ff88)">$'+hostOwesTot.toFixed(2)+'</div></div>' +
+        '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Net</div><div style="font-size:0.95rem;font-weight:900;color:'+(netTot>=0?'var(--green,#00ff88)':'var(--red,#ff3d57)')+'">'+(netTot>=0?'+':'−')+'$'+Math.abs(netTot).toFixed(2)+'</div></div>' +
+      '</div>' +
+      '<div style="font-size:0.85rem;font-weight:900;margin-bottom:10px">Player Settlements</div>';
+
+    if (!players.length) {
+      html += '<div style="padding:24px;text-align:center;color:#666;font-size:0.78rem;background:var(--card,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:14px;margin-bottom:12px">No players yet</div>';
+    }
 
     players.forEach(function(p) {
-      var isOwes = p.owesHost > 0;
-      var color  = isOwes ? 'var(--red,#ff3d57)' : (p.hostOwes>0 ? 'var(--green,#00ff88)' : '#666');
-      var amtTxt   = isOwes ? '−$'+p.owesHost.toFixed(2)+' owes' : (p.hostOwes>0 ? '+$'+p.hostOwes.toFixed(2)+' owed' : 'Even');
-      var canSettle = (p.owesHost > 0 || p.hostOwes > 0);
-      var settleBtn = canSettle
-        ? '<button onclick="openSettlePlayerModal('+JSON.stringify(p.playerId)+','+JSON.stringify(p.username)+','+p.owesHost+','+p.hostOwes+')"'+
-          ' style="font-size:0.65rem;font-weight:800;padding:4px 10px;border-radius:10px;border:1px solid '+color+';background:transparent;color:'+color+';cursor:pointer;white-space:nowrap">🤝 Settle</button>'
-        : '';
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--border,#2a2a2a)">' +
-        '<div style="min-width:0;flex:1">' +
-          '<div style="font-size:0.82rem;font-weight:700">'+p.username+'</div>' +
-          (p.openRisk>0 ? '<div style="font-size:0.62rem;color:#666;margin-top:2px">🔒 $'+p.openRisk.toFixed(2)+' open risk</div>' : '') +
+      var owesHost = parseFloat(p.owesHost)||0;
+      var hostOwes = parseFloat(p.hostOwes)||0;
+      var bal = p.currentBalance != null ? parseFloat(p.currentBalance) : (p.balance != null ? parseFloat(p.balance) : null);
+      var startBal = p.startingBalance != null ? parseFloat(p.startingBalance)
+                   : (p.balance_start != null ? parseFloat(p.balance_start) : null);
+      var weekWagered = parseFloat(p.weekWagered)||0;
+      var weekWon = parseFloat(p.weekWon)||0;
+      var weekLost = parseFloat(p.weekLost)||0;
+      var weekNet = p.weekNet != null ? parseFloat(p.weekNet) : parseFloat(p.settledNet)||0;
+      var isSettled = (owesHost < 0.005 && hostOwes < 0.005);
+      var isOwes = owesHost > 0.005;
+      var color  = isOwes ? 'var(--red,#ff3d57)' : (hostOwes>0.005 ? 'var(--green,#00ff88)' : '#888');
+      var amtTxt = isOwes ? 'owes host '+_money(owesHost)
+                 : (hostOwes>0.005 ? 'host owes '+_money(hostOwes) : 'Settled');
+      var settleBtn = isSettled
+        ? '<span style="font-size:0.65rem;font-weight:800;padding:4px 10px;border-radius:10px;background:rgba(255,255,255,0.04);color:#888">Settled</span>'
+        : '<button onclick="openSettlePlayerModal('+JSON.stringify(String(p.playerId))+','+JSON.stringify(String(p.username||p.playerId))+','+owesHost+','+hostOwes+')"'+
+          ' style="font-size:0.7rem;font-weight:900;padding:8px 14px;border-radius:10px;border:none;background:'+color+';color:#000;cursor:pointer;white-space:nowrap">Settle</button>';
+      var netColor = weekNet>=0 ? 'var(--green,#00ff88)' : 'var(--red,#ff3d57)';
+      html += '<div data-db-settle-card="'+_escAttr(p.playerId)+'" style="background:var(--card,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:14px;padding:14px;margin-bottom:10px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px">' +
+          '<div style="min-width:0;flex:1">' +
+            '<div style="font-size:0.92rem;font-weight:800">'+(p.username||p.playerId)+'</div>' +
+            '<div style="font-size:0.62rem;color:#666;margin-top:2px">Balance: <span style="color:#fff;font-weight:800">'+(bal!=null?_money(bal):'—')+'</span>' +
+              (p.openRisk>0 ? ' · open risk '+_money(p.openRisk) : '') +
+            '</div>' +
+          '</div>' +
+          '<div style="text-align:right;flex-shrink:0">' +
+            '<div style="font-size:0.88rem;font-weight:900;color:'+color+'">'+amtTxt+'</div>' +
+            '<div style="margin-top:8px">'+settleBtn+'</div>' +
+          '</div>' +
         '</div>' +
-        '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">' +
-          '<div style="font-size:0.88rem;font-weight:900;color:'+color+'">'+amtTxt+'</div>' +
-          settleBtn +
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;text-align:center;background:rgba(255,255,255,0.02);border-radius:10px;padding:8px;margin-bottom:10px">' +
+          '<div><div style="font-size:0.5rem;color:#666;text-transform:uppercase">Wagered</div><div style="font-size:0.72rem;font-weight:800">$'+weekWagered.toFixed(2)+'</div></div>' +
+          '<div><div style="font-size:0.5rem;color:#666;text-transform:uppercase">Won</div><div style="font-size:0.72rem;font-weight:800;color:var(--green,#00ff88)">$'+weekWon.toFixed(2)+'</div></div>' +
+          '<div><div style="font-size:0.5rem;color:#666;text-transform:uppercase">Lost</div><div style="font-size:0.72rem;font-weight:800;color:var(--red,#ff3d57)">$'+weekLost.toFixed(2)+'</div></div>' +
+          '<div><div style="font-size:0.5rem;color:#666;text-transform:uppercase">Net</div><div style="font-size:0.72rem;font-weight:800;color:'+netColor+'">'+(weekNet>=0?'+':'−')+'$'+Math.abs(weekNet).toFixed(2)+'</div></div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px">' +
+          '<label style="font-size:0.58rem;color:#666;text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap">Starting bal</label>' +
+          '<input type="number" step="0.01" min="0" value="'+(startBal!=null?startBal.toFixed(2):'')+'"' +
+            ' data-balance-start="'+_escAttr(p.playerId)+'"' +
+            ' onchange="savePlayerStartingBalance(this.getAttribute(\'data-balance-start\'), this.value)"' +
+            ' style="flex:1;background:#0a0a0a;border:1px solid var(--border,#2a2a2a);border-radius:8px;padding:7px 10px;color:#fff;font-size:0.82rem;font-weight:700;outline:none;font-family:monospace">' +
         '</div>' +
       '</div>';
     });
@@ -1298,18 +1392,22 @@ async function renderSettlementPreviewFromDb() {
     if (container) {
       container.innerHTML = html;
     } else {
-      // Insert before existing settlements if container not found
       var settEl = document.getElementById('settlements-section') || document.getElementById('settlement-section');
-      if (settEl) settEl.insertAdjacentHTML('afterbegin', html);
+      if (settEl) {
+        var wrap = document.createElement('div');
+        wrap.id = 'settlement-db-preview';
+        wrap.innerHTML = html;
+        settEl.insertBefore(wrap, settEl.firstChild);
+      }
     }
 
-    
     return data;
   } catch(e) {
     console.warn('[settlement preview] DB failed, keeping existing local UI:', e.message);
     return { ok:false, fallbackReason:e.message };
   }
 }
+window.savePlayerStartingBalance = savePlayerStartingBalance;
 
 async function runSettlementDbAudit() {
   
@@ -1391,22 +1489,30 @@ async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes) {
     var iKey = _buildIdempotencyKey(cid||'?', playerId, direction, week);
 
     try {
-      var resp = await fetch('/api/host/settle-player', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ clubId:cid, playerId, amount:amt, direction,
-          settlementWeek:week, note:noteEl.value||null, idempotencyKey:iKey })
-      });
+      var resp = await (typeof _pbFetch === 'function'
+        ? _pbFetch('/api/host/settle-player', {
+            method:'POST',
+            headers:{'Content-Type':'application/json','Idempotency-Key':iKey},
+            body:JSON.stringify({ clubId:cid, playerId:playerId, amount:amt, direction:direction,
+              settlementWeek:week, note:noteEl.value||null, idempotencyKey:iKey })
+          })
+        : fetch('/api/host/settle-player', {
+            method:'POST', headers:{'Content-Type':'application/json','Idempotency-Key':iKey},
+            body:JSON.stringify({ clubId:cid, playerId:playerId, amount:amt, direction:direction,
+              settlementWeek:week, note:noteEl.value||null, idempotencyKey:iKey })
+          }));
       var data = await resp.json();
       if (!data.ok) throw new Error(data.error || JSON.stringify(data.errors));
       ov.remove();
-      // Refresh DB views
+      // Refresh DB views — row shows settled; balance resets toward balance_start
       try { await renderSettlementPreviewFromDb(); } catch(_e){}
+      try { await loadWeeklyHistory(); } catch(_e){}
       try { await loadHostDashboardFromDb('post_settlement'); } catch(_e){}
-      if (typeof showToastHost === 'function') showToastHost('✅ Settlement recorded: $'+amt.toFixed(2));
+      if (typeof showToastHost === 'function') showToastHost('Settlement recorded: $'+amt.toFixed(2));
       
     } catch(e) {
       btn.textContent = 'Confirm Settlement'; btn.disabled = false;
-      if (typeof showToastHost === 'function') showToastHost('❌ Settlement failed: '+e.message);
+      if (typeof showToastHost === 'function') showToastHost('Settlement failed: '+e.message);
       console.error('[settlement execution] error:', e.message);
     }
   });
@@ -1443,6 +1549,8 @@ async function createWeeklyRollover(confirm) {
   var week = _currentISOWeek();
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
   var cid  = club.id || club.clubId || null;
+  var weekStart = _buildSettlementWeek(); // Sunday YYYY-MM-DD
+  var iKey = 'rollover_'+(cid||'unknown')+'_'+weekStart;
 
   if (!confirm) {
     // Show confirm modal
@@ -1451,14 +1559,13 @@ async function createWeeklyRollover(confirm) {
     ov.id = '_rollover_modal';
     ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;padding:20px';
     ov.innerHTML = '<div style="background:#111;width:100%;max-width:400px;border-radius:16px;padding:24px">'+
-      '<div style="font-size:1rem;font-weight:900;margin-bottom:8px">📅 Close Week '+week+'</div>'+
+      '<div style="font-size:1rem;font-weight:900;margin-bottom:8px">Settle All — '+week+'</div>'+
       '<div style="font-size:0.8rem;color:#888;margin-bottom:20px">'+
-        'This snapshots all current settlement balances and starts a new settlement week.\n\n'+
-        'Active bets are preserved. Historical data remains forever.'+
+        'This settles every player with an outstanding balance, snapshots the week, and starts a new settlement period. Active bets are preserved.'+
       '</div>'+
       '<div style="display:flex;gap:10px">'+
         '<button onclick="document.getElementById(\'_rollover_modal\').remove()" style="flex:1;height:44px;background:#1a1a1a;border:1px solid #333;border-radius:10px;color:#888;font-weight:700;cursor:pointer">Cancel</button>'+
-        '<button onclick="createWeeklyRollover(true)" style="flex:2;height:44px;background:#2563eb;border:none;border-radius:10px;color:#fff;font-size:0.9rem;font-weight:900;cursor:pointer">Confirm Close Week</button>'+
+        '<button onclick="createWeeklyRollover(true)" style="flex:2;height:44px;background:var(--green,#00c853);border:none;border-radius:10px;color:#000;font-size:0.9rem;font-weight:900;cursor:pointer">Confirm Settle All</button>'+
       '</div>'+
     '</div>';
     document.body.appendChild(ov);
@@ -1468,21 +1575,30 @@ async function createWeeklyRollover(confirm) {
 
   var modal = document.getElementById('_rollover_modal'); if (modal) modal.remove();
   try {
-    var resp = await fetch('/api/host/weekly-rollover', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ clubId:cid, rolloverWeek:week, performedBy:'host' })
-    });
+    var body = { clubId:cid, rolloverWeek:week, performedBy:'host', idempotencyKey:iKey, weekStart:weekStart };
+    var resp = await (typeof _pbFetch === 'function'
+      ? _pbFetch('/api/host/weekly-rollover', {
+          method:'POST',
+          headers:{'Content-Type':'application/json','Idempotency-Key':iKey},
+          body: JSON.stringify(body)
+        })
+      : fetch('/api/host/weekly-rollover', {
+          method:'POST',
+          headers:{'Content-Type':'application/json','Idempotency-Key':iKey},
+          body: JSON.stringify(body)
+        }));
     var data = await resp.json();
     if (!data.ok) throw new Error(data.error || JSON.stringify(data.errors));
     if (typeof showToastHost === 'function')
-      showToastHost('✅ Week '+week+' closed. '+data.playersSnapshotted+' players snapshotted.');
+      showToastHost('Week '+week+' settled. '+(data.playersSnapshotted||0)+' players snapshotted.');
     // Refresh views
     try { await renderSettlementPreviewFromDb(); } catch(_e){}
+    try { await loadWeeklyHistory(); } catch(_e){}
     try { await loadHostDashboardFromDb('post_rollover'); } catch(_e){}
     
     return data;
   } catch(e) {
-    if (typeof showToastHost === 'function') showToastHost('❌ Rollover failed: '+e.message);
+    if (typeof showToastHost === 'function') showToastHost('Settle All failed: '+e.message);
     console.error('[weekly rollover] error:', e.message);
   }
 }
@@ -1517,7 +1633,7 @@ async function loadWeeklyHistory(targetEl) {
   var cid  = club.id || club.clubId || null;
   try {
     var qs   = cid ? '?clubId='+encodeURIComponent(cid) : '';
-    var resp = await fetch('/api/host/rollover-history'+qs);
+    var resp = await (typeof _pbFetch === 'function' ? _pbFetch('/api/host/rollover-history'+qs) : fetch('/api/host/rollover-history'+qs));
     var data = await resp.json();
     if (!data.ok) throw new Error(data.error || 'failed');
     _renderWeekList(data.history||[], cid);
@@ -2684,6 +2800,7 @@ function setBN(el,tab){
       s.insertBefore(_hdDiv,s.firstChild);
     }
     loadHostDiamondCard();
+    // DB primary for Settle tab; localStorage fallback inside renderSettlements
     renderSettlements();
   } else {
     var s=document.getElementById('home-content');
@@ -4461,15 +4578,54 @@ function _exportBettorCSV() {
 function renderSettlements() {
   var el = document.getElementById('settlements-section');
   if (!el) return;
-  // Phase P: inject settlements panel container if not present
-  var phaseP = document.getElementById('phase-p-settlements');
-  if (!phaseP) {
-    phaseP = document.createElement('div');
-    phaseP.id = 'phase-p-settlements';
-    phaseP.style.cssText = 'margin-bottom:8px';
-    el.insertBefore(phaseP, el.firstChild);
+
+  // Preserve diamond card if present
+  var diamond = document.getElementById('host-diamond-card');
+  var diamondHtml = diamond ? diamond.outerHTML : '';
+
+  // Shell: DB preview + history + Phase P periods; local fallback fills if DB fails
+  el.innerHTML =
+    (diamondHtml || '<div id="host-diamond-card" style="padding:10px 8px 0"></div>') +
+    '<div id="settlement-db-preview"><div style="padding:24px;text-align:center;color:#555;font-size:0.78rem">Loading settlements from DB…</div></div>' +
+    '<div id="phase-p-settlements" style="margin:0 8px 8px"></div>' +
+    '<div id="_weekly_history_section" style="padding:0 16px 24px"></div>' +
+    '<div id="settlements-local-fallback" style="display:none"></div>';
+
+  if (typeof loadHostDiamondCard === 'function') {
+    try { loadHostDiamondCard(); } catch(_e){}
   }
-  _renderSettlementPeriods(phaseP);
+
+  var phaseP = document.getElementById('phase-p-settlements');
+  if (phaseP && typeof _renderSettlementPeriods === 'function') {
+    try { _renderSettlementPeriods(phaseP); } catch(_e){}
+  }
+
+  renderSettlementPreviewFromDb().then(function(data) {
+    if (data && data.ok) {
+      loadWeeklyHistory(document.getElementById('_weekly_history_section'));
+      return;
+    }
+    // DB failed — fall back to localStorage UI
+    _renderSettlementsFromLocalStorage();
+  }).catch(function() {
+    _renderSettlementsFromLocalStorage();
+  });
+}
+
+function _renderSettlementsFromLocalStorage() {
+  var el = document.getElementById('settlements-section');
+  if (!el) return;
+  var fallback = document.getElementById('settlements-local-fallback');
+  var previewEl = document.getElementById('settlement-db-preview');
+  if (previewEl) previewEl.innerHTML = '<div style="padding:8px 16px;font-size:0.65rem;color:#888">DB unavailable — showing local cache</div>';
+  // Build into a temp host then move into fallback or replace section body below diamond
+  var host = fallback || el;
+  if (fallback) fallback.style.display = 'block';
+  _paintLocalSettlementsUI(host);
+}
+
+function _paintLocalSettlementsUI(el) {
+  if (!el) return;
   checkWeeklySettlement();
   var all = loadSettlements();
   var preview = _currentWeekPreview(_settleWeekOffset);
