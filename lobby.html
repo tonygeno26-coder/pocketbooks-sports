@@ -1692,16 +1692,55 @@ async function loadMyClubs() {
     }
     if (userClubs.length && !activeClub) setActiveClub(userClubs[0]);
     updateClubsTilePreview();
-    // Show host-facing join-request count on Requests badge when applicable
+    // Show host-facing join-request count on Requests badge (API primary)
     try {
-      var jr = JSON.parse(localStorage.getItem('pb-join-requests')||'[]');
       var isHost = userClubs.some(function(c){
         var role = String(c.role||'').toLowerCase();
         return role==='host'||role==='owner'||role==='admin'||role==='full_admin';
       });
-      if (isHost && jr.length) {
-        var badge = document.getElementById('pending-badge');
-        if (badge) { badge.textContent = String(jr.length); badge.style.display = 'inline-block'; }
+      var badge = document.getElementById('pending-badge');
+      var paintBadge = function(n){
+        if (!badge) return;
+        if (n > 0) { badge.textContent = String(n); badge.style.display = 'inline-block'; }
+        else badge.style.display = 'none';
+      };
+      if (isHost && TOKEN) {
+        var hostClub = userClubs.find(function(c){
+          var role = String(c.role||'').toLowerCase();
+          return role==='host'||role==='owner'||role==='admin'||role==='full_admin';
+        });
+        var hid = hostClub && (hostClub.id || hostClub.clubId);
+        if (hid) {
+          fetch(API+'/api/club/pending-requests?clubId='+encodeURIComponent(hid), {
+            headers: { 'Authorization':'Bearer '+TOKEN, 'Content-Type':'application/json' }
+          }).then(function(r){ return r.json(); }).then(function(data){
+            var arr = (data && data.requests) || [];
+            paintBadge(arr.length);
+            if (arr.length) {
+              try {
+                localStorage.setItem('pb-join-requests', JSON.stringify(arr.map(function(r){
+                  return {
+                    playerId: r.playerId || r.actor_id || r.player_id,
+                    playerName: r.playerName || r.username || r.name || 'Player',
+                    clubId: hid,
+                    clubName: hostClub.name || '',
+                    membershipId: r.membershipId || r.id,
+                    requestedAt: r.joined_at || r.requestedAt
+                  };
+                })));
+              } catch(_s){}
+            }
+          }).catch(function(){
+            var jr = JSON.parse(localStorage.getItem('pb-join-requests')||'[]');
+            paintBadge(jr.length);
+          });
+        } else {
+          var jr0 = JSON.parse(localStorage.getItem('pb-join-requests')||'[]');
+          paintBadge(jr0.length);
+        }
+      } else {
+        var jr = JSON.parse(localStorage.getItem('pb-join-requests')||'[]');
+        if (isHost) paintBadge(jr.length);
       }
     } catch(_jr){}
     // Player notification: club join approved
@@ -1955,12 +1994,19 @@ async function requestJoin(clubId, code, name) {
   if (clubsLockedGuard()) return;
   if (!TOKEN) { showToast('Sign in to join clubs'); return; }
   try {
-    const r = await apiCall('POST', '/api/club/join-request', {code: code, clubId: clubId});
+    var r = await apiCall('POST', '/api/club/request-join', {code: code, clubId: clubId});
+    if (!r || r.error === 'not_found' || (r.error && /Cannot POST|404/i.test(String(r.error||'')))) {
+      r = await apiCall('POST', '/api/club/join-request', {code: code, clubId: clubId});
+    }
     if (r && (r.error === 'club_locked' || r.error === 'clubs_locked')) {
       showToast(r.message || 'This club is not accepting new members right now');
       return;
     }
-    if (r.error && !r.status) { showToast('❌ ' + (r.message || r.error)); return; }
+    // Already pending/member: still show pending UI if status is pending.
+    if (r && r.error && String(r.status||'').toLowerCase() !== 'pending' && !r.ok && !r.success) {
+      showToast('❌ ' + (r.message || r.error));
+      return;
+    }
     const newClub = normalizeMembership({id:clubId, code, name, role:'player', status:'pending', balance:0}, 'player');
     userClubs = dedupClubs([newClub, ...userClubs]);
     localStorage.setItem('pb-clubs', JSON.stringify(userClubs));
@@ -2105,10 +2151,19 @@ function renderLobbyHostRequests(){
   };
   if (TOKEN && hosted.length) {
     var clubId = hosted[0].id || hosted[0].clubId;
-    fetch(API+'/api/clubs/'+encodeURIComponent(clubId)+'/requests', {
+    var tryPending = fetch(API+'/api/club/pending-requests?clubId='+encodeURIComponent(clubId), {
       headers: { 'Authorization':'Bearer '+TOKEN, 'Content-Type':'application/json' }
     }).then(function(r){ return r.json(); }).then(function(data){
-      var arr = Array.isArray(data) ? data : (data && data.requests) || [];
+      return Array.isArray(data) ? data : (data && data.requests) || [];
+    }).catch(function(){ return []; });
+    tryPending.then(function(arr){
+      if (arr && arr.length) return arr;
+      return fetch(API+'/api/clubs/'+encodeURIComponent(clubId)+'/requests', {
+        headers: { 'Authorization':'Bearer '+TOKEN, 'Content-Type':'application/json' }
+      }).then(function(r){ return r.json(); }).then(function(data){
+        return Array.isArray(data) ? data : (data && data.requests) || [];
+      }).catch(function(){ return []; });
+    }).then(function(arr){
       if (arr.length) {
         finish(arr.map(function(r){
           return {
@@ -2116,7 +2171,7 @@ function renderLobbyHostRequests(){
             playerName: r.name || r.username || r.playerName || 'Player',
             clubId: clubId,
             clubName: hosted[0].name || '',
-            membershipId: r.id,
+            membershipId: r.id || r.membershipId,
             requestedAt: r.joined_at || r.requestedAt
           };
         }));

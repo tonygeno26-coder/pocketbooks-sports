@@ -3143,16 +3143,20 @@ async function loadRequests(){
   } catch(_e){}
   var reqs = [];
   if (clubId) {
+    // Primary: GET /api/club/pending-requests
     try {
-      var data = await apiCall('GET', '/api/clubs/'+clubId+'/requests');
-      if (Array.isArray(data)) reqs = data;
-      else if (data && Array.isArray(data.requests)) reqs = data.requests;
-    } catch(_e1) {}
+      var pending = await apiCall('GET', '/api/club/pending-requests?clubId='+encodeURIComponent(clubId));
+      if (pending && Array.isArray(pending.requests)) reqs = pending.requests;
+      else if (Array.isArray(pending)) reqs = pending;
+    } catch(_ep) {}
     if (!reqs.length) {
       try {
-        var mem = await apiCall('GET', '/api/club/members', null);
-        // apiCall with GET may need query — try path with query string
-      } catch(_e2) {}
+        var data = await apiCall('GET', '/api/clubs/'+clubId+'/requests');
+        if (Array.isArray(data)) reqs = data;
+        else if (data && Array.isArray(data.requests)) reqs = data.requests;
+      } catch(_e1) {}
+    }
+    if (!reqs.length) {
       try {
         var r = await fetch(API+'/api/club/members?clubId='+encodeURIComponent(clubId), {
           headers: Object.assign({ 'Content-Type':'application/json' }, TOKEN?{'Authorization':'Bearer '+TOKEN}:{})

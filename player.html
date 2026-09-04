@@ -5039,15 +5039,24 @@ async function searchClub() {
 async function requestJoin(clubId, code) {
   if (!TOKEN) { showToast('Sign in to join a club'); return; }
   try {
-    const r = await (await fetch('https://pocketbooks-sports-backend-production.up.railway.app/api/club/join-request', {
+    var _joinUrl = 'https://pocketbooks-sports-backend-production.up.railway.app/api/club/request-join';
+    var r = await (await fetch(_joinUrl, {
       method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
       body: JSON.stringify({code: code, clubId: clubId})
     })).json();
+    if (r && (r.error === 'not_found' || /Cannot POST|404/i.test(String(r.error||'')))) {
+      r = await (await fetch('https://pocketbooks-sports-backend-production.up.railway.app/api/club/join-request', {
+        method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
+        body: JSON.stringify({code: code, clubId: clubId})
+      })).json();
+    }
     if (r.error === 'club_locked' || r.error === 'clubs_locked') {
       showToast(r.message || 'This club is not accepting new members right now');
       return;
     }
-    if (r.error) { showToast('❌ '+(r.message||r.error)); return; }
+    if (r.error && String(r.status||'').toLowerCase() !== 'pending' && !r.ok && !r.success) {
+      showToast('❌ '+(r.message||r.error)); return;
+    }
     document.getElementById('club-search-result').innerHTML = '<div style="background:rgba(0,255,136,0.1);border:1px solid var(--green);border-radius:12px;padding:16px;text-align:center;margin-top:10px">' +
       '<div style="font-size:1.1rem;margin-bottom:6px">⏳</div>' +
       '<div style="font-weight:800;color:var(--green);margin-bottom:4px">Request Sent!</div>' +
