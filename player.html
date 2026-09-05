@@ -348,6 +348,11 @@ body.theme-light .stake-input{background:#fff;border:1px solid #d8dee8;color:#11
 .dkslip-ou{display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:1.7rem;font-weight:900;line-height:1;letter-spacing:-0.04em;font-family:Impact,'Arial Black','Helvetica Neue',sans-serif;background:none;border:none;border-radius:0;padding:0;margin:0;-webkit-text-stroke:1.4px rgba(0,0,0,0.28);paint-order:stroke fill;user-select:none;pointer-events:none}
 .dkslip-ou-o{color:#00e676;-webkit-text-stroke-color:rgba(0,100,40,0.45);text-shadow:0 2px 4px rgba(0,0,0,0.28),0 0 10px rgba(0,230,118,0.45)}
 .dkslip-ou-u{color:#ff3b30;-webkit-text-stroke-color:rgba(120,10,10,0.4);text-shadow:0 2px 4px rgba(0,0,0,0.28),0 0 10px rgba(255,59,48,0.4)}
+.dkslip-draw{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;gap:1px;background:none;border:none;border-radius:0;padding:0;margin:0;user-select:none;pointer-events:none;line-height:1}
+.dkslip-draw-x{font-size:1.15rem;font-weight:900;letter-spacing:-0.04em;font-family:Impact,'Arial Black','Helvetica Neue',sans-serif;color:#c8cdd6;-webkit-text-stroke:1px rgba(0,0,0,0.25);paint-order:stroke fill;text-shadow:0 2px 4px rgba(0,0,0,0.28)}
+.dkslip-draw-label{font-size:0.42rem;font-weight:800;letter-spacing:0.08em;color:#9aa3b2;text-transform:uppercase}
+.dkslip-player-photo,.dkslip-leg-logo img.dkslip-player-photo{width:100%;height:100%;object-fit:contain;display:block;border-radius:0;background:transparent;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35))}
+.dkslip-leg-logo [data-player-photo]{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
 .dkslip-leg-info{flex:1;min-width:0}
 .dkslip-leg-matchup{font-size:0.6rem;color:#999;margin-bottom:2px}
 .dkslip-leg-pick{font-size:0.85rem;font-weight:900;color:#111;line-height:1.2;margin-bottom:2px}
@@ -697,6 +702,8 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
   .dkslip-leg{gap:8px;padding:10px 12px}
   .dkslip-leg-logo{width:32px;height:32px}
   .dkslip-ou{font-size:1.5rem}
+  .dkslip-draw-x{font-size:1rem}
+  .dkslip-draw-label{font-size:0.38rem}
   .dkslip-leg-pick{font-size:0.82rem}
   .qamts{grid-template-columns:repeat(3,1fr);gap:8px}
   .dkslip-quick,.single-quick{flex-wrap:wrap}
@@ -992,6 +999,10 @@ body{
 .dkslip-ou{background:none!important;border:none!important;border-radius:0!important;box-shadow:none!important}
 .dkslip-ou-o{color:#00e676!important}
 .dkslip-ou-u{color:#ff3b30!important}
+.dkslip-draw{background:none!important;border:none!important;border-radius:0!important;box-shadow:none!important}
+.dkslip-draw-x{color:#c8cdd6!important}
+.dkslip-draw-label{color:#9aa3b2!important}
+.dkslip-player-photo{object-fit:contain!important;border-radius:0!important;background:transparent!important;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35))!important}
 .dkslip-leg-matchup{color:#999!important}
 .dkslip-leg-mkt{color:#0064c8!important}
 .dkslip-leg-odds{color:#111!important}
@@ -2319,22 +2330,35 @@ async function api(method,path,body,_retried){
   return data;
 }
 
-// Team logos via shared team-logos.js (soccer ESPN IDs + tennis headshots)
+// Team logos via shared team-logos.js (soccer ESPN IDs + tennis/MMA headshots)
 function _pbAvatarSportKey(sport) {
   var s = String(sport || (typeof _currentSport !== 'undefined' ? _currentSport : '') || '').toLowerCase();
   if (s.indexOf('tennis') === 0 || s === 'atp' || s === 'wta') return 'tennis';
+  if (s === 'mma' || s === 'mma_mixed_martial_arts' || s.indexOf('mma') === 0) return 'mma';
   if (s.indexOf('soccer') === 0 || s === 'epl' || s === 'mls' || s === 'ucl' ||
       s === 'laliga' || s === 'seriea' || s === 'bundesliga' || s === 'ligue1' ||
       s === 'worldcup' || s === 'euros') return 'soccer';
   return s;
 }
 
+function _pbPlayerHeadshotImg(name, sport, size) {
+  size = size || 52;
+  if (typeof getPlayerPhotoImg === 'function') {
+    return getPlayerPhotoImg(name, sport, size, { borderRadius: '10px' });
+  }
+  if (sport === 'tennis' && typeof getTennisPlayerPhotoImg === 'function') {
+    return getTennisPlayerPhotoImg(name, size);
+  }
+  return '';
+}
+
 function teamAvatar(name, sport, opts) {
   sport = sport || (typeof _currentSport !== 'undefined' ? _currentSport : '') || '';
   opts = opts || {};
   var kind = _pbAvatarSportKey(sport);
-  if (kind === 'tennis' && typeof getTennisPlayerPhotoImg === 'function') {
-    return '<div class="mc-jersey mc-jersey-headshot">' + getTennisPlayerPhotoImg(name, 52) + '</div>';
+  if ((kind === 'tennis' || kind === 'mma')) {
+    var shot = _pbPlayerHeadshotImg(name, kind, 52);
+    if (shot) return '<div class="mc-jersey mc-jersey-headshot">' + shot + '</div>';
   }
   if (kind === 'soccer' && typeof getSoccerTeamLogoImg === 'function') {
     return '<div class="mc-jersey">' + getSoccerTeamLogoImg(name, 52) + '</div>';
@@ -2354,8 +2378,13 @@ function teamAvatar(name, sport, opts) {
 }
 
 function _pbHydrateLobbyAvatars(root) {
+  var scope = root || document.getElementById('games-list') || document;
   if (typeof hydrateEspnLobbyMedia === 'function') {
-    hydrateEspnLobbyMedia(root || document.getElementById('games-list') || document).catch(function(){});
+    hydrateEspnLobbyMedia(scope).catch(function(){});
+  }
+  if (typeof hydratePlayerPhotos === 'function') {
+    var sportHint = (typeof _currentSport !== 'undefined' ? _currentSport : '') || '';
+    hydratePlayerPhotos(scope, sportHint).catch(function(){});
   }
 }
 
@@ -3194,6 +3223,12 @@ function _pbRenderGameCardHtml(g) {
     }
     var awN = aw.split(' ').slice(-1)[0] || aw, hwN = hw.split(' ').slice(-1)[0] || hw;
     var awC = aw.split(' ').slice(0, -1).join(' '), hwC = hw.split(' ').slice(0, -1).join(' ');
+    var sportRouteEarly = _ODDS_ROUTE_KEY[String((g.sport || '')).toLowerCase()] || String((g.sport || '')).toLowerCase();
+    var isMmaCard = sportRouteEarly === 'mma' || _pbAvatarSportKey(g.sport || '') === 'mma';
+    // Fighters: keep given name / family name split; show promotion in header.
+    if (isMmaCard) {
+      // no-op — awC/awN already first/last; league shown below
+    }
     var awSp = (Array.isArray(g.spreads) ? g.spreads : []).find(function(s){ return s && s.team === aw; });
     var hwSp = (Array.isArray(g.spreads) ? g.spreads : []).find(function(s){ return s && s.team === hw; });
     var ov = (Array.isArray(g.totals) ? g.totals : []).find(function(t){ return t && t.name === 'Over'; });
@@ -3203,6 +3238,8 @@ function _pbRenderGameCardHtml(g) {
     var timeRaw = g.time || g.commence_time || null;
     var time = timeRaw ? new Date(timeRaw).toLocaleString('en-US', { weekday:'short', hour:'2-digit', minute:'2-digit' }) : 'TBD';
     var sp = (g.sport ? g.sport.toUpperCase() : null) || 'MLB';
+    var leagueLabel = (g.league || g.promotion || g.sport_title || '').trim();
+    var headerSport = (isMmaCard && leagueLabel) ? leagueLabel : sp;
     var icon = _PB_GAME_ICONS[sp] || '🏅';
     var isLiveMarket = _pbMarketIsLive(g);
     var split = _findSplitForGame(g);
@@ -3221,7 +3258,7 @@ function _pbRenderGameCardHtml(g) {
     var safeHome = hw.replace(/"/g, '');
     var safeAway = aw.replace(/"/g, '');
     return '<div class="market-card" data-game-id="' + safeGameId + '" data-home="' + safeHome + '" data-away="' + safeAway + '" style="margin-bottom:14px">' +
-      '<div class="mc-header"><span style="font-size:0.9rem">' + icon + '</span><span class="mc-sport">' + sp + '</span>' +
+      '<div class="mc-header"><span style="font-size:0.9rem">' + icon + '</span><span class="mc-sport">' + headerSport + '</span>' +
       (isLiveMarket ? _pbLiveBadgeHtml() : '') +
       '</div>' +
       liveScoreHtml +
@@ -3427,8 +3464,9 @@ function _pbSpreadMarketLabel(sport) {
 function _pbLobbyLogoImg(name, sport, size) {
   size = size || 36;
   var kind = _pbAvatarSportKey(sport);
-  if (kind === 'tennis' && typeof getTennisPlayerPhotoImg === 'function') {
-    return getTennisPlayerPhotoImg(name, size);
+  if (kind === 'tennis' || kind === 'mma') {
+    var shot = _pbPlayerHeadshotImg(name, kind, size);
+    if (shot) return shot;
   }
   if (kind === 'soccer' && typeof getSoccerTeamLogoImg === 'function') {
     return getSoccerTeamLogoImg(name, size);
@@ -4157,6 +4195,38 @@ function _pbPropCellId(p, gameId) {
   return 'prop-' + gameId + '-' + String(p.playerName).replace(/\s+/g, '-') + '-' + pt + '-' + p.side + '-' + p.line;
 }
 
+/** Resolve shared player-photo metadata for prop cells / bet-slip presentation. */
+function _pbResolvePropPhotoMeta(playerName, team, sport) {
+  sport = typeof _pbNormalizePropSport === 'function' ? _pbNormalizePropSport(sport) : String(sport || 'mlb').toLowerCase();
+  var name = String(playerName || '').trim();
+  if (!name) return null;
+  var cacheKey = typeof _pbEspnCacheKey === 'function' ? _pbEspnCacheKey(name, sport, team) : (name + '|' + sport);
+  var cached = (typeof _espnPlayerCache !== 'undefined' && _espnPlayerCache)
+    ? (_espnPlayerCache[cacheKey] || _espnPlayerCache[_pbEspnCacheKey(name, sport)])
+    : null;
+  if ((!cached || !cached.headshotUrl) && typeof getVerifiedPlayerId === 'function') {
+    var vid = getVerifiedPlayerId(name, sport);
+    if (vid) {
+      cached = {
+        id: String(vid),
+        headshotUrl: (typeof _pbEspnHeadshotUrl === 'function')
+          ? _pbEspnHeadshotUrl(vid, sport)
+          : ((typeof getPlayerHeadshotUrl === 'function') ? getPlayerHeadshotUrl(name, sport, vid) : ''),
+        verified: true
+      };
+      if (typeof _espnPlayerCache !== 'undefined' && _espnPlayerCache) {
+        _espnPlayerCache[cacheKey] = cached;
+        _espnPlayerCache[_pbEspnCacheKey(name, sport)] = cached;
+      }
+    }
+  }
+  if ((!cached || !cached.headshotUrl) && typeof getPlayerHeadshotUrl === 'function') {
+    var url = getPlayerHeadshotUrl(name, sport);
+    if (url) cached = { id: (cached && cached.id) || '', headshotUrl: url };
+  }
+  return (cached && cached.headshotUrl) ? cached : (cached || null);
+}
+
 function _pbRenderPropOddsBtn(p, gameId, gameLabel, sport, sideLabel, lineLabel) {
   if (!p) return '<div class="mc-prop-ou mc-prop-ou-empty">—</div>';
   var cellId = _pbPropCellId(p, gameId);
@@ -4165,12 +4235,26 @@ function _pbRenderPropOddsBtn(p, gameId, gameLabel, sport, sideLabel, lineLabel)
   var c = p.odds > 0 ? 'odds-pos' : 'odds-neg';
   var label = sideLabel || 'O';
   var lineTxt = lineLabel != null ? lineLabel : p.line;
+  var playerName = String(p.playerName || '').trim();
+  var playerTeam = String(p.team || '').trim();
+  var propType = String(p.propType || '').trim();
+  var side = String(p.side || '').trim().toLowerCase();
+  var photoMeta = _pbResolvePropPhotoMeta(playerName, playerTeam, p.sport || sport);
+  var escAttr = function(v) { return String(v || '').replace(/"/g, '&quot;'); };
   return '<div class="mc-prop-ou odds-cell' + (isSel ? ' selected' : '') + '" id="c-' + cellId + '" ' +
     'data-id="' + cellId + '" data-game-id="' + (p.gameId || gameId) + '" ' +
     'data-game="' + String(gameLabel || '').replace(/"/g, '') + '" ' +
     'data-time="' + (p.scheduledStart || '') + '" data-market="Prop" ' +
     'data-pick="' + String(p.pick || '').replace(/"/g, '') + '" data-odds="' + p.odds + '" ' +
-    'data-sport="' + (p.sport || sport) + '">' +
+    'data-sport="' + (p.sport || sport) + '" ' +
+    'data-player-prop="1" ' +
+    'data-player-name="' + escAttr(playerName) + '" ' +
+    'data-player-team="' + escAttr(playerTeam) + '" ' +
+    'data-prop-type="' + escAttr(propType) + '" ' +
+    'data-side="' + escAttr(side) + '" ' +
+    (photoMeta && photoMeta.id ? 'data-player-id="' + escAttr(photoMeta.id) + '" ' : '') +
+    (photoMeta && photoMeta.headshotUrl ? 'data-photo-url="' + escAttr(photoMeta.headshotUrl) + '" ' : '') +
+    '>' +
     '<span class="mc-prop-ou-label">' + label + '</span>' +
     (lineTxt !== '' && lineTxt != null ? '<span class="mc-prop-ou-line">' + lineTxt + '</span>' : '') +
     '<span class="odds-num ' + c + '">' + fmt + '</span>' +
@@ -6213,6 +6297,8 @@ function bsTeamAbbr(pickStr, game) {
 /** Resolve Over/Under for game totals from structured slip fields (side → market → pick). */
 function _slipTotalSide(b) {
   if (!b) return null;
+  // Player props can carry over/under side — never treat as game-total icons.
+  if (typeof _slipIsPlayerProp === 'function' && _slipIsPlayerProp(b)) return null;
   var side = String(b.side || '').toLowerCase().trim();
   if (side === 'over' || side === 'under') return side;
   var market = typeof _normalizeSlipMarket === 'function'
@@ -6226,10 +6312,148 @@ function _slipTotalSide(b) {
   return pickSide;
 }
 
-/** Logo-slot HTML: O/U block letters for totals; unboxed team logos otherwise. */
+/** Structured player-prop detection — never infer from matchup display text alone. */
+function _slipIsPlayerProp(b) {
+  if (!b) return false;
+  if (b.presentation && b.presentation.kind === 'player_prop') return true;
+  if (b.isPlayerProp === true || b.is_player_prop === true) return true;
+  if (b.playerName || (b.presentation && b.presentation.playerName)) {
+    var m0 = typeof _normalizeSlipMarket === 'function'
+      ? _normalizeSlipMarket(b.market)
+      : String(b.market || '').trim().toLowerCase();
+    if (m0 === 'prop' || m0 === 'player_prop' || m0.indexOf('prop') === 0) return true;
+  }
+  var market = typeof _normalizeSlipMarket === 'function'
+    ? _normalizeSlipMarket(b.market)
+    : String(b.market || '').trim().toLowerCase();
+  if (market === 'prop' || market === 'player_prop') return true;
+  var cellId = String(b.cellId || '');
+  if (/^prop-/i.test(cellId)) return true;
+  return false;
+}
+
+/** Soccer 1X2 Draw selection — never treat as a club crest or remove-button X. */
+function _slipIsDrawSelection(b) {
+  if (!b) return false;
+  if (typeof _slipIsPlayerProp === 'function' && _slipIsPlayerProp(b)) return false;
+  var side = String(b.side || '').toLowerCase().trim();
+  if (side === 'draw' || side === 'x' || side === 'tie') return true;
+  var pick = String(b.pick || '').trim();
+  if (/^draw\b/i.test(pick) || /^x\b/i.test(pick) || /^tie\b/i.test(pick)) return true;
+  var market = typeof _normalizeSlipMarket === 'function'
+    ? _normalizeSlipMarket(b.market)
+    : String(b.market || '').trim().toLowerCase();
+  var isMl = market === 'moneyline' || market === 'ml' || market === '1x2' || market === 'three way';
+  if (isMl && /^draw$/i.test(pick)) return true;
+  return false;
+}
+
+/** Read presentation-only metadata from an odds cell (does not alter wager identity). */
+function _slipPresentationFromCell(cell) {
+  if (!cell) return null;
+  var isProp = cell.getAttribute('data-player-prop') === '1'
+    || String(cell.getAttribute('data-market') || '').toLowerCase() === 'prop'
+    || /^prop-/i.test(String(cell.getAttribute('data-id') || cell.dataset && cell.dataset.id || ''));
+  if (!isProp) return null;
+  var playerName = cell.getAttribute('data-player-name') || '';
+  var playerTeam = cell.getAttribute('data-player-team') || '';
+  var propType = cell.getAttribute('data-prop-type') || '';
+  var side = cell.getAttribute('data-side') || '';
+  var playerId = cell.getAttribute('data-player-id') || '';
+  var photoUrl = cell.getAttribute('data-photo-url') || '';
+  if (!playerName && !playerId && !photoUrl) {
+    // Still mark as player prop so logo hierarchy prefers photo/fallback over O/U.
+    return { kind: 'player_prop', playerName: '', playerTeam: '', propType: propType, side: side };
+  }
+  return {
+    kind: 'player_prop',
+    playerName: playerName,
+    playerTeam: playerTeam,
+    propType: propType,
+    side: side,
+    playerId: playerId || undefined,
+    photoUrl: photoUrl || undefined
+  };
+}
+
+/** Player-prop photo HTML for the slip logo slot (shared photo helpers). */
+function _slipPlayerPropPhotoHtml(b, size) {
+  size = size || 36;
+  var pres = (b && b.presentation) || {};
+  var name = String(pres.playerName || b.playerName || '').trim();
+  var team = String(pres.playerTeam || b.playerTeam || '').trim();
+  var sport = (b && b.sport) || (typeof _currentSport !== 'undefined' ? _currentSport : null) || 'mlb';
+  var photoUrl = String(pres.photoUrl || '').trim();
+  var playerId = String(pres.playerId || '').trim();
+
+  if (!name && !photoUrl && !playerId) {
+    return '<span class="dkslip-player-fallback" aria-hidden="true">?</span>';
+  }
+
+  if (typeof getPlayerPhotoImg === 'function' && name) {
+    return getPlayerPhotoImg(name, sport, size, {
+      team: team,
+      className: 'dkslip-player-photo',
+      borderRadius: '0',
+      objectFit: 'contain',
+      photoUrl: photoUrl || undefined,
+      espnId: playerId || undefined,
+      playerId: playerId || undefined
+    });
+  }
+
+  if (photoUrl) {
+    var safeUrl = photoUrl.replace(/"/g, '&quot;');
+    var safeName = String(name || 'Player').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    return '<img class="dkslip-player-photo" src="' + safeUrl + '" alt="' + safeName +
+      '" width="' + size + '" height="' + size + '"' +
+      ' style="width:' + size + 'px;height:' + size + 'px;object-fit:contain;display:block;border-radius:0"' +
+      ' referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">';
+  }
+
+  if (typeof getPlayerHeadshotUrl === 'function' && name) {
+    var url = getPlayerHeadshotUrl(name, sport, playerId || undefined);
+    if (url) {
+      return '<img class="dkslip-player-photo" src="' + String(url).replace(/"/g, '&quot;') +
+        '" alt="' + String(name).replace(/"/g, '&quot;').replace(/</g, '&lt;') +
+        '" width="' + size + '" height="' + size + '"' +
+        ' style="width:' + size + 'px;height:' + size + 'px;object-fit:contain;display:block;border-radius:0"' +
+        ' referrerpolicy="no-referrer"' +
+        ' data-player-photo="' + String(name).replace(/"/g, '&quot;') + '"' +
+        ' data-player-name="' + String(name).replace(/"/g, '&quot;') + '"' +
+        ' data-player-sport="' + String(sport).replace(/"/g, '&quot;') + '"' +
+        ' data-player-team="' + String(team).replace(/"/g, '&quot;') + '"' +
+        ' data-logo-size="' + size + '" data-object-fit="contain" data-border-radius="0"' +
+        ' data-logo-class="dkslip-player-photo"' +
+        ' onerror="window.handlePlayerPhotoError&&window.handlePlayerPhotoError(this)">';
+    }
+  }
+
+  // Graceful initials fallback (never a broken image)
+  var initials = String(name || '?').trim().split(/\s+/).filter(Boolean)
+    .map(function(w){ return w.charAt(0); }).slice(0, 2).join('').toUpperCase() || '?';
+  return '<span class="dkslip-player-fallback" aria-hidden="true">' + initials + '</span>';
+}
+
+/**
+ * Logo-slot HTML hierarchy:
+ * 1) Player prop → player photo
+ * 2) Team-based → team logo
+ * 3) Game/event total → green O / red U
+ * 4) Soccer Draw → neutral X/DRAW
+ * 5) Unresolved → graceful abbr fallback
+ */
 function _slipLegLogoHtml(b, opts) {
   opts = opts || {};
   var extraStyle = opts.style ? ' style="' + String(opts.style).replace(/"/g, '') + '"' : '';
+
+  // 1) Player prop photo beats Over/Under icons even when side is over/under.
+  if (_slipIsPlayerProp(b)) {
+    return '<div class="dkslip-leg-logo"' + extraStyle + ' aria-hidden="true">' +
+      _slipPlayerPropPhotoHtml(b, 36) + '</div>';
+  }
+
+  // 3) Game totals O/U (checked before team extraction so "Over" is not a team)
   var ou = _slipTotalSide(b);
   if (ou === 'over') {
     return '<div class="dkslip-leg-logo"' + extraStyle + ' aria-hidden="true"><span class="dkslip-ou dkslip-ou-o">O</span></div>';
@@ -6237,6 +6461,14 @@ function _slipLegLogoHtml(b, opts) {
   if (ou === 'under') {
     return '<div class="dkslip-leg-logo"' + extraStyle + ' aria-hidden="true"><span class="dkslip-ou dkslip-ou-u">U</span></div>';
   }
+
+  // 4) Soccer Draw
+  if (_slipIsDrawSelection(b)) {
+    return '<div class="dkslip-leg-logo"' + extraStyle + ' aria-hidden="true" title="Draw">' +
+      '<span class="dkslip-draw"><span class="dkslip-draw-x">X</span><span class="dkslip-draw-label">DRAW</span></span></div>';
+  }
+
+  // 2) Team logo / 5) abbr fallback
   var pick = (b && b.pick) || '';
   var game = (b && b.game) || '';
   var legSport = (b && b.sport) || (typeof _currentSport !== 'undefined' ? _currentSport : null) || 'mlb';
@@ -6247,6 +6479,16 @@ function _slipLegLogoHtml(b, opts) {
   var _logo = (typeof _pbLobbyLogoImg === 'function') ? _pbLobbyLogoImg(team || pick, legSport, 36) : '';
   if (_logo) return '<div class="dkslip-leg-logo"' + extraStyle + '>' + _logo + '</div>';
   return '<div class="dkslip-leg-logo"' + extraStyle + '>' + bsTeamAbbr(pick, game) + '</div>';
+}
+
+function _hydrateSlipPlayerPhotos(root) {
+  if (typeof hydratePlayerPhotos !== 'function') return;
+  var scope = root || document.getElementById('bs-legs-container') || document.getElementById('bs-confirm-panel');
+  if (!scope) return;
+  try {
+    var p = hydratePlayerPhotos(scope);
+    if (p && typeof p.then === 'function') p.catch(function(){});
+  } catch (_e) {}
 }
 
 function bsValidate() {
@@ -6646,6 +6888,7 @@ function bsRenderLegs() {
 
   el.innerHTML = warningHtml + legs;
   bsSyncPlaceBtn();
+  if (typeof _hydrateSlipPlayerPhotos === 'function') _hydrateSlipPlayerPhotos(el);
   // Wire stake-all input with all event types for reliable live updates
   var saInp = document.getElementById('stake-all-inp');
   if (saInp) {
@@ -6891,6 +7134,7 @@ function openBetConfirm() {
   sheet.innerHTML = headerHtml + bodyHtml + footerHtml;
   overlay.appendChild(sheet);
   document.body.appendChild(overlay);
+  if (typeof _hydrateSlipPlayerPhotos === 'function') _hydrateSlipPlayerPhotos(sheet);
   overlay.addEventListener('click', function(e){ if(e.target===overlay) closeBetConfirm(); });
   // Wire confirm + cancel via addEventListener (inline onclick inside innerHTML can be blocked)
   var _confirmBtn = sheet.querySelector('[data-action="confirm"]');
@@ -12384,14 +12628,21 @@ document.addEventListener('click', function(e) {
       gameId: cell.getAttribute('data-game-id') || (cell.dataset && cell.dataset.gameId) || ''
     }, _cachedG);
     var _line = market === 'moneyline' ? null : _extractSlipPointLine(pick, null);
+    var _presentation = typeof _slipPresentationFromCell === 'function'
+      ? _slipPresentationFromCell(cell)
+      : null;
 
     // Add new valid selection — contract fields always present
+    // presentation is UI-only metadata (photos); never part of wager identity
     betSlip.push({
       cellId: id, game: game, time: time, market: market,
       pick: pick, odds: odds, sport: sp, gameKey: gameKey,
       canonicalGameKey: _cKey, scheduledStart: _isoTime,
       line: _line, gameId: _gameId, providerGameId: _gameId,
-      homeTeam: _home, awayTeam: _away, gameStatus: gameStatus
+      homeTeam: _home, awayTeam: _away, gameStatus: gameStatus,
+      presentation: _presentation || undefined,
+      isPlayerProp: !!(_presentation && _presentation.kind === 'player_prop'),
+      playerName: (_presentation && _presentation.playerName) || undefined
     });
     
     cell.classList.add('selected');
