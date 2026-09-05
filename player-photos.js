@@ -701,8 +701,9 @@
     var team = opts.team || '';
     var className = opts.className || '';
     var borderRadius = opts.borderRadius != null ? opts.borderRadius : (sport === 'tennis' ? '10px' : '50%');
+    var objectFit = opts.objectFit || 'cover';
     var cls = className ? ' class="' + esc(className) + '"' : '';
-    var url = getPlayerHeadshotUrl(name, sport);
+    var url = opts.photoUrl || getPlayerHeadshotUrl(name, sport, opts.espnId || opts.playerId || '');
 
     if (!url) {
       if (sport === 'soccer' && team) {
@@ -712,6 +713,8 @@
       return '<span data-player-photo="' + esc(name) + '" data-player-name="' + esc(name) +
         '" data-player-sport="' + esc(sport) + '" data-player-team="' + esc(team) +
         '" data-logo-size="' + size + '"' +
+        ' data-object-fit="' + esc(objectFit) + '"' +
+        ' data-border-radius="' + esc(String(borderRadius)) + '"' +
         (className ? ' data-logo-class="' + esc(className) + '"' : '') + '>' +
         initialsHtml(name, size, className, team, sport) + '</span>';
     }
@@ -720,7 +723,8 @@
       ' src="' + esc(url) + '"' +
       ' alt="' + esc(name) + '"' +
       ' width="' + size + '" height="' + size + '"' +
-      ' style="width:' + size + 'px;height:' + size + 'px;object-fit:cover;display:block;border-radius:' + borderRadius + '"' +
+      ' style="width:' + size + 'px;height:' + size + 'px;object-fit:' + esc(objectFit) +
+      ';display:block;border-radius:' + esc(String(borderRadius)) + '"' +
       ' referrerpolicy="no-referrer"' +
       ' data-photo-step="0"' +
       ' data-player-photo="' + esc(name) + '"' +
@@ -728,19 +732,26 @@
       ' data-player-sport="' + esc(sport) + '"' +
       ' data-player-team="' + esc(team) + '"' +
       ' data-logo-size="' + size + '"' +
+      ' data-object-fit="' + esc(objectFit) + '"' +
+      ' data-border-radius="' + esc(String(borderRadius)) + '"' +
       (className ? ' data-logo-class="' + esc(className) + '"' : '') +
       ' onerror="window.handlePlayerPhotoError&&window.handlePlayerPhotoError(this)">';
   }
 
-  function buildHeadshotImgNode(name, sport, size, team, className, url) {
+  function buildHeadshotImgNode(name, sport, size, team, className, url, styleOpts) {
+    styleOpts = styleOpts || {};
+    var objectFit = styleOpts.objectFit || 'cover';
+    var borderRadius = styleOpts.borderRadius != null
+      ? styleOpts.borderRadius
+      : (normalizeSport(sport) === 'tennis' ? '10px' : '50%');
     var img = document.createElement('img');
     if (className) img.className = className;
     img.src = url;
     img.alt = name;
     img.width = size;
     img.height = size;
-    img.style.cssText = 'width:' + size + 'px;height:' + size + 'px;object-fit:cover;display:block;border-radius:' +
-      (normalizeSport(sport) === 'tennis' ? '10px' : '50%');
+    img.style.cssText = 'width:' + size + 'px;height:' + size + 'px;object-fit:' + objectFit +
+      ';display:block;border-radius:' + borderRadius;
     img.referrerPolicy = 'no-referrer';
     img.setAttribute('data-photo-step', '0');
     img.setAttribute('data-player-photo', name);
@@ -748,6 +759,8 @@
     img.setAttribute('data-player-sport', sport);
     img.setAttribute('data-player-team', team || '');
     img.setAttribute('data-logo-size', String(size));
+    img.setAttribute('data-object-fit', objectFit);
+    img.setAttribute('data-border-radius', String(borderRadius));
     if (className) img.setAttribute('data-logo-class', className);
     img.onerror = function () { handlePlayerPhotoError(img); };
     return img;
@@ -778,13 +791,24 @@
       var team = el.getAttribute('data-player-team') || '';
       var size = parseInt(el.getAttribute('data-logo-size') || '40', 10);
       var className = el.getAttribute('data-logo-class') || '';
+      var objectFit = el.getAttribute('data-object-fit') || 'cover';
+      var borderRadius = el.getAttribute('data-border-radius');
+      if (borderRadius == null || borderRadius === '') {
+        borderRadius = normalizeSport(sport) === 'tennis' ? '10px' : '50%';
+      }
       var key = cacheKey(name, sport, team);
       var cached = _memCache[key];
       var url = (cached && cached.headshotUrl) || getPlayerHeadshotUrl(name, sport);
       if (!url) return;
       if (el.tagName === 'IMG' && el.getAttribute('src') === url) return;
       if (!el.parentNode) return;
-      el.parentNode.replaceChild(buildHeadshotImgNode(name, sport, size, team, className, url), el);
+      el.parentNode.replaceChild(
+        buildHeadshotImgNode(name, sport, size, team, className, url, {
+          objectFit: objectFit,
+          borderRadius: borderRadius
+        }),
+        el
+      );
     });
   }
 
