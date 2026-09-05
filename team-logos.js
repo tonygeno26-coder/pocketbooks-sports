@@ -1569,30 +1569,77 @@
 
   function _lookupSoccerIdSync(teamName) {
     _seedVerifiedSoccerTeams();
-    var k = _normKey(teamName);
+    var raw = String(teamName || '').trim();
+    if (/^draw$/i.test(raw)) return '';
+    var k = _normKey(raw);
     if (!k) return '';
     if (_soccerIdByNorm[k]) return _soccerIdByNorm[k];
     var verified = global.VERIFIED_SOCCER_TEAM_IDS;
     if (verified) {
-      if (verified[teamName] != null) return String(verified[teamName]);
+      if (verified[raw] != null) return String(verified[raw]);
       var keys = Object.keys(verified);
       for (var vi = 0; vi < keys.length; vi++) {
         if (_normKey(keys[vi]) === k) return String(verified[keys[vi]]);
       }
     }
-    // Fuzzy: substring match against known keys
-    var known = Object.keys(_soccerIdByNorm);
-    for (var i = 0; i < known.length; i++) {
-      var kk = known[i];
-      if (kk === k || kk.indexOf(k) >= 0 || k.indexOf(kk) >= 0) return _soccerIdByNorm[kk];
-    }
+    // Strict only — no substring fuzzy matching across clubs.
     return '';
   }
 
+  var _soccerLogoUrlByNorm = {};
+  var _soccerApiSeeded = false;
+  var _soccerApiPromise = null;
+
   function getSoccerTeamLogo(teamName) {
-    var id = _lookupSoccerIdSync(teamName);
+    var raw = String(teamName || '').trim();
+    if (/^draw$/i.test(raw)) return '';
+    var k = _normKey(raw);
+    if (k && _soccerLogoUrlByNorm[k]) return _soccerLogoUrlByNorm[k];
+    var id = _lookupSoccerIdSync(raw);
     if (!id) return '';
     return 'https://a.espncdn.com/i/teamlogos/soccer/500/' + id + '.png';
+  }
+
+  function _rememberSoccerLogoUrl(name, logoUrl, id, abbr) {
+    if (!name) return;
+    var k = _normKey(name);
+    if (!k) return;
+    if (logoUrl) _soccerLogoUrlByNorm[k] = String(logoUrl);
+    if (id) _rememberSoccerTeam(name, id, abbr);
+  }
+
+  async function warmSoccerTeamLogosFromApi(apiBase) {
+    if (_soccerApiSeeded) return true;
+    if (_soccerApiPromise) return _soccerApiPromise;
+    var base = String(apiBase || (typeof global.API === 'string' ? global.API : '') || '').replace(/\/$/, '');
+    if (!base) base = _playerPhotoApiBase();
+    if (!base) return false;
+    _soccerApiPromise = (async function () {
+      try {
+        var res = await fetch(base + '/api/team-logos/soccer', { cache: 'no-store' });
+        if (!res.ok) return false;
+        var data = await res.json();
+        var teams = (data && data.teams) || [];
+        teams.forEach(function (t) {
+          if (!t) return;
+          var id = t.providerTeamId || t.provider_team_id;
+          var canon = t.canonicalName || t.canonical_name || t.displayName || t.display_name;
+          var logoUrl = t.logoUrl || t.logo_url || '';
+          if (canon) _rememberSoccerLogoUrl(canon, logoUrl, id, t.abbreviation);
+          (t.aliases || []).forEach(function (a) {
+            _rememberSoccerLogoUrl(a, logoUrl, id, t.abbreviation);
+          });
+          if (t.abbreviation) _rememberSoccerLogoUrl(t.abbreviation, logoUrl, id, t.abbreviation);
+        });
+        _soccerApiSeeded = true;
+        return true;
+      } catch (_e) {
+        return false;
+      } finally {
+        _soccerApiPromise = null;
+      }
+    })();
+    return _soccerApiPromise;
   }
 
   async function warmSoccerTeamsCache() {
@@ -2021,11 +2068,15 @@
     var scope = root || (typeof document !== 'undefined' ? document : null);
     if (!scope || !scope.querySelectorAll) return;
 
-    await warmSoccerTeamsCache();
+    // Prefer durable team_logos DB (soccer + ncaaf) before ESPN client warm/search.
     try {
       var apiBase = (typeof global.API === 'string' && global.API) || '';
-      await warmNcaafTeamLogosFromApi(apiBase);
+      await Promise.all([
+        warmSoccerTeamLogosFromApi(apiBase),
+        warmNcaafTeamLogosFromApi(apiBase)
+      ]);
     } catch (_eApi) {}
+    await warmSoccerTeamsCache();
 
     // Shared verified/search photo hydrate for tennis (and any data-player-photo nodes)
     if (typeof global.hydratePlayerPhotos === 'function') {
@@ -2139,6 +2190,7 @@
   global.getCountryFlagUrl = getCountryFlagUrl;
   global.getCountryFlagCode = getCountryFlagCode;
   global.warmSoccerTeamsCache = warmSoccerTeamsCache;
+  global.warmSoccerTeamLogosFromApi = warmSoccerTeamLogosFromApi;
   global.hydrateEspnLobbyMedia = hydrateEspnLobbyMedia;
   global.searchNcaafTeamId = searchNcaafTeamId;
   global.warmNcaafTeamLogosFromApi = warmNcaafTeamLogosFromApi;

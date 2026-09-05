@@ -2360,6 +2360,13 @@ function teamAvatar(name, sport, opts) {
     var shot = _pbPlayerHeadshotImg(name, kind, 52);
     if (shot) return '<div class="mc-jersey mc-jersey-headshot">' + shot + '</div>';
   }
+  if (kind === 'soccer' && opts.logoUrl) {
+    var safeSoccerUrl = String(opts.logoUrl).replace(/"/g, '&quot;');
+    var safeSoccerName = String(name || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    return '<div class="mc-jersey"><img src="' + safeSoccerUrl + '" alt="' + safeSoccerName +
+      '" width="52" height="52" style="width:52px;height:52px;object-fit:contain;display:block;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35))" ' +
+      'referrerpolicy="no-referrer" loading="lazy" onerror="this.style.display=\'none\'"></div>';
+  }
   if (kind === 'soccer' && typeof getSoccerTeamLogoImg === 'function') {
     return '<div class="mc-jersey">' + getSoccerTeamLogoImg(name, 52) + '</div>';
   }
