@@ -44,16 +44,24 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .top-tab{padding:10px 14px;font-size:0.88rem;font-weight:700;color:var(--gray);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s}
 .top-tab.active{color:var(--white);border-bottom-color:var(--green)}
 
-/* SPORT TABS */
-.sport-tabs{display:flex;gap:20px;padding:14px 16px 8px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border)}
-.sport-tabs::-webkit-scrollbar{display:none}
-.sport-tab{flex-shrink:0;display:flex;align-items:center;gap:6px;font-size:0.82rem;font-weight:700;color:var(--gray);cursor:pointer;padding:6px 2px 8px;border-bottom:2px solid transparent;white-space:nowrap;opacity:0.6;transition:opacity 0.15s,color 0.15s}
-.sport-tab.active{color:var(--white);border-bottom-color:var(--green);opacity:1}
-.sport-tab svg{width:17px;height:17px;flex-shrink:0}
-.sport-tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:rgba(255,255,255,0.1);color:var(--gray);font-size:0.58rem;font-weight:800;margin-left:2px}
-.sport-tab.active .sport-tab-count{background:rgba(0,255,136,0.15);color:var(--green)}
-.sport-tab.zero-games .sport-tab-count{opacity:0.45}
-.sport-tab.zero-games{opacity:0.45;pointer-events:none}
+/* SPORT GRID */
+.sport-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 8px;padding:16px 12px 14px;border-bottom:1px solid var(--border)}
+@media (min-width:768px){
+  .sport-grid{grid-template-columns:repeat(6,minmax(0,1fr));padding:18px 16px 16px;gap:16px 12px}
+}
+.sport-tab{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:8px;min-height:0;padding:4px 2px 2px;border:none;border-radius:0;background:transparent;color:var(--white);cursor:pointer;opacity:1;transition:opacity 0.15s,color 0.15s,filter 0.15s;font:inherit;appearance:none;-webkit-appearance:none}
+.sport-tab.zero-games{opacity:0.42;filter:grayscale(0.35)}
+.sport-tab.active{opacity:1;filter:none;color:var(--white);border:none;background:transparent;box-shadow:none}
+.sport-tab-emoji{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;background:radial-gradient(circle at 50% 38%,#2a3344 0%,#171c26 52%,#0c0f16 100%);border:1px solid rgba(255,255,255,0.06);box-shadow:inset 0 2px 8px rgba(0,0,0,0.55),inset 0 -1px 1px rgba(255,255,255,0.05);overflow:hidden;font-size:1.25rem;line-height:1;flex-shrink:0;transition:box-shadow 0.18s,border-color 0.18s}
+.sport-tab.active .sport-tab-emoji{border-color:rgba(61,126,255,0.85);box-shadow:0 0 0 2px #3d7eff,0 0 16px rgba(61,126,255,0.55),inset 0 2px 8px rgba(0,0,0,0.45)}
+.sport-tab-emoji img{width:36px;height:36px;object-fit:contain;border-radius:0;display:block}
+.sport-tab-name{position:relative;font-size:0.7rem;font-weight:700;letter-spacing:0.15px;line-height:1.15;color:var(--white);padding-bottom:5px}
+.sport-tab.active .sport-tab-name::after{content:'';position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:28px;height:2.5px;border-radius:2px;background:#3d7eff;box-shadow:0 0 8px rgba(61,126,255,0.55)}
+.sport-tab-count{display:none;align-items:center;justify-content:center;gap:4px;min-width:18px;height:16px;padding:0 5px;border-radius:8px;background:rgba(0,255,136,0.14);color:var(--green);font-size:0.55rem;font-weight:800}
+.sport-tab-count.is-on{display:inline-flex}
+.sport-tab-avail-dot{width:5px;height:5px;border-radius:50%;background:#00ff88;box-shadow:0 0 4px rgba(0,255,136,0.7);flex-shrink:0}
+.sport-tab.active .sport-tab-count{background:rgba(61,126,255,0.22);color:#8eb6ff}
+.sport-tab.zero-games .sport-tab-count{display:none}
 
 /* BETTING SPLITS */
 .split-row{padding:0 16px 10px}
@@ -87,7 +95,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .mc-base.on{background:#00ff88;border-color:#00ff88;box-shadow:0 0 4px rgba(0,255,136,0.5)}
 .mc-live-badge{margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:rgba(255,61,87,0.12);border:1px solid rgba(255,61,87,0.35);color:#ff3d57;font-size:0.55rem;font-weight:900;letter-spacing:0.5px;text-transform:uppercase;padding:2px 7px;border-radius:6px}
 .mc-live-badge-dot{width:6px;height:6px;border-radius:50%;background:#ff3d57;animation:pbLivePulse 1.4s ease-in-out infinite}
-.sport-tab-live{display:inline-flex;align-items:center;gap:4px;margin-left:4px;font-size:0.5rem;font-weight:900;color:#ff3d57;background:rgba(255,61,87,0.15);border:1px solid rgba(255,61,87,0.35);border-radius:6px;padding:1px 5px;letter-spacing:0.4px;text-transform:uppercase;vertical-align:middle}
+.sport-tab-live{position:absolute;top:4px;right:4px;display:inline-flex;align-items:center;gap:3px;margin:0;font-size:0.42rem;font-weight:900;color:#ff3d57;background:rgba(255,61,87,0.16);border:1px solid rgba(255,61,87,0.35);border-radius:6px;padding:1px 4px;letter-spacing:0.3px;text-transform:uppercase}
 .sport-tab-live-dot{width:5px;height:5px;border-radius:50%;background:#ff3d57;animation:pbLivePulse 1.4s ease-in-out infinite}
 
 /* PARLAY BUILDER UX */
@@ -229,7 +237,14 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 /* ══ LIGHT MODE (bet slip + sportsbook chrome) ══ */
 body.theme-light{background:#f4f6fb;color:#111}
 body.theme-light .h-top,body.theme-light .topbar,body.theme-light .h-wrap{background:#fff;color:#111;border-bottom:1px solid #e8e8e8}
-body.theme-light .top-tabs,body.theme-light .sport-tabs,body.theme-light .filter-pills{background:#fff;border-bottom:1px solid #eee}
+body.theme-light .top-tabs,body.theme-light .sport-tabs,body.theme-light .sport-grid,body.theme-light .filter-pills{background:#fff;border-bottom:1px solid #eee}
+body.theme-light .sport-tab{background:transparent;border:none;color:#111}
+body.theme-light .sport-tab-emoji{background:radial-gradient(circle at 50% 38%,#e8ecf4 0%,#d5dbe8 55%,#c5ccd9 100%);border-color:rgba(0,0,0,0.08);box-shadow:inset 0 2px 6px rgba(0,0,0,0.08)}
+body.theme-light .sport-tab.active{color:#111;border:none;background:transparent;box-shadow:none}
+body.theme-light .sport-tab.active .sport-tab-emoji{border-color:rgba(61,126,255,0.85);box-shadow:0 0 0 2px #3d7eff,0 0 14px rgba(61,126,255,0.4)}
+body.theme-light .sport-tab-name{color:#111}
+body.theme-light .sport-tab.active .sport-tab-name::after{background:#3d7eff}
+body.theme-light .sport-tab.zero-games{opacity:0.5}
 body.theme-light .market-card,body.theme-light .game-card{background:#fff;border:1px solid #e8e8e8;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
 body.theme-light .odds-box{background:#f4f6fb;border:1px solid #e8e8e8;color:#111}
 body.theme-light .odds-box.sel,body.theme-light .odds-box.selected{background:#e7f9ee;border-color:#00c853;box-shadow:0 0 0 2px rgba(0,200,83,0.18);color:#00875a}
@@ -473,7 +488,7 @@ body.theme-light :root,body.theme-light{
   --white:#111;--gray:#666;--light:#888;
 }
 /* Generic surfaces */
-body.theme-light header,body.theme-light .hdr,body.theme-light .h-top,body.theme-light .topbar,body.theme-light .h-wrap,body.theme-light .header,body.theme-light .top-tabs,body.theme-light .sport-tabs,body.theme-light .filter-pills,body.theme-light .club-bar,body.theme-light .sport-filter,body.theme-light .bnav,body.theme-light .bottom-nav{background:#fff!important;color:#111!important;border-color:#e6e9ef!important}
+body.theme-light header,body.theme-light .hdr,body.theme-light .h-top,body.theme-light .topbar,body.theme-light .h-wrap,body.theme-light .header,body.theme-light .top-tabs,body.theme-light .sport-tabs,body.theme-light .sport-grid,body.theme-light .filter-pills,body.theme-light .club-bar,body.theme-light .sport-filter,body.theme-light .bnav,body.theme-light .bottom-nav{background:#fff!important;color:#111!important;border-color:#e6e9ef!important}
 body.theme-light .card,body.theme-light .market-card,body.theme-light .game-card,body.theme-light .alert-card,body.theme-light .settle-card,body.theme-light .stat-card,body.theme-light .ticket-card,body.theme-light .player-card,body.theme-light .leg{background:#fff!important;color:#111!important;border:1px solid #e6e9ef!important;box-shadow:0 1px 3px rgba(15,30,55,0.04)!important}
 body.theme-light input[type=text],body.theme-light input[type=number],body.theme-light input[type=email],body.theme-light input[type=password],body.theme-light input[type=tel],body.theme-light input[type=search],body.theme-light textarea,body.theme-light select{background:#fff!important;border:1px solid #d8dee8!important;color:#111!important}
 body.theme-light input:focus,body.theme-light textarea:focus,body.theme-light select:focus{border-color:#00c853!important;outline:none!important}
@@ -612,7 +627,8 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
 
   .bn:hover{opacity:0.85}
   .pill:not(.active):hover{border-color:#444;color:#bbb}
-  .sport-tab:not(.active):hover{opacity:0.9;color:#bbb}
+  .sport-tab:not(.active):hover{opacity:1;color:#fff}
+  .sport-tab:not(.active):hover .sport-tab-emoji{border-color:rgba(255,255,255,0.14);box-shadow:inset 0 2px 8px rgba(0,0,0,0.55),0 0 0 1px rgba(255,255,255,0.08)}
 }
 @keyframes pbDeskSlipIn {
   from { opacity:0; transform:translateX(20px); }
@@ -642,7 +658,9 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
   }
   .deposit-btn{min-height:44px;padding:10px 14px}
   .top-tab{min-height:44px;display:inline-flex;align-items:center}
-  .sport-tab{min-height:44px;padding:10px 6px 10px}
+  .sport-tab{min-height:0;padding:4px 2px 2px}
+  .sport-tab-emoji{width:52px;height:52px}
+  .sport-tab-emoji img{width:34px;height:34px}
   .pill{min-height:44px;display:inline-flex;align-items:center}
   .bn{min-height:44px}
   .bnav{padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -677,7 +695,9 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
 /* ═══ 390px phones — odds remain tappable, slips stay on-screen ═══ */
 @media (max-width:375px){
   body{max-width:100vw;overflow-x:hidden}
-  .sport-tab{min-height:44px;padding:10px 6px 10px}
+  .sport-tab{min-height:0;padding:4px 2px 2px}
+  .sport-tab-emoji{width:48px;height:48px}
+  .sport-tab-emoji img{width:32px;height:32px}
   .pill,.odds-box,.props-odds{min-height:44px}
   .bet-slip-panel,.dkslip{max-width:100vw}
   .bnav,.bottom-nav{padding-bottom:max(8px, env(safe-area-inset-bottom))}
@@ -711,6 +731,318 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
     overflow-wrap:anywhere;word-break:break-word
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CLEAN DARK SPORTSBOOK REDESIGN (presentation only)
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#070b12;
+  --bg-elev:#0c121c;
+  --card:#121a27;
+  --card2:#162032;
+  --border:#1e2a3c;
+  --border-soft:rgba(255,255,255,0.06);
+  --green:#3d8bfd;
+  --green-dim:rgba(61,139,253,0.14);
+  --accent:#3d8bfd;
+  --accent-soft:rgba(61,139,253,0.16);
+  --accent-glow:rgba(61,139,253,0.45);
+  --white:#f4f7fb;
+  --gray:#7a8799;
+  --light:#a8b3c4;
+  --red:#ff4d6a;
+  --red-dim:rgba(255,77,106,0.12);
+  --cyan:#5eb1ff;
+  --cyan-dim:rgba(94,177,255,0.12);
+  --win:#3dd68c;
+  --shadow:0 8px 28px rgba(0,0,0,0.35);
+}
+body{
+  font-family:'SF Pro Display',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  background:radial-gradient(1200px 600px at 50% -120px,rgba(61,139,253,0.08),transparent 60%),var(--bg);
+  color:var(--white);
+  max-width:430px;margin:0 auto;min-height:100vh;overflow-x:hidden;padding-bottom:80px;
+}
+
+/* HEADER */
+.header{
+  display:flex;justify-content:space-between;align-items:center;gap:10px;
+  padding:12px 14px;background:rgba(7,11,18,0.92);backdrop-filter:blur(12px);
+  position:sticky;top:0;z-index:100;border-bottom:1px solid var(--border);
+}
+.h-left{display:flex;align-items:center;gap:8px;min-width:0}
+.h-right{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:nowrap}
+.hdr-back{
+  background:var(--card);border:1px solid var(--border);color:var(--light);
+  width:36px;height:36px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;
+  cursor:pointer;padding:0;flex-shrink:0;-webkit-tap-highlight-color:transparent;
+}
+.hdr-back:hover{border-color:var(--accent);color:#fff}
+.hdr-brand{display:flex;align-items:center;gap:8px;min-width:0}
+.hdr-logo{width:34px;height:34px;border-radius:10px;object-fit:cover;border:1px solid var(--border);flex-shrink:0}
+.hdr-club{
+  width:32px;height:32px;background:var(--card2);border:1px solid var(--border);border-radius:10px;
+  display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:900;color:var(--accent);flex-shrink:0;
+}
+.hdr-chip{
+  display:flex;flex-direction:column;align-items:flex-end;justify-content:center;
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:6px 10px;line-height:1.15;min-height:36px;
+}
+.hdr-chip-lbl{font-size:0.5rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.55px}
+.hdr-chip-val{font-size:0.88rem;font-weight:800;color:var(--white);letter-spacing:-0.2px}
+.buy-diamonds-nav-btn{
+  background:var(--card)!important;border:1px solid var(--border)!important;color:var(--cyan)!important;
+  width:auto!important;min-width:36px;height:36px;border-radius:12px!important;
+  display:inline-flex!important;align-items:center;justify-content:center;gap:4px;
+  font-size:0.78rem!important;font-weight:800;cursor:pointer;padding:0 10px!important;line-height:1;
+  box-shadow:none!important;
+}
+.buy-diamonds-nav-btn:hover{border-color:rgba(94,177,255,0.55)!important;background:var(--cyan-dim)!important}
+.icon-btn,.notif-bell{
+  width:36px;height:36px;border-radius:12px;background:var(--card);border:1px solid var(--border);
+  display:inline-flex;align-items:center;justify-content:center;font-size:1rem;color:var(--light);cursor:pointer;
+}
+.icon-btn:hover,.notif-bell:hover{color:#fff;border-color:var(--accent)}
+.notif-bell{background:var(--card);border:1px solid var(--border);padding:0}
+.notif-dd{background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow)}
+.notif-dd-hd{color:var(--gray);border-bottom:1px solid var(--border)}
+.notif-item{border-bottom:1px solid rgba(255,255,255,0.04)}
+.notif-item.unread{background:var(--accent-soft)}
+
+/* MAIN NAV / FILTER PILLS */
+.top-tabs{display:flex;gap:0;padding:2px 14px 0;border-bottom:1px solid var(--border);background:transparent}
+.top-tab{padding:12px 14px;font-size:0.9rem;font-weight:700;color:var(--gray);cursor:pointer;border-bottom:2px solid transparent;transition:color .15s,border-color .15s}
+.top-tab.active{color:var(--white);border-bottom-color:var(--accent)}
+.filter-row{display:flex;gap:4px;padding:10px 12px 4px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--border)}
+.pill{
+  flex-shrink:0;padding:10px 12px 12px;border-radius:0;border:none;border-bottom:2px solid transparent;
+  font-size:0.84rem;font-weight:700;color:var(--gray);cursor:pointer;background:transparent;white-space:nowrap;
+  box-shadow:none;
+}
+.pill.active{
+  border-color:transparent;border-bottom-color:var(--accent);color:var(--white);
+  background:transparent;box-shadow:none;
+}
+
+/* SPORT GRID refinements */
+.sport-grid{padding:14px 10px 12px;border-bottom:1px solid var(--border);gap:12px 6px}
+.sport-tab{opacity:0.72}
+.sport-tab.active{opacity:1}
+.sport-tab-emoji{
+  background:radial-gradient(circle at 50% 35%,#1a2436 0%,#101826 55%,#0a101a 100%);
+  border:1px solid var(--border-soft);
+  box-shadow:inset 0 2px 8px rgba(0,0,0,0.5);
+}
+.sport-tab.active .sport-tab-emoji{
+  background:radial-gradient(circle at 50% 35%,#22314a 0%,#152033 55%,#0d1522 100%);
+  border-color:rgba(61,139,253,0.9);
+  box-shadow:0 0 0 2px #3d8bfd,0 0 14px rgba(61,139,253,0.4),inset 0 2px 8px rgba(0,0,0,0.4);
+}
+.sport-tab-name{color:var(--light);font-weight:650}
+.sport-tab.active .sport-tab-name{color:#fff}
+.sport-tab.active .sport-tab-name::after{background:var(--accent);box-shadow:0 0 8px var(--accent-glow)}
+.sport-tab.zero-games{opacity:0.38}
+
+/* MARKET CARDS */
+.market-card{
+  margin:0 12px 12px;background:var(--card);border-radius:16px;overflow:hidden;
+  box-shadow:0 4px 18px rgba(0,0,0,0.28);border:1px solid var(--border);
+}
+.market-card.props-expanded,.market-card.alt-expanded{
+  border-color:rgba(61,139,253,0.45);
+  box-shadow:0 0 0 1px rgba(61,139,253,0.25),0 6px 22px rgba(0,0,0,0.35);
+}
+.mc-header{padding:12px 14px 8px}
+.mc-sport{color:var(--gray)}
+.mc-cols,.mc-team-row{padding-left:14px;padding-right:14px}
+.mc-jersey{
+  width:44px;height:44px;border-radius:12px;background:#0d1420;border:1px solid var(--border);
+  box-shadow:none;padding:6px;
+}
+.mc-city{color:var(--gray)}
+.mc-name{font-size:0.9rem;font-weight:750;color:var(--white)}
+.mc-divider{background:linear-gradient(90deg,transparent,var(--border),transparent);margin:0 14px}
+.mc-footer{padding:10px 14px}
+.mc-time{color:var(--gray)}
+.odds-box{
+  text-align:center;padding:8px 4px;background:#0d1420;border-radius:10px;cursor:pointer;
+  border:1px solid var(--border);min-height:50px;gap:2px;box-shadow:none;
+  transition:transform .1s,border-color .12s,background .12s,box-shadow .12s;
+}
+.odds-box:hover{border-color:#2a3a52;background:#121c2c}
+.odds-box.sel,.odds-cell.selected{
+  border:1.5px solid var(--accent)!important;outline:none!important;
+  box-shadow:0 0 0 1px rgba(61,139,253,0.35),0 0 14px rgba(61,139,253,0.28)!important;
+  background:rgba(61,139,253,0.14)!important;
+}
+.odds-pos{color:var(--win);text-shadow:none}
+.odds-neg{color:#d7dde8}
+.odds-line{color:var(--gray);font-size:0.62rem}
+.odds-num{font-size:0.9rem;font-weight:800}
+.mc-col-label{color:#5d6b7e}
+.mkt-odds-box{background:#0d1420;border:1px solid var(--border);border-radius:10px}
+.mkt-odds-box.selected{
+  border-color:var(--accent)!important;box-shadow:0 0 10px rgba(61,139,253,0.3)!important;
+  background:rgba(61,139,253,0.14)!important;
+}
+.mkt-odds-num.pos{color:var(--win)}
+.mc-props-tab.active{color:#041018;background:var(--accent)}
+.mc-prop-team-pill.active{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.mc-prop-ou{background:#0d1420;border:1px solid var(--border);border-radius:10px}
+.mc-live-badge{border-radius:8px}
+.value-bets-section{
+  margin:0 12px 14px;background:linear-gradient(180deg,#121a27,#0e1520);
+  border:1px solid rgba(61,139,253,0.22);border-radius:14px;
+}
+.value-bets-title{color:var(--accent)}
+
+/* BOTTOM NAV */
+.bnav{
+  background:rgba(7,11,18,0.98);border-top:1px solid var(--border);
+  box-shadow:0 -6px 24px rgba(0,0,0,0.45);
+}
+.bn-label{color:#5d6b7e}
+.bn-icon svg{stroke:#5d6b7e}
+.bn.active .bn-label{color:var(--accent)}
+.bn.active .bn-icon svg{stroke:var(--accent);filter:drop-shadow(0 0 5px rgba(61,139,253,0.45))}
+
+/* SLIP BAR */
+.slip-bar,.bs-bar{
+  background:linear-gradient(180deg,#3d8bfd,#2f74e0);border-radius:14px;
+  box-shadow:0 8px 28px rgba(61,139,253,0.3);
+}
+.slip-count,.bs-badge{background:#041018;color:#9ec5ff}
+
+/* BET SLIP — dark sportsbook sheet */
+.dkslip-overlay{background:rgba(2,6,12,0.72)}
+.dkslip{
+  background:var(--bg-elev)!important;border-radius:18px 18px 0 0;
+  box-shadow:0 -10px 40px rgba(0,0,0,0.55);border:1px solid var(--border);border-bottom:none;
+}
+.dkslip-hdr{background:var(--card)!important;border-bottom:1px solid var(--border)!important;border-radius:18px 18px 0 0}
+.dkslip-badge{background:var(--accent)!important;color:#fff!important}
+.dkslip-title{color:var(--white)!important}
+.dkslip-clear{color:var(--accent)!important}
+.dkslip-close{background:var(--card2)!important;color:var(--light)!important;border:1px solid var(--border)}
+.dkslip-tabs{background:var(--card)!important;border-bottom:1px solid var(--border)!important}
+.dkslip-tab{background:var(--card2)!important;color:var(--gray)!important;border-radius:10px}
+.dkslip-tab.active{background:#0d1420!important;color:#fff!important;box-shadow:inset 0 -2px 0 var(--accent)}
+.dkslip-scroll{background:var(--bg-elev)!important}
+.dkslip-card,.parlay-mini,.stake-all-row{
+  background:var(--card)!important;border:1px solid var(--border)!important;border-radius:14px;
+  box-shadow:none!important;color:var(--white)!important;
+}
+.dkslip-card-hdr{border-bottom:1px solid var(--border)!important}
+.dkslip-card-title,.dkslip-leg-pick,.parlay-mini-title{color:var(--white)!important}
+.dkslip-card-odds,.dkslip-payout span:last-child,.parlay-mini-odds,.single-payout{color:var(--win)!important}
+.dkslip-leg{border-bottom:1px solid rgba(255,255,255,0.04)!important}
+.dkslip-leg-matchup{color:var(--gray)!important}
+.dkslip-leg-mkt{color:var(--accent)!important}
+.dkslip-leg-odds{color:var(--white)!important}
+.dkslip-leg-rm{color:var(--gray)!important}
+.dkslip-entry{background:var(--card)!important;border-top:1px solid var(--border)!important}
+.dkslip-qa,.single-qa{
+  background:var(--card2)!important;border:1px solid var(--border)!important;color:var(--light)!important;
+}
+.dkslip-input-row,.single-inp-row{
+  background:#0d1420!important;border:1px solid var(--border)!important;border-radius:10px;
+}
+.dkslip-input-row span,.single-inp-row span{color:var(--gray)!important}
+.dkslip-input-row input,.single-inp-row input{color:var(--white)!important}
+.dkslip-payout span:first-child{color:var(--gray)!important}
+.dkslip-place-btn.ready{background:var(--accent)!important;color:#fff!important}
+.dkslip-place-btn.empty{background:#1a2436!important;color:#5d6b7e!important}
+.single-card-footer{background:#0e1520!important;border-top:1px solid var(--border)!important}
+.dkslip-confirm{background:var(--bg-elev)!important}
+.dkslip-confirm-footer{background:var(--card)!important;border-top:1px solid var(--border)!important}
+.dkslip-share-btn{border-color:var(--border);color:var(--light)}
+.modal{background:var(--card)}
+.mh{background:var(--card);border-bottom:1px solid var(--border)}
+.stype{background:var(--card2);border:1px solid var(--border);color:var(--gray)}
+.stype.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.leg{background:var(--card2);border:1px solid var(--border)}
+.pbox{background:var(--card2);border:1px solid var(--border)}
+.risk-inp{background:#0d1420;border:1px solid var(--border);color:#fff}
+.risk-inp:focus{border-color:var(--accent)}
+.qa{background:var(--card2);border:1px solid var(--border);color:var(--light)}
+.place-btn{background:var(--accent);color:#fff}
+.sl-badge{background:var(--accent);color:#fff}
+.bs-drawer{background:var(--bg-elev)!important;border:1px solid var(--border)}
+.bs-hdr{background:var(--bg-elev)!important;border-bottom:1px solid var(--border)}
+.bs-leg{background:var(--card)!important;border:1px solid var(--border)!important}
+.bs-tab{background:var(--card2);border:1px solid var(--border);color:var(--gray)}
+.bs-tab.active{background:var(--accent-soft);color:#fff;border-color:rgba(61,139,253,0.4)}
+.bs-odds-val{color:var(--win)!important}
+.numpad{background:#121a27;border-top:1px solid var(--border)}
+.numpad-key{background:var(--card);color:#fff;box-shadow:none;border:1px solid var(--border)}
+.numpad-key.dark{background:#1a2436}
+.numpad-active-bar{background:var(--card)}
+.numpad-active-val{color:#fff}
+.numpad-done{background:var(--accent)}
+
+/* MY BETS — dark overrides for inline light styles */
+#mybets-section{
+  background:var(--bg)!important;color:var(--white)!important;min-height:100vh;padding-bottom:100px;
+}
+#mybets-section .mybets-search{
+  background:var(--card)!important;border:1px solid var(--border)!important;color:var(--white)!important;
+  border-radius:12px;
+}
+#mybets-section .mybets-search:focus{border-color:var(--accent)!important}
+#mybets-section .mybets-chip{
+  background:var(--card)!important;border:1px solid var(--border)!important;color:var(--light)!important;
+}
+#mybets-section .mybets-chip.on{background:var(--accent-soft)!important;border-color:var(--accent)!important;color:#fff!important}
+#mybets-section .mybets-chip.range.on{background:#0d1420!important;border-color:var(--accent)!important;color:#fff!important}
+#mybets-section .bet-menu-btn{color:var(--light)!important}
+#mybets-section .bet-menu-btn:hover{background:var(--card2)!important;color:#fff!important}
+#mybets-section .bet-menu-dropdown{background:var(--card)!important;border-color:var(--border)!important}
+#mybets-section [style*="background:#fff"],
+#mybets-section [style*="background:#fafafa"],
+#mybets-section [style*="background:#f5f5f5"],
+#mybets-section [style*="background:#f0f0f0"]{
+  background:var(--card)!important;border-color:var(--border)!important;color:var(--white)!important;
+}
+#mybets-section [style*="color:#111"]{color:var(--white)!important}
+#mybets-section [style*="color:#444"],
+#mybets-section [style*="color:#555"]{color:var(--light)!important}
+#mybets-section [style*="border-top:1px solid #f0f0f0"],
+#mybets-section [style*="border-bottom:1px solid #f0f0f0"],
+#mybets-section [style*="border:1px solid #e8e8e8"],
+#mybets-section [style*="border:1px solid #eee"],
+#mybets-section [style*="border:1px solid #ddd"],
+#mybets-section [style*="border:1px solid #ccc"]{border-color:var(--border)!important}
+#live-section,#results-section{background:var(--bg)!important}
+#predictions-section{background:var(--bg)!important;color:var(--white)!important}
+#predictions-section [style*="color:#111"]{color:var(--white)!important}
+
+/* 390px / compact phones */
+@media (max-width:400px){
+  html,body{max-width:100vw;overflow-x:hidden}
+  .header{padding:10px 8px;gap:6px}
+  .hdr-chip{padding:5px 8px;min-width:0}
+  .hdr-chip-val{font-size:0.78rem}
+  .hdr-diamond-lbl{display:none}
+  .buy-diamonds-nav-btn{padding:0!important;width:36px!important;min-width:36px;font-size:0.95rem!important}
+  .sport-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 6px;padding:12px 8px 10px}
+  .sport-tab-emoji{width:50px;height:50px}
+  .sport-tab-emoji img{width:30px;height:30px}
+  .sport-tab-name{font-size:0.66rem;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .filter-row{padding:8px 8px 2px;gap:2px}
+  .pill{padding:10px 10px 12px;font-size:0.78rem}
+  .market-card{margin:0 8px 10px;max-width:calc(100vw - 16px)}
+  .h-right{gap:5px;flex-shrink:1}
+  .h-left{gap:6px}
+  .notif-dd{width:min(300px,calc(100vw - 20px));right:-8px}
+}
+@media (max-width:390px){
+  .sport-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .hdr-club{display:none}
+  .header{padding:8px 8px}
+  .hdr-back,.icon-btn,.notif-bell,.buy-diamonds-nav-btn{width:34px;height:34px;min-width:34px;border-radius:10px}
+}
+
 </style>
 
 <script>
@@ -869,15 +1201,20 @@ function _debugClearTickets() {
 <!-- HEADER -->
 <div class="header">
   <div class="h-left">
-    <button onclick="returnToLobby()" style="background:none;border:none;color:#aaa;font-size:1.2rem;cursor:pointer;padding:4px 8px 4px 0;display:flex;align-items:center;gap:4px;-webkit-tap-highlight-color:transparent" aria-label="Back to Lobby">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    <button type="button" class="hdr-back" onclick="returnToLobby()" aria-label="Back to Lobby">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
     </button>
-    <img src="./logo.jpg" style="width:36px;height:36px;border-radius:50%;object-fit:cover" alt="PB Sports">
-    <div style="width:32px;height:32px;background:#222;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:900;color:var(--green)">RT</div>
+    <div class="hdr-brand">
+      <img class="hdr-logo" src="./logo.jpg" width="34" height="34" alt="PB Sports">
+      <div class="hdr-club" aria-hidden="true">RT</div>
+    </div>
   </div>
   <div class="h-right">
-    <div style="display:flex;flex-direction:column;align-items:flex-end;line-height:1.2"><div style="font-size:0.52rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px">Balance</div><div id="player-balance-display" style="font-size:0.92rem;font-weight:900;color:#fff;text-shadow:0 0 8px rgba(255,255,255,0.25)">...</div></div>
-    <button type="button" class="buy-diamonds-nav-btn" id="buy-diamonds-btn" onclick="openBuyDiamondsModal()" aria-label="Buy Diamonds" title="Buy Diamonds">💎</button>
+    <div class="hdr-chip" title="Cash balance">
+      <div class="hdr-chip-lbl">Cash</div>
+      <div class="hdr-chip-val" id="player-balance-display">...</div>
+    </div>
+    <button type="button" class="buy-diamonds-nav-btn" id="buy-diamonds-btn" onclick="openBuyDiamondsModal()" aria-label="Buy Diamonds" title="Buy Diamonds"><span aria-hidden="true">💎</span><span class="hdr-diamond-lbl">Buy</span></button>
     <div class="notif-wrap" id="notif-wrap">
       <button type="button" class="notif-bell" id="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications" title="Notifications">🔔</button>
       <span class="notif-badge" id="notif-badge"></span>
@@ -886,39 +1223,26 @@ function _debugClearTickets() {
         <div id="notif-list"><div class="notif-empty">Loading…</div></div>
       </div>
     </div>
-    <span class="icon-btn" id="open-profile-btn" style="cursor:pointer" onclick="showPlayerSettings()">👤</span>
+    <span class="icon-btn" id="open-profile-btn" style="cursor:pointer" onclick="showPlayerSettings()" role="button" aria-label="Account">👤</span>
   </div>
 </div>
 
 <!-- TOP TABS -->
 <div id="sportsbook-section">
-<!-- SPORT TABS -->
-<div class="sport-tabs">
-  <div class="sport-tab active" id="st-mlb" onclick="setSport(this,'mlb')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3c1.5 2 2.5 5 2.5 9s-1 7-2.5 9"/><path d="M12 3c-1.5 2-2.5 5-2.5 9s1 7 2.5 9"/><line x1="3" y1="12" x2="21" y2="12"/></svg>MLB</div>
-  <div class="sport-tab" id="st-nba" onclick="setSport(this,'nba')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3c2 2.5 3 5.5 3 9s-1 6.5-3 9"/><path d="M12 3c-2 2.5-3 5.5-3 9s1 6.5 3 9"/><path d="M5 7.5Q8.5 9 12 9q3.5 0 7-1.5"/><path d="M5 16.5Q8.5 15 12 15q3.5 0 7 1.5"/></svg>NBA</div>
-  <div class="sport-tab" id="st-nhl" onclick="setSport(this,'nhl')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="18" rx="7" ry="2.5"/><line x1="8" y1="4" x2="12" y2="18"/><line x1="16" y1="4" x2="12" y2="18"/><line x1="7" y1="10" x2="17" y2="10"/></svg>NHL</div>
-  <div class="sport-tab" id="st-nfl" onclick="setSport(this,'nfl')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="12" rx="9" ry="5"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="10.5" y1="10.5" x2="10.5" y2="13.5"/><line x1="12" y1="10.5" x2="12" y2="13.5"/><line x1="13.5" y1="10.5" x2="13.5" y2="13.5"/></svg>NFL</div>
-  <div class="sport-tab" id="st-ncaaf" onclick="setSport(this,'ncaaf')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="12" rx="9" ry="5"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="10.5" y1="10.5" x2="10.5" y2="13.5"/><line x1="13.5" y1="10.5" x2="13.5" y2="13.5"/></svg>NCAAF</div>
-  <div class="sport-tab" id="st-ncaab" onclick="setSport(this,'ncaab')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3v18"/><path d="M5 7.5Q8.5 9 12 9q3.5 0 7-1.5"/><path d="M5 16.5Q8.5 15 12 15q3.5 0 7 1.5"/></svg>NCAAB</div>
-  <div class="sport-tab" id="st-tennis" onclick="setSport(this,'tennis')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12c3-4 6-5 9-4"/><path d="M21 12c-3 4-6 5-9 4"/></svg>Tennis</div>
-  <div class="sport-tab" id="st-soccer" onclick="setSport(this,'soccer')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><polygon points="12,6 15,10 13,14 11,14 9,10"/><line x1="9" y1="10" x2="4.5" y2="8"/><line x1="15" y1="10" x2="19.5" y2="8"/><line x1="13" y1="14" x2="14.5" y2="19"/><line x1="11" y1="14" x2="9.5" y2="19"/></svg>Soccer</div>
-  <div class="sport-tab" id="st-golf" onclick="setSport(this,'golf')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="2" x2="12" y2="18"/><path d="M12 2l6 4-6 4"/><circle cx="12" cy="20" r="2"/><line x1="8" y1="22" x2="16" y2="22"/></svg>Golf</div>
-  <div class="sport-tab" id="st-wnba" onclick="setSport(this,'wnba')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3c2 2.5 3 5.5 3 9s-1 6.5-3 9"/><path d="M12 3c-2 2.5-3 5.5-3 9s1 6.5 3 9"/><path d="M5 7.5Q8.5 9 12 9q3.5 0 7-1.5"/><path d="M5 16.5Q8.5 15 12 15q3.5 0 7 1.5"/></svg>WNBA</div>
-  <div class="sport-tab" id="st-ncaabaseball" onclick="setSport(this,'ncaabaseball')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3c1.5 2 2.5 5 2.5 9s-1 7-2.5 9"/><path d="M12 3c-1.5 2-2.5 5-2.5 9s1 7 2.5 9"/><line x1="3" y1="12" x2="21" y2="12"/></svg>College Baseball</div>
-  <div class="sport-tab" id="st-mma" onclick="setSport(this,'mma')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="8,3 16,3 21,8 21,16 16,21 8,21 3,16 3,8"/></svg>MMA</div>
-  <div class="sport-tab" id="st-boxing" onclick="setSport(this,'boxing')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="10" rx="6" ry="6.5"/><path d="M9 16h6v4a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z"/></svg>Boxing</div>
-  <div class="sport-tab" id="st-nascar" onclick="setSport(this,'nascar')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="5" y1="3" x2="5" y2="21"/><path d="M5 3h14l-3.5 5L19 13H5"/></svg>NASCAR</div>
-  <div class="sport-tab" id="st-f1" onclick="setSport(this,'f1')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 15h18l-2-5H10L8 7H5z"/><circle cx="8" cy="17" r="2"/><circle cx="16" cy="17" r="2"/></svg>Formula 1</div>
-  <div class="sport-tab" id="st-cricket" onclick="setSport(this,'cricket')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="6" y1="20" x2="15" y2="3"/><line x1="4" y1="16" x2="11" y2="18"/><circle cx="18" cy="17" r="3"/></svg>Cricket</div>
-  <div class="sport-tab" id="st-rugby" onclick="setSport(this,'rugby')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="12" rx="9" ry="5" transform="rotate(-35 12 12)"/><line x1="8" y1="8" x2="16" y2="16"/></svg>Rugby</div>
-  <div class="sport-tab" id="st-rugby-league" onclick="setSport(this,'rugby_league')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="12" rx="9" ry="5" transform="rotate(-35 12 12)"/><line x1="8" y1="8" x2="16" y2="16"/><line x1="10" y1="7" x2="17" y2="14"/></svg>Rugby League</div>
-  <div class="sport-tab" id="st-afl" onclick="setSport(this,'afl')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="12" rx="9" ry="5" transform="rotate(-20 12 12)"/><line x1="7" y1="10" x2="17" y2="14"/></svg>AFL</div>
-  <div class="sport-tab" id="st-table-tennis" onclick="setSport(this,'table_tennis')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="4"/><line x1="11" y1="11" x2="18" y2="20"/><path d="M16 18l5 1-2 4"/></svg>Table Tennis</div>
-  <div class="sport-tab" id="st-cs2" onclick="setSport(this,'cs2')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="8" width="18" height="10" rx="5"/><circle cx="9" cy="13" r="1.2"/><circle cx="15" cy="13" r="1.2"/><path d="M8 13h2M9 12v2"/></svg>CS2</div>
-  <div class="sport-tab" id="st-valorant" onclick="setSport(this,'valorant')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="8" width="18" height="10" rx="5"/><circle cx="9" cy="13" r="1.2"/><circle cx="15" cy="13" r="1.2"/><path d="M8 13h2M9 12v2"/></svg>Valorant</div>
-  <div class="sport-tab" id="st-lol" onclick="setSport(this,'lol')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="8" width="18" height="10" rx="5"/><circle cx="9" cy="13" r="1.2"/><circle cx="15" cy="13" r="1.2"/><path d="M8 13h2M9 12v2"/></svg>LoL</div>
-  <div class="sport-tab" id="st-dota2" onclick="setSport(this,'dota2')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="8" width="18" height="10" rx="5"/><circle cx="9" cy="13" r="1.2"/><circle cx="15" cy="13" r="1.2"/><path d="M8 13h2M9 12v2"/></svg>Dota 2</div>
-  <div class="sport-tab" id="st-rocketleague" onclick="setSport(this,'rocketleague')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 15h18l-2-5H10L8 7H5z"/><circle cx="8" cy="17" r="2"/><circle cx="16" cy="17" r="2"/></svg>Rocket League</div>
+<!-- SPORT GRID -->
+<div class="sport-grid" role="tablist" aria-label="Sports">
+  <button type="button" class="sport-tab" id="st-nfl" onclick="setSport(this,'nfl')" role="tab" aria-selected="false"><span class="sport-tab-emoji"><img src="https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png" width="36" height="36" alt="NFL" onerror="this.onerror=null;this.replaceWith(document.createTextNode('🏈'))"></span><span class="sport-tab-name">NFL</span><span class="sport-tab-count"></span></button>
+  <button type="button" class="sport-tab active" id="st-mlb" onclick="setSport(this,'mlb')" role="tab" aria-selected="true"><span class="sport-tab-emoji"><img src="https://a.espncdn.com/i/teamlogos/leagues/500/mlb.png" width="36" height="36" alt="MLB" onerror="this.onerror=null;this.replaceWith(document.createTextNode('⚾'))"></span><span class="sport-tab-name">MLB</span><span class="sport-tab-count"></span></button>
+  <button type="button" class="sport-tab" id="st-nba" onclick="setSport(this,'nba')" role="tab" aria-selected="false"><span class="sport-tab-emoji"><img src="https://a.espncdn.com/i/teamlogos/leagues/500/nba.png" width="36" height="36" alt="NBA" onerror="this.onerror=null;this.replaceWith(document.createTextNode('🏀'))"></span><span class="sport-tab-name">NBA</span><span class="sport-tab-count"></span></button>
+  <button type="button" class="sport-tab" id="st-nhl" onclick="setSport(this,'nhl')" role="tab" aria-selected="false"><span class="sport-tab-emoji"><img src="https://a.espncdn.com/i/teamlogos/leagues/500/nhl.png" width="36" height="36" alt="NHL" onerror="this.onerror=null;this.replaceWith(document.createTextNode('🏒'))"></span><span class="sport-tab-name">NHL</span><span class="sport-tab-count"></span></button>
+  <button type="button" class="sport-tab" id="st-ncaaf" onclick="setSport(this,'ncaaf')" role="tab" aria-selected="false"><span class="sport-tab-emoji"><img src="https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-football.png" width="36" height="36" alt="NCAAF" onerror="this.onerror=null;this.replaceWith(document.createTextNode('🏈'))"></span><span class="sport-tab-name">NCAAF</span><span class="sport-tab-count"></span></button>
+  <button type="button" class="sport-tab" id="st-ncaab" onclick="setSport(this,'ncaab')" role="tab" aria-selected="false"><span class="sport-tab-emoji"><img src="https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-basketball.png" width="36" height="36" alt="NCAAB" onerror="this.onerror=null;this.replaceWith(document.createTextNode('🏀'))"></span><span class="sport-tab-name">NCAAB</span><span class="sport-tab-count"></span></button>
+  <button type="button" class="sport-tab" id="st-soccer" onclick="setSport(this,'soccer')" role="tab" aria-selected="false"><span class="sport-tab-emoji"><img src="https://a.espncdn.com/i/teamlogos/leagues/500/fifa.png" width="36" height="36" alt="Soccer" onerror="this.onerror=null;this.replaceWith(document.createTextNode('⚽'))"></span><span class="sport-tab-name">Soccer</span><span class="sport-tab-count"></span></button>
+  <button type="button" class="sport-tab" id="st-tennis" onclick="setSport(this,'tennis')" role="tab" aria-selected="false"><span class="sport-tab-emoji"><img src="https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-tennis.png" width="36" height="36" alt="Tennis" onerror="this.onerror=null;this.replaceWith(document.createTextNode('🎾'))"></span><span class="sport-tab-name">Tennis</span><span class="sport-tab-count"></span></button>
+  <button type="button" class="sport-tab" id="st-golf" onclick="setSport(this,'golf')" role="tab" aria-selected="false"><span class="sport-tab-emoji"><img src="https://a.espncdn.com/i/teamlogos/leagues/500/pgatour.png" width="36" height="36" alt="Golf" onerror="this.onerror=null;this.replaceWith(document.createTextNode('⛳'))"></span><span class="sport-tab-name">Golf</span><span class="sport-tab-count"></span></button>
+  <button type="button" class="sport-tab" id="st-boxing" onclick="setSport(this,'boxing')" role="tab" aria-selected="false"><span class="sport-tab-emoji"><img src="https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-boxing.png" width="36" height="36" alt="Boxing" onerror="this.onerror=null;this.replaceWith(document.createTextNode('🥊'))"></span><span class="sport-tab-name">Boxing</span><span class="sport-tab-count"></span></button>
+  <button type="button" class="sport-tab" id="st-mma" onclick="setSport(this,'mma')" role="tab" aria-selected="false"><span class="sport-tab-emoji"><img src="https://a.espncdn.com/i/teamlogos/leagues/500/ufc.png" width="36" height="36" alt="MMA" onerror="this.onerror=null;this.replaceWith(document.createTextNode('🥋'))"></span><span class="sport-tab-name">MMA</span><span class="sport-tab-count"></span></button>
+  <button type="button" class="sport-tab" id="st-rugby" onclick="setSport(this,'rugby')" role="tab" aria-selected="false"><span class="sport-tab-emoji"><img src="https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png" width="36" height="36" alt="Rugby" onerror="this.onerror=null;this.replaceWith(document.createTextNode('🏉'))"></span><span class="sport-tab-name">Rugby</span><span class="sport-tab-count"></span></button>
 </div>
 
 <!-- MARKET FILTER PILLS -->
@@ -939,7 +1263,7 @@ function _debugClearTickets() {
 <div style="height:20px"></div>
 <div id="games-list"><div class="empty">Loading games...</div></div>
 </div><!-- /sportsbook-section -->
-<div id="mybets-section" style="display:none;background:#f5f5f5;min-height:100vh;padding-bottom:100px"></div>
+<div id="mybets-section" style="display:none;background:#070b12;min-height:100vh;padding-bottom:100px"></div>
 <div id="live-section" style="display:none;background:#0a0a0a;min-height:100vh;padding:14px 0 100px">
   <div style="display:flex;align-items:center;gap:8px;padding:0 16px 14px">
     <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff3d57;box-shadow:0 0 8px rgba(255,61,87,0.7);animation:pbLivePulse 1.4s ease-in-out infinite"></span>
@@ -1195,6 +1519,21 @@ function _showSessionExpiredModal(result) {
 window.PBS_BUILD_SHA = '9100d35';
 window.PBS_BUILD_DATE = '2026-06-02T09:54:15.131Z';
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
+// ESPN league logos for sport grid (verified working CDN paths; ncaa/soccer/atp/pga/boxing/rugby preferred slugs 404)
+const SPORT_LOGOS = {
+  nfl: 'https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png',
+  mlb: 'https://a.espncdn.com/i/teamlogos/leagues/500/mlb.png',
+  nba: 'https://a.espncdn.com/i/teamlogos/leagues/500/nba.png',
+  nhl: 'https://a.espncdn.com/i/teamlogos/leagues/500/nhl.png',
+  ncaaf: 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-football.png',
+  ncaab: 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-basketball.png',
+  soccer: 'https://a.espncdn.com/i/teamlogos/leagues/500/fifa.png',
+  tennis: 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-tennis.png',
+  golf: 'https://a.espncdn.com/i/teamlogos/leagues/500/pgatour.png',
+  boxing: 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-boxing.png',
+  mma: 'https://a.espncdn.com/i/teamlogos/leagues/500/ufc.png',
+  rugby: 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-rugby.png',
+};
 // dbgBanner must be defined FIRST — called by balance engine before any other function
 function dbgBanner(msg, color) {}
 // Do not paint a localStorage-derived balance before the dashboard hydrates.
@@ -4051,7 +4390,7 @@ var _ODDS_ROUTE_KEY = {
   boxing_boxing:'boxing', boxing:'boxing',
   nascar:'nascar', nascar_cup:'nascar',
   formula1:'f1', f1:'f1',
-  golf:'golf_pga', golf_pga:'golf_pga', pga:'golf_pga', golf_liv:'golf_liv', golf_european:'golf_european',
+  golf:'golf', golf_pga:'golf', pga:'golf', golf_liv:'golf', golf_european:'golf',
   soccer:'soccer', soccer_epl:'soccer_epl', epl:'soccer_epl', premier_league:'soccer_epl',
   soccer_ucl:'soccer_ucl', ucl:'soccer_ucl', champions_league:'soccer_ucl',
   soccer_mls:'soccer_mls', mls:'soccer_mls',
@@ -4075,7 +4414,8 @@ var _ODDS_ROUTE_KEY = {
 var _SPORT_CATALOG_ALIASES = {
   soccer:  ['soccer','soccer_epl','soccer_ucl','soccer_mls','soccer_worldcup','soccer_euros','soccer_laliga','soccer_seriea','soccer_bundesliga','soccer_ligue1'],
   tennis:  ['tennis','tennis_atp','tennis_wta'],
-  golf:    ['golf_pga','golf_liv','golf_european'],
+  golf:    ['golf','golf_pga','golf_liv','golf_european'],
+  rugby:   ['rugby','rugby_union','rugby_league'],
   cricket: ['cricket','cricket_ipl','cricket_t20']
 };
 function _resolveOddsRouteKeys(sport) {
@@ -4239,7 +4579,7 @@ async function loadGames(sport, opts){
 }
 
 // Live tab: fetch isLive=true games across Owls sports (via /api/sports + /api/odds/:sport).
-var _PB_LIVE_SPORT_FALLBACK = ['mlb','nba','nfl','nhl','ncaaf','ncaab','wnba','tennis','soccer','mma','boxing'];
+var _PB_LIVE_SPORT_FALLBACK = ['mlb','nba','nfl','nhl','ncaaf','ncaab','tennis','soccer','golf','mma','boxing','rugby'];
 async function _pbResolveLiveSportKeys() {
   var liveKeys = [];
   var upcomingKeys = [];
@@ -4619,16 +4959,10 @@ function _updateSportTabs() {
   // Keys are Owls short keys; catalog aliases (soccer_epl, golf_pga, …)
   // roll up to the parent tab so league/tour feeds still count as games.
   var tabMap = {
-    mlb:'st-mlb', nba:'st-nba', nhl:'st-nhl', nfl:'st-nfl',
+    nfl:'st-nfl', mlb:'st-mlb', nba:'st-nba', nhl:'st-nhl',
     ncaaf:'st-ncaaf', ncaab:'st-ncaab',
-    tennis:'st-tennis', soccer:'st-soccer', golf:'st-golf',
-    wnba:'st-wnba', ncaabaseball:'st-ncaabaseball',
-    mma:'st-mma', boxing:'st-boxing',
-    nascar:'st-nascar', f1:'st-f1',
-    cricket:'st-cricket', rugby:'st-rugby', rugby_league:'st-rugby-league', afl:'st-afl',
-    table_tennis:'st-table-tennis',
-    cs2:'st-cs2', valorant:'st-valorant', lol:'st-lol', dota2:'st-dota2',
-    rocketleague:'st-rocketleague'
+    soccer:'st-soccer', tennis:'st-tennis', golf:'st-golf',
+    boxing:'st-boxing', mma:'st-mma', rugby:'st-rugby'
   };
   var catalogAliases = _SPORT_CATALOG_ALIASES;
   // Build a quick lookup: which sports does the backend currently know about?
@@ -4661,14 +4995,13 @@ function _updateSportTabs() {
     var blocked = isSportBlocked(sport);
     var entry    = catalogEntry(sport);
     var gameCount = entry ? (entry.games || 0) : (sportsByKey ? 0 : null);
-    var isActive = tab.classList.contains('active');
     var hasGames = gameCount === null || gameCount > 0;
     tab.style.display = '';
-    tab.style.opacity = blocked ? '0.35' : (hasGames ? '' : '0.55');
-    // Keep the active tab tappable even when the catalog reports 0 games —
-    // the lobby still fetches /api/odds/{sport} directly on load.
-    tab.style.pointerEvents = blocked ? 'none' : ((gameCount === 0 && !isActive) ? 'none' : '');
-    tab.classList.toggle('zero-games', !blocked && gameCount === 0 && !isActive);
+    tab.style.opacity = blocked ? '0.35' : '';
+    // Empty cells stay tappable so users can still switch sports and see
+    // the empty-state list; only host-blocked sports are disabled.
+    tab.style.pointerEvents = blocked ? 'none' : '';
+    tab.classList.toggle('zero-games', !blocked && gameCount === 0);
     tab.title = blocked
       ? ('Your host has disabled ' + sport.toUpperCase() + ' betting')
       : (hasGames ? '' : 'No games available right now');
@@ -4678,11 +5011,12 @@ function _updateSportTabs() {
       badge.className = 'sport-tab-count';
       tab.appendChild(badge);
     }
-    if (gameCount === null) {
-      badge.style.display = 'none';
+    if (gameCount === null || gameCount === 0) {
+      badge.classList.remove('is-on');
+      badge.textContent = '';
     } else {
-      badge.style.display = '';
-      badge.textContent = String(gameCount);
+      badge.classList.add('is-on');
+      badge.innerHTML = '<span class="sport-tab-avail-dot"></span>' + String(gameCount);
     }
     if (!hasGames) _dim++; else _vis++;
   });
@@ -4725,8 +5059,12 @@ async function setSport(el,sport){
     showToast(_sa.message, 'error');
     return;
   }
-  document.querySelectorAll('.sport-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.sport-tab').forEach(function(t){
+    t.classList.remove('active');
+    t.setAttribute('aria-selected', 'false');
+  });
   el.classList.add('active');
+  el.setAttribute('aria-selected', 'true');
   _currentSport = sport;
   _updateTeaserTab();
   _pbCollapseAllGameProps();
@@ -10864,7 +11202,7 @@ function renderMyBets() {
   // no host-mirror direct rendering.
   var html =
     '<div style="padding:16px 14px 8px;display:flex;justify-content:space-between;align-items:center">' +
-      '<span style="font-size:1rem;font-weight:900;color:#111">My Bets</span>' +
+      '<span style="font-size:1rem;font-weight:900;color:#f4f7fb">My Bets</span>' +
       '<div style="display:flex;gap:6px">' +
         '<button onclick="openGradedAudit()" style="font-size:0.7rem;font-weight:700;color:#7c3aed;background:rgba(124,58,237,0.08);border:1.5px solid #7c3aed;border-radius:20px;padding:5px 12px;cursor:pointer">🧪 Graded ('+(graded.length)+')</button>' +
         '<button id="check-results-btn" onclick="checkOpenTickets()" style="font-size:0.7rem;font-weight:700;color:#0064c8;background:none;border:1.5px solid #0064c8;border-radius:20px;padding:5px 12px;cursor:pointer">Check Results</button>' +
@@ -10921,7 +11259,7 @@ function renderMyBets() {
   }
   html += '<div style="height:80px"></div>'; // nav clearance
   el.innerHTML = html;
-  el.style.background = '#f5f5f5';
+  el.style.background = '#070b12';
   el.style.minHeight = '100vh';
   var _search = document.getElementById('mybets-search');
   if (_search) {
