@@ -527,17 +527,21 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
      odds buttons get clipped by .market-card{overflow:hidden}. Switch the
      team track to minmax(0,1fr) and the odds tracks to minmax(0,90px) so
      they shrink instead of overflowing. */
-  .market-card{margin:0 12px 12px;max-width:calc(100vw - 24px)}
+  .market-card{margin:0 10px 12px;max-width:calc(100vw - 20px)}
   .market-card .mc-cols,
   .market-card .mc-team-row{
-    grid-template-columns: minmax(0,1fr) minmax(0,90px) minmax(0,90px) minmax(0,90px);
-    gap:5px;
-    padding:0 12px;
+    grid-template-columns: minmax(0,1fr) minmax(0,78px) minmax(0,78px) minmax(0,78px);
+    gap:4px;
+    padding:0 10px;
   }
-  .market-card .mc-team{min-width:0;gap:8px}
-  .market-card .mc-team > div{min-width:0}
+  .market-card .mc-team{min-width:0;gap:6px}
+  .market-card .mc-team > div{min-width:0;flex:1}
   .market-card .mc-name,
-  .market-card .mc-city{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .market-card .mc-city{
+    min-width:0;overflow:visible;text-overflow:unset;
+    white-space:normal;overflow-wrap:break-word;word-break:normal;hyphens:auto
+  }
+  .market-card .mc-name{line-height:1.2;max-height:2.4em}
   .market-card .mc-jersey{width:44px;height:44px;flex-shrink:0}
   .market-card .odds-box,
   .market-card .mkt-odds-box{min-width:0;max-width:100%;padding-left:2px;padding-right:2px}
@@ -571,8 +575,12 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
     padding:0 14px;
   }
   .market-card .mc-team{min-width:0}
+  .market-card .mc-team > div{min-width:0;flex:1}
   .market-card .mc-name,
-  .market-card .mc-city{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .market-card .mc-city{
+    min-width:0;overflow:visible;text-overflow:unset;
+    white-space:normal;overflow-wrap:break-word
+  }
   .market-card .odds-box,
   .market-card .mkt-odds-box{flex-shrink:0;min-width:0;max-width:100%}
   /* Hide both legacy and DK floating bars on desktop — docked panel will
@@ -686,7 +694,7 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
   .bs-drawer.open{display:flex;flex-direction:column}
   #mybets-section{overflow-x:hidden;max-width:100%}
   #mybets-section .mc-team,#mybets-section .mc-name{
-    min-width:0;overflow:hidden;text-overflow:ellipsis
+    min-width:0;overflow:visible;text-overflow:unset;white-space:normal;overflow-wrap:break-word
   }
   table{max-width:100%}
   .table-scroll,[style*="overflow-x:auto"]{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
@@ -708,19 +716,34 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
   .mc-prop-sec-title{font-size:0.7rem}
 }
 @media (max-width:400px){
-  .market-card{margin:0 8px 10px;max-width:calc(100vw - 16px)}
+  .market-card{margin:0 6px 10px;max-width:calc(100vw - 12px)}
   .market-card .mc-cols,
   .market-card .mc-team-row{
-    grid-template-columns: minmax(0,1fr) minmax(0,72px) minmax(0,72px) minmax(0,72px);
-    gap:4px;
-    padding:0 8px;
+    /* Odds columns capped so team names keep usable width at ~390px */
+    grid-template-columns: minmax(0,1fr) minmax(0,68px) minmax(0,68px) minmax(0,68px);
+    gap:3px;
+    padding:0 6px;
   }
+  .market-card .mc-header,
+  .market-card .mc-footer{padding-left:8px;padding-right:8px}
+  .market-card .mc-divider{margin:0 8px}
+  .market-card .mc-team{gap:6px}
+  .market-card .mc-team > div{min-width:0;flex:1}
+  .market-card .mc-name,
+  .market-card .mc-city{
+    min-width:0;overflow:visible;text-overflow:unset;
+    white-space:normal;overflow-wrap:break-word;word-break:normal
+  }
+  .market-card .mc-name{font-size:0.84rem;line-height:1.2;max-height:2.4em}
+  .market-card .mc-city{font-size:0.55rem;line-height:1.15}
   .market-card .odds-box,
   .market-card .mkt-odds-box{
-    min-height:44px;min-width:0;padding:4px 2px;
+    min-height:44px;min-width:0;padding:4px 1px;
     display:flex;flex-direction:column;align-items:center;justify-content:center
   }
-  .market-card .mc-jersey{width:36px;height:36px}
+  .market-card .odds-box .odds-num{font-size:0.8rem}
+  .market-card .odds-box .odds-line{font-size:0.55rem}
+  .market-card .mc-jersey{width:36px;height:36px;flex-shrink:0}
   .dkslip,.dkslip.open,.bs-drawer,.modal{
     max-width:100vw;width:100%;box-sizing:border-box
   }
@@ -907,79 +930,125 @@ body{
 .bn.active .bn-label{color:var(--accent)}
 .bn.active .bn-icon svg{stroke:var(--accent);filter:drop-shadow(0 0 5px rgba(61,139,253,0.45))}
 
-/* SLIP BAR */
-.slip-bar,.bs-bar{
-  background:linear-gradient(180deg,#3d8bfd,#2f74e0);border-radius:14px;
-  box-shadow:0 8px 28px rgba(61,139,253,0.3);
+/* ═══════════════════════════════════════════════════════════════════════════
+   BET SLIP — restore pre-redesign PocketBooks colors (ref: 5bb0c9d)
+   Dashboard chrome stays dark; slip UI returns to original light/green sheet.
+   Presentation only — no JS / betting logic changes.
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* Slip open bars: original green (not remapped --green/#3d8bfd) */
+.slip-bar{
+  background:#00ff87!important;
+  box-shadow:0 8px 32px rgba(0,255,135,0.3)!important;
 }
-.slip-count,.bs-badge{background:#041018;color:#9ec5ff}
+.slip-count{background:#000!important;color:#00ff87!important}
+.bs-bar{
+  background:#00ff88!important;
+  box-shadow:0 8px 28px rgba(0,255,136,0.35)!important;
+}
+.bs-badge{background:#000!important;color:#00ff88!important}
 
-/* BET SLIP — dark sportsbook sheet */
-.dkslip-overlay{background:rgba(2,6,12,0.72)}
+.dkslip-overlay{background:rgba(0,0,0,0.55)!important}
 .dkslip{
-  background:var(--bg-elev)!important;border-radius:18px 18px 0 0;
-  box-shadow:0 -10px 40px rgba(0,0,0,0.55);border:1px solid var(--border);border-bottom:none;
+  background:#f2f2f2!important;border-radius:20px 20px 0 0!important;
+  box-shadow:0 -8px 40px rgba(0,0,0,0.6)!important;border:none!important;
 }
-.dkslip-hdr{background:var(--card)!important;border-bottom:1px solid var(--border)!important;border-radius:18px 18px 0 0}
-.dkslip-badge{background:var(--accent)!important;color:#fff!important}
-.dkslip-title{color:var(--white)!important}
-.dkslip-clear{color:var(--accent)!important}
-.dkslip-close{background:var(--card2)!important;color:var(--light)!important;border:1px solid var(--border)}
-.dkslip-tabs{background:var(--card)!important;border-bottom:1px solid var(--border)!important}
-.dkslip-tab{background:var(--card2)!important;color:var(--gray)!important;border-radius:10px}
-.dkslip-tab.active{background:#0d1420!important;color:#fff!important;box-shadow:inset 0 -2px 0 var(--accent)}
-.dkslip-scroll{background:var(--bg-elev)!important}
+.dkslip-hdr{
+  background:#fff!important;border-bottom:1px solid #e8e8e8!important;
+  border-radius:20px 20px 0 0!important;
+}
+.dkslip-badge{background:#00c853!important;color:#fff!important}
+.dkslip-title{color:#111!important}
+.dkslip-clear{color:#0064c8!important}
+.dkslip-close{background:#eee!important;color:#333!important;border:none!important}
+.dkslip-tabs{background:#fff!important;border-bottom:1px solid #e8e8e8!important}
+.dkslip-tab{background:#f0f0f0!important;color:#555!important;border-radius:8px!important;box-shadow:none!important}
+.dkslip-tab.active{background:#111!important;color:#00ff88!important;box-shadow:none!important}
+.dkslip-tab:disabled{opacity:0.35;cursor:not-allowed}
+.dkslip-scroll{background:#f2f2f2!important}
 .dkslip-card,.parlay-mini,.stake-all-row{
-  background:var(--card)!important;border:1px solid var(--border)!important;border-radius:14px;
-  box-shadow:none!important;color:var(--white)!important;
+  background:#fff!important;border:none!important;border-radius:14px!important;
+  box-shadow:0 1px 4px rgba(0,0,0,0.08)!important;color:#111!important;
 }
-.dkslip-card-hdr{border-bottom:1px solid var(--border)!important}
-.dkslip-card-title,.dkslip-leg-pick,.parlay-mini-title{color:var(--white)!important}
-.dkslip-card-odds,.dkslip-payout span:last-child,.parlay-mini-odds,.single-payout{color:var(--win)!important}
-.dkslip-leg{border-bottom:1px solid rgba(255,255,255,0.04)!important}
-.dkslip-leg-matchup{color:var(--gray)!important}
-.dkslip-leg-mkt{color:var(--accent)!important}
-.dkslip-leg-odds{color:var(--white)!important}
-.dkslip-leg-rm{color:var(--gray)!important}
-.dkslip-entry{background:var(--card)!important;border-top:1px solid var(--border)!important}
-.dkslip-qa,.single-qa{
-  background:var(--card2)!important;border:1px solid var(--border)!important;color:var(--light)!important;
+.stake-all-row{box-shadow:0 1px 3px rgba(0,0,0,0.06)!important;border-radius:12px!important}
+.dkslip-card-hdr{border-bottom:1px solid #f0f0f0!important}
+.dkslip-card-title,.dkslip-leg-pick,.parlay-mini-title{color:#111!important}
+.dkslip-card-odds,.dkslip-payout span:last-child,.parlay-mini-odds,.single-payout{color:#00c853!important}
+.dkslip-leg{border-bottom:1px solid #f5f5f5!important}
+.dkslip-leg:last-child{border-bottom:none!important}
+.dkslip-leg-matchup{color:#999!important}
+.dkslip-leg-mkt{color:#0064c8!important}
+.dkslip-leg-odds{color:#111!important}
+.dkslip-leg-rm{color:#bbb!important;background:none!important}
+.dkslip-entry{background:#fff!important;border-top:1px solid #e0e0e0!important}
+.dkslip-qa{
+  background:#f5f5f5!important;border:1px solid #e0e0e0!important;color:#333!important;
 }
-.dkslip-input-row,.single-inp-row{
-  background:#0d1420!important;border:1px solid var(--border)!important;border-radius:10px;
+.dkslip-qa:hover{background:#e8e8e8!important}
+.single-qa{
+  background:#fff!important;border:1px solid #ddd!important;color:#333!important;
 }
-.dkslip-input-row span,.single-inp-row span{color:var(--gray)!important}
-.dkslip-input-row input,.single-inp-row input{color:var(--white)!important}
-.dkslip-payout span:first-child{color:var(--gray)!important}
-.dkslip-place-btn.ready{background:var(--accent)!important;color:#fff!important}
-.dkslip-place-btn.empty{background:#1a2436!important;color:#5d6b7e!important}
-.single-card-footer{background:#0e1520!important;border-top:1px solid var(--border)!important}
-.dkslip-confirm{background:var(--bg-elev)!important}
-.dkslip-confirm-footer{background:var(--card)!important;border-top:1px solid var(--border)!important}
-.dkslip-share-btn{border-color:var(--border);color:var(--light)}
-.modal{background:var(--card)}
-.mh{background:var(--card);border-bottom:1px solid var(--border)}
-.stype{background:var(--card2);border:1px solid var(--border);color:var(--gray)}
-.stype.active{background:var(--accent);color:#fff;border-color:var(--accent)}
-.leg{background:var(--card2);border:1px solid var(--border)}
-.pbox{background:var(--card2);border:1px solid var(--border)}
-.risk-inp{background:#0d1420;border:1px solid var(--border);color:#fff}
-.risk-inp:focus{border-color:var(--accent)}
-.qa{background:var(--card2);border:1px solid var(--border);color:var(--light)}
-.place-btn{background:var(--accent);color:#fff}
-.sl-badge{background:var(--accent);color:#fff}
-.bs-drawer{background:var(--bg-elev)!important;border:1px solid var(--border)}
-.bs-hdr{background:var(--bg-elev)!important;border-bottom:1px solid var(--border)}
-.bs-leg{background:var(--card)!important;border:1px solid var(--border)!important}
-.bs-tab{background:var(--card2);border:1px solid var(--border);color:var(--gray)}
-.bs-tab.active{background:var(--accent-soft);color:#fff;border-color:rgba(61,139,253,0.4)}
-.bs-odds-val{color:var(--win)!important}
-.numpad{background:#121a27;border-top:1px solid var(--border)}
-.numpad-key{background:var(--card);color:#fff;box-shadow:none;border:1px solid var(--border)}
-.numpad-key.dark{background:#1a2436}
-.numpad-active-bar{background:var(--card)}
-.numpad-active-val{color:#fff}
-.numpad-done{background:var(--accent)}
+.dkslip-input-row{
+  background:#f5f5f5!important;border:1.5px solid #ddd!important;border-radius:10px!important;
+}
+.single-inp-row{
+  background:#fff!important;border:1.5px solid #ddd!important;border-radius:8px!important;
+}
+.dkslip-input-row span{color:#555!important}
+.single-inp-row span{color:#888!important}
+.dkslip-input-row input,.single-inp-row input{color:#111!important;background:none!important}
+.dkslip-payout span:first-child{color:#777!important}
+.dkslip-place-btn.ready{background:#00c853!important;color:#fff!important}
+.dkslip-place-btn.empty{background:#e0e0e0!important;color:#aaa!important;cursor:default}
+.single-card-footer{background:#fafafa!important;border-top:1px solid #f5f5f5!important}
+.dkslip-confirm{background:#f2f2f2!important}
+.dkslip-confirm-footer{background:#fff!important;border-top:1px solid #e0e0e0!important}
+.dkslip-share-btn{background:transparent!important;border:1px solid #ddd!important;color:#555!important}
+.dkslip-leg-limit{color:#888!important}
+
+/* Legacy modal slip (same original palette) */
+.modal{background:#1a1a1a}
+.mh{background:#1a1a1a;border-bottom:1px solid #2a2a2a}
+.stype{background:#222;border:1px solid #2a2a2a;color:#666}
+.stype.active{background:#00ff87;color:#000;border-color:#00ff87}
+.leg{background:#222;border:1px solid #2a2a2a}
+.pbox{background:#222;border:1px solid #2a2a2a}
+.risk-inp{background:#222;border:1.5px solid #2a2a2a;color:#fff}
+.risk-inp:focus{border-color:#00ff87}
+.qa{background:#222;border:1px solid #2a2a2a;color:#aaa}
+.place-btn{background:#00ff87;color:#000}
+.place-btn:disabled{opacity:0.4}
+.sl-badge{background:#00ff87;color:#000}
+
+/* Legacy dark bs-drawer path (pre-redesign values from 5bb0c9d) */
+.bs-drawer{background:#111!important;border:none!important}
+.bs-hdr{background:#111!important;border-bottom:1px solid #1e1e1e!important}
+.bs-leg{background:#1a1a1a!important;border:1px solid #222!important}
+.bs-tab{background:#1a1a1a!important;border:1px solid #2a2a2a!important;color:#555!important}
+.bs-tab.active{background:rgba(0,255,136,0.12)!important;color:#00ff88!important;border-color:rgba(0,255,136,0.3)!important}
+.bs-odds-val{color:#00ff88!important}
+.bs-clear{color:#ff3d57!important}
+.bs-market{color:#00c2ff!important}
+.bs-pick{color:#fff!important}
+.bs-game{color:#555!important}
+.bs-remove{background:rgba(255,255,255,0.06)!important;color:#555!important}
+.bs-leg-pick{color:#f0f0f0!important}
+.bs-leg-mkt{color:#00c2ff!important}
+.bs-leg-matchup{color:#444!important}
+.bs-close{background:rgba(255,255,255,0.08)!important;color:#888!important}
+
+/* Numpad — original light sheet */
+.numpad{background:#e9e9ef!important;border-top:1px solid #d0d0d0!important}
+.numpad-key{background:#fff!important;color:#111!important;box-shadow:0 1px 2px rgba(0,0,0,0.15)!important;border:none!important}
+.numpad-key.dark{background:#d8d8de!important;color:#111!important}
+.numpad-active-bar{background:#fff!important}
+.numpad-active-label{color:#888!important}
+.numpad-active-val{color:#111!important}
+.numpad-done{background:#00c853!important;color:#fff!important}
+
+/* Parlay insurance (inside slip) — original */
+.parlay-insure{background:#f8f5ff!important;border:1.5px solid #ddd6fe!important}
+.parlay-insure label{color:#111!important}
+.parlay-insure small{color:#7c3aed!important}
 
 /* MY BETS — dark overrides for inline light styles */
 #mybets-section{
@@ -1041,6 +1110,156 @@ body{
   .hdr-club{display:none}
   .header{padding:8px 8px}
   .hdr-back,.icon-btn,.notif-bell,.buy-diamonds-nav-btn{width:34px;height:34px;min-width:34px;border-radius:10px}
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE LAYOUT FIX — must come AFTER redesign block
+   Redesign re-applied body{max-width:430px} after the earlier desktop MQ,
+   so desktop rendered as a phone-width column. Re-assert breakpoints here.
+   Also ensure team names wrap (no ellipsis crop) at mobile widths.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Team names: readable wrap by default (sportsbook cards) */
+.market-card .mc-team > div{min-width:0;flex:1}
+.market-card .mc-name,
+.market-card .mc-city{
+  min-width:0;overflow:visible;text-overflow:unset;
+  white-space:normal;overflow-wrap:break-word;word-break:normal
+}
+.market-card .mc-name{line-height:1.2}
+
+/* ── Tablet (≥768): leave phone shell; real intermediate width ── */
+@media (min-width:768px){
+  body{
+    max-width:760px;
+    padding-bottom:80px;
+  }
+  .bnav{
+    max-width:760px;width:100%;
+    left:50%;right:auto;transform:translateX(-50%);margin:0;
+  }
+  .slip-bar,.bs-bar{max-width:728px;width:calc(100% - 32px)}
+  .dkslip,.bs-drawer,.modal,.numpad{max-width:760px}
+  .header{padding:14px 20px}
+  .sport-grid{
+    grid-template-columns:repeat(6,minmax(0,1fr));
+    padding:18px 16px 16px;gap:16px 12px;
+  }
+  .sport-tab-emoji{width:56px;height:56px}
+  .sport-tab-emoji img{width:36px;height:36px}
+  .market-card{margin:0 16px 14px;max-width:none}
+  .market-card .mc-cols,
+  .market-card .mc-team-row{
+    grid-template-columns:minmax(0,1fr) minmax(78px,90px) minmax(78px,90px) minmax(78px,90px);
+    gap:6px;padding:0 16px;
+  }
+  .market-card .mc-jersey{width:44px;height:44px}
+  .filter-row{padding:12px 16px 4px}
+  #sportsbook-section,#mybets-section,#live-section,#predictions-section,#results-section{
+    padding-left:4px;padding-right:4px
+  }
+}
+
+/* ── Desktop (≥1100): true sportsbook width + card grid + docked slip ── */
+@media (min-width:1100px){
+  body{max-width:1080px;padding-bottom:40px}
+  .bnav{
+    max-width:1080px;width:1080px;
+    left:calc(50vw - 540px);right:auto;transform:none;margin:0
+  }
+  .header{padding:16px 24px}
+  #sportsbook-section,#mybets-section,#live-section,#predictions-section,#results-section{
+    padding-left:8px;padding-right:8px
+  }
+  .sport-grid{
+    grid-template-columns:repeat(6,minmax(0,1fr));
+    padding:20px 20px 18px;gap:18px 14px
+  }
+  .sport-tab-emoji{width:60px;height:60px}
+  .sport-tab-emoji img{width:38px;height:38px}
+  #games-list,#live-games-list{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));
+    gap:14px;padding:0 16px;transition:padding-right 0.18s ease
+  }
+  #games-list > *,#live-games-list > *{margin:0!important;min-width:0}
+  .market-card{
+    margin:0;max-width:none;min-width:0;
+    transition:transform 0.12s,box-shadow 0.15s
+  }
+  .market-card:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,0,0,0.7)}
+  .market-card .mc-cols,
+  .market-card .mc-team-row{
+    grid-template-columns:minmax(0,1fr) minmax(70px,90px) minmax(70px,90px) minmax(70px,90px);
+    gap:6px;padding:0 14px
+  }
+  .market-card .mc-team{min-width:0}
+  .market-card .mc-team > div{min-width:0;flex:1}
+  .market-card .mc-name,
+  .market-card .mc-city{
+    min-width:0;overflow:visible;text-overflow:unset;
+    white-space:normal;overflow-wrap:break-word
+  }
+  .market-card .odds-box,
+  .market-card .mkt-odds-box{flex-shrink:0;min-width:0;max-width:100%}
+  .slip-bar,.slip-bar.show,.bs-bar,.bs-bar.show{display:none!important}
+  .modal-bg#modal-slip{display:none!important}
+  body:not(.has-slip-items) #bs-drawer{display:none!important}
+  body:not(.has-slip-items) #bs-overlay{display:none!important}
+  body.has-slip-items{padding-right:360px}
+  body.has-slip-items .bnav{max-width:720px;width:720px;left:calc(50vw - 540px)}
+  body.has-slip-items #bs-drawer{
+    display:flex!important;position:fixed!important;
+    top:80px!important;right:24px!important;bottom:24px!important;left:auto!important;
+    width:320px!important;max-width:320px!important;height:auto!important;max-height:none!important;
+    border-radius:18px!important;box-shadow:0 12px 36px rgba(0,0,0,0.6)!important;
+    border:1px solid var(--border)!important;transform:none!important;z-index:60!important;
+    overflow:hidden!important;animation:pbDeskSlipIn 0.22s ease-out
+  }
+  body.has-slip-items #bs-overlay{display:none!important}
+  body.has-slip-items #bs-drawer .dkslip-close{display:none!important}
+  .dkslip{left:auto!important;right:24px!important;transform:none!important;max-width:520px!important}
+  .modal-bg:not(#modal-slip):not(#bs-overlay){align-items:center!important}
+  .modal-bg:not(#modal-slip):not(#bs-overlay) .modal{max-width:560px!important;border-radius:20px!important}
+  #ps-overlay{align-items:center!important}
+  #ps-overlay > div{max-width:560px!important;border-radius:20px!important}
+}
+
+/* ── Wide desktop (≥1280 / 1440): more breathing room ── */
+@media (min-width:1280px){
+  body{max-width:1240px}
+  .bnav{max-width:1240px;width:1240px;left:calc(50vw - 620px)}
+  body.has-slip-items .bnav{max-width:880px;width:880px;left:calc(50vw - 620px)}
+  .sport-grid{padding:22px 24px 20px;gap:20px 16px}
+  #games-list,#live-games-list{
+    grid-template-columns:repeat(auto-fit,minmax(420px,1fr));
+    gap:16px;padding:0 20px
+  }
+  .market-card .mc-cols,
+  .market-card .mc-team-row{
+    grid-template-columns:minmax(0,1fr) minmax(80px,100px) minmax(80px,100px) minmax(80px,100px);
+    padding:0 16px;gap:8px
+  }
+  .market-card .mc-jersey{width:48px;height:48px}
+  .market-card .mc-name{font-size:0.95rem}
+}
+@media (min-width:1440px){
+  body{max-width:1360px}
+  .bnav{max-width:1360px;width:1360px;left:calc(50vw - 680px)}
+  body.has-slip-items .bnav{max-width:1000px;width:1000px;left:calc(50vw - 680px)}
+  #games-list,#live-games-list{
+    grid-template-columns:repeat(auto-fit,minmax(460px,1fr));
+    gap:18px;padding:0 24px
+  }
+}
+
+/* Compact phones: keep team-name wrap after redesign overrides */
+@media (max-width:400px){
+  .market-card .mc-name,
+  .market-card .mc-city{
+    overflow:visible!important;text-overflow:unset!important;
+    white-space:normal!important;overflow-wrap:break-word
+  }
+  .market-card .mc-team > div{min-width:0;flex:1}
 }
 
 </style>

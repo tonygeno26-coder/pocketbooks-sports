@@ -36,7 +36,11 @@ console.log('\n-- 390px mobile layout --');
 
 test('player sportsbook shrinks odds columns at 390px', function() {
   const src = read('player.html');
-  assert(src.includes('minmax(0,72px) minmax(0,72px) minmax(0,72px)'));
+  assert(
+    src.includes('minmax(0,68px) minmax(0,68px) minmax(0,68px)') ||
+    src.includes('minmax(0,72px) minmax(0,72px) minmax(0,72px)'),
+    'missing compact odds column template'
+  );
   assert(src.includes('min-height:44px'));
 });
 
