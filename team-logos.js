@@ -348,7 +348,8 @@
     'UTSA Roadrunners': '2636', 'UTEP Miners': '2638',
     'Texas Tech Red Raiders': '2641', 'Toledo Rockets': '2649',
     'Troy Trojans': '2653', 'Tulane Green Wave': '2655',
-    'Western Michigan Broncos': '2711', 'Wyoming Cowboys': '2751'
+    'Western Michigan Broncos': '2711', 'Wyoming Cowboys': '2751',
+    'North Dakota State Bison': '2449', 'Sacramento State Hornets': '16'
   };
 
   var NCAAF_SHORT_ALIASES = {
@@ -464,6 +465,11 @@
     'Miami (OH)': 'Miami (OH) RedHawks',
     'Miami OH': 'Miami (OH) RedHawks',
     'M-OH': 'Miami (OH) RedHawks',
+    'Miami': 'Miami Hurricanes',
+    'Miami (FL)': 'Miami Hurricanes',
+    'Miami FL': 'Miami Hurricanes',
+    'Miami Florida': 'Miami Hurricanes',
+    'MIA': 'Miami Hurricanes',
     'Ohio State': 'Ohio State Buckeyes',
     'OSU': 'Ohio State Buckeyes',
     'Ohio': 'Ohio Bobcats',
@@ -746,7 +752,7 @@
     }),
     wnba: _buildMaps(WNBA_FULL, _aliasFromFull(WNBA_FULL), {}),
     mls: _buildMaps(MLS_FULL, _aliasFromFull(MLS_FULL), {}),
-    ncaafb: _buildMaps(NCAAF_FULL, _aliasFromFull(NCAAF_FULL, NCAAF_SHORT_ALIASES), {}),
+    ncaafb: _buildMaps(NCAAF_FULL, NCAAF_SHORT_ALIASES, {}),
     ncaab: _buildMaps(NCAAB_FULL, _aliasFromFull(NCAAB_FULL), {})
   };
 
@@ -777,9 +783,36 @@
     if (data.fullToAbbrev[n]) return n;
     var alias = data.aliases[n] || data.aliases[n.toUpperCase()];
     if (alias && data.fullToAbbrev[alias]) return alias;
-    var keys = Object.keys(data.fullToAbbrev);
-    for (var i = 0; i < keys.length; i++) {
-      if (teamMatches(keys[i], n)) return keys[i];
+    var lower = n.toLowerCase();
+    var fullKeys = Object.keys(data.fullToAbbrev);
+    for (var fi = 0; fi < fullKeys.length; fi++) {
+      if (fullKeys[fi].toLowerCase() === lower) return fullKeys[fi];
+    }
+    var aliasKeys = Object.keys(data.aliases);
+    for (var ai = 0; ai < aliasKeys.length; ai++) {
+      if (aliasKeys[ai].toLowerCase() === lower) {
+        var mapped = data.aliases[aliasKeys[ai]];
+        if (mapped && data.fullToAbbrev[mapped]) return mapped;
+      }
+    }
+    var want = n.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (want) {
+      for (var ni = 0; ni < fullKeys.length; ni++) {
+        var nk = fullKeys[ni].toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (nk === want) return fullKeys[ni];
+      }
+      for (var aj = 0; aj < aliasKeys.length; aj++) {
+        var ak = aliasKeys[aj].toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (ak === want) {
+          var mapped2 = data.aliases[aliasKeys[aj]];
+          if (mapped2 && data.fullToAbbrev[mapped2]) return mapped2;
+        }
+      }
+    }
+    // NCAAF: never use loose substring fuzzy matching
+    if (sport === 'ncaafb') return n;
+    for (var i = 0; i < fullKeys.length; i++) {
+      if (teamMatches(fullKeys[i], n)) return fullKeys[i];
     }
     return n;
   }
@@ -1876,7 +1909,7 @@
       try {
         var url = 'https://site.api.espn.com/apis/common/v3/search?query=' +
           encodeURIComponent(name + ' ncaa football') +
-          '&sport=football&type=team&limit=5';
+          '&sport=football&type=team&limit=8';
         var res = await fetch(url, { cache: 'force-cache' });
         if (!res.ok) {
           _ncaafMiss[k] = true;
@@ -1886,19 +1919,17 @@
         var items = (data && data.items) || [];
         var want = k;
         var pick = null;
+        var ambiguous = false;
         for (var i = 0; i < items.length; i++) {
           var it = items[i];
           if (!_isCollegeFootballSearchItem(it)) continue;
           var dn = _normKey(it.displayName || it.name || '');
-          if (dn === want) { pick = it; break; }
-          if (!pick && (dn.indexOf(want) >= 0 || want.indexOf(dn) >= 0)) pick = it;
-        }
-        if (!pick) {
-          for (var j = 0; j < items.length; j++) {
-            if (_isCollegeFootballSearchItem(items[j])) { pick = items[j]; break; }
+          if (dn === want) {
+            if (pick && String(pick.id) !== String(it.id)) { ambiguous = true; break; }
+            pick = it;
           }
         }
-        if (!pick || !pick.id) {
+        if (ambiguous || !pick || !pick.id) {
           _ncaafMiss[k] = true;
           return null;
         }
@@ -1925,11 +1956,72 @@
     return _ncaafPending[k];
   }
 
+  var _ncaafApiSeeded = false;
+  var _ncaafApiPromise = null;
+
+  function _rememberNcaafMapping(name, id) {
+    if (!name || id == null) return;
+    var idStr = String(id);
+    var k = _normKey(name);
+    if (!k) return;
+    _ncaafIdByNorm[k] = idStr;
+    _ncaafCacheWrite(k, idStr);
+    if (TEAM_DATA.ncaafb) {
+      var keys = Object.keys(TEAM_DATA.ncaafb.fullToAbbrev || {});
+      for (var i = 0; i < keys.length; i++) {
+        if (String(TEAM_DATA.ncaafb.fullToAbbrev[keys[i]]) === idStr) {
+          TEAM_DATA.ncaafb.aliases[name] = keys[i];
+          break;
+        }
+      }
+    }
+  }
+
+  async function warmNcaafTeamLogosFromApi(apiBase) {
+    if (_ncaafApiSeeded) return true;
+    if (_ncaafApiPromise) return _ncaafApiPromise;
+    var base = String(apiBase || (typeof global.API === 'string' ? global.API : '') || '').replace(/\/$/, '');
+    if (!base) return false;
+    _ncaafApiPromise = (async function () {
+      try {
+        var res = await fetch(base + '/api/team-logos/ncaaf', { cache: 'no-store' });
+        if (!res.ok) return false;
+        var data = await res.json();
+        var teams = (data && data.teams) || [];
+        teams.forEach(function (t) {
+          if (!t) return;
+          var id = t.providerTeamId || t.provider_team_id;
+          var canon = t.canonicalName || t.canonical_name || t.displayName || t.display_name;
+          if (canon && id) {
+            if (TEAM_DATA.ncaafb && !TEAM_DATA.ncaafb.fullToAbbrev[canon]) {
+              TEAM_DATA.ncaafb.fullToAbbrev[canon] = String(id);
+            }
+            _rememberNcaafMapping(canon, id);
+          }
+          (t.aliases || []).forEach(function (a) { _rememberNcaafMapping(a, id); });
+          if (t.abbreviation) _rememberNcaafMapping(t.abbreviation, id);
+          if (t.location) _rememberNcaafMapping(t.location, id);
+        });
+        _ncaafApiSeeded = true;
+        return true;
+      } catch (_e) {
+        return false;
+      } finally {
+        _ncaafApiPromise = null;
+      }
+    })();
+    return _ncaafApiPromise;
+  }
+
   async function hydrateEspnLobbyMedia(root) {
     var scope = root || (typeof document !== 'undefined' ? document : null);
     if (!scope || !scope.querySelectorAll) return;
 
     await warmSoccerTeamsCache();
+    try {
+      var apiBase = (typeof global.API === 'string' && global.API) || '';
+      await warmNcaafTeamLogosFromApi(apiBase);
+    } catch (_eApi) {}
 
     // Shared verified/search photo hydrate for tennis (and any data-player-photo nodes)
     if (typeof global.hydratePlayerPhotos === 'function') {
