@@ -585,17 +585,39 @@
     if (_pending[key]) return _pending[key];
 
     _pending[key] = (async function () {
-      var searchSport = ESPN_SEARCH_SPORT[sport] || sport;
-      var queries = [];
-      if (sport === 'tennis') {
-        queries = tennisSearchQueries(playerName);
-      } else {
-        var query = String(playerName || '').trim();
-        if (team) query = query + ' ' + String(team).trim();
-        queries.push(query);
-        if (team) queries.push(String(playerName || '').trim());
-      }
       try {
+        try {
+          var apiBase = (typeof global.API === 'string' && global.API)
+            || global._PBS_BACKEND
+            || 'https://pocketbooks-sports-backend-production.up.railway.app';
+          var dbRes = await fetch(apiBase + '/api/player-photo/' +
+            encodeURIComponent(sport) + '/' + encodeURIComponent(String(playerName || '').trim()),
+            { cache: 'no-store' });
+          if (dbRes.ok) {
+            var dbJson = await dbRes.json();
+            if (dbJson && dbJson.ok && dbJson.photoUrl) {
+              var dbHit = {
+                id: dbJson.espnId ? String(dbJson.espnId) : '',
+                headshotUrl: dbJson.photoUrl,
+                fromDb: true
+              };
+              _memCache[key] = dbHit;
+              writePersistentCache(key, { espnId: dbHit.id, headshotUrl: dbHit.headshotUrl });
+              return dbHit;
+            }
+          }
+        } catch (_dbE) { /* fall through to ESPN search */ }
+
+        var searchSport = ESPN_SEARCH_SPORT[sport] || sport;
+        var queries = [];
+        if (sport === 'tennis') {
+          queries = tennisSearchQueries(playerName);
+        } else {
+          var query = String(playerName || '').trim();
+          if (team) query = query + ' ' + String(team).trim();
+          queries.push(query);
+          if (team) queries.push(String(playerName || '').trim());
+        }
         var pick = null;
         for (var qi = 0; qi < queries.length && !pick; qi++) {
           var q = queries[qi];
