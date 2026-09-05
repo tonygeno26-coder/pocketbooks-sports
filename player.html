@@ -199,6 +199,25 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .odds-pos{color:#00ff88;text-shadow:0 0 10px rgba(0,255,136,0.5)}
 .odds-line{font-size:0.65rem;color:#666;line-height:1}
 .odds-num{font-size:0.95rem;font-weight:900;letter-spacing:-0.3px}
+.odds-cmp{font-size:0.52rem;font-weight:900;line-height:1;margin-top:1px;letter-spacing:0}
+.odds-cmp-better{color:#16a34a}
+.odds-cmp-worse{color:#dc2626}
+.odds-cmp-even{color:#9ca3af}
+.odds-best-tag{display:block;font-size:0.48rem;font-weight:800;color:#16a34a;letter-spacing:0.2px;margin-top:1px}
+.mybets-toolbar{padding:0 14px 10px}
+.mybets-search{width:100%;padding:10px 12px;border:1.5px solid #e0e0e0;border-radius:10px;font-size:0.85rem;font-weight:600;outline:none;background:#fff;color:#111}
+.mybets-search:focus{border-color:#0064c8}
+.mybets-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.mybets-chip{border:1.5px solid #ddd;background:#fff;color:#555;border-radius:16px;padding:5px 10px;font-size:0.68rem;font-weight:800;cursor:pointer}
+.mybets-chip.on{background:#0064c8;border-color:#0064c8;color:#fff}
+.mybets-chip.range.on{background:#111;border-color:#111}
+.notif-item-actions{display:flex;gap:8px;margin-top:8px}
+.notif-act{flex:1;padding:7px 8px;border-radius:8px;font-size:0.68rem;font-weight:800;cursor:pointer;border:none}
+.notif-act.accept{background:#00c853;color:#fff}
+.notif-act.decline{background:#f0f0f0;color:#555}
+.parlay-insure{display:none;margin:0 0 10px;padding:10px 12px;background:#f8f5ff;border:1.5px solid #ddd6fe;border-radius:10px}
+.parlay-insure label{display:flex;align-items:center;gap:8px;font-size:0.78rem;font-weight:800;color:#111;cursor:pointer}
+.parlay-insure small{display:block;margin-top:4px;font-size:0.62rem;color:#7c3aed;font-weight:600;line-height:1.35}
 .odds-pos{color:#00ff88;text-shadow:0 0 8px rgba(0,255,136,0.4)}
 .odds-neg{color:#e0e0e0}
 .mc-divider{height:1px;background:linear-gradient(90deg,transparent,#2a2a2a,transparent);margin:0 16px}
@@ -2040,6 +2059,58 @@ function _pbAltTotalCellId(gid, name, line) {
 function _pbGameHasAltLines(g) {
   return !!(g && ((Array.isArray(g.alt_spreads) && g.alt_spreads.length) || (Array.isArray(g.alt_totals) && g.alt_totals.length)));
 }
+var _oddsCmpIndex = {};
+function _oddsCmpKey(gameId, market, pick, line) {
+  return [String(gameId||''), String(market||'').toLowerCase(), String(pick||'').toLowerCase(), line==null||line===''?'':String(line)].join('|');
+}
+function _oddsCmpLookup(gameId, market, pick, line) {
+  if (!_oddsCmpIndex) return null;
+  var keys = [
+    _oddsCmpKey(gameId, market, pick, line),
+    _oddsCmpKey(gameId, market, pick, ''),
+    _oddsCmpKey(gameId, market, String(pick||'').split(' ').pop(), line)
+  ];
+  for (var i = 0; i < keys.length; i++) {
+    if (_oddsCmpIndex[keys[i]]) return _oddsCmpIndex[keys[i]];
+  }
+  var needle = String(pick||'').toLowerCase();
+  var mk = String(market||'').toLowerCase();
+  var gid = String(gameId||'');
+  var found = null;
+  Object.keys(_oddsCmpIndex).forEach(function(k) {
+    if (found) return;
+    var row = _oddsCmpIndex[k];
+    if (!row || String(row.gameId) !== gid) return;
+    if (String(row.market||'').toLowerCase() !== mk) return;
+    if (needle && String(row.pick||'').toLowerCase().indexOf(needle) === -1 && needle.indexOf(String(row.pick||'').toLowerCase()) === -1) return;
+    found = row;
+  });
+  return found;
+}
+function _oddsCmpIndicatorHtml(cmp) {
+  if (!cmp || !cmp.direction) return '';
+  var dir = cmp.direction;
+  var cls = dir === 'better' ? 'odds-cmp-better' : (dir === 'worse' ? 'odds-cmp-worse' : 'odds-cmp-even');
+  var mark = dir === 'better' ? '▲' : (dir === 'worse' ? '▼' : '●');
+  var tip = dir === 'better' ? 'Better than market' : (dir === 'worse' ? 'Market has better odds' : 'In line with market');
+  if (cmp.bestBook && cmp.marketBestOdds != null) tip += ' · best '+cmp.bestBook+' '+(cmp.marketBestOdds>0?'+':'')+cmp.marketBestOdds;
+  return '<span class="odds-cmp '+cls+'" title="'+tip.replace(/"/g,'')+'">'+mark+'</span>';
+}
+function _oddsCmpApplyPayload(d) {
+  _oddsCmpIndex = {};
+  ((d && d.markets) || []).forEach(function(m) {
+    if (!m) return;
+    _oddsCmpIndex[_oddsCmpKey(m.gameId, m.market, m.pick, m.line)] = m;
+  });
+}
+async function _loadOddsComparison(sport) {
+  try {
+    var r = await fetch(API + '/api/odds-comparison/' + encodeURIComponent(sport || 'mlb'));
+    var d = await r.json();
+    _oddsCmpApplyPayload(d);
+  } catch(_e) { _oddsCmpIndex = _oddsCmpIndex || {}; }
+}
+
 function _pbOddsCellHtml(g, aw, hw, sp, id, top, odds, marketType, teamPick, teamName) {
   if (!odds) return '<div class="odds-box" style="cursor:default;pointer-events:none"><span style="color:var(--gray)">—</span></div>';
   var isLiveMarket = _pbMarketIsLive(g);
@@ -2066,7 +2137,9 @@ function _pbOddsCellHtml(g, aw, hw, sp, id, top, odds, marketType, teamPick, tea
     ' data-status="' + (g.status || g.state || '') + '"' +
     ' data-live-market="' + (isLiveMarket ? 'true' : 'false') + '"' +
     '>' + (top ? '<span class="odds-line">' + top + '</span>' : '') +
-    '<span class="odds-num ' + c + '">' + f + '</span></div>';
+    '<span class="odds-num ' + c + '">' + f + '</span>' +
+    _oddsCmpIndicatorHtml(_oddsCmpLookup(safeGameId, safeMkt, teamName || teamPick || top, top)) +
+    '</div>';
 }
 function _pbFmtSignedLine(line) {
   if (line == null || line === '') return '';
@@ -3497,7 +3570,19 @@ function _pbRenderPropOddsBtn(p, gameId, gameLabel, sport, sideLabel, lineLabel)
     'data-sport="' + (p.sport || sport) + '">' +
     '<span class="mc-prop-ou-label">' + label + '</span>' +
     (lineTxt !== '' && lineTxt != null ? '<span class="mc-prop-ou-line">' + lineTxt + '</span>' : '') +
-    '<span class="odds-num ' + c + '">' + fmt + '</span></div>';
+    '<span class="odds-num ' + c + '">' + fmt + '</span>' +
+    (function() {
+      var cmp = _oddsCmpLookup(p.gameId || gameId, 'player_prop', p.playerName || p.pick, p.line);
+      if (!cmp) cmp = _oddsCmpLookup(p.gameId || gameId, 'player_prop', p.pick, p.line);
+      var html = _oddsCmpIndicatorHtml(cmp);
+      if (cmp && cmp.direction === 'better') {
+        html += '<span class="odds-best-tag">Best Available' + (cmp.bestBook ? ' · '+cmp.bestBook : '') + '</span>';
+      } else if (cmp && cmp.bestBook && String(cmp.ourBook||'') === String(cmp.bestBook)) {
+        html += '<span class="odds-best-tag">Best Available · ' + cmp.bestBook + '</span>';
+      }
+      return html;
+    })() +
+    '</div>';
 }
 
 function _pbRenderPlayerPropRowHtml(row, gameId, gameLabel, sport, away, home, teamMap) {
@@ -4137,6 +4222,7 @@ async function loadGames(sport, opts){
       var liveN = games.filter(_pbMarketIsLive).length;
       _pbUpdateSportTabLiveBadge(_sportLc, liveN);
     }
+    try { await _loadOddsComparison(_sport); } catch(_ce) {}
     if (opts.silent && el.querySelector('.market-card[data-game-id]')) {
       _pbSyncGamesListInPlace(el, games);
       _pbHydrateLobbyAvatars(el);
@@ -6847,6 +6933,7 @@ async function confirmBet() {
       // RR: include rrStakes so the backend can expand combos server-side.
       // undefined for Single/Parlay/Teaser so it is omitted from the JSON body.
       rrStakes: snap.type === 'rr' ? snap.rrStakes : undefined,
+      insuranceEnabled: snap.type==='parlay' && ((_t0.selections||snap.legs||[]).length >= 3) && !!(document.getElementById('parlay-insure-chk')||{}).checked,
       legs:(_t0.selections||snap.legs||[]).map(function(leg){
         var _c = _buildContractPlaceLeg(leg);
         return {
@@ -6952,6 +7039,10 @@ async function confirmBet() {
           if (_dbData.ticketId && newTickets[0]) newTickets[0].id = _dbData.ticketId;
         }
         if (_dbData.status && newTickets[0]) newTickets[0].status = _dbData.status || newTickets[0].status;
+        if (newTickets[0] && _dbPayload.insuranceEnabled) {
+          newTickets[0].insuranceEnabled = true;
+          newTickets[0].insurance_enabled = true;
+        }
         try {
           // Prevent duplicate: remove any pre-existing entry with same id before unshift
           var _tid = newTickets[0] && newTickets[0].id;
@@ -9250,6 +9341,10 @@ function _normalizeDbTicket(t) {
     placedAt:        t.placedAt || t.placed_at,
     gradedAt:        t.gradedAt || t.graded_at,
     rrGroupId:       t.rrGroupId || t.rr_group_id,
+    insuranceEnabled: !!(t.insuranceEnabled || t.insurance_enabled),
+    insurance_enabled: !!(t.insuranceEnabled || t.insurance_enabled),
+    cashoutOfferAmount: t.cashoutOfferAmount != null ? t.cashoutOfferAmount : t.cashout_offer_amount,
+    cashoutOfferStatus: t.cashoutOfferStatus || t.cashout_offer_status || null,
     selections:      selections,
     source:          t.source || 'db'
   });
@@ -9904,6 +9999,8 @@ function _getActorHeaders() {
 // Money endpoints that require an Idempotency-Key header
 var _MONEY_ENDPOINTS = new Set([
   '/api/bets/place', '/api/bets/cancel',
+  '/api/bets/accept-cashout', '/api/bets/decline-cashout',
+  '/api/host/offer-cashout',
   '/api/host/settle-player', '/api/host/weekly-rollover'
 ]);
 // Per-action key store: prevents double-click generating two different keys
@@ -10192,6 +10289,13 @@ function _dispatchGradePoll() {
 }
 // ════════════════════════════════════════════════════════════════════════════
 
+var _myBetsFilter = { q: '', status: 'all', range: 'week', sort: 'newest' };
+var _myBetsSearchFocused = false;
+function _myBetsApply(key, val) {
+  _myBetsFilter[key] = val;
+  renderMyBets();
+}
+
 function renderMyBets() {
   try {
     var el = document.getElementById('mybets-section');
@@ -10267,7 +10371,7 @@ function renderMyBets() {
     var ledger = [];
     try { ledger = JSON.parse(localStorage.getItem('pb-ledger') || '[]'); if (!Array.isArray(ledger)) ledger = []; }
     catch(_le){ console.error('[renderMyBets] pb-ledger JSON parse failed', _le); ledger = []; }
-  var sc = { active:'#0064c8', open:'#0064c8', won:'#00875a', lost:'#cc0000', push:'#888', partial:'#f59e0b' };
+  var sc = { active:'#0064c8', open:'#0064c8', won:'#00875a', lost:'#cc0000', push:'#888', partial:'#f59e0b', cashed_out:'#7c3aed', cashedout:'#7c3aed', canceled:'#555' };
   function ticketCard(t) {
     // Settled display guard: never paint WON/LOST/PUSH on a ticket that
     // fails the 5-guard, even if t.status is stale-set to 'lost'.
@@ -10444,7 +10548,7 @@ function renderMyBets() {
         name: parts.slice(-1)[0]
       };
     }
-    var picks = rawLegs.slice(0, 3).map(function(s){
+    var pickRows = rawLegs.map(function(s){
       var pickText    = _legPickText(s);
       var matchupText = _legMatchupText(s);
       var oddsText    = _legOddsText(s);
@@ -10491,13 +10595,18 @@ function renderMyBets() {
         '</div>' +
         matchupBlock +
       '</div>';
-    }).join('');
+    });
+    var picks = pickRows.slice(0, 3).join('');
     if (!picks) {
       picks = '<div style="font-size:0.78rem;color:#333;padding:4px 0;border-bottom:1px solid #f0f0f0">' +
               '<span style="font-weight:800">Unknown matchup</span>' +
               '</div>';
     }
-    var morePicks = rawLegs.length > 3 ? '<div style="font-size:0.68rem;color:#aaa;padding-top:4px">+'+(rawLegs.length-3)+' more picks</div>' : '';
+    var extraLegs = pickRows.slice(3).join('');
+    var morePicks = extraLegs
+      ? '<button type="button" data-expand-parlay="'+t.id+'" data-leg-count="'+rawLegs.length+'" style="margin-top:6px;background:none;border:none;color:#0064c8;font-size:0.68rem;font-weight:800;cursor:pointer;padding:0">Show all '+rawLegs.length+' legs ▾</button>' +
+        '<div id="parlay-extra-'+t.id+'" style="display:none">'+extraLegs+'</div>'
+      : '';
 
     var __firstLeg   = rawLegs[0] || {};
     var ticketSport  = _ticketSportLabel(t, __firstLeg);
@@ -10513,7 +10622,9 @@ function renderMyBets() {
       : isDeleteDenied
         ? '<span style="font-size:0.68rem;font-weight:800;color:#cc0000;background:#fff0f0;padding:4px 10px;border-radius:20px;border:1px solid #cc0000">REQUEST DENIED</span>'
         : displayStatus === 'canceled'
-          ? '<span style="font-size:0.68rem;font-weight:800;color:#555;background:#f0f0f0;padding:4px 10px;border-radius:20px;border:1px solid #ccc">BET CANCELED</span>'
+          ? '<span style="font-size:0.68rem;font-weight:800;color:#555;background:#f0f0f0;padding:4px 10px;border-radius:20px;border:1px solid #ccc">CANCELED</span>'
+          : (displayStatus === 'cashed_out' || displayStatus === 'cashedout')
+            ? '<span style="font-size:0.68rem;font-weight:800;color:#7c3aed;background:#f3e8ff;padding:4px 10px;border-radius:20px;border:1px solid #c4b5fd">CASHED OUT</span>'
           : isVoided
             ? '<span style="font-size:0.68rem;font-weight:800;color:#888;background:#f5f5f5;padding:4px 10px;border-radius:20px;border:1px solid #ddd">VOIDED</span>'
           : '<span style="font-size:0.68rem;font-weight:800;color:'+color+';background:'+(displayStatus==='lost'?'#fff0f0':displayStatus==='won'?'#f0fff4':'#f0f4ff')+';padding:4px 10px;border-radius:20px;border:1px solid '+color+'">'+displayStatus.toUpperCase()+'</span>';
@@ -10600,6 +10711,9 @@ function renderMyBets() {
           '<div style="font-size:0.62rem;color:#aaa;margin-top:2px">'+dateStr+'</div>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
+          ((t.insurance_enabled || t.insuranceEnabled)
+            ? '<span style="font-size:0.62rem;font-weight:800;color:#7c3aed;background:#f3e8ff;padding:3px 8px;border-radius:20px;border:1px solid #c4b5fd">INSURED</span>'
+            : '') +
           statusBadge +
           overflowMenu +
         '</div>' +
@@ -10645,21 +10759,11 @@ function renderMyBets() {
   var settledAll = betTickets.filter(function(t){ var ds = _safeDisplayStatus(t); return ds !== 'active' && ds !== 'open'; });
 
   // ===== My Bets ticket lifecycle =====================================
-  // My Bets shows ACTIVE tickets forever (until graded), and SETTLED
-  // tickets for 12 hours after gradedAt. After that, settled tickets are
-  // hidden from My Bets to reduce clutter, but the underlying data is
-  // NEVER deleted from pb-tickets. They remain permanently accessible:
-  //   - Results tab reads pb-tickets directly (no age filter applied).
-  //   - Host dashboard reads hostActiveBets (still mirrored).
-  //   - Settlement records / ledger entries / audit panel: all untouched.
-  // The canonical key is ticket.id, used across My Bets, hostActiveBets,
-  // pb-settlements, pb-ledger, and Results.
+  // Default: ACTIVE forever + SETTLED for 12 hours. Search / All Time /
+  // status filters show the full already-loaded history client-side.
   var MYBETS_SETTLED_TTL_MS = 12 * 60 * 60 * 1000;
   var _nowMs = Date.now();
   function _settledTicketAgeMs(t) {
-    // Prefer gradedAt (the finalization moment). Fall back to grading.gradedAt
-    // or settledAt for legacy shapes. Tickets with no timestamp default to
-    // "too old" so they are hidden — better than appearing forever.
     var iso = (t && t.gradedAt) ||
               (t && t.grading && t.grading.gradedAt) ||
               (t && t.settledAt) || null;
@@ -10668,10 +10772,85 @@ function renderMyBets() {
     if (!isFinite(ms)) return Number.POSITIVE_INFINITY;
     return _nowMs - ms;
   }
-  var settled = settledAll.filter(function(t){
+  var _f = _myBetsFilter || { q:'', status:'all', range:'week', sort:'newest' };
+  var _showFullHistory = !!String(_f.q||'').trim() || _f.status !== 'all' || _f.range === 'all' || _f.range === 'lastweek' || _f.range === 'month';
+  var settled = _showFullHistory ? settledAll : settledAll.filter(function(t){
     return _settledTicketAgeMs(t) <= MYBETS_SETTLED_TTL_MS;
   });
   var hiddenSettledCount = settledAll.length - settled.length;
+
+  function _ticketHaystack(t) {
+    var parts = [t.type, t.betType, t.sport, t.pick, t.matchup, t.game];
+    (t.selections || t.legs || []).forEach(function(s) {
+      if (!s) return;
+      parts.push(s.pick, s.market, s.matchup, s.game, s.homeTeam, s.awayTeam, s.team, s.sport, s.label);
+    });
+    return parts.filter(Boolean).join(' ').toLowerCase();
+  }
+  function _ticketIsParlay(t) {
+    var ty = String(t.type || t.betType || '').toLowerCase();
+    if (ty === 'parlay' || ty === 'sgp' || ty === 'round robin' || ty === 'roundrobin' || ty === 'teaser') return true;
+    var n = (t.selections || t.legs || []).length;
+    return n > 1;
+  }
+  function _ticketInRange(t) {
+    var ms = Date.parse(t.placedAt || t.placed_at || 0) || 0;
+    if (_f.range === 'all') return true;
+    var now = new Date();
+    var start, end = Infinity;
+    if (_f.range === 'week') {
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).getTime();
+    } else if (_f.range === 'lastweek') {
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).getTime();
+      start = end - 7 * 86400000;
+    } else if (_f.range === 'month') {
+      start = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    } else {
+      start = 0;
+    }
+    return ms >= start && ms < end;
+  }
+  function _ticketMatchesStatus(t) {
+    var ds = _safeDisplayStatus(t);
+    if (_f.status === 'all') return true;
+    if (_f.status === 'active') return ds === 'active' || ds === 'open';
+    if (_f.status === 'won') return ds === 'won';
+    if (_f.status === 'lost') return ds === 'lost';
+    if (_f.status === 'canceled') return ds === 'canceled' || ds === 'cancelled' || ds === 'voided';
+    if (_f.status === 'parlays') return _ticketIsParlay(t);
+    if (_f.status === 'singles') return !_ticketIsParlay(t);
+    return true;
+  }
+  function _filterTicketList(list) {
+    var q = String(_f.q || '').trim().toLowerCase();
+    return list.filter(function(t) {
+      if (!_ticketMatchesStatus(t)) return false;
+      if (!_ticketInRange(t)) return false;
+      if (q && _ticketHaystack(t).indexOf(q) === -1) return false;
+      return true;
+    });
+  }
+  function _sortTickets(list) {
+    var arr = list.slice();
+    if (_f.sort === 'oldest') {
+      arr.sort(function(a,b){ return Date.parse(a.placedAt||0) - Date.parse(b.placedAt||0); });
+    } else if (_f.sort === 'win') {
+      arr.sort(function(a,b){
+        function w(t){ var s=_safeDisplayStatus(t); return (s==='won'||s==='cashed_out') ? (parseFloat(t.potentialProfit||t.estimatedPayout)||0) : -1; }
+        return w(b) - w(a);
+      });
+    } else if (_f.sort === 'loss') {
+      arr.sort(function(a,b){
+        function l(t){ return _safeDisplayStatus(t)==='lost' ? (parseFloat(t.riskAmount)||0) : -1; }
+        return l(b) - l(a);
+      });
+    } else {
+      arr.sort(function(a,b){ return Date.parse(b.placedAt||0) - Date.parse(a.placedAt||0); });
+    }
+    return arr;
+  }
+  active = _sortTickets(_filterTicketList(active));
+  settled = _sortTickets(_filterTicketList(_showFullHistory ? settledAll : settled));
   // One-shot debug so we can verify the cutoff is doing the right thing.
   try {
     
@@ -10697,12 +10876,32 @@ function renderMyBets() {
       '<span>Graded: <strong style="color:#00875a">'+(graded.length)+'</strong></span>' +
       '<span>Ledger rows: <strong style="color:#555">'+(ledger.length)+'</strong></span>' +
     '<span id="last-graded-display" style="margin-left:auto"></span>' +
+    '</div>' +
+    '<div class="mybets-toolbar">' +
+      '<input id="mybets-search" class="mybets-search" type="search" placeholder="Search team, sport, or bet type" value="'+String(_f.q||'').replace(/"/g,'&quot;')+'">' +
+      '<div class="mybets-chips" id="mybets-status-chips">' +
+        [['all','All'],['active','Active'],['won','Won'],['lost','Lost'],['canceled','Canceled'],['parlays','Parlays'],['singles','Singles']].map(function(p){
+          return '<button type="button" class="mybets-chip'+(_f.status===p[0]?' on':'')+'" data-mb-status="'+p[0]+'">'+p[1]+'</button>';
+        }).join('') +
+      '</div>' +
+      '<div class="mybets-chips">' +
+        [['week','This Week'],['lastweek','Last Week'],['month','This Month'],['all','All Time']].map(function(p){
+          return '<button type="button" class="mybets-chip range'+(_f.range===p[0]?' on':'')+'" data-mb-range="'+p[0]+'">'+p[1]+'</button>';
+        }).join('') +
+      '</div>' +
+      '<div class="mybets-chips">' +
+        [['newest','Newest'],['oldest','Oldest'],['win','Biggest Win'],['loss','Biggest Loss']].map(function(p){
+          return '<button type="button" class="mybets-chip'+(_f.sort===p[0]?' on':'')+'" data-mb-sort="'+p[0]+'">'+p[1]+'</button>';
+        }).join('') +
+      '</div>' +
     '</div>';
   // Last graded timestamp
   var _lg = localStorage.getItem('pb-last-graded');
   if (_lg) html += '<div style="padding:0 14px 6px;font-size:0.65rem;color:#aaa">Last graded: ' + new Date(_lg).toLocaleString() + '</div>';
   if (!betTickets.length) {
-    html += '<div style="text-align:center;padding:50px 20px;color:#aaa;font-size:0.9rem">No active bets yet</div>';
+    html += '<div style="text-align:center;padding:50px 20px;color:#aaa;font-size:0.9rem">No bets yet</div>';
+  } else if (!active.length && !settled.length) {
+    html += '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:0.88rem">No bets match these filters</div>';
   } else {
     if (active.length) {
       html += '<div style="padding:4px 14px;font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#0064c8">Active Bets ('+active.length+')</div>';
@@ -10714,7 +10913,7 @@ function renderMyBets() {
     }
     // Hidden-older-settled notice. Data is intact in Results; this is
     // just a heads-up so the user doesn't think tickets disappeared.
-    if (hiddenSettledCount > 0) {
+    if (!_showFullHistory && hiddenSettledCount > 0) {
       html += '<div style="padding:10px 14px 4px;font-size:0.66rem;color:#888;text-align:center">' +
               '+' + hiddenSettledCount + ' older settled ticket' + (hiddenSettledCount===1?'':'s') +
               ' hidden — view full history in <strong style="color:#0064c8">Results</strong></div>';
@@ -10724,6 +10923,40 @@ function renderMyBets() {
   el.innerHTML = html;
   el.style.background = '#f5f5f5';
   el.style.minHeight = '100vh';
+  var _search = document.getElementById('mybets-search');
+  if (_search) {
+    _search.value = _f.q || '';
+    if (_myBetsSearchFocused) {
+      _search.focus();
+      try { var _sl = _search.value.length; _search.setSelectionRange(_sl, _sl); } catch(_e){}
+    }
+    _search.addEventListener('input', function() {
+      _myBetsFilter.q = _search.value;
+      _myBetsSearchFocused = true;
+      renderMyBets();
+    });
+    _search.addEventListener('blur', function(){ setTimeout(function(){ _myBetsSearchFocused = false; }, 200); });
+  }
+  el.querySelectorAll('[data-mb-status]').forEach(function(btn){
+    btn.addEventListener('click', function(){ _myBetsApply('status', btn.getAttribute('data-mb-status')); });
+  });
+  el.querySelectorAll('[data-mb-range]').forEach(function(btn){
+    btn.addEventListener('click', function(){ _myBetsApply('range', btn.getAttribute('data-mb-range')); });
+  });
+  el.querySelectorAll('[data-mb-sort]').forEach(function(btn){
+    btn.addEventListener('click', function(){ _myBetsApply('sort', btn.getAttribute('data-mb-sort')); });
+  });
+  el.querySelectorAll('[data-expand-parlay]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var id = btn.getAttribute('data-expand-parlay');
+      var extra = document.getElementById('parlay-extra-'+id);
+      if (!extra) return;
+      var open = extra.style.display !== 'none';
+      extra.style.display = open ? 'none' : 'block';
+      var n = btn.getAttribute('data-leg-count') || '';
+      btn.textContent = open ? ('Show all '+n+' legs ▾') : 'Hide extra legs ▴';
+    });
+  });
   } catch (err) {
     // CRITICAL: never let a thrown error leave My Bets blank without a trace.
     console.error('[renderMyBets] FATAL — render aborted, tab will appear blank:', err);
@@ -11080,6 +11313,14 @@ function bsSyncPlaceBtn() {
   var payVal = document.getElementById('dk-payout-val');
   var badge2 = document.getElementById('bs-badge2');
   if (badge2) badge2.textContent = betSlip.length;
+  var _insWrap = document.getElementById('parlay-insure-wrap');
+  if (_insWrap) {
+    _insWrap.style.display = (bsType === 'parlay' && betSlip.length >= 3) ? 'block' : 'none';
+    if (!(bsType === 'parlay' && betSlip.length >= 3)) {
+      var _insChk = document.getElementById('parlay-insure-chk');
+      if (_insChk) _insChk.checked = false;
+    }
+  }
 
   // PARLAY-FOOTER REGRESSION FIX:
   // Always trust the FOOTER INPUT as the source of truth for parlay / teaser /
@@ -13640,6 +13881,10 @@ window.openGradingConsole = openGradingConsole;
       <span style="font-size:0.72rem;color:#888">Total Payout</span>
       <span id="dk-payout-val" style="font-weight:800;color:#00875a"></span>
     </div>
+    <div class="parlay-insure" id="parlay-insure-wrap">
+      <label><input type="checkbox" id="parlay-insure-chk"> Parlay Insurance</label>
+      <small>If this 3+ leg parlay loses by exactly one leg, your stake is credited back.</small>
+    </div>
     <button id="bs-place-btn" data-action="place-bet" data-disabled="true" onclick="window.bsPlaceBet()"
       style="display:none;width:100%;padding:15px;background:#00c853;color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:900;cursor:pointer;transition:background 0.15s;letter-spacing:0.3px;pointer-events:auto;margin-bottom:4px">
       Place Bet
@@ -14078,6 +14323,22 @@ function _notifUpdateBadge(count) {
   }
 }
 
+function _notifCashoutMeta(n) {
+  var meta = n && (n.metadata_json || n.metadata) || {};
+  if (typeof meta === 'string') {
+    try { meta = JSON.parse(meta); } catch(_e) { meta = {}; }
+  }
+  var ticketId = meta.ticketId || meta.ticket_id || '';
+  var amount = meta.amount;
+  if (!ticketId && n && n.message) {
+    var tm = String(n.message).match(/\[ticket:([^\]]+)\]/);
+    if (tm) ticketId = tm[1];
+    var m = String(n.message).match(/\$([0-9]+(?:\.[0-9]+)?)/);
+    if (m) amount = parseFloat(m[1]);
+  }
+  return { ticketId: ticketId, amount: amount, notificationId: n && n.id };
+}
+
 function _notifRenderList(list) {
   var el = document.getElementById('notif-list');
   if (!el) return;
@@ -14087,12 +14348,58 @@ function _notifRenderList(list) {
   }
   el.innerHTML = list.map(function(n) {
     var cls = n.read ? 'notif-item' : 'notif-item unread';
+    var isCash = String(n.type || '').toLowerCase() === 'cashout_offer' || /cash out offer/i.test(n.message || '');
+    var meta = isCash ? _notifCashoutMeta(n) : null;
+    var actions = (isCash && meta && meta.ticketId)
+      ? '<div class="notif-item-actions">' +
+          '<button type="button" class="notif-act accept" data-cashout-accept="'+_notifEscHtml(meta.ticketId)+'" data-notif-id="'+_notifEscHtml(n.id||'')+'">Accept</button>' +
+          '<button type="button" class="notif-act decline" data-cashout-decline="'+_notifEscHtml(meta.ticketId)+'" data-notif-id="'+_notifEscHtml(n.id||'')+'">Decline</button>' +
+        '</div>'
+      : '';
     return '<div class="' + cls + '">' +
       '<div class="notif-item-title">' + _notifEscHtml(n.title || '') + '</div>' +
-      '<div class="notif-item-msg">' + _notifEscHtml(n.message || '') + '</div>' +
+      '<div class="notif-item-msg">' + _notifEscHtml(String(n.message || '').replace(/\s*\[ticket:[^\]]+\]\s*$/, '')) + '</div>' +
+      actions +
       '<div class="notif-item-time">' + _notifFmtTime(n.created_at) + '</div>' +
       '</div>';
   }).join('');
+  el.querySelectorAll('[data-cashout-accept]').forEach(function(btn) {
+    btn.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      _playerRespondCashout('accept', btn.getAttribute('data-cashout-accept'), btn.getAttribute('data-notif-id'));
+    });
+  });
+  el.querySelectorAll('[data-cashout-decline]').forEach(function(btn) {
+    btn.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      _playerRespondCashout('decline', btn.getAttribute('data-cashout-decline'), btn.getAttribute('data-notif-id'));
+    });
+  });
+}
+
+async function _playerRespondCashout(action, ticketId, notificationId) {
+  if (!ticketId) return;
+  var path = action === 'accept' ? '/api/bets/accept-cashout' : '/api/bets/decline-cashout';
+  try {
+    var payload = JSON.stringify({ ticketId: ticketId, notificationId: notificationId });
+    var resp = await (typeof _pbFetch === 'function'
+      ? _pbFetch(API + path, { method:'POST', headers: { 'Content-Type': 'application/json' }, body: payload })
+      : fetch(API + path, { method:'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, _getActorHeaders()), body: payload }));
+    var d = await resp.json();
+    if (!d || !d.ok) {
+      if (typeof showToast === 'function') showToast((d && d.error) || 'Cash out failed', 'error');
+      return;
+    }
+    if (typeof showToast === 'function') {
+      showToast(action === 'accept' ? 'Cash out accepted' : 'Cash out declined', 'success');
+    }
+    _loadNotifications();
+    if (typeof loadPlayerDashboardFromDb === 'function') loadPlayerDashboardFromDb({ silent:true }).then(function(){
+      if (typeof renderMyBets === 'function') renderMyBets();
+    });
+  } catch(_e) {
+    if (typeof showToast === 'function') showToast('Cash out request failed', 'error');
+  }
 }
 
 async function _loadNotifications() {

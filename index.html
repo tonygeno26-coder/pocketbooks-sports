@@ -2261,6 +2261,7 @@ function _hostTicketStatusBucket(status) {
   if (s === 'active' || s === 'open') return 'active';
   if (s === 'won') return 'won';
   if (s === 'lost') return 'lost';
+  if (s === 'cashed_out' || s === 'cashedout') return 'cashed_out';
   if (s === 'push' || s === 'pushed') return 'push';
   if (s === 'void' || s === 'voided' || s === 'canceled' || s === 'cancelled' || s === 'deleted' || s === 'refunded') return 'void';
   return s || 'other';
@@ -2269,7 +2270,7 @@ function _hostTicketStatusBucket(status) {
 function _hostTicketIsActive(t) { return _hostTicketStatusBucket(t && t.status) === 'active'; }
 function _hostTicketIsSettled(t) {
   var b = _hostTicketStatusBucket(t && t.status);
-  return b === 'won' || b === 'lost' || b === 'push';
+  return b === 'won' || b === 'lost' || b === 'push' || b === 'cashed_out';
 }
 function _hostTicketIsCanceled(t) {
   return _hostTicketStatusBucket(t && t.status) === 'void';
@@ -2460,6 +2461,7 @@ function _hostStatusBadge(status){
     won:    { label:'WON',    color:'#00ff88', bg:'rgba(0,255,136,0.12)', border:'rgba(0,255,136,0.35)' },
     lost:   { label:'LOST',   color:'#ff3d57', bg:'rgba(255,61,87,0.12)', border:'rgba(255,61,87,0.35)' },
     push:   { label:'PUSH',   color:'#f5c842', bg:'rgba(245,200,66,0.12)', border:'rgba(245,200,66,0.35)' },
+    cashed_out: { label:'CASHED OUT', color:'#c4b5fd', bg:'rgba(124,58,237,0.14)', border:'rgba(196,181,253,0.4)' },
     void:   { label:'VOID',   color:'#999', bg:'rgba(255,255,255,0.06)', border:'#444' }
   };
   var m = map[b] || { label:String(status||'UNKNOWN').toUpperCase(), color:'#888', bg:'#1a1a1a', border:'#333' };
@@ -2543,6 +2545,35 @@ function removeClubStaff(userId) {
   saveClubStaff(staff); return true;
 }
 // ═══════════════════════════════════════════════════════════════════════════════
+
+async function hostOfferCashout(ticketId, playerId) {
+  if (!ticketId) return;
+  var raw = prompt('Cash out amount ($):');
+  if (raw == null) return;
+  var amount = parseFloat(String(raw).replace(/[^0-9.]/g, ''));
+  if (!(amount > 0)) { alert('Enter a valid amount'); return; }
+  try {
+    var resp = await (typeof _pbFetch === 'function'
+      ? _pbFetch('/api/host/offer-cashout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticketId: ticketId, playerId: playerId, amount: amount })
+        })
+      : fetch('/api/host/offer-cashout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticketId: ticketId, playerId: playerId, amount: amount })
+        }));
+    var d = await resp.json();
+    if (!d || !d.ok) {
+      alert((d && d.error) || 'Cash out offer failed');
+      return;
+    }
+    alert('Cash out offer of $' + amount.toFixed(2) + ' sent to the player.');
+  } catch (e) {
+    alert('Cash out offer failed');
+  }
+}
 
 function hostApproveDelete(ticketId) {
   if (!can('cancelBet')) { _denyToast('Cancel bet'); return false; }
@@ -2802,7 +2833,8 @@ function renderHostBets(){
               '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Stake</div><div style="font-size:0.78rem;font-weight:800">'+fmt$(t.riskAmount)+'</div></div>' +
               '<div><div style="font-size:0.55rem;color:#555;text-transform:uppercase;letter-spacing:0.4px">Placed</div><div style="font-size:0.68rem;font-weight:700;color:#aaa">'+esc(dt||'—')+'</div></div>' +
             '</div>' +
-            (canCancel ? '<button data-host-cancel="'+esc(t.id)+'" style="width:100%;margin-top:10px;padding:8px;background:transparent;border:1px solid #cc0000;border-radius:8px;color:#ff6b6b;font-size:0.7rem;font-weight:800;cursor:pointer;letter-spacing:0.3px">Cancel Bet</button>' : '') +
+            (canCancel ? '<button data-host-cashout="'+esc(t.id)+'" data-player-id="'+esc(t.playerId||'')+'" style="width:100%;margin-top:10px;padding:8px;background:transparent;border:1px solid #22c55e;border-radius:8px;color:#4ade80;font-size:0.7rem;font-weight:800;cursor:pointer;letter-spacing:0.3px">Offer Cash Out</button>' : '') +
+            (canCancel ? '<button data-host-cancel="'+esc(t.id)+'" style="width:100%;margin-top:8px;padding:8px;background:transparent;border:1px solid #cc0000;border-radius:8px;color:#ff6b6b;font-size:0.7rem;font-weight:800;cursor:pointer;letter-spacing:0.3px">Cancel Bet</button>' : '') +
           '</div>';
         }).join('') +
       '</div>';
@@ -2837,6 +2869,12 @@ function renderHostBets(){
       if (!confirm('Cancel this bet?')) return;
       hostApproveDelete(tid);
       renderHostBets();
+    });
+  });
+  Array.prototype.forEach.call(el.querySelectorAll('[data-host-cashout]'), function(btn) {
+    btn.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      hostOfferCashout(btn.dataset.hostCashout, btn.getAttribute('data-player-id'));
     });
   });
   Array.prototype.forEach.call(el.querySelectorAll('[data-delaction]'), function(btn) {
