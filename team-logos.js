@@ -675,7 +675,11 @@
     'Connecticut': 'UConn Huskies',
     'North Carolina State': 'NC State Wolfpack',
     'Miss State': 'Mississippi State Bulldogs',
-    'Sam Houston State': 'Sam Houston Bearkats'
+    'Sam Houston State': 'Sam Houston Bearkats',
+    'North Dakota State': 'North Dakota State Bison',
+    'NDSU': 'North Dakota State Bison',
+    'Sacramento State': 'Sacramento State Hornets',
+    'Sac State': 'Sacramento State Hornets'
   };
 
   // Major NCAAB programs
@@ -2136,5 +2140,7 @@
   global.getCountryFlagCode = getCountryFlagCode;
   global.warmSoccerTeamsCache = warmSoccerTeamsCache;
   global.hydrateEspnLobbyMedia = hydrateEspnLobbyMedia;
+  global.searchNcaafTeamId = searchNcaafTeamId;
+  global.warmNcaafTeamLogosFromApi = warmNcaafTeamLogosFromApi;
   _seedVerifiedSoccerTeams();
 })(typeof window !== 'undefined' ? window : this);
