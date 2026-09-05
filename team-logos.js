@@ -1089,6 +1089,32 @@
   var _tennisIdByNorm = {};
   var _tennisMiss = {};
   var _tennisPending = {};
+  var _dbPhotoByNorm = {};
+
+  function _playerPhotoApiBase() {
+    if (typeof global.API === 'string' && global.API) return global.API;
+    if (typeof API === 'string' && API) return API;
+    if (global._PBS_BACKEND) return global._PBS_BACKEND;
+    return 'https://pocketbooks-sports-backend-production.up.railway.app';
+  }
+
+  async function _lookupDbPlayerPhoto(playerName, sport) {
+    var k = _normKey(playerName);
+    if (!k) return null;
+    if (_dbPhotoByNorm[k]) return { photoUrl: _dbPhotoByNorm[k], cached: true };
+    try {
+      var url = _playerPhotoApiBase() + '/api/player-photo/' +
+        encodeURIComponent(sport || 'tennis') + '/' + encodeURIComponent(String(playerName).trim());
+      var res = await fetch(url, { cache: 'no-store' });
+      var d = await res.json();
+      if (d && d.ok && d.photoUrl) {
+        _dbPhotoByNorm[k] = d.photoUrl;
+        if (d.espnId) _tennisIdByNorm[k] = String(d.espnId);
+        return d;
+      }
+    } catch (_e) {}
+    return null;
+  }
 
   // Major-league soccer IDs — EPL, La Liga, Bundesliga, Serie A, Ligue 1, Champions League, MLS
   var SOCCER_TEAM_IDS = {
@@ -1666,6 +1692,8 @@
   }
 
   function getTennisPlayerPhoto(playerName) {
+    var k0 = _normKey(playerName);
+    if (k0 && _dbPhotoByNorm[k0]) return _dbPhotoByNorm[k0];
     // Tier 1: verified player-photos.js map
     if (typeof global.getPlayerHeadshotUrl === 'function') {
       var verifiedUrl = global.getPlayerHeadshotUrl(playerName, 'tennis');
@@ -1697,68 +1725,72 @@
     if (_tennisMiss[k]) return null;
     if (_tennisPending[k]) return _tennisPending[k];
 
-    // Prefer shared search + 7-day localStorage cache when available
-    if (typeof global.searchEspnPlayerId === 'function') {
-      _tennisPending[k] = (async function () {
-        try {
-          var hit = await global.searchEspnPlayerId(playerName, 'tennis', '');
-          if (hit && hit.id) {
-            _tennisIdByNorm[k] = String(hit.id);
-            return String(hit.id);
-          }
-          _tennisMiss[k] = true;
-          return null;
-        } catch (_e) {
-          _tennisMiss[k] = true;
-          return null;
-        } finally {
-          delete _tennisPending[k];
-        }
-      })();
-      return _tennisPending[k];
-    }
-
     _tennisPending[k] = (async function () {
-      var parts = String(playerName || '').trim().split(/\s+/).filter(Boolean);
-      var firstLast = parts.length >= 2 ? (parts[0] + ' ' + parts[parts.length - 1]) : String(playerName || '').trim();
-      var queries = [firstLast + ' tennis', firstLast];
       try {
-        var pick = null;
-        for (var qi = 0; qi < queries.length && !pick; qi++) {
-          var url = 'https://site.api.espn.com/apis/common/v3/search?query=' +
-            encodeURIComponent(queries[qi]) +
-            '&sport=tennis&type=player&limit=3';
-          var res = await fetch(url, { cache: 'force-cache' });
-          if (!res.ok) continue;
-          var data = await res.json();
-          var items = (data && data.items) || [];
-          for (var i = 0; i < items.length; i++) {
-            var it = items[i];
-            if (!it || !it.id) continue;
-            var sp = String(it.sport || '').toLowerCase();
-            var lg = String(it.league || '').toLowerCase();
-            if (sp && sp !== 'tennis') continue;
-            if (lg && lg !== 'atp' && lg !== 'wta' && lg !== 'tennis') continue;
-            pick = it;
-            break;
-          }
+        var dbHit = await _lookupDbPlayerPhoto(playerName, 'tennis');
+        if (dbHit && (dbHit.espnId || dbHit.photoUrl)) {
+          if (dbHit.espnId) _tennisIdByNorm[k] = String(dbHit.espnId);
+          return dbHit.espnId ? String(dbHit.espnId) : (_tennisIdByNorm[k] || null);
         }
-        if (!pick || !pick.id) {
-          _tennisMiss[k] = true;
-          return null;
-        }
-        _tennisIdByNorm[k] = String(pick.id);
-        if (pick.displayName) _tennisIdByNorm[_normKey(pick.displayName)] = String(pick.id);
-        return String(pick.id);
-      } catch (_e) {
-        _tennisMiss[k] = true;
-        return null;
+        return await _fetchTennisPlayerIdFromEspn(playerName, k);
       } finally {
         delete _tennisPending[k];
       }
     })();
-
     return _tennisPending[k];
+  }
+
+  async function _fetchTennisPlayerIdFromEspn(playerName, k) {
+    if (typeof global.searchEspnPlayerId === 'function') {
+      try {
+        var hit = await global.searchEspnPlayerId(playerName, 'tennis', '');
+        if (hit && hit.id) {
+          _tennisIdByNorm[k] = String(hit.id);
+          return String(hit.id);
+        }
+        _tennisMiss[k] = true;
+        return null;
+      } catch (_e) {
+        _tennisMiss[k] = true;
+        return null;
+      }
+    }
+
+    var parts = String(playerName || '').trim().split(/\s+/).filter(Boolean);
+    var firstLast = parts.length >= 2 ? (parts[0] + ' ' + parts[parts.length - 1]) : String(playerName || '').trim();
+    var queries = [firstLast + ' tennis', firstLast];
+    try {
+      var pick = null;
+      for (var qi = 0; qi < queries.length && !pick; qi++) {
+        var url = 'https://site.api.espn.com/apis/common/v3/search?query=' +
+          encodeURIComponent(queries[qi]) +
+          '&sport=tennis&type=player&limit=3';
+        var res = await fetch(url, { cache: 'force-cache' });
+        if (!res.ok) continue;
+        var data = await res.json();
+        var items = (data && data.items) || [];
+        for (var i = 0; i < items.length; i++) {
+          var it = items[i];
+          if (!it || !it.id) continue;
+          var sp = String(it.sport || '').toLowerCase();
+          var lg = String(it.league || '').toLowerCase();
+          if (sp && sp !== 'tennis') continue;
+          if (lg && lg !== 'atp' && lg !== 'wta' && lg !== 'tennis') continue;
+          pick = it;
+          break;
+        }
+      }
+      if (!pick || !pick.id) {
+        _tennisMiss[k] = true;
+        return null;
+      }
+      _tennisIdByNorm[k] = String(pick.id);
+      if (pick.displayName) _tennisIdByNorm[_normKey(pick.displayName)] = String(pick.id);
+      return String(pick.id);
+    } catch (_e) {
+      _tennisMiss[k] = true;
+      return null;
+    }
   }
 
   function handleTennisPhotoError(img) {
