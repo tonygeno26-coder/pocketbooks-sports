@@ -900,13 +900,14 @@ body.theme-light [style*="color:#00ff88"],body.theme-light [style*="color:#00ff8
   border:1px solid var(--border)!important;
 }
 
-/* Semantic money / P&L colors (green/red only for amounts) */
-#stat-profit,
-#stat-week-net,
+/* Semantic money / P&L colors — remap legacy green/red only; do NOT force #stat-profit always green */
 .pr-amount.pos,
 [style*="color:var(--green)"]#stat-profit,
 .stat-val[style*="color:var(--green)"]{color:var(--positive)!important}
 .stat-val[style*="color:var(--red)"]{color:var(--negative)!important}
+.stat-val[style*="color:var(--positive)"]{color:var(--positive)!important}
+.stat-val[style*="color:var(--negative)"]{color:var(--negative)!important}
+.stat-val[style*="color:var(--text-muted)"]{color:var(--text-muted)!important}
 .stat-val[style*="color:var(--cyan)"]{color:var(--cyan)!important}
 .stat-val[style*="color:var(--gold)"]{color:var(--gold)!important}
 
@@ -2241,9 +2242,9 @@ async function renderSettlementPreviewFromDb() {
         '</div>' +
       '</div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;margin-bottom:14px;background:var(--card,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:14px;padding:12px">' +
-        '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Players Owe</div><div style="font-size:0.95rem;font-weight:900;color:var(--positive,#22C55E)">$'+playersOwe.toFixed(2)+'</div></div>' +
-        '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Host Owes</div><div style="font-size:0.95rem;font-weight:900;color:var(--negative,#EF4444)">$'+hostOwesTot.toFixed(2)+'</div></div>' +
-        '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Net</div><div style="font-size:0.95rem;font-weight:900;color:'+(netTot>=0?'var(--positive,#22C55E)':'var(--negative,#EF4444)')+'">'+(netTot>=0?'+':'−')+'$'+Math.abs(netTot).toFixed(2)+'</div></div>' +
+        '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Players Owe</div><div style="font-size:0.95rem;font-weight:900;color:'+(Math.abs(playersOwe)<0.005?'var(--text-muted,#64748B)':'var(--positive,#22C55E)')+'">$'+playersOwe.toFixed(2)+'</div></div>' +
+        '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Host Owes</div><div style="font-size:0.95rem;font-weight:900;color:'+(Math.abs(hostOwesTot)<0.005?'var(--text-muted,#64748B)':'var(--negative,#EF4444)')+'">$'+hostOwesTot.toFixed(2)+'</div></div>' +
+        '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Net</div><div style="font-size:0.95rem;font-weight:900;color:'+(Math.abs(netTot)<0.005?'var(--text-muted,#64748B)':(netTot>0?'var(--positive,#22C55E)':'var(--negative,#EF4444)'))+'">'+(netTot>=0?'+':'−')+'$'+Math.abs(netTot).toFixed(2)+'</div></div>' +
       '</div>' +
       '<div style="font-size:0.85rem;font-weight:900;margin-bottom:10px">Player Settlements</div>';
 
@@ -2271,7 +2272,7 @@ async function renderSettlementPreviewFromDb() {
         ? '<span style="font-size:0.65rem;font-weight:800;padding:4px 10px;border-radius:10px;background:rgba(255,255,255,0.04);color:#888">Settled</span>'
         : '<button onclick="openSettlePlayerModal('+JSON.stringify(String(p.playerId))+','+JSON.stringify(String(p.username||p.playerId))+','+owesHost+','+hostOwes+')"'+
           ' style="font-size:0.7rem;font-weight:900;padding:8px 14px;border-radius:10px;border:none;background:'+color+';color:#000;cursor:pointer;white-space:nowrap">Settle</button>';
-      var netColor = weekNet>=0 ? 'var(--positive,#22C55E)' : 'var(--negative,#EF4444)';
+      var netColor = Math.abs(weekNet)<0.005 ? 'var(--text-muted,#64748B)' : (weekNet>0 ? 'var(--positive,#22C55E)' : 'var(--negative,#EF4444)');
       html += '<div data-db-settle-card="'+_escAttr(p.playerId)+'" style="background:var(--card,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:14px;padding:14px;margin-bottom:10px">' +
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px">' +
           '<div style="min-width:0;flex:1">' +
@@ -2630,9 +2631,9 @@ function _renderHistoricalSnapshot(week, rolloverRow, players) {
       '</div>' +
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;background:rgba(255,255,255,0.02);border-radius:10px;padding:10px;margin-bottom:14px">' +
-      '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Players Owed</div><div style="font-size:0.95rem;font-weight:900;color:var(--positive,#22C55E)">$'+((totals.playersOwe||0).toFixed(2))+'</div></div>' +
-      '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Host Owed</div><div style="font-size:0.95rem;font-weight:900;color:var(--negative,#EF4444)">$'+((totals.hostOwes||0).toFixed(2))+'</div></div>' +
-      '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Net</div><div style="font-size:0.95rem;font-weight:900;color:'+((totals.net||0)>=0?'var(--positive,#22C55E)':'var(--negative,#EF4444)')+'">'+(((totals.net||0)>=0?'+':'−'))+'$'+Math.abs(totals.net||0).toFixed(2)+'</div></div>' +
+      '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Players Owed</div><div style="font-size:0.95rem;font-weight:900;color:'+(Math.abs(totals.playersOwe||0)<0.005?'var(--text-muted,#64748B)':'var(--positive,#22C55E)')+'">$'+((totals.playersOwe||0).toFixed(2))+'</div></div>' +
+      '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Host Owed</div><div style="font-size:0.95rem;font-weight:900;color:'+(Math.abs(totals.hostOwes||0)<0.005?'var(--text-muted,#64748B)':'var(--negative,#EF4444)')+'">$'+((totals.hostOwes||0).toFixed(2))+'</div></div>' +
+      '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Net</div><div style="font-size:0.95rem;font-weight:900;color:'+(Math.abs(totals.net||0)<0.005?'var(--text-muted,#64748B)':((totals.net||0)>0?'var(--positive,#22C55E)':'var(--negative,#EF4444)'))+'">'+(((totals.net||0)>=0?'+':'−'))+'$'+Math.abs(totals.net||0).toFixed(2)+'</div></div>' +
     '</div>';
 
   sorted.forEach(function(p) {
