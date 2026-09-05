@@ -183,8 +183,10 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .mc-header{padding:12px 16px 6px;display:flex;align-items:center;gap:6px}
 .mc-sport{font-size:0.62rem;font-weight:800;color:var(--gray);text-transform:uppercase;letter-spacing:0.8px}
 .mc-cols{display:grid;grid-template-columns:1fr 90px 90px 90px;gap:6px;padding:0 16px 8px}
+.mc-cols.mc-cols-ml-only,.mc-team-row.mc-team-row-ml-only{grid-template-columns:1fr 90px}
 .mc-col-label{text-align:center;font-size:0.58rem;color:#555;font-weight:700;text-transform:uppercase;letter-spacing:0.5px}
 .mc-team-row{display:grid;grid-template-columns:1fr 90px 90px 90px;gap:6px;padding:0 16px;margin-bottom:10px;align-items:center}
+.market-card-golf .mc-vs{font-size:0.58rem;font-weight:800;color:#666;text-transform:uppercase;letter-spacing:0.6px;padding:0 16px 6px}
 .mc-team{display:flex;align-items:center;gap:10px}
 .mc-jersey{width:52px;height:52px;border-radius:0;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:900;background:transparent;border:none;padding:0;overflow:visible;box-shadow:none;flex-shrink:0}
 .mc-jersey img{width:100%;height:100%;object-fit:contain;display:block;max-width:100%;max-height:100%;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.45))}
@@ -1782,8 +1784,8 @@ function _showSessionExpiredModal(result) {
 })();
 // ══════════════════════════════════════════════════════════════════════════════
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '01749e3';
-window.PBS_BUILD_DATE = '2026-09-05T17:36:36.371Z';
+window.PBS_BUILD_SHA = 'golf-lobby';
+window.PBS_BUILD_DATE = '2026-09-05T20:00:00.000Z';
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 try { window.API = API; } catch (_eApi) {}
 // ESPN league logos for sport grid (verified working CDN paths; ncaa/soccer/atp/pga/boxing/rugby preferred slugs 404)
@@ -3070,6 +3072,11 @@ function _pbApplyMarketFilterToCards() {
   var showTotals = filter === 'lines' || filter === 'totals';
   var showML = filter === 'lines' || filter === 'moneyline';
   document.querySelectorAll('.mc-cols').forEach(function(colHeader) {
+    if (colHeader.classList.contains('mc-cols-ml-only')) {
+      // Golf matchups only have moneylines — keep To Win visible on every filter.
+      colHeader.style.display = '';
+      return;
+    }
     var labels = colHeader.querySelectorAll('.mc-col-label');
     if (labels[0]) labels[0].style.display = showSpread ? '' : 'none';
     if (labels[1]) labels[1].style.display = showTotals ? '' : 'none';
@@ -3077,6 +3084,10 @@ function _pbApplyMarketFilterToCards() {
   });
   document.querySelectorAll('.mc-team-row').forEach(function(row) {
     var cells = row.querySelectorAll('.odds-box');
+    if (row.classList.contains('mc-team-row-ml-only')) {
+      if (cells[0]) cells[0].style.display = '';
+      return;
+    }
     if (cells[0]) cells[0].style.display = showSpread ? '' : 'none';
     if (cells[1]) cells[1].style.display = showTotals ? '' : 'none';
     if (cells[2]) cells[2].style.display = showML ? '' : 'none';
@@ -3258,6 +3269,23 @@ function _pbEnsureAltLinesOnCard(card, g) {
   }
 }
 
+function _pbIsGolfSport(sport) {
+  return _pbAvatarSportKey(sport || '') === 'golf';
+}
+
+/** Outrights / tournament winners — not 2-player matchups; skip in lobby cards. */
+function _pbIsGolfOutright(g) {
+  if (!g) return false;
+  var aw = String((g.away || g.away_team) || '');
+  var hw = String((g.home || g.home_team) || '');
+  if (/^outright$/i.test(hw.trim())) return true;
+  if (/winner/i.test(aw) || /winner/i.test(hw)) return true;
+  var ml = Array.isArray(g.moneyline) ? g.moneyline : [];
+  // Matchups are 2-way; fields with many ML selections are tournament boards.
+  if (ml.length > 2) return true;
+  return false;
+}
+
 function _pbRenderGameCardHtml(g) {
   window.gamesCache = window.gamesCache || {};
   window.gamesCache[g.id] = g;
@@ -3268,9 +3296,13 @@ function _pbRenderGameCardHtml(g) {
       console.warn('[card] skipping game with missing teams', g && g.id);
       return '';
     }
+    var sportRouteEarly = _ODDS_ROUTE_KEY[String((g.sport || '')).toLowerCase()] || String((g.sport || '')).toLowerCase();
+    var isGolfCard = sportRouteEarly === 'golf' || _pbIsGolfSport(g.sport || '');
+    if (isGolfCard && _pbIsGolfOutright(g)) {
+      return '';
+    }
     var awN = aw.split(' ').slice(-1)[0] || aw, hwN = hw.split(' ').slice(-1)[0] || hw;
     var awC = aw.split(' ').slice(0, -1).join(' '), hwC = hw.split(' ').slice(0, -1).join(' ');
-    var sportRouteEarly = _ODDS_ROUTE_KEY[String((g.sport || '')).toLowerCase()] || String((g.sport || '')).toLowerCase();
     var isMmaCard = sportRouteEarly === 'mma' || _pbAvatarSportKey(g.sport || '') === 'mma';
     // Fighters: keep given name / family name split; show promotion in header.
     if (isMmaCard) {
@@ -3286,11 +3318,11 @@ function _pbRenderGameCardHtml(g) {
     var time = timeRaw ? new Date(timeRaw).toLocaleString('en-US', { weekday:'short', hour:'2-digit', minute:'2-digit' }) : 'TBD';
     var sp = (g.sport ? g.sport.toUpperCase() : null) || 'MLB';
     var leagueLabel = (g.league || g.promotion || g.sport_title || '').trim();
-    var headerSport = (isMmaCard && leagueLabel) ? leagueLabel : sp;
+    var headerSport = ((isMmaCard || isGolfCard) && leagueLabel) ? leagueLabel : sp;
     var icon = _PB_GAME_ICONS[sp] || '🏅';
     var isLiveMarket = _pbMarketIsLive(g);
     var split = _findSplitForGame(g);
-    var splitHtml = split ? _renderSplitBar(split, awN, hwN) : '';
+    var splitHtml = split ? _renderSplitBar(split, isGolfCard ? aw : awN, isGolfCard ? hw : hwN) : '';
     var liveScoreHtml = isLiveMarket ? _pbLiveScoreboardHtml(g) : '';
     var safeGameId = String(g.id || g.providerGameId || '').replace(/"/g, '');
     var sportRoute = _ODDS_ROUTE_KEY[sp.toLowerCase()] || sp.toLowerCase();
@@ -3304,6 +3336,31 @@ function _pbRenderGameCardHtml(g) {
 
     var safeHome = hw.replace(/"/g, '');
     var safeAway = aw.replace(/"/g, '');
+
+    // Golf matchups: Player A vs Player B + moneyline only (no fake spread/total columns).
+    if (isGolfCard) {
+      return '<div class="market-card market-card-golf" data-game-id="' + safeGameId + '" data-home="' + safeHome + '" data-away="' + safeAway + '" data-sport="golf" style="margin-bottom:14px">' +
+        '<div class="mc-header"><span style="font-size:0.9rem">' + icon + '</span><span class="mc-sport">' + headerSport + '</span>' +
+        (isLiveMarket ? _pbLiveBadgeHtml() : '') +
+        '</div>' +
+        liveScoreHtml +
+        splitHtml +
+        '<div class="mc-vs">' + aw + ' vs ' + hw + '</div>' +
+        '<div class="mc-cols mc-cols-ml-only"><div></div><div class="mc-col-label">To Win</div></div>' +
+        '<div class="mc-team-row mc-team-row-ml-only">' +
+          '<div class="mc-team">' + teamAvatar(aw, 'golf') + '<div><div class="mc-city">' + (awC || 'Player') + '</div><div class="mc-name">' + awN + '</div></div></div>' +
+          cell(g.id + '-ml-aw', null, awML ? awML.odds : null, 'Moneyline', aw, aw) +
+        '</div>' +
+        '<div class="mc-divider"></div>' +
+        '<div class="mc-team-row mc-team-row-ml-only">' +
+          '<div class="mc-team">' + teamAvatar(hw, 'golf') + '<div><div class="mc-city">' + (hwC || 'Player') + '</div><div class="mc-name">' + hwN + '</div></div></div>' +
+          cell(g.id + '-ml-hw', null, hwML ? hwML.odds : null, 'Moneyline', hw, hw) +
+        '</div>' +
+        '<div class="mc-footer"><span class="mc-time">' + time + '</span></div>' +
+        '<div class="mc-props-panel"></div>' +
+        '</div>';
+    }
+
     return '<div class="market-card" data-game-id="' + safeGameId + '" data-home="' + safeHome + '" data-away="' + safeAway + '" style="margin-bottom:14px">' +
       '<div class="mc-header"><span style="font-size:0.9rem">' + icon + '</span><span class="mc-sport">' + headerSport + '</span>' +
       (isLiveMarket ? _pbLiveBadgeHtml() : '') +
@@ -4817,7 +4874,19 @@ var _SPORT_CATALOG_ALIASES = {
 };
 function _resolveOddsRouteKeys(sport) {
   var s = String(sport || 'mlb').toLowerCase();
-  if (_SPORT_CATALOG_ALIASES[s]) return _SPORT_CATALOG_ALIASES[s].slice();
+  if (_SPORT_CATALOG_ALIASES[s]) {
+    // Map aliases through _ODDS_ROUTE_KEY and dedupe so golf_pga/liv/european
+    // all hit the unified /api/odds/golf rollup (one fetch, not four).
+    var seen = {};
+    var out = [];
+    _SPORT_CATALOG_ALIASES[s].forEach(function(alias) {
+      var route = _ODDS_ROUTE_KEY[alias] || alias;
+      if (!route || seen[route]) return;
+      seen[route] = true;
+      out.push(route);
+    });
+    return out.length ? out : [s];
+  }
   var route = _ODDS_ROUTE_KEY[s];
   if (route) return [route];
   if (s.indexOf('baseball') === 0) return ['mlb'];
@@ -4834,7 +4903,8 @@ async function _fetchOddsRoute(routeKey) {
   if (!res.ok) {
     return { ok:false, status:res.status, body:body, headers:res.headers, games:[] };
   }
-  var games = Array.isArray(body) ? body : [];
+  var games = Array.isArray(body) ? body
+    : (body && Array.isArray(body.games) ? body.games : []);
   return { ok:true, status:res.status, body:body, headers:res.headers, games:games };
 }
 
@@ -4888,7 +4958,7 @@ async function loadGames(sport, opts){
         console.error('[sportsbook fetch failed] network error url=' + _url + ' err=' + fetchErr.message);
       }
     }
-    if (_hadNetworkErr && !games.length && _routeKeys.length === 1) {
+    if (_hadNetworkErr && !games.length) {
       throw new Error('Backend unreachable');
     }
     if (!games.length && _lastErrStatus && _routeKeys.length === 1) {
@@ -4939,6 +5009,23 @@ async function loadGames(sport, opts){
     // Rule 2: keep isLive games (LIVE badge + bettable when live betting enabled).
     // Rule 3: keep pre-game (!isLive && !isFinal).
     games = games.filter(function(g){ return !_pbMarketIsFinal(g); });
+    // Golf: drop tournament outrights so matchup cards populate the lobby.
+    if (_pbIsGolfSport(_sportLc) || _sport === 'golf') {
+      games = games.filter(function(g){ return !_pbIsGolfOutright(g); });
+    }
+
+    if (!games.length) {
+      if (opts.silent && el.querySelector('.market-card[data-game-id]')) {
+        el.querySelectorAll('.market-card[data-game-id]').forEach(function(c){ if (c.parentNode) c.parentNode.removeChild(c); });
+        return;
+      }
+      if (_liveOnly) {
+        el.innerHTML = _pbLiveEmptyStateHtml(null);
+      } else {
+        el.innerHTML='<div class="empty" style="padding:60px 20px;text-align:center;color:#888">No games available right now.</div>';
+      }
+      return;
+    }
 
     // Live filter — real isLive only; never invent mock-live placeholders.
     if (_liveOnly) {
