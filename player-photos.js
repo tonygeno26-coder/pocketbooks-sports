@@ -346,25 +346,34 @@
     'Sergio Busquets': 121893,
     'Thiago Almada': 277208,
     'Tyler Adams': 222776
+  },
+  // Exact Owls-name → ESPN ID aliases only (no fuzzy). Populated by sync /
+  // verified lookups; empty object keeps resolver path open without guesses.
+  mma: {
+    // Accent / punctuation aliases (same ESPN id when known):
+    // 'Casey ONeill': <id>, "Casey O'Neill": <id>
   }
   };
 
   var ESPN_SEARCH_SPORT = {
     mlb: 'baseball', nba: 'basketball', wnba: 'basketball', ncaab: 'basketball',
     nfl: 'football', ncaaf: 'football', ncaafb: 'football', nhl: 'hockey',
-    tennis: 'tennis', tennis_atp: 'tennis', tennis_wta: 'tennis', soccer: 'soccer', mls: 'soccer'
+    tennis: 'tennis', tennis_atp: 'tennis', tennis_wta: 'tennis', soccer: 'soccer', mls: 'soccer',
+    mma: 'mma', boxing: 'mma'
   };
 
   var ESPN_HEADSHOT_SPORT = {
     mlb: 'mlb', nba: 'nba', nfl: 'nfl', nhl: 'nhl', wnba: 'wnba',
     ncaab: 'mens-college-basketball', ncaaf: 'college-football', ncaafb: 'college-football',
-    tennis: 'tennis', tennis_atp: 'tennis', tennis_wta: 'tennis', soccer: 'soccer', mls: 'soccer'
+    tennis: 'tennis', tennis_atp: 'tennis', tennis_wta: 'tennis', soccer: 'soccer', mls: 'soccer',
+    mma: 'mma', boxing: 'mma'
   };
 
   var ESPN_LEAGUE_SLUG = {
     mlb: 'mlb', nba: 'nba', nfl: 'nfl', nhl: 'nhl', wnba: 'wnba',
     ncaab: 'mens-college-basketball', ncaaf: 'college-football', ncaafb: 'college-football',
-    tennis: 'atp', tennis_atp: 'atp', tennis_wta: 'wta', soccer: 'soccer', mls: 'usa.1'
+    tennis: 'atp', tennis_atp: 'atp', tennis_wta: 'wta', soccer: 'soccer', mls: 'usa.1',
+    mma: 'ufc', boxing: 'boxing'
   };
 
   var CACHE_PREFIX = 'pbPlayerPhoto:v1:';
@@ -383,6 +392,7 @@
     if (s === 'icehockey_nhl') return 'nhl';
     if (s === 'tennis_atp' || s === 'atp' || s === 'tennis_wta' || s === 'wta') return 'tennis';
     if (s === 'soccer_mls' || s === 'mls') return 'soccer';
+    if (s === 'mma_mixed_martial_arts') return 'mma';
     return s;
   }
 
@@ -390,11 +400,16 @@
     var s = normalizeSport(sport);
     if (s === 'tennis' || s === 'tennis_atp' || s === 'tennis_wta') return 'tennis';
     if (s === 'soccer' || s === 'mls') return 'soccer';
+    if (s === 'mma' || s === 'mma_mixed_martial_arts') return 'mma';
     return s;
   }
 
   function normName(name) {
-    return String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    return String(name || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '');
   }
 
   function esc(s) {
@@ -522,6 +537,11 @@
       return !league || league === 'atp' || league === 'wta' || league === 'tennis';
     }
     if (s === 'soccer') return !itemSport || itemSport === 'soccer';
+    if (s === 'mma') {
+      if (itemSport && itemSport !== 'mma') return false;
+      // Accept UFC / BKFC / PFL / etc. — any MMA league slug.
+      return true;
+    }
     var want = ESPN_LEAGUE_SLUG[s] || s;
     return !league || league === String(want).toLowerCase();
   }
@@ -537,6 +557,18 @@
     return queries;
   }
 
+  function mmaSearchQueries(playerName) {
+    var parts = String(playerName || '').trim().split(/\s+/).filter(Boolean);
+    var firstLast = parts.length >= 2 ? (parts[0] + ' ' + parts[parts.length - 1]) : String(playerName || '').trim();
+    var full = String(playerName || '').trim();
+    var queries = [];
+    if (full) queries.push(full);
+    if (firstLast && queries.indexOf(firstLast) < 0) queries.push(firstLast);
+    if (full) queries.push(full + ' ufc');
+    if (firstLast) queries.push(firstLast + ' mma');
+    return queries;
+  }
+
   function pickSearchResult(items, playerName, sport, team) {
     var want = normName(playerName);
     var teamNorm = normName(team);
@@ -547,7 +579,9 @@
       if (!leagueMatches(it, sport)) continue;
       var dn = normName(it.displayName || it.name || '');
       var score = 0;
+      // Exact-only preference for combat sports — never promote weak substring hits.
       if (dn === want) score = 100;
+      else if (normalizeSport(sport) === 'mma') continue;
       else if (dn.indexOf(want) >= 0 || want.indexOf(dn) >= 0) score = 50;
       else score = 10;
       if (teamNorm) {
@@ -557,7 +591,10 @@
       ranked.push({ score: score, it: it });
     }
     ranked.sort(function (a, b) { return b.score - a.score; });
-    return ranked.length ? ranked[0].it : null;
+    if (!ranked.length) return null;
+    // Ambiguous exact ties → unresolved (no dangerous guess).
+    if (ranked.length > 1 && ranked[0].score === ranked[1].score && ranked[0].score >= 100) return null;
+    return ranked[0].it;
   }
 
   async function searchEspnPlayerId(playerName, sport, team) {
@@ -612,6 +649,8 @@
         var queries = [];
         if (sport === 'tennis') {
           queries = tennisSearchQueries(playerName);
+        } else if (sport === 'mma') {
+          queries = mmaSearchQueries(playerName);
         } else {
           var query = String(playerName || '').trim();
           if (team) query = query + ' ' + String(team).trim();
@@ -622,10 +661,14 @@
         for (var qi = 0; qi < queries.length && !pick; qi++) {
           var q = queries[qi];
           if (!q) continue;
-          var limit = sport === 'tennis' ? 3 : 8;
+          var limit = (sport === 'tennis' || sport === 'mma') ? 5 : 8;
+          // ESPN returns empty items when `sport=` is set for some individual
+          // sports — query by name + type=player, then filter in pickSearchResult.
           var url = 'https://site.api.espn.com/apis/common/v3/search?query=' +
             encodeURIComponent(q) +
-            '&sport=' + encodeURIComponent(searchSport) +
+            ((sport === 'tennis' || sport === 'mma')
+              ? ''
+              : ('&sport=' + encodeURIComponent(searchSport))) +
             '&type=player&limit=' + limit;
           var res = await fetch(url, { cache: 'force-cache' });
           if (!res.ok) continue;
@@ -700,7 +743,7 @@
     var name = String(playerName || '').trim();
     var team = opts.team || '';
     var className = opts.className || '';
-    var borderRadius = opts.borderRadius != null ? opts.borderRadius : (sport === 'tennis' ? '10px' : '50%');
+    var borderRadius = opts.borderRadius != null ? opts.borderRadius : ((sport === 'tennis' || sport === 'mma') ? '10px' : '50%');
     var cls = className ? ' class="' + esc(className) + '"' : '';
     var url = getPlayerHeadshotUrl(name, sport);
 
@@ -740,7 +783,7 @@
     img.width = size;
     img.height = size;
     img.style.cssText = 'width:' + size + 'px;height:' + size + 'px;object-fit:cover;display:block;border-radius:' +
-      (normalizeSport(sport) === 'tennis' ? '10px' : '50%');
+      ((normalizeSport(sport) === 'tennis' || normalizeSport(sport) === 'mma') ? '10px' : '50%');
     img.referrerPolicy = 'no-referrer';
     img.setAttribute('data-photo-step', '0');
     img.setAttribute('data-player-photo', name);
@@ -1437,6 +1480,12 @@
   global.getPlayerHeadshotUrl = getPlayerHeadshotUrl;
   global.searchEspnPlayerId = searchEspnPlayerId;
   global.getPlayerPhotoImg = getPlayerPhotoImg;
+  global.getTennisPlayerPhotoImg = function (name, size) {
+    return getPlayerPhotoImg(name, 'tennis', size || 52, { borderRadius: '10px' });
+  };
+  global.getMmaFighterPhotoImg = function (name, size) {
+    return getPlayerPhotoImg(name, 'mma', size || 52, { borderRadius: '10px' });
+  };
   global.handlePlayerPhotoError = handlePlayerPhotoError;
   global.hydratePlayerPhotos = hydratePlayerPhotos;
   global.clearPlayerPhotoCache = clearPlayerPhotoCache;
