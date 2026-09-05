@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Live score card visual gate</title>
+<style>
+  :root { --bg:#080D18; --panel:#101A2E; --line:#1D2B42; --accent:#1677FF; --muted:#64748B; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:ui-sans-serif,system-ui,sans-serif;background:var(--bg);color:#e2e8f0;padding:24px}
+  h1{font-size:1rem;margin:0 0 8px;color:#94a3b8;font-weight:800;letter-spacing:.4px;text-transform:uppercase}
+  .row{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:28px}
+  .market-card{width:360px;max-width:100%;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .mc-header{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:.72rem;font-weight:800}
+  .mc-live-badge{margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.32);color:#ef4444;font-size:.55rem;font-weight:900;letter-spacing:.5px;text-transform:uppercase;padding:2px 7px;border-radius:6px}
+  .mc-live-badge-dot{width:6px;height:6px;border-radius:50%;background:#ef4444}
+  .mc-live-score{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:5px 14px 7px;font-size:.7rem;font-weight:800;color:#94a3b8;background:linear-gradient(180deg,rgba(16,26,46,.55),rgba(8,13,24,0))}
+  .mc-live-score-row{display:flex;align-items:center;justify-content:center;gap:10px;width:100%}
+  .mc-live-state{font-size:.56rem;color:#ef4444;font-weight:900;text-transform:uppercase;letter-spacing:.35px}
+  .mc-live-pts{color:#e2e8f0;font-size:.92rem;font-weight:900}
+  .mc-live-extras{display:flex;gap:10px;font-size:.52rem;color:var(--muted);font-weight:700}
+  .odds{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;padding:10px 12px 14px}
+  .cell{background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:10px 6px;text-align:center;font-size:.68rem;font-weight:800}
+  .cell span{display:block;color:var(--accent);margin-top:4px}
+  .note{font-size:.7rem;color:var(--muted);margin-top:6px}
+  .bp{font-size:.65rem;color:#94a3b8;margin:0 0 12px}
+</style>
+</head>
+<body>
+  <h1>Live score cards — visual gate</h1>
+  <p class="bp">Breakpoints: resize to 390 / 768 / 1280 / 1440. Pregame has no scoreboard. Live without score omits board.</p>
+  <div class="row" id="cards"></div>
+<script>
+const samples = [
+  { sport:'MLB', away:'Cubs', home:'Marlins', aw:3, hw:0, state:'Top 4th', note:'MLB inning' },
+  { sport:'NCAAF', away:'Boise St', home:'Oregon', aw:17, hw:14, state:'Q3 · 8:41', note:'College football' },
+  { sport:'SOCCER', away:'Le Mans', home:'Nice', aw:2, hw:3, state:"58'", note:'Soccer minute' },
+  { sport:'TENNIS', away:'Khachanov', home:'Bonzi', aw:2, hw:0, state:'2-0 · 15-0', note:'Tennis sets/games' },
+  { sport:'NBA', away:'Celtics', home:'Pistons', aw:null, hw:null, state:null, liveNoScore:true, note:'Live odds, no score → no board' },
+  { sport:'NFL', away:'Patriots', home:'Seahawks', pregame:true, note:'Pregame → no scoreboard' },
+];
+function card(s){
+  const liveBadge = s.pregame ? '' : '<span class="mc-live-badge"><span class="mc-live-badge-dot"></span>LIVE</span>';
+  let score = '';
+  if (!s.pregame && !s.liveNoScore && (s.aw!=null || s.hw!=null || s.state)) {
+    score = `<div class="mc-live-score"><div class="mc-live-score-row">
+      <span>${s.away} <span class="mc-live-pts">${s.aw??'—'}</span></span>
+      <span class="mc-live-state">${s.state||'● LIVE'}</span>
+      <span><span class="mc-live-pts">${s.hw??'—'}</span> ${s.home}</span>
+    </div></div>`;
+  }
+  return `<div class="market-card">
+    <div class="mc-header"><span>${s.sport}</span><span style="color:#64748B">${s.away} @ ${s.home}</span>${liveBadge}</div>
+    ${score}
+    <div class="odds"><div class="cell">+3.5<span>-110</span></div><div class="cell">O 45.5<span>-105</span></div><div class="cell">ML<span>-130</span></div></div>
+    <div class="note" style="padding:0 12px 12px">${s.note}</div>
+  </div>`;
+}
+document.getElementById('cards').innerHTML = samples.map(card).join('');
+</script>
+</body>
+</html>
