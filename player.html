@@ -2348,14 +2348,16 @@ function _pbAvatarSportKey(sport) {
 
 function _pbPlayerHeadshotImg(name, sport, size) {
   size = size || 52;
-  if (typeof getPlayerPhotoImg === 'function') {
-    return getPlayerPhotoImg(name, sport, size, { borderRadius: '10px' });
-  }
+  // Sport-specific helpers first so verified maps in team-logos.js are used
+  // (getPlayerPhotoImg alone misses golf IDs that live outside player-photos.js).
   if (sport === 'tennis' && typeof getTennisPlayerPhotoImg === 'function') {
     return getTennisPlayerPhotoImg(name, size);
   }
   if (sport === 'golf' && typeof getGolfPlayerPhotoImg === 'function') {
     return getGolfPlayerPhotoImg(name, size);
+  }
+  if (typeof getPlayerPhotoImg === 'function') {
+    return getPlayerPhotoImg(name, sport, size, { borderRadius: '10px' });
   }
   return '';
 }

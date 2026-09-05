@@ -2115,10 +2115,17 @@
   function getGolfPlayerPhotoImg(playerName, size, className) {
     size = size || 40;
     var name = String(playerName || '').trim();
-    if (typeof global.getPlayerPhotoImg === 'function') {
-      return global.getPlayerPhotoImg(name, 'golf', size, { className: className || '', borderRadius: '10px' });
-    }
+    // Prefer verified URL from this module (and player-photos.js map) so lobby
+    // cards get an <img> immediately — do not render initials-only placeholders
+    // when getPlayerPhotoImg is present but its golf map is incomplete.
     var url = getGolfPlayerPhoto(name);
+    if (typeof global.getPlayerPhotoImg === 'function') {
+      return global.getPlayerPhotoImg(name, 'golf', size, {
+        className: className || '',
+        borderRadius: '10px',
+        photoUrl: url || undefined
+      });
+    }
     var cls = className ? ' class="' + esc(className) + '"' : '';
     if (!url) {
       return '<span data-golf-player="' + esc(name) + '" data-player-photo="' + esc(name) +
