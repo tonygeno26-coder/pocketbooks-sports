@@ -390,6 +390,466 @@ body.theme-light [style*="color:#00ff88"],body.theme-light [style*="color:#00ff8
   .modal,#_invoice-modal-inner{max-width:100vw;width:100%;box-sizing:border-box}
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   SETTLE TAB — player.html sportsbook visual language (presentation only)
+   Scoped to #settlements-section + settlement modals. No layout/logic change.
+   ═══════════════════════════════════════════════════════════════════════════ */
+#settlements-section{
+  --bg:#070b12;
+  --bg-elev:#0c121c;
+  --card:#121a27;
+  --card2:#162032;
+  --border:#1e2a3c;
+  --border-soft:rgba(255,255,255,0.06);
+  --accent:#3d8bfd;
+  --accent-soft:rgba(61,139,253,0.16);
+  --accent-glow:rgba(61,139,253,0.45);
+  --green:#3d8bfd;
+  --green-dim:rgba(61,139,253,0.14);
+  --win:#3dd68c;
+  --win-dim:rgba(61,214,140,0.12);
+  --red:#ff4d6a;
+  --red-dim:rgba(255,77,106,0.12);
+  --cyan:#5eb1ff;
+  --cyan-dim:rgba(94,177,255,0.12);
+  --gold:#e8c547;
+  --gold-dim:rgba(232,197,71,0.12);
+  --white:#f4f7fb;
+  --gray:#7a8799;
+  --light:#a8b3c4;
+  --shadow:0 8px 28px rgba(0,0,0,0.35);
+  --radius:16px;
+  --radius-sm:12px;
+  background:
+    radial-gradient(900px 420px at 50% -80px,rgba(61,139,253,0.07),transparent 55%),
+    var(--bg)!important;
+  color:var(--white)!important;
+  min-height:100vh;
+  padding-bottom:100px;
+  overflow-x:hidden;
+  max-width:100%;
+  box-sizing:border-box;
+}
+
+/* Recessed panels / cards */
+#settlements-section [data-settle-card],
+#settlements-section [data-db-settle-card],
+#settlements-section #host-diamond-card > div,
+#settlements-section #host-diamond-weekly-report > div,
+#settlements-section #phase-p-settlements > div,
+#settlements-section #settlement-db-preview > div > div[style*="border-radius"],
+#settlements-section #_weekly_history_section button{
+  background:var(--card)!important;
+  border:1px solid var(--border)!important;
+  border-radius:var(--radius)!important;
+  box-shadow:0 4px 18px rgba(0,0,0,0.28)!important;
+  color:var(--white)!important;
+}
+#settlements-section [data-settle-card]:hover,
+#settlements-section [data-db-settle-card]:hover{
+  border-color:rgba(61,139,253,0.35)!important;
+}
+#settlements-section [data-settle-card],
+#settlements-section [data-db-settle-card]{
+  padding:14px 16px!important;
+  margin-bottom:12px!important;
+}
+
+/* Typography hierarchy */
+#settlements-section [style*="font-weight:900"],
+#settlements-section [style*="font-weight:800"]{
+  letter-spacing:-0.2px;
+}
+#settlements-section [style*="color:#555"],
+#settlements-section [style*="color:#666"],
+#settlements-section [style*="color:#777"],
+#settlements-section [style*="color:#888"]{
+  color:var(--gray)!important;
+}
+#settlements-section [style*="color:#aaa"]{color:var(--light)!important}
+#settlements-section [style*="color:#fff"],
+#settlements-section [style*="color:#FFF"]{color:var(--white)!important}
+
+/* Semantic money colors → restrained sportsbook palette */
+#settlements-section [style*="color:#00ff88"],
+#settlements-section [style*="color:#00ff87"],
+#settlements-section [style*="color:var(--green"]{
+  color:var(--win)!important;
+}
+#settlements-section [style*="color:#ff3d57"],
+#settlements-section [style*="color:#ff4d6a"],
+#settlements-section [style*="color:var(--red"]{
+  color:var(--red)!important;
+}
+#settlements-section [style*="color:#00c2ff"],
+#settlements-section [style*="color:var(--cyan"]{
+  color:var(--cyan)!important;
+}
+#settlements-section [style*="color:#8eb6ff"],
+#settlements-section [style*="color:#93c5fd"]{
+  color:var(--accent)!important;
+}
+
+/* Hardcoded dark surfaces → navy cards */
+#settlements-section [style*="background:#0a0a0a"],
+#settlements-section [style*="background:#0d0d0d"],
+#settlements-section [style*="background:#0f0f0f"],
+#settlements-section [style*="background:#111"],
+#settlements-section [style*="background:#1a1a1a"],
+#settlements-section [style*="background:#1c1c1c"],
+#settlements-section [style*="background:var(--card"]{
+  background:var(--card)!important;
+  border-color:var(--border)!important;
+}
+#settlements-section [style*="background:rgba(255,255,255,0.02)"]{
+  background:var(--bg-elev)!important;
+  border:1px solid var(--border-soft);
+  border-radius:12px;
+}
+#settlements-section [style*="border:1px solid #222"],
+#settlements-section [style*="border:1px solid #2a2a2a"],
+#settlements-section [style*="border:1px solid #333"],
+#settlements-section [style*="border:1px solid var(--border"],
+#settlements-section [style*="border-top:1px solid #1a1a1a"],
+#settlements-section [style*="border-bottom:1px solid var(--border"]{
+  border-color:var(--border)!important;
+}
+
+/* Inputs / selects */
+#settlements-section input,
+#settlements-section select,
+#settlements-section textarea{
+  background:var(--bg-elev)!important;
+  border:1px solid var(--border)!important;
+  border-radius:12px!important;
+  color:var(--white)!important;
+  min-height:40px;
+}
+#settlements-section input:focus,
+#settlements-section select:focus,
+#settlements-section textarea:focus{
+  border-color:var(--accent)!important;
+  box-shadow:0 0 0 2px rgba(61,139,253,0.22)!important;
+  outline:none!important;
+}
+
+/* Filter chips / secondary buttons */
+#settlements-section [data-settle-filter],
+#settlements-section [data-settle-week],
+#settlements-section [data-settle-full],
+#settlements-section [data-settle-view],
+#settlements-section button[style*="background:transparent"],
+#settlements-section button[style*="background:none"]{
+  border-radius:12px!important;
+  min-height:36px;
+  transition:border-color .15s,background .15s,color .15s;
+}
+#settlements-section [data-settle-filter]{
+  background:var(--card)!important;
+  border:1px solid var(--border)!important;
+  color:var(--light)!important;
+  border-radius:999px!important;
+  padding:6px 12px!important;
+}
+#settlements-section [data-settle-filter][style*="var(--cyan)"],
+#settlements-section [data-settle-filter][style*="background:var(--cyan"]{
+  background:var(--accent-soft)!important;
+  border-color:var(--accent)!important;
+  color:#fff!important;
+}
+#settlements-section [data-settle-week]{
+  background:var(--card)!important;
+  border:1px solid var(--border)!important;
+  border-radius:12px!important;
+  color:var(--white)!important;
+}
+#settlements-section [data-settle-week]:hover:not(:disabled){
+  border-color:var(--accent)!important;
+}
+#settlements-section [data-settle-full],
+#settlements-section [data-settle-view]{
+  background:var(--card2)!important;
+  border:1px solid var(--border)!important;
+  color:var(--cyan)!important;
+}
+#settlements-section [data-settle-full]:hover,
+#settlements-section [data-settle-view]:hover{
+  border-color:var(--accent)!important;
+  color:#fff!important;
+}
+
+/* Primary actions — blue accent (player sportsbook) */
+#settlements-section [data-settle-confirm],
+#settlements-section [data-settle-save],
+#settlements-section button[onclick*="createWeeklyRollover"],
+#settlements-section button[style*="background:var(--green"],
+#settlements-section button[style*="background:#10b981"],
+#settlements-section button[style*="background:#00c853"]{
+  background:var(--accent)!important;
+  border:none!important;
+  color:#041018!important;
+  border-radius:12px!important;
+  box-shadow:0 0 14px rgba(61,139,253,0.28);
+  font-weight:900!important;
+}
+#settlements-section [data-settle-confirm]:hover,
+#settlements-section [data-settle-save]:hover,
+#settlements-section button[onclick*="createWeeklyRollover"]:hover{
+  filter:brightness(1.06);
+}
+
+/* Status badges — restrained dark theme */
+#settlements-section [data-settle-status]{
+  font-size:0.58rem!important;
+  font-weight:800!important;
+  letter-spacing:0.45px!important;
+  border-radius:8px!important;
+  padding:4px 9px!important;
+  border:1px solid var(--border-soft)!important;
+}
+#settlements-section [data-settle-status][style*="#00ff88"],
+#settlements-section [data-settle-status][style*="rgba(0,255,136"]{
+  color:var(--win)!important;
+  background:var(--win-dim)!important;
+  border-color:rgba(61,214,140,0.25)!important;
+}
+#settlements-section [data-settle-status][style*="#f5c842"],
+#settlements-section [data-settle-status][style*="rgba(245,200,66"]{
+  color:var(--gold)!important;
+  background:var(--gold-dim)!important;
+  border-color:rgba(232,197,71,0.28)!important;
+}
+#settlements-section [data-settle-status][style*="#00c2ff"],
+#settlements-section [data-settle-status][style*="rgba(0,194,255"]{
+  color:var(--cyan)!important;
+  background:var(--cyan-dim)!important;
+  border-color:rgba(94,177,255,0.28)!important;
+}
+#settlements-section [data-settle-status][style*="#888"],
+#settlements-section [data-settle-status][style*="rgba(255,255,255,0.04)"]{
+  color:var(--gray)!important;
+  background:rgba(255,255,255,0.04)!important;
+  border-color:var(--border-soft)!important;
+}
+#settlements-section [style*="background:rgba(0,255,136,0.1)"],
+#settlements-section [style*="background:rgba(22,163,74,0.12)"]{
+  background:var(--win-dim)!important;
+  border-color:rgba(61,214,140,0.28)!important;
+  color:var(--win)!important;
+}
+#settlements-section [style*="background:rgba(37,99,235,0.12)"]{
+  background:var(--accent-soft)!important;
+  border-color:rgba(61,139,253,0.35)!important;
+  color:var(--accent)!important;
+}
+#settlements-section [style*="background:rgba(61,126,255"],
+#settlements-section [style*="border:1px solid #2563eb"]{
+  background:var(--accent-soft)!important;
+  border-color:rgba(61,139,253,0.45)!important;
+}
+
+/* Phase P period / payment action chips */
+#settlements-section #phase-p-settlements button{
+  border-radius:8px!important;
+  min-height:28px;
+  font-weight:700!important;
+}
+#settlements-section #phase-p-settlements button[style*="#4ade80"],
+#settlements-section #phase-p-settlements button[style*="background:#1e3a1e"],
+#settlements-section #phase-p-settlements button[style*="background:#0f2718"]{
+  background:var(--win-dim)!important;
+  border:1px solid rgba(61,214,140,0.3)!important;
+  color:var(--win)!important;
+}
+#settlements-section #phase-p-settlements button[style*="#38bdf8"],
+#settlements-section #phase-p-settlements button[style*="background:#0f2027"]{
+  background:var(--accent-soft)!important;
+  border:1px solid rgba(61,139,253,0.35)!important;
+  color:var(--cyan)!important;
+}
+#settlements-section #phase-p-settlements button[style*="#facc15"],
+#settlements-section #phase-p-settlements button[style*="background:#1a1a00"]{
+  background:var(--gold-dim)!important;
+  border:1px solid rgba(232,197,71,0.3)!important;
+  color:var(--gold)!important;
+}
+#settlements-section #phase-p-settlements button[style*="#f87171"],
+#settlements-section #phase-p-settlements button[style*="background:#1a0a0a"]{
+  background:var(--red-dim)!important;
+  border:1px solid rgba(255,77,106,0.3)!important;
+  color:var(--red)!important;
+}
+
+/* Diamond card polish inside Settle */
+#settlements-section #host-diamond-card,
+#settlements-section #host-diamond-weekly-report{
+  padding-left:8px;padding-right:8px;
+}
+#settlements-section #host-diamond-card button,
+#settlements-section #host-diamond-weekly-report button{
+  border-radius:10px!important;
+  transition:border-color .15s,background .15s;
+}
+#settlements-section #host-diamond-card button[style*="#4ade80"]{
+  background:var(--accent-soft)!important;
+  border:1px solid rgba(61,139,253,0.4)!important;
+  color:var(--accent)!important;
+}
+
+/* Settlement modals (body-level overlays) — match player sheets */
+#_settle_modal,
+#_rollover_modal,
+#_phase-p-pay-modal,
+#settle-detail{
+  --card:#121a27;
+  --card2:#162032;
+  --border:#1e2a3c;
+  --accent:#3d8bfd;
+  --white:#f4f7fb;
+  --gray:#7a8799;
+  --light:#a8b3c4;
+  --win:#3dd68c;
+  --red:#ff4d6a;
+  --cyan:#5eb1ff;
+  --bg-elev:#0c121c;
+  background:rgba(4,8,14,0.78)!important;
+  backdrop-filter:blur(8px);
+}
+#_settle_modal > div,
+#_rollover_modal > div,
+#_phase-p-pay-modal > div,
+#settle-detail > div{
+  background:linear-gradient(180deg,#162032,#121a27)!important;
+  border:1px solid var(--border)!important;
+  box-shadow:0 -8px 40px rgba(0,0,0,0.55)!important;
+  color:var(--white)!important;
+}
+#_settle_modal input,
+#_rollover_modal input,
+#_phase-p-pay-modal input,
+#_phase-p-pay-modal select{
+  background:var(--bg-elev)!important;
+  border:1px solid var(--border)!important;
+  border-radius:12px!important;
+  color:var(--white)!important;
+}
+#_settle_modal input:focus,
+#_phase-p-pay-modal input:focus,
+#_phase-p-pay-modal select:focus{
+  border-color:var(--accent)!important;
+  box-shadow:0 0 0 2px rgba(61,139,253,0.22)!important;
+  outline:none!important;
+}
+#_settle_modal button[id="_settle_confirm_btn"],
+#_rollover_modal button[onclick*="createWeeklyRollover(true)"],
+#_phase-p-pay-modal #_pay-submit{
+  background:var(--accent)!important;
+  color:#041018!important;
+  border:none!important;
+  border-radius:12px!important;
+  box-shadow:0 0 14px rgba(61,139,253,0.28);
+}
+#_settle_modal button[onclick*="_settle_modal"],
+#_rollover_modal button[onclick*="_rollover_modal"],
+#_phase-p-pay-modal #_pay-cancel,
+#settle-detail #sd-close{
+  background:var(--card2)!important;
+  border:1px solid var(--border)!important;
+  color:var(--light)!important;
+  border-radius:12px!important;
+}
+
+/* Ticket status labels in settle detail — restrained badges */
+#settle-detail [style*="font-weight:800"][style*="text-transform"],
+#settle-detail div[style*="font-size:0.7rem"][style*="font-weight:800"]{
+  font-size:0.62rem!important;
+  letter-spacing:0.4px;
+  padding:3px 8px;
+  border-radius:8px;
+  border:1px solid rgba(255,255,255,0.06);
+  background:rgba(255,255,255,0.04);
+}
+#settle-detail [style*="color:var(--green)"]{
+  color:var(--win)!important;
+  background:rgba(61,214,140,0.12)!important;
+  border-color:rgba(61,214,140,0.25)!important;
+}
+#settle-detail [style*="color:var(--red)"]{
+  color:var(--red)!important;
+  background:rgba(255,77,106,0.12)!important;
+  border-color:rgba(255,77,106,0.25)!important;
+}
+#settle-detail [style*="color:var(--gray)"]{
+  color:var(--gray)!important;
+}
+#settle-detail [style*="background:#0a0a0a"],
+#settle-detail [style*="background:#1c1c1c"]{
+  background:var(--bg-elev)!important;
+  border-color:var(--border)!important;
+}
+
+/* Settle tab responsive — keep controls usable, no overflow */
+@media (max-width:400px){
+  #settlements-section{padding-left:0;padding-right:0}
+  #settlements-section [data-settle-card],
+  #settlements-section [data-db-settle-card]{
+    padding:12px!important;
+  }
+  #settlements-section [data-settle-card] > div,
+  #settlements-section [data-db-settle-card] > div{
+    min-width:0;
+  }
+  #settlements-section [style*="grid-template-columns:1fr 1fr 1fr 1fr"]{
+    grid-template-columns:1fr 1fr!important;
+    gap:8px!important;
+  }
+  #settlements-section [style*="grid-template-columns:1fr 1fr 1fr"]{
+    grid-template-columns:1fr 1fr!important;
+  }
+  #settlements-section [data-settle-confirm],
+  #settlements-section [data-settle-full],
+  #settlements-section [data-settle-save],
+  #settlements-section [data-settle-view],
+  #settlements-section button[onclick*="createWeeklyRollover"],
+  #settlements-section button[onclick*="openSettlePlayerModal"]{
+    min-height:44px!important;
+  }
+  #settlements-section input[data-settle-input],
+  #settlements-section input[data-balance-start]{
+    min-height:44px!important;
+    font-size:0.9rem!important;
+  }
+  #settlements-section [style*="font-size:2.8rem"]{
+    font-size:2.1rem!important;
+  }
+  #_settle_modal > div,
+  #settle-detail > div{
+    max-width:100vw!important;
+    width:100%!important;
+  }
+}
+@media (min-width:768px){
+  #settlements-section #settlement-db-preview > div[style*="padding:12px 16px"]{
+    padding-left:20px!important;
+    padding-right:20px!important;
+  }
+}
+@media (min-width:1280px){
+  #settlements-section [data-db-settle-card],
+  #settlements-section [data-settle-card]{
+    transition:border-color .15s,box-shadow .15s;
+  }
+  #settlements-section #settlement-db-preview{
+    max-width:100%;
+  }
+}
+@media (min-width:1440px){
+  #settlements-section{
+    padding-left:4px;
+    padding-right:4px;
+  }
+}
+
 </style>
 
 <script>
