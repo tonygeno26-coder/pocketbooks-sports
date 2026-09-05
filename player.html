@@ -186,10 +186,10 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .mc-col-label{text-align:center;font-size:0.58rem;color:#555;font-weight:700;text-transform:uppercase;letter-spacing:0.5px}
 .mc-team-row{display:grid;grid-template-columns:1fr 90px 90px 90px;gap:6px;padding:0 16px;margin-bottom:10px;align-items:center}
 .mc-team{display:flex;align-items:center;gap:10px}
-.mc-jersey{width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:900;background:linear-gradient(145deg,#1e1e1e,#111);border:1px solid rgba(255,255,255,0.06);padding:7px;overflow:hidden;box-shadow:inset 0 0 8px rgba(0,0,0,0.4),0 2px 8px rgba(0,0,0,0.3);flex-shrink:0}
-.mc-jersey img{width:100%;height:100%;object-fit:contain;display:block;max-width:100%;max-height:100%}
-.mc-jersey.mc-jersey-headshot{padding:2px;border-radius:14px}
-.mc-jersey.mc-jersey-headshot img{object-fit:cover;border-radius:10px}
+.mc-jersey{width:52px;height:52px;border-radius:0;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:900;background:transparent;border:none;padding:0;overflow:visible;box-shadow:none;flex-shrink:0}
+.mc-jersey img{width:100%;height:100%;object-fit:contain;display:block;max-width:100%;max-height:100%;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.45))}
+.mc-jersey.mc-jersey-headshot{padding:0;border-radius:12px;overflow:hidden;background:transparent;border:none;box-shadow:none}
+.mc-jersey.mc-jersey-headshot img{object-fit:cover;border-radius:10px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35))}
 .mc-team{display:flex;align-items:center;gap:8px}
 .mc-city{font-size:0.6rem;color:#555;line-height:1.2;text-transform:uppercase;letter-spacing:0.3px}
 .mc-name{font-size:0.92rem;font-weight:800;letter-spacing:-0.2px;line-height:1.2}
@@ -542,7 +542,7 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
     white-space:normal;overflow-wrap:break-word;word-break:normal;hyphens:auto
   }
   .market-card .mc-name{line-height:1.2;max-height:2.4em}
-  .market-card .mc-jersey{width:44px;height:44px;flex-shrink:0}
+  .market-card .mc-jersey{width:44px;height:44px;flex-shrink:0;padding:0;background:transparent;border:none;box-shadow:none}
   .market-card .odds-box,
   .market-card .mkt-odds-box{min-width:0;max-width:100%;padding-left:2px;padding-right:2px}
   .market-card .odds-box .odds-num{font-size:0.88rem}
@@ -743,7 +743,7 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
   }
   .market-card .odds-box .odds-num{font-size:0.8rem}
   .market-card .odds-box .odds-line{font-size:0.55rem}
-  .market-card .mc-jersey{width:36px;height:36px;flex-shrink:0}
+  .market-card .mc-jersey{width:42px;height:42px;flex-shrink:0;padding:0;background:transparent;border:none;box-shadow:none}
   .dkslip,.dkslip.open,.bs-drawer,.modal{
     max-width:100vw;width:100%;box-sizing:border-box
   }
@@ -880,9 +880,10 @@ body{
 .mc-sport{color:var(--gray)}
 .mc-cols,.mc-team-row{padding-left:14px;padding-right:14px}
 .mc-jersey{
-  width:44px;height:44px;border-radius:12px;background:#0d1420;border:1px solid var(--border);
-  box-shadow:none;padding:6px;
+  width:44px;height:44px;border-radius:0;background:transparent;border:none;
+  box-shadow:none;padding:0;overflow:visible;
 }
+.mc-jersey img{filter:drop-shadow(0 2px 4px rgba(0,0,0,0.45))}
 .mc-city{color:var(--gray)}
 .mc-name{font-size:0.9rem;font-weight:750;color:var(--white)}
 .mc-divider{background:linear-gradient(90deg,transparent,var(--border),transparent);margin:0 14px}
@@ -1127,6 +1128,23 @@ body{
   white-space:normal;overflow-wrap:break-word;word-break:normal
 }
 .market-card .mc-name{line-height:1.2}
+/* Unboxed team logos sit on the card — reassert sizes after redesign */
+.market-card .mc-jersey{
+  background:transparent!important;border:none!important;box-shadow:none!important;
+  padding:0!important;border-radius:0;overflow:visible
+}
+.market-card .mc-jersey img{
+  object-fit:contain;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.45))
+}
+.market-card .mc-jersey.mc-jersey-headshot{border-radius:12px;overflow:hidden}
+.market-card .mc-jersey.mc-jersey-headshot img{object-fit:cover;border-radius:10px}
+
+@media (max-width:480px){
+  .market-card .mc-jersey{width:44px;height:44px;flex-shrink:0}
+}
+@media (max-width:400px){
+  .market-card .mc-jersey{width:42px;height:42px;flex-shrink:0}
+}
 
 /* ── Tablet (≥768): leave phone shell; real intermediate width ── */
 @media (min-width:768px){
@@ -1153,7 +1171,7 @@ body{
     grid-template-columns:minmax(0,1fr) minmax(78px,90px) minmax(78px,90px) minmax(78px,90px);
     gap:6px;padding:0 16px;
   }
-  .market-card .mc-jersey{width:44px;height:44px}
+  .market-card .mc-jersey{width:48px;height:48px;padding:0;background:transparent;border:none;box-shadow:none}
   .filter-row{padding:12px 16px 4px}
   #sportsbook-section,#mybets-section,#live-section,#predictions-section,#results-section{
     padding-left:4px;padding-right:4px
@@ -1194,6 +1212,7 @@ body{
   }
   .market-card .mc-team{min-width:0}
   .market-card .mc-team > div{min-width:0;flex:1}
+  .market-card .mc-jersey{width:52px;height:52px}
   .market-card .mc-name,
   .market-card .mc-city{
     min-width:0;overflow:visible;text-overflow:unset;
@@ -1239,7 +1258,7 @@ body{
     grid-template-columns:minmax(0,1fr) minmax(80px,100px) minmax(80px,100px) minmax(80px,100px);
     padding:0 16px;gap:8px
   }
-  .market-card .mc-jersey{width:48px;height:48px}
+  .market-card .mc-jersey{width:52px;height:52px;padding:0;background:transparent;border:none;box-shadow:none}
   .market-card .mc-name{font-size:0.95rem}
 }
 @media (min-width:1440px){
@@ -1250,6 +1269,7 @@ body{
     grid-template-columns:repeat(auto-fit,minmax(460px,1fr));
     gap:18px;padding:0 24px
   }
+  .market-card .mc-jersey{width:56px;height:56px}
 }
 
 /* Compact phones: keep team-name wrap after redesign overrides */
