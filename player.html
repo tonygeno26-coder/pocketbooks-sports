@@ -2330,22 +2330,35 @@ async function api(method,path,body,_retried){
   return data;
 }
 
-// Team logos via shared team-logos.js (soccer ESPN IDs + tennis headshots)
+// Team logos via shared team-logos.js (soccer ESPN IDs + tennis/MMA headshots)
 function _pbAvatarSportKey(sport) {
   var s = String(sport || (typeof _currentSport !== 'undefined' ? _currentSport : '') || '').toLowerCase();
   if (s.indexOf('tennis') === 0 || s === 'atp' || s === 'wta') return 'tennis';
+  if (s === 'mma' || s === 'mma_mixed_martial_arts' || s.indexOf('mma') === 0) return 'mma';
   if (s.indexOf('soccer') === 0 || s === 'epl' || s === 'mls' || s === 'ucl' ||
       s === 'laliga' || s === 'seriea' || s === 'bundesliga' || s === 'ligue1' ||
       s === 'worldcup' || s === 'euros') return 'soccer';
   return s;
 }
 
+function _pbPlayerHeadshotImg(name, sport, size) {
+  size = size || 52;
+  if (typeof getPlayerPhotoImg === 'function') {
+    return getPlayerPhotoImg(name, sport, size, { borderRadius: '10px' });
+  }
+  if (sport === 'tennis' && typeof getTennisPlayerPhotoImg === 'function') {
+    return getTennisPlayerPhotoImg(name, size);
+  }
+  return '';
+}
+
 function teamAvatar(name, sport, opts) {
   sport = sport || (typeof _currentSport !== 'undefined' ? _currentSport : '') || '';
   opts = opts || {};
   var kind = _pbAvatarSportKey(sport);
-  if (kind === 'tennis' && typeof getTennisPlayerPhotoImg === 'function') {
-    return '<div class="mc-jersey mc-jersey-headshot">' + getTennisPlayerPhotoImg(name, 52) + '</div>';
+  if ((kind === 'tennis' || kind === 'mma')) {
+    var shot = _pbPlayerHeadshotImg(name, kind, 52);
+    if (shot) return '<div class="mc-jersey mc-jersey-headshot">' + shot + '</div>';
   }
   if (kind === 'soccer' && typeof getSoccerTeamLogoImg === 'function') {
     return '<div class="mc-jersey">' + getSoccerTeamLogoImg(name, 52) + '</div>';
@@ -2365,8 +2378,13 @@ function teamAvatar(name, sport, opts) {
 }
 
 function _pbHydrateLobbyAvatars(root) {
+  var scope = root || document.getElementById('games-list') || document;
   if (typeof hydrateEspnLobbyMedia === 'function') {
-    hydrateEspnLobbyMedia(root || document.getElementById('games-list') || document).catch(function(){});
+    hydrateEspnLobbyMedia(scope).catch(function(){});
+  }
+  if (typeof hydratePlayerPhotos === 'function') {
+    var sportHint = (typeof _currentSport !== 'undefined' ? _currentSport : '') || '';
+    hydratePlayerPhotos(scope, sportHint).catch(function(){});
   }
 }
 
@@ -3205,6 +3223,12 @@ function _pbRenderGameCardHtml(g) {
     }
     var awN = aw.split(' ').slice(-1)[0] || aw, hwN = hw.split(' ').slice(-1)[0] || hw;
     var awC = aw.split(' ').slice(0, -1).join(' '), hwC = hw.split(' ').slice(0, -1).join(' ');
+    var sportRouteEarly = _ODDS_ROUTE_KEY[String((g.sport || '')).toLowerCase()] || String((g.sport || '')).toLowerCase();
+    var isMmaCard = sportRouteEarly === 'mma' || _pbAvatarSportKey(g.sport || '') === 'mma';
+    // Fighters: keep given name / family name split; show promotion in header.
+    if (isMmaCard) {
+      // no-op — awC/awN already first/last; league shown below
+    }
     var awSp = (Array.isArray(g.spreads) ? g.spreads : []).find(function(s){ return s && s.team === aw; });
     var hwSp = (Array.isArray(g.spreads) ? g.spreads : []).find(function(s){ return s && s.team === hw; });
     var ov = (Array.isArray(g.totals) ? g.totals : []).find(function(t){ return t && t.name === 'Over'; });
@@ -3214,6 +3238,8 @@ function _pbRenderGameCardHtml(g) {
     var timeRaw = g.time || g.commence_time || null;
     var time = timeRaw ? new Date(timeRaw).toLocaleString('en-US', { weekday:'short', hour:'2-digit', minute:'2-digit' }) : 'TBD';
     var sp = (g.sport ? g.sport.toUpperCase() : null) || 'MLB';
+    var leagueLabel = (g.league || g.promotion || g.sport_title || '').trim();
+    var headerSport = (isMmaCard && leagueLabel) ? leagueLabel : sp;
     var icon = _PB_GAME_ICONS[sp] || '🏅';
     var isLiveMarket = _pbMarketIsLive(g);
     var split = _findSplitForGame(g);
@@ -3232,7 +3258,7 @@ function _pbRenderGameCardHtml(g) {
     var safeHome = hw.replace(/"/g, '');
     var safeAway = aw.replace(/"/g, '');
     return '<div class="market-card" data-game-id="' + safeGameId + '" data-home="' + safeHome + '" data-away="' + safeAway + '" style="margin-bottom:14px">' +
-      '<div class="mc-header"><span style="font-size:0.9rem">' + icon + '</span><span class="mc-sport">' + sp + '</span>' +
+      '<div class="mc-header"><span style="font-size:0.9rem">' + icon + '</span><span class="mc-sport">' + headerSport + '</span>' +
       (isLiveMarket ? _pbLiveBadgeHtml() : '') +
       '</div>' +
       liveScoreHtml +
@@ -3438,8 +3464,9 @@ function _pbSpreadMarketLabel(sport) {
 function _pbLobbyLogoImg(name, sport, size) {
   size = size || 36;
   var kind = _pbAvatarSportKey(sport);
-  if (kind === 'tennis' && typeof getTennisPlayerPhotoImg === 'function') {
-    return getTennisPlayerPhotoImg(name, size);
+  if (kind === 'tennis' || kind === 'mma') {
+    var shot = _pbPlayerHeadshotImg(name, kind, size);
+    if (shot) return shot;
   }
   if (kind === 'soccer' && typeof getSoccerTeamLogoImg === 'function') {
     return getSoccerTeamLogoImg(name, size);
@@ -6426,8 +6453,7 @@ function _slipLegLogoHtml(b, opts) {
       _slipPlayerPropPhotoHtml(b, 36) + '</div>';
   }
 
-  // 3) Game totals O/U (checked before team extraction so "Over" is not a team)
-  var ou = _slipTotalSide(b);
+  // 3) Game totals O/U (checked before team extraction so "Over" is not a team)  var ou = _slipTotalSide(b);
   if (ou === 'over') {
     return '<div class="dkslip-leg-logo"' + extraStyle + ' aria-hidden="true"><span class="dkslip-ou dkslip-ou-o">O</span></div>';
   }
