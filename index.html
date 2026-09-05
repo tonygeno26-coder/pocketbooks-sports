@@ -1464,12 +1464,12 @@ function renderAdminCrypto() {
 <div id="home-content">
 <!-- SETTLEMENT SUMMARY -->
 <div class="settlement">
-  <div class="settle-card sc-red">
+  <div class="settle-card sc-green">
     <div class="sc-label">Players Owe You</div>
     <div class="sc-amount" id="total-owes-you">$0</div>
     <div class="sc-sub">Lost stakes (all-time)</div>
   </div>
-  <div class="settle-card sc-green">
+  <div class="settle-card sc-red">
     <div class="sc-label">You Owe Players</div>
     <div class="sc-amount" id="total-you-owe">$0</div>
     <div class="sc-sub">Won profits (all-time)</div>
@@ -1503,11 +1503,11 @@ function renderAdminCrypto() {
     <div class="stat-lbl">Handle</div>
   </div>
   <div class="stat-card">
-    <div class="stat-val" style="color:var(--gold)" id="stat-hold">0%</div>
+    <div class="stat-val" id="stat-hold">0%</div>
     <div class="stat-lbl">Settled Hold %</div>
   </div>
   <div class="stat-card">
-    <div class="stat-val" style="color:var(--green)" id="stat-profit">$0</div>
+    <div class="stat-val" id="stat-profit">$0</div>
     <div class="stat-lbl">Profit</div>
   </div>
 </div>
@@ -1868,6 +1868,17 @@ function refreshHostDashboardStats(trigger) {
 
   // ── Render DOM ────────────────────────────────────────────────────────
   function _fmtUSD(v) { return '$' + Math.abs(v).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+  // Host money colors: income=green, outflow=red, signed metrics by sign, zero=muted
+  function _colorEl(id, color) { var el = document.getElementById(id); if (el) el.style.color = color; }
+  function _signedColor(v) {
+    var n = Number(v); if (isNaN(n) || Math.abs(n) < 0.005) return 'var(--text-muted)';
+    return n > 0 ? 'var(--positive)' : 'var(--negative)';
+  }
+  function _dirColor(v, dir) {
+    var n = Number(v) || 0;
+    if (Math.abs(n) < 0.005) return 'var(--text-muted)';
+    return dir === 'in' ? 'var(--positive)' : 'var(--negative)';
+  }
 
   var _set = function(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; };
   _set('stat-handle',       _fmtUSD(handle));
@@ -1882,9 +1893,13 @@ function refreshHostDashboardStats(trigger) {
   _set('total-owes-you',    _fmtUSD(playersOwe));
   _set('total-you-owe',     _fmtUSD(hostOwes));
 
-  // Color profit element
-  var profitEl = document.getElementById('stat-profit');
-  if (profitEl) profitEl.style.color = hostProfit >= 0 ? 'var(--positive)' : 'var(--negative)';
+  // Color semantics: Players Owe You = income (green); You Owe Players = outflow (red)
+  _colorEl('total-owes-you', _dirColor(playersOwe, 'in'));
+  _colorEl('total-you-owe',  _dirColor(hostOwes, 'out'));
+  _colorEl('stat-players-owe', _dirColor(playersOwe, 'in'));
+  _colorEl('stat-host-owes',   _dirColor(hostOwes, 'out'));
+  _colorEl('stat-profit', _signedColor(hostProfit));
+  _colorEl('stat-hold', holdPct === null ? 'var(--text-muted)' : _signedColor(holdPct));
 
   // Week Net/Handle/Bets — local fallback so cards are not stuck at HTML $0
   var _wStart = new Date(); _wStart.setUTCHours(0,0,0,0);
@@ -1910,6 +1925,8 @@ function refreshHostDashboardStats(trigger) {
   _set('settle-week-bets',   String(weekSettledCount));
   _set('settle-all-net',     (hostProfit>=0?'+':'-')+_fmtUSD(hostProfit));
   _set('settle-all-handle',  _fmtUSD(handle));
+  _colorEl('settle-week-net', _signedColor(weekNet));
+  _colorEl('settle-all-net',  _signedColor(hostProfit));
 
   return { handle, atRisk, hostProfit, holdPct, active: active.length, settled: settled.length, playersOwe, hostOwes, weekly: { net: weekNet, handle: weekHandle, settledCount: weekSettledCount } };
 }
@@ -1931,8 +1948,20 @@ function _applyHostDbStatsToDom(cache) {
   if (!cache) return;
   function _fmtUSD(v){ return '$'+Math.abs(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
   function _set(id,val){ var el=document.getElementById(id); if(el) el.textContent=val; }
+  function _colorEl(id, color){ var el=document.getElementById(id); if(el) el.style.color=color; }
+  function _signedColor(v){
+    var n=Number(v); if(isNaN(n)||Math.abs(n)<0.005) return 'var(--text-muted)';
+    return n>0 ? 'var(--positive)' : 'var(--negative)';
+  }
+  function _dirColor(v, dir){
+    var n=Number(v)||0;
+    if(Math.abs(n)<0.005) return 'var(--text-muted)';
+    return dir==='in' ? 'var(--positive)' : 'var(--negative)';
+  }
   var holdPct = cache.holdPct;
   var profitVal = cache.profit || 0;
+  var playersOweVal = cache.playersOwe || 0;
+  var hostOwesVal = cache.hostOwes || 0;
   _set('stat-handle',       _fmtUSD(cache.handle));
   _set('stat-hold',         holdPct!=null ? Number(holdPct).toFixed(1)+'%' : '—');
   _set('stat-profit',       (profitVal>=0?'+':'-')+_fmtUSD(profitVal));
@@ -1940,12 +1969,16 @@ function _applyHostDbStatsToDom(cache) {
   _set('stat-active-bets',  String(cache.activeBetCount != null ? cache.activeBetCount : 0));
   var ac = cache.activeBetCount != null ? cache.activeBetCount : 0;
   _set('host-bets-count',   ac+' bet'+(ac!==1?'s':''));
-  _set('stat-players-owe',  _fmtUSD(cache.playersOwe));
-  _set('stat-host-owes',    _fmtUSD(cache.hostOwes));
-  _set('total-owes-you',    _fmtUSD(cache.playersOwe));
-  _set('total-you-owe',     _fmtUSD(cache.hostOwes));
-  var profitEl = document.getElementById('stat-profit');
-  if (profitEl) profitEl.style.color = profitVal>=0 ? 'var(--positive)' : 'var(--negative)';
+  _set('stat-players-owe',  _fmtUSD(playersOweVal));
+  _set('stat-host-owes',    _fmtUSD(hostOwesVal));
+  _set('total-owes-you',    _fmtUSD(playersOweVal));
+  _set('total-you-owe',     _fmtUSD(hostOwesVal));
+  _colorEl('total-owes-you', _dirColor(playersOweVal, 'in'));
+  _colorEl('total-you-owe',  _dirColor(hostOwesVal, 'out'));
+  _colorEl('stat-players-owe', _dirColor(playersOweVal, 'in'));
+  _colorEl('stat-host-owes',   _dirColor(hostOwesVal, 'out'));
+  _colorEl('stat-profit', _signedColor(profitVal));
+  _colorEl('stat-hold', holdPct==null ? 'var(--text-muted)' : _signedColor(holdPct));
   var wk = cache.weekly || {};
   var wkNet = wk.net != null ? Number(wk.net) : 0;
   if (isNaN(wkNet)) wkNet = 0;
@@ -1956,6 +1989,8 @@ function _applyHostDbStatsToDom(cache) {
   var atNet = at.net != null ? at.net : profitVal;
   _set('settle-all-net',     (atNet>=0?'+':'-')+_fmtUSD(atNet));
   _set('settle-all-handle',  _fmtUSD(at.handle != null ? at.handle : cache.handle || 0));
+  _colorEl('settle-week-net', _signedColor(wkNet));
+  _colorEl('settle-all-net',  _signedColor(atNet));
 }
 
 async function loadHostDashboardFromDb(trigger) {
@@ -2206,9 +2241,9 @@ async function renderSettlementPreviewFromDb() {
         '</div>' +
       '</div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;margin-bottom:14px;background:var(--card,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:14px;padding:12px">' +
-        '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Players Owe</div><div style="font-size:0.95rem;font-weight:900;color:var(--red,#ff3d57)">$'+playersOwe.toFixed(2)+'</div></div>' +
-        '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Host Owes</div><div style="font-size:0.95rem;font-weight:900;color:var(--green,#00ff88)">$'+hostOwesTot.toFixed(2)+'</div></div>' +
-        '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Net</div><div style="font-size:0.95rem;font-weight:900;color:'+(netTot>=0?'var(--green,#00ff88)':'var(--red,#ff3d57)')+'">'+(netTot>=0?'+':'−')+'$'+Math.abs(netTot).toFixed(2)+'</div></div>' +
+        '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Players Owe</div><div style="font-size:0.95rem;font-weight:900;color:var(--positive,#22C55E)">$'+playersOwe.toFixed(2)+'</div></div>' +
+        '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Host Owes</div><div style="font-size:0.95rem;font-weight:900;color:var(--negative,#EF4444)">$'+hostOwesTot.toFixed(2)+'</div></div>' +
+        '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Net</div><div style="font-size:0.95rem;font-weight:900;color:'+(netTot>=0?'var(--positive,#22C55E)':'var(--negative,#EF4444)')+'">'+(netTot>=0?'+':'−')+'$'+Math.abs(netTot).toFixed(2)+'</div></div>' +
       '</div>' +
       '<div style="font-size:0.85rem;font-weight:900;margin-bottom:10px">Player Settlements</div>';
 
@@ -2228,14 +2263,15 @@ async function renderSettlementPreviewFromDb() {
       var weekNet = p.weekNet != null ? parseFloat(p.weekNet) : parseFloat(p.settledNet)||0;
       var isSettled = (owesHost < 0.005 && hostOwes < 0.005);
       var isOwes = owesHost > 0.005;
-      var color  = isOwes ? 'var(--red,#ff3d57)' : (hostOwes>0.005 ? 'var(--green,#00ff88)' : '#888');
+      // Host view: player owes host = income (green); host owes player = outflow (red)
+      var color  = isOwes ? 'var(--positive,#22C55E)' : (hostOwes>0.005 ? 'var(--negative,#EF4444)' : '#888');
       var amtTxt = isOwes ? 'owes host '+_money(owesHost)
                  : (hostOwes>0.005 ? 'host owes '+_money(hostOwes) : 'Settled');
       var settleBtn = isSettled
         ? '<span style="font-size:0.65rem;font-weight:800;padding:4px 10px;border-radius:10px;background:rgba(255,255,255,0.04);color:#888">Settled</span>'
         : '<button onclick="openSettlePlayerModal('+JSON.stringify(String(p.playerId))+','+JSON.stringify(String(p.username||p.playerId))+','+owesHost+','+hostOwes+')"'+
           ' style="font-size:0.7rem;font-weight:900;padding:8px 14px;border-radius:10px;border:none;background:'+color+';color:#000;cursor:pointer;white-space:nowrap">Settle</button>';
-      var netColor = weekNet>=0 ? 'var(--green,#00ff88)' : 'var(--red,#ff3d57)';
+      var netColor = weekNet>=0 ? 'var(--positive,#22C55E)' : 'var(--negative,#EF4444)';
       html += '<div data-db-settle-card="'+_escAttr(p.playerId)+'" style="background:var(--card,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:14px;padding:14px;margin-bottom:10px">' +
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px">' +
           '<div style="min-width:0;flex:1">' +
@@ -2336,7 +2372,7 @@ async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes) {
   var label     = owesHost > 0
     ? playerName + ' owes host $'+owesHost.toFixed(2)
     : 'Host owes '+playerName+' $'+hostOwes.toFixed(2);
-  var color     = owesHost > 0 ? 'var(--red,#ff3d57)' : 'var(--green,#00ff88)';
+  var color     = owesHost > 0 ? 'var(--positive,#22C55E)' : 'var(--negative,#EF4444)';
 
   var ov = document.createElement('div');
   ov.id = '_settle_modal';
@@ -2594,15 +2630,16 @@ function _renderHistoricalSnapshot(week, rolloverRow, players) {
       '</div>' +
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;background:rgba(255,255,255,0.02);border-radius:10px;padding:10px;margin-bottom:14px">' +
-      '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Players Owed</div><div style="font-size:0.95rem;font-weight:900;color:var(--green,#00ff88)">$'+((totals.playersOwe||0).toFixed(2))+'</div></div>' +
-      '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Host Owed</div><div style="font-size:0.95rem;font-weight:900;color:var(--red,#ff3d57)">$'+((totals.hostOwes||0).toFixed(2))+'</div></div>' +
-      '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Net</div><div style="font-size:0.95rem;font-weight:900;color:'+((totals.net||0)>=0?'var(--green,#00ff88)':'var(--red,#ff3d57)')+'">'+(((totals.net||0)>=0?'+':'−'))+'$'+Math.abs(totals.net||0).toFixed(2)+'</div></div>' +
+      '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Players Owed</div><div style="font-size:0.95rem;font-weight:900;color:var(--positive,#22C55E)">$'+((totals.playersOwe||0).toFixed(2))+'</div></div>' +
+      '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Host Owed</div><div style="font-size:0.95rem;font-weight:900;color:var(--negative,#EF4444)">$'+((totals.hostOwes||0).toFixed(2))+'</div></div>' +
+      '<div><div style="font-size:0.55rem;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Net</div><div style="font-size:0.95rem;font-weight:900;color:'+((totals.net||0)>=0?'var(--positive,#22C55E)':'var(--negative,#EF4444)')+'">'+(((totals.net||0)>=0?'+':'−'))+'$'+Math.abs(totals.net||0).toFixed(2)+'</div></div>' +
     '</div>';
 
   sorted.forEach(function(p) {
     var owe = parseFloat(p.owes_host)||0, hOwe = parseFloat(p.host_owes)||0;
     var isOwes = owe > 0;
-    var color  = isOwes ? 'var(--red,#ff3d57)' : hOwe>0 ? 'var(--green,#00ff88)' : '#555';
+    // Host view: player owes = income (green); host owes = outflow (red)
+    var color  = isOwes ? 'var(--positive,#22C55E)' : hOwe>0 ? 'var(--negative,#EF4444)' : '#555';
     var amtTxt = isOwes ? '−$'+owe.toFixed(2)+' owed' : hOwe>0 ? '+$'+hOwe.toFixed(2)+' owed' : 'Even';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--border,#2a2a2a)">' +
       '<div>' +
