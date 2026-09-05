@@ -359,21 +359,21 @@
     mlb: 'baseball', nba: 'basketball', wnba: 'basketball', ncaab: 'basketball',
     nfl: 'football', ncaaf: 'football', ncaafb: 'football', nhl: 'hockey',
     tennis: 'tennis', tennis_atp: 'tennis', tennis_wta: 'tennis', soccer: 'soccer', mls: 'soccer',
-    mma: 'mma', boxing: 'mma'
+    mma: 'mma', boxing: 'mma', golf: 'golf', golf_pga: 'golf', pga: 'golf', lpga: 'golf'
   };
 
   var ESPN_HEADSHOT_SPORT = {
     mlb: 'mlb', nba: 'nba', nfl: 'nfl', nhl: 'nhl', wnba: 'wnba',
     ncaab: 'mens-college-basketball', ncaaf: 'college-football', ncaafb: 'college-football',
     tennis: 'tennis', tennis_atp: 'tennis', tennis_wta: 'tennis', soccer: 'soccer', mls: 'soccer',
-    mma: 'mma', boxing: 'mma'
+    mma: 'mma', boxing: 'mma', golf: 'golf', golf_pga: 'golf', pga: 'golf', lpga: 'golf'
   };
 
   var ESPN_LEAGUE_SLUG = {
     mlb: 'mlb', nba: 'nba', nfl: 'nfl', nhl: 'nhl', wnba: 'wnba',
     ncaab: 'mens-college-basketball', ncaaf: 'college-football', ncaafb: 'college-football',
     tennis: 'atp', tennis_atp: 'atp', tennis_wta: 'wta', soccer: 'soccer', mls: 'usa.1',
-    mma: 'ufc', boxing: 'boxing'
+    mma: 'ufc', boxing: 'boxing', golf: 'pga', golf_pga: 'pga', pga: 'pga', lpga: 'lpga'
   };
 
   var CACHE_PREFIX = 'pbPlayerPhoto:v1:';
@@ -393,6 +393,7 @@
     if (s === 'tennis_atp' || s === 'atp' || s === 'tennis_wta' || s === 'wta') return 'tennis';
     if (s === 'soccer_mls' || s === 'mls') return 'soccer';
     if (s === 'mma_mixed_martial_arts') return 'mma';
+    if (s === 'golf_pga' || s === 'pga' || s === 'lpga' || s === 'golf_liv' || s === 'golf_european') return 'golf';
     return s;
   }
 
@@ -541,6 +542,10 @@
       if (itemSport && itemSport !== 'mma') return false;
       // Accept UFC / BKFC / PFL / etc. — any MMA league slug.
       return true;
+    }
+    if (s === 'golf') {
+      if (itemSport && itemSport !== 'golf') return false;
+      return !league || league === 'pga' || league === 'lpga' || league === 'golf' || league.indexOf('golf') >= 0;
     }
     var want = ESPN_LEAGUE_SLUG[s] || s;
     return !league || league === String(want).toLowerCase();
@@ -743,7 +748,7 @@
     var name = String(playerName || '').trim();
     var team = opts.team || '';
     var className = opts.className || '';
-    var borderRadius = opts.borderRadius != null ? opts.borderRadius : ((sport === 'tennis' || sport === 'mma') ? '10px' : '50%');
+    var borderRadius = opts.borderRadius != null ? opts.borderRadius : ((sport === 'tennis' || sport === 'mma' || sport === 'golf') ? '10px' : '50%');
     var objectFit = opts.objectFit || 'cover';
     var cls = className ? ' class="' + esc(className) + '"' : '';
     var url = opts.photoUrl || getPlayerHeadshotUrl(name, sport, opts.espnId || opts.playerId || '');

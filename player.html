@@ -2335,6 +2335,7 @@ function _pbAvatarSportKey(sport) {
   var s = String(sport || (typeof _currentSport !== 'undefined' ? _currentSport : '') || '').toLowerCase();
   if (s.indexOf('tennis') === 0 || s === 'atp' || s === 'wta') return 'tennis';
   if (s === 'mma' || s === 'mma_mixed_martial_arts' || s.indexOf('mma') === 0) return 'mma';
+  if (s.indexOf('golf') === 0 || s === 'pga' || s === 'lpga' || s === 'golf_pga' || s === 'golf_liv' || s === 'golf_european') return 'golf';
   if (s.indexOf('soccer') === 0 || s === 'epl' || s === 'mls' || s === 'ucl' ||
       s === 'laliga' || s === 'seriea' || s === 'bundesliga' || s === 'ligue1' ||
       s === 'worldcup' || s === 'euros') return 'soccer';
@@ -2349,6 +2350,9 @@ function _pbPlayerHeadshotImg(name, sport, size) {
   if (sport === 'tennis' && typeof getTennisPlayerPhotoImg === 'function') {
     return getTennisPlayerPhotoImg(name, size);
   }
+  if (sport === 'golf' && typeof getGolfPlayerPhotoImg === 'function') {
+    return getGolfPlayerPhotoImg(name, size);
+  }
   return '';
 }
 
@@ -2356,9 +2360,13 @@ function teamAvatar(name, sport, opts) {
   sport = sport || (typeof _currentSport !== 'undefined' ? _currentSport : '') || '';
   opts = opts || {};
   var kind = _pbAvatarSportKey(sport);
-  if ((kind === 'tennis' || kind === 'mma')) {
+  if ((kind === 'tennis' || kind === 'mma' || kind === 'golf')) {
     var shot = _pbPlayerHeadshotImg(name, kind, 52);
     if (shot) return '<div class="mc-jersey mc-jersey-headshot">' + shot + '</div>';
+    if (kind === 'golf' && typeof getGolfPlayerPhotoImg === 'function') {
+      var golfShot = getGolfPlayerPhotoImg(name, 52);
+      if (golfShot) return '<div class="mc-jersey mc-jersey-headshot">' + golfShot + '</div>';
+    }
   }
   if (kind === 'soccer' && opts.logoUrl) {
     var safeSoccerUrl = String(opts.logoUrl).replace(/"/g, '&quot;');
@@ -2463,6 +2471,38 @@ function _pbMarketIsLive(g) {
   var s = String(g.status || g.state || g.gameStatus || '').toLowerCase();
   return s === 'live' || s === 'in_play' || s === 'inprogress' || s === 'in_progress';
 }
+
+function _pbMarketIsFinal(g) {
+  if (!g) return false;
+  if (g.isFinal === true || g.final === true || g.completed === true) return true;
+  var s = String(g.status || g.state || g.gameStatus || '').toLowerCase().trim();
+  return s === 'final' || s === 'post' || s === 'completed' || s === 'complete' ||
+    s === 'closed' || s === 'f' || s === 'f/ot' || s === 'f/so';
+}
+
+/** Prefer /api/health liveBettingEnabled; default true so live games stay bettable. */
+var _pbLiveBettingEnabled = true;
+function _pbIsLiveBettingEnabled() {
+  return _pbLiveBettingEnabled !== false;
+}
+function _pbRefreshLiveBettingFlag() {
+  try {
+    var api = (typeof API === 'string' && API) || '';
+    if (!api || typeof fetch !== 'function') return Promise.resolve(_pbLiveBettingEnabled);
+    return fetch(api + '/api/health', { credentials: 'omit' })
+      .then(function(r){ return r && r.ok ? r.json() : null; })
+      .then(function(j){
+        if (j && typeof j.liveBettingEnabled === 'boolean') {
+          _pbLiveBettingEnabled = j.liveBettingEnabled;
+        }
+        return _pbLiveBettingEnabled;
+      })
+      .catch(function(){ return _pbLiveBettingEnabled; });
+  } catch (_e) {
+    return Promise.resolve(_pbLiveBettingEnabled);
+  }
+}
+try { _pbRefreshLiveBettingFlag(); } catch (_eFlag) {}
 
 function _pbGameStartMs(g) {
   return Date.parse(g && (g.scheduledStart || g.time || g.commence_time || g.commenceTime) || '') || 0;
@@ -3444,12 +3484,14 @@ var _espnPlayerCache = {};
 var _ESPN_SEARCH_SPORT = {
   mlb: 'baseball', nba: 'basketball', wnba: 'basketball', ncaab: 'basketball',
   nfl: 'football', ncaaf: 'football', ncaafb: 'football', nhl: 'hockey',
-  tennis: 'tennis', tennis_atp: 'tennis', tennis_wta: 'tennis'
+  tennis: 'tennis', tennis_atp: 'tennis', tennis_wta: 'tennis',
+  golf: 'golf', golf_pga: 'golf', pga: 'golf', lpga: 'golf'
 };
 var _ESPN_HEADSHOT_SPORT = {
   mlb: 'mlb', nba: 'nba', nfl: 'nfl', nhl: 'nhl', wnba: 'wnba',
   ncaab: 'mens-college-basketball', ncaaf: 'college-football', ncaafb: 'college-football',
-  tennis: 'tennis', tennis_atp: 'tennis', tennis_wta: 'tennis'
+  tennis: 'tennis', tennis_atp: 'tennis', tennis_wta: 'tennis',
+  golf: 'golf', golf_pga: 'golf', pga: 'golf', lpga: 'golf'
 };
 var _ESPN_LEAGUE_SLUG = {
   mlb: 'mlb', nba: 'nba', nfl: 'nfl', nhl: 'nhl', wnba: 'wnba',
@@ -4893,13 +4935,18 @@ async function loadGames(sport, opts){
       }
       return;
     }
+    // Rule 1: drop finished games from the lobby (isFinal / status final|post).
+    // Rule 2: keep isLive games (LIVE badge + bettable when live betting enabled).
+    // Rule 3: keep pre-game (!isLive && !isFinal).
+    games = games.filter(function(g){ return !_pbMarketIsFinal(g); });
+
     // Live filter — real isLive only; never invent mock-live placeholders.
     if (_liveOnly) {
       var liveGames = games.filter(_pbMarketIsLive).slice().sort(_pbCompareLiveRecentlyStarted);
       var nextStart = null;
       var nowMs = Date.now();
       games.forEach(function(g) {
-        if (_pbMarketIsLive(g)) return;
+        if (_pbMarketIsLive(g) || _pbMarketIsFinal(g)) return;
         var ms = _pbGameStartMs(g);
         if (ms > nowMs && (nextStart == null || ms < Date.parse(nextStart))) {
           nextStart = g.scheduledStart || g.time || g.commence_time || null;
@@ -7669,7 +7716,7 @@ async function confirmBet() {
   var _pg = _checkTicketPlacementGate(_pgLegs, Date.now());
   if (!_pg.allowed) {
     closeBetConfirm();
-    showToast(_pg.message || 'Bet unavailable: this game has already started or finalized.', 'error');
+    showToast(_pg.message || 'game is final', 'error');
     _cbErr('CONFIRM_BET_ERROR', null, 'reason=placement_gate leg='+_pg.legIndex);
     return;
   }
@@ -8031,7 +8078,9 @@ async function confirmBet() {
           return;
         }
         var _rejMsg;
-        if (Array.isArray(_dbData.errors) && _dbData.errors.length) {
+        if (_dbData.userMessage) {
+          _rejMsg = String(_dbData.userMessage);
+        } else if (Array.isArray(_dbData.errors) && _dbData.errors.length) {
           _rejMsg='Bet rejected: '+_dbData.errors.join(', ').replace(/_/g,' ');
         } else if (_dbData.code) {
           _rejMsg='Bet rejected: '+String(_dbData.code).replace(/_/g,' ');
@@ -12667,34 +12716,51 @@ document.addEventListener('click', function(e) {
 // Prevents betting on games that have already started or finalized.
 // Applied at slip add (bsToggle) and re-checked at confirmBet.
 // ════════════════════════════════════════════════════════════════════════════
-var _FINAL_STATUSES = ['final','f','completed','complete','closed','cancelled','canceled','postponed','suspended','forfeit','f/ot','f/so'];
+var _FINAL_STATUSES = ['final','f','completed','complete','closed','cancelled','canceled','postponed','suspended','forfeit','f/ot','f/so','post'];
 function _isGameFinal(status) {
   if (!status) return false;
   return _FINAL_STATUSES.indexOf(String(status).toLowerCase().trim()) !== -1;
+}
+function _legLooksLive(leg, nowMs) {
+  if (!leg) return false;
+  if (leg.isLive === true || leg.live === true || leg.in_play === true || leg.eventLive === true) return true;
+  var st = String(leg.gameStatus || leg.status || leg.state || '').toLowerCase().trim();
+  if (st === 'live' || st === 'in_play' || st === 'inprogress' || st === 'in_progress') return true;
+  var ct = leg.scheduledStart || leg.commenceTime || leg.time || null;
+  var ctMs = ct ? new Date(ct).getTime() : 0;
+  return ctMs > 0 && nowMs >= ctMs && !_isGameFinal(st);
 }
 function _checkPlacementGate(leg, nowMs) {
   nowMs = nowMs || Date.now();
   var ct  = leg.scheduledStart || leg.commenceTime || leg.time || null;
   var ctMs = ct ? new Date(ct).getTime() : 0;
-  var officialStatus = (leg.gameStatus || '').toLowerCase().trim();
+  var officialStatus = (leg.gameStatus || leg.status || '').toLowerCase().trim();
   var attemptId = 'PG-' + (leg.cellId||'?') + '-' + nowMs;
 
-  // Gate 1: game already final/closed/canceled
-  if (_isGameFinal(officialStatus)) {
-    var r1 = { allowed: false, blockedReason: 'game_already_final', officialStatus: officialStatus,
-               message: 'Bet unavailable: this game has already started or finalized.' };
-    
-    return r1;
+  // Gate 1: final / post games — never bettable
+  if (_isGameFinal(officialStatus) || leg.isFinal === true) {
+    return {
+      allowed: false,
+      blockedReason: 'game_already_final',
+      officialStatus: officialStatus,
+      message: 'game is final'
+    };
   }
-  // Gate 2: commenceTime in the past (game already started)
-  if (ctMs > 0 && nowMs >= ctMs) {
-    var r2 = { allowed: false, blockedReason: 'game_already_started', commenceTime: ct,
-               now: new Date(nowMs).toISOString(),
-               message: 'Bet unavailable: this game has already started or finalized.' };
-    
-    return r2;
+
+  // Gate 2: live / commenced — allow when live betting is enabled
+  if (_legLooksLive(leg, nowMs) || (ctMs > 0 && nowMs >= ctMs)) {
+    if (_pbIsLiveBettingEnabled()) {
+      return { allowed: true, live: true };
+    }
+    return {
+      allowed: false,
+      blockedReason: 'live_betting_disabled',
+      commenceTime: ct,
+      now: new Date(nowMs).toISOString(),
+      message: 'live betting disabled'
+    };
   }
-  
+
   return { allowed: true };
 }
 function _checkTicketPlacementGate(legs, nowMs) {

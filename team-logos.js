@@ -1926,6 +1926,219 @@
       ' onerror="window.handleTennisPhotoError&&window.handleTennisPhotoError(this)">';
   }
 
+  // ── Golf player photos (verified ESPN IDs + search fallback) ──────────────
+  var _GOLF_VERIFIED_IDS = {
+    'Scottie Scheffler': '9478',
+    'Rory McIlroy': '3470',
+    'Xander Schauffele': '10140',
+    'Collin Morikawa': '10592',
+    'Viktor Hovland': '4364873',
+    'Ludvig Aberg': '4375972',
+    'Ludvig Åberg': '4375972',
+    'Tommy Fleetwood': '5539',
+    'Patrick Cantlay': '1651',
+    'Wyndham Clark': '11119',
+    'Tony Finau': '2230',
+    'Max Homa': '8973',
+    'Justin Thomas': '4848',
+    'Jordan Spieth': '5467',
+    'Jon Rahm': '9780',
+    'Brooks Koepka': '6798',
+    'Bryson DeChambeau': '10046',
+    'Shane Lowry': '4587',
+    'Russell Henley': '5409',
+    'Cameron Smith': '9131',
+    'Hideki Matsuyama': '5860',
+    'Sam Burns': '9938',
+    'Adam Scott': '388',
+    'Corey Conners': '9126',
+    'Sahith Theegala': '10980',
+    'Tom Kim': '10981',
+    'Keegan Bradley': '4513',
+    'Chris Kirk': '1581',
+    'Sungjae Im': '11378',
+    'Si Woo Kim': '7081',
+    'Webb Simpson': '1614',
+    'Billy Horschel': '1067',
+    'Jason Day': '1680',
+    'Matt Fitzpatrick': '9037',
+    'Tyrrell Hatton': '5553',
+    'Min Woo Lee': '10863',
+    'Cameron Young': '11099',
+    'Nick Taylor': '1612',
+    'Harris English': '5408',
+    'Rickie Fowler': '3702',
+    'Patrick Reed': '5579',
+    'Sergio Garcia': '158',
+    'Ian Poulter': '619',
+    'Matt Kuchar': '257',
+    'Bubba Watson': '780',
+    'Phil Mickelson': '308',
+    'Tiger Woods': '462',
+    'Nelly Korda': '9012',
+    'Lilia Vu': '9401'
+  };
+  var _golfIdByNorm = {};
+  var _golfMiss = {};
+  var _golfPending = {};
+  Object.keys(_GOLF_VERIFIED_IDS).forEach(function (n) {
+    var k = _normKey(n);
+    if (k) _golfIdByNorm[k] = String(_GOLF_VERIFIED_IDS[n]);
+  });
+
+  function _golfEspnCache() {
+    if (!global._espnPlayerCache) global._espnPlayerCache = {};
+    return global._espnPlayerCache;
+  }
+
+  function _golfCacheKey(name) {
+    return String(name || '').trim().toLowerCase() + '|golf';
+  }
+
+  function _golfHeadshotUrl(id) {
+    return 'https://a.espncdn.com/i/headshots/golf/players/full/' + id + '.png';
+  }
+
+  function getGolfPlayerPhoto(playerName) {
+    var name = String(playerName || '').trim();
+    if (!name) return '';
+    var cache = _golfEspnCache();
+    var ck = _golfCacheKey(name);
+    if (cache[ck] && cache[ck].headshotUrl) return cache[ck].headshotUrl;
+    if (cache[ck] && cache[ck].miss) return '';
+
+    if (typeof global.getPlayerHeadshotUrl === 'function') {
+      var verifiedUrl = global.getPlayerHeadshotUrl(name, 'golf');
+      if (verifiedUrl) {
+        cache[ck] = { headshotUrl: verifiedUrl, verified: true };
+        return verifiedUrl;
+      }
+    }
+    var k = _normKey(name);
+    var id = (k && _golfIdByNorm[k]) || _GOLF_VERIFIED_IDS[name] || '';
+    if (!id && typeof global.getVerifiedPlayerId === 'function') {
+      id = global.getVerifiedPlayerId(name, 'golf') || '';
+    }
+    if (!id) return '';
+    var url = _golfHeadshotUrl(id);
+    cache[ck] = { id: String(id), headshotUrl: url, verified: true };
+    return url;
+  }
+
+  async function _fetchGolfPlayerId(playerName) {
+    var name = String(playerName || '').trim();
+    var k = _normKey(name);
+    if (!k) return null;
+    if (_golfIdByNorm[k]) return _golfIdByNorm[k];
+    if (_golfMiss[k]) return null;
+    if (_golfPending[k]) return _golfPending[k];
+
+    _golfPending[k] = (async function () {
+      try {
+        var cache = _golfEspnCache();
+        var ck = _golfCacheKey(name);
+        if (cache[ck] && cache[ck].id) {
+          _golfIdByNorm[k] = String(cache[ck].id);
+          return String(cache[ck].id);
+        }
+        if (typeof global.searchEspnPlayerId === 'function') {
+          var hit = await global.searchEspnPlayerId(name, 'golf', '');
+          if (hit && hit.id) {
+            _golfIdByNorm[k] = String(hit.id);
+            cache[ck] = { id: String(hit.id), headshotUrl: _golfHeadshotUrl(hit.id) };
+            return String(hit.id);
+          }
+        }
+        var url = 'https://site.api.espn.com/apis/common/v3/search?query=' +
+          encodeURIComponent(name + ' golf') +
+          '&sport=golf&type=player&limit=1';
+        var res = await fetch(url, { cache: 'force-cache' });
+        if (!res.ok) {
+          _golfMiss[k] = true;
+          cache[ck] = { miss: true };
+          return null;
+        }
+        var data = await res.json();
+        var items = (data && data.items) || [];
+        var pick = null;
+        for (var i = 0; i < items.length; i++) {
+          var it = items[i];
+          if (!it || !it.id) continue;
+          var sp = String(it.sport || '').toLowerCase();
+          if (sp && sp !== 'golf') continue;
+          pick = it;
+          break;
+        }
+        if (!pick || !pick.id) {
+          _golfMiss[k] = true;
+          cache[ck] = { miss: true };
+          return null;
+        }
+        _golfIdByNorm[k] = String(pick.id);
+        cache[ck] = { id: String(pick.id), headshotUrl: _golfHeadshotUrl(pick.id) };
+        if (pick.displayName) {
+          _golfIdByNorm[_normKey(pick.displayName)] = String(pick.id);
+          cache[_golfCacheKey(pick.displayName)] = cache[ck];
+        }
+        return String(pick.id);
+      } catch (_e) {
+        _golfMiss[k] = true;
+        _golfEspnCache()[_golfCacheKey(name)] = { miss: true };
+        return null;
+      } finally {
+        delete _golfPending[k];
+      }
+    })();
+    return _golfPending[k];
+  }
+
+  function handleGolfPhotoError(img) {
+    if (!img) return;
+    if (typeof global.handlePlayerPhotoError === 'function' && img.getAttribute('data-player-sport')) {
+      return global.handlePlayerPhotoError(img);
+    }
+    var name = img.getAttribute('data-player-name') || img.alt || '';
+    var size = parseInt(img.getAttribute('data-logo-size') || '40', 10);
+    var className = img.getAttribute('data-logo-class') || '';
+    var k = _normKey(name);
+    if (k && _golfIdByNorm[k]) {
+      _golfMiss[k] = true;
+      delete _golfIdByNorm[k];
+    }
+    var cache = _golfEspnCache();
+    cache[_golfCacheKey(name)] = { miss: true };
+    img.outerHTML = _initialsFallbackHtml(name, size, className);
+  }
+
+  function getGolfPlayerPhotoImg(playerName, size, className) {
+    size = size || 40;
+    var name = String(playerName || '').trim();
+    if (typeof global.getPlayerPhotoImg === 'function') {
+      return global.getPlayerPhotoImg(name, 'golf', size, { className: className || '', borderRadius: '10px' });
+    }
+    var url = getGolfPlayerPhoto(name);
+    var cls = className ? ' class="' + esc(className) + '"' : '';
+    if (!url) {
+      return '<span data-golf-player="' + esc(name) + '" data-player-photo="' + esc(name) +
+        '" data-player-name="' + esc(name) + '" data-player-sport="golf" data-logo-size="' + size + '"' +
+        (className ? ' data-logo-class="' + esc(className) + '"' : '') + '>' +
+        _initialsFallbackHtml(name, size, className) + '</span>';
+    }
+    return '<img' + cls +
+      ' src="' + esc(url) + '"' +
+      ' alt="' + esc(name) + '"' +
+      ' width="' + size + '" height="' + size + '"' +
+      ' style="width:' + size + 'px;height:' + size + 'px;object-fit:cover;display:block;border-radius:10px"' +
+      ' referrerpolicy="no-referrer"' +
+      ' data-golf-player="' + esc(name) + '"' +
+      ' data-player-photo="' + esc(name) + '"' +
+      ' data-player-name="' + esc(name) + '"' +
+      ' data-player-sport="golf"' +
+      ' data-logo-size="' + size + '"' +
+      (className ? ' data-logo-class="' + esc(className) + '"' : '') +
+      ' onerror="window.handleGolfPhotoError&&window.handleGolfPhotoError(this)">';
+  }
+
   function _replacePlaceholderWithImg(el, imgHtml) {
     if (!el || !el.parentNode) return;
     var tmp = document.createElement('div');
@@ -2078,13 +2291,15 @@
     } catch (_eApi) {}
     await warmSoccerTeamsCache();
 
-    // Shared verified/search photo hydrate for tennis (and any data-player-photo nodes)
+    // Shared verified/search photo hydrate for tennis/golf (and any data-player-photo nodes)
     if (typeof global.hydratePlayerPhotos === 'function') {
       try { await global.hydratePlayerPhotos(scope, 'tennis'); } catch (_eHydra) {}
+      try { await global.hydratePlayerPhotos(scope, 'golf'); } catch (_eHydraG) {}
     }
 
     var soccerEls = Array.prototype.slice.call(scope.querySelectorAll('[data-soccer-team]'));
     var tennisEls = Array.prototype.slice.call(scope.querySelectorAll('[data-tennis-player],[data-player-photo][data-player-sport="tennis"]'));
+    var golfEls = Array.prototype.slice.call(scope.querySelectorAll('[data-golf-player],[data-player-photo][data-player-sport="golf"]'));
     var ncaafEls = Array.prototype.slice.call(scope.querySelectorAll('[data-ncaaf-team]'));
 
     var soccerNames = [];
@@ -2096,6 +2311,11 @@
     tennisEls.forEach(function (el) {
       var n = el.getAttribute('data-tennis-player') || el.getAttribute('data-player-name') || el.getAttribute('data-player-photo') || '';
       if (n) tennisNames.push(n);
+    });
+    var golfNames = [];
+    golfEls.forEach(function (el) {
+      var n = el.getAttribute('data-golf-player') || el.getAttribute('data-player-name') || el.getAttribute('data-player-photo') || '';
+      if (n) golfNames.push(n);
     });
     var ncaafNames = [];
     ncaafEls.forEach(function (el) {
@@ -2129,6 +2349,7 @@
     await Promise.all([
       runPool(soccerNames, _fetchSoccerTeamId, 6),
       runPool(tennisNames, _fetchTennisPlayerId, 6),
+      runPool(golfNames, _fetchGolfPlayerId, 6),
       runPool(ncaafNames, searchNcaafTeamId, 6)
     ]);
 
@@ -2136,6 +2357,7 @@
 
     soccerEls = Array.prototype.slice.call(scope.querySelectorAll('[data-soccer-team]'));
     tennisEls = Array.prototype.slice.call(scope.querySelectorAll('[data-tennis-player],[data-player-photo][data-player-sport="tennis"]'));
+    golfEls = Array.prototype.slice.call(scope.querySelectorAll('[data-golf-player],[data-player-photo][data-player-sport="golf"]'));
     ncaafEls = Array.prototype.slice.call(scope.querySelectorAll('[data-ncaaf-team]'));
 
     soccerEls.forEach(function (el) {
@@ -2157,6 +2379,16 @@
       if (el.tagName === 'IMG' && url && el.getAttribute('src') === url) return;
       if (!url) return;
       _replacePlaceholderWithImg(el, getTennisPlayerPhotoImg(name, size, className));
+    });
+
+    golfEls.forEach(function (el) {
+      var name = el.getAttribute('data-golf-player') || el.getAttribute('data-player-name') || el.getAttribute('data-player-photo') || '';
+      var size = parseInt(el.getAttribute('data-logo-size') || '40', 10);
+      var className = el.getAttribute('data-logo-class') || '';
+      var url = getGolfPlayerPhoto(name);
+      if (el.tagName === 'IMG' && url && el.getAttribute('src') === url) return;
+      if (!url) return;
+      _replacePlaceholderWithImg(el, getGolfPlayerPhotoImg(name, size, className));
     });
 
     ncaafEls.forEach(function (el) {
@@ -2187,6 +2419,9 @@
   global.getTennisPlayerPhoto = getTennisPlayerPhoto;
   global.getTennisPlayerPhotoImg = getTennisPlayerPhotoImg;
   global.handleTennisPhotoError = handleTennisPhotoError;
+  global.getGolfPlayerPhoto = getGolfPlayerPhoto;
+  global.getGolfPlayerPhotoImg = getGolfPlayerPhotoImg;
+  global.handleGolfPhotoError = handleGolfPhotoError;
   global.getCountryFlagUrl = getCountryFlagUrl;
   global.getCountryFlagCode = getCountryFlagCode;
   global.warmSoccerTeamsCache = warmSoccerTeamsCache;
