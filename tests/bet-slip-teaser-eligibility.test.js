@@ -23,11 +23,13 @@ const scriptRx = /<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g;
 const scripts  = [];
 let m;
 while ((m = scriptRx.exec(src)) !== null) scripts.push(m[1]);
-if (scripts.length < 2) {
-  console.error('FATAL: player.html script extraction failed (got ' + scripts.length + ' blocks).');
+const scriptBody = scripts.find(function(s) {
+  return s.indexOf('function isTeaserEligible') >= 0 && s.indexOf('function isSlipTeaserEligible') >= 0;
+});
+if (!scriptBody) {
+  console.error('FATAL: player.html script extraction failed (teaser helpers not found in ' + scripts.length + ' blocks).');
   process.exit(1);
 }
-const scriptBody = scripts[1];
 
 function ext(startNeedle, endNeedle) {
   const s = scriptBody.indexOf(startNeedle);

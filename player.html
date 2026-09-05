@@ -344,6 +344,10 @@ body.theme-light .stake-input{background:#fff;border:1px solid #d8dee8;color:#11
 .dkslip-leg-logo{width:36px;height:36px;border-radius:0;background:transparent;border:none;padding:0;overflow:visible;box-shadow:none;display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:900;color:#666;flex-shrink:0;line-height:1}
 .dkslip-leg-logo img{width:100%;height:100%;object-fit:contain;display:block;max-width:100%;max-height:100%;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35))}
 .dkslip-leg-logo > div{background:transparent!important;border:none!important;border-radius:0!important;box-shadow:none!important;color:#666!important}
+/* Game TOTAL O/U — floating block letters in the same logo footprint (no tile/box/circle) */
+.dkslip-ou{display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:1.7rem;font-weight:900;line-height:1;letter-spacing:-0.04em;font-family:Impact,'Arial Black','Helvetica Neue',sans-serif;background:none;border:none;border-radius:0;padding:0;margin:0;-webkit-text-stroke:1.4px rgba(0,0,0,0.28);paint-order:stroke fill;user-select:none;pointer-events:none}
+.dkslip-ou-o{color:#00e676;-webkit-text-stroke-color:rgba(0,100,40,0.45);text-shadow:0 2px 4px rgba(0,0,0,0.28),0 0 10px rgba(0,230,118,0.45)}
+.dkslip-ou-u{color:#ff3b30;-webkit-text-stroke-color:rgba(120,10,10,0.4);text-shadow:0 2px 4px rgba(0,0,0,0.28),0 0 10px rgba(255,59,48,0.4)}
 .dkslip-leg-info{flex:1;min-width:0}
 .dkslip-leg-matchup{font-size:0.6rem;color:#999;margin-bottom:2px}
 .dkslip-leg-pick{font-size:0.85rem;font-weight:900;color:#111;line-height:1.2;margin-bottom:2px}
@@ -692,6 +696,7 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
   .dkslip-place-btn,.place-btn{min-height:44px}
   .dkslip-leg{gap:8px;padding:10px 12px}
   .dkslip-leg-logo{width:32px;height:32px}
+  .dkslip-ou{font-size:1.5rem}
   .dkslip-leg-pick{font-size:0.82rem}
   .qamts{grid-template-columns:repeat(3,1fr);gap:8px}
   .dkslip-quick,.single-quick{flex-wrap:wrap}
@@ -984,6 +989,9 @@ body{
 .dkslip-leg:last-child{border-bottom:none!important}
 .dkslip-leg-logo{background:transparent!important;border:none!important;border-radius:0!important;box-shadow:none!important;padding:0!important;overflow:visible!important}
 .dkslip-leg-logo img{filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35))!important}
+.dkslip-ou{background:none!important;border:none!important;border-radius:0!important;box-shadow:none!important}
+.dkslip-ou-o{color:#00e676!important}
+.dkslip-ou-u{color:#ff3b30!important}
 .dkslip-leg-matchup{color:#999!important}
 .dkslip-leg-mkt{color:#0064c8!important}
 .dkslip-leg-odds{color:#111!important}
@@ -1763,8 +1771,8 @@ function _showSessionExpiredModal(result) {
 })();
 // ══════════════════════════════════════════════════════════════════════════════
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '3018cc2';
-window.PBS_BUILD_DATE = '2026-09-05T17:27:46.439Z';
+window.PBS_BUILD_SHA = '01749e3';
+window.PBS_BUILD_DATE = '2026-09-05T17:36:36.371Z';
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 // ESPN league logos for sport grid (verified working CDN paths; ncaa/soccer/atp/pga/boxing/rugby preferred slugs 404)
 const SPORT_LOGOS = {
@@ -6193,6 +6201,45 @@ function bsTeamAbbr(pickStr, game) {
   return pickStr.slice(0,3).toUpperCase();
 }
 
+/** Resolve Over/Under for game totals from structured slip fields (side → market → pick). */
+function _slipTotalSide(b) {
+  if (!b) return null;
+  var side = String(b.side || '').toLowerCase().trim();
+  if (side === 'over' || side === 'under') return side;
+  var market = typeof _normalizeSlipMarket === 'function'
+    ? _normalizeSlipMarket(b.market)
+    : String(b.market || '').trim().toLowerCase();
+  var isTotal = market === 'total' || market === 'totals' || market === 'ou';
+  var pick = String(b.pick || '').trim();
+  var pickSide = /^over\b/i.test(pick) ? 'over' : /^under\b/i.test(pick) ? 'under' : null;
+  if (isTotal) return pickSide;
+  // Selection names Over/Under are always game totals in this sportsbook
+  return pickSide;
+}
+
+/** Logo-slot HTML: O/U block letters for totals; unboxed team logos otherwise. */
+function _slipLegLogoHtml(b, opts) {
+  opts = opts || {};
+  var extraStyle = opts.style ? ' style="' + String(opts.style).replace(/"/g, '') + '"' : '';
+  var ou = _slipTotalSide(b);
+  if (ou === 'over') {
+    return '<div class="dkslip-leg-logo"' + extraStyle + ' aria-hidden="true"><span class="dkslip-ou dkslip-ou-o">O</span></div>';
+  }
+  if (ou === 'under') {
+    return '<div class="dkslip-leg-logo"' + extraStyle + ' aria-hidden="true"><span class="dkslip-ou dkslip-ou-u">U</span></div>';
+  }
+  var pick = (b && b.pick) || '';
+  var game = (b && b.game) || '';
+  var legSport = (b && b.sport) || (typeof _currentSport !== 'undefined' ? _currentSport : null) || 'mlb';
+  var teams = String(game).split(' vs ');
+  var team = (typeof extractTeamFromPick === 'function')
+    ? extractTeamFromPick(pick, teams[1] || '', teams[0] || '', legSport)
+    : pick;
+  var _logo = (typeof _pbLobbyLogoImg === 'function') ? _pbLobbyLogoImg(team || pick, legSport, 36) : '';
+  if (_logo) return '<div class="dkslip-leg-logo"' + extraStyle + '>' + _logo + '</div>';
+  return '<div class="dkslip-leg-logo"' + extraStyle + '>' + bsTeamAbbr(pick, game) + '</div>';
+}
+
 function bsValidate() {
   var warnings = [];
 
@@ -6448,12 +6495,7 @@ function bsRenderLegs() {
           var pm = b.market||'Market', pp = b.pick||'Unknown Selection', pg = b.game||'';
           var pteams = pg.split(' vs ');
           var pshort = pteams.length===2 ? pteams[0].split(' ').pop()+' vs '+pteams[1].split(' ').pop() : pg;
-          var legSport = b.sport || _currentSport || 'mlb';
-          var pteam = (typeof extractTeamFromPick === 'function') ? extractTeamFromPick(pp, pteams[1]||'', pteams[0]||'', legSport) : pp;
-          var _plogo = (typeof _pbLobbyLogoImg === 'function') ? _pbLobbyLogoImg(pteam || pp, legSport, 36) : '';
-          var plogoHtml = _plogo
-            ? '<div class="dkslip-leg-logo">' + _plogo + '</div>'
-            : '<div class="dkslip-leg-logo">' + bsTeamAbbr(pp, pg) + '</div>';
+          var plogoHtml = _slipLegLogoHtml(b);
           return '<div class="dkslip-leg" data-cell-id="'+b.cellId+'">' +
             plogoHtml +
             '<div class="dkslip-leg-info">' +
@@ -6505,12 +6547,7 @@ function bsRenderLegs() {
           var pm = b.market||'Market', pp = b.pick||'Unknown Selection', pg = b.game||'';
           var pteams = pg.split(' vs ');
           var pshort = pteams.length===2 ? pteams[0].split(' ').pop()+' vs '+pteams[1].split(' ').pop() : pg;
-          var legSport = b.sport || _currentSport || 'mlb';
-          var pteam = (typeof extractTeamFromPick === 'function') ? extractTeamFromPick(pp, pteams[1]||'', pteams[0]||'', legSport) : pp;
-          var _plogo = (typeof _pbLobbyLogoImg === 'function') ? _pbLobbyLogoImg(pteam || pp, legSport, 36) : '';
-          var plogoHtml = _plogo
-            ? '<div class="dkslip-leg-logo">' + _plogo + '</div>'
-            : '<div class="dkslip-leg-logo">' + bsTeamAbbr(pp, pg) + '</div>';
+          var plogoHtml = _slipLegLogoHtml(b);
           return '<div class="dkslip-leg" data-cell-id="'+b.cellId+'">' +
             plogoHtml +
             '<div class="dkslip-leg-info">' +
@@ -6547,12 +6584,7 @@ function bsRenderLegs() {
         var shortGame = teams.length===2 ? teams[0].split(' ').pop()+' vs '+teams[1].split(' ').pop() : matchup;
         var timeStr = '';
         try { if(b.time){ var td=new Date(b.time); if(!isNaN(td.getTime())) timeStr=' • '+td.toLocaleString('en-US',{weekday:'short',hour:'2-digit',minute:'2-digit'}); } } catch(e){}
-        var legSport = b.sport || _currentSport || 'mlb';
-        var team = (typeof extractTeamFromPick === 'function') ? extractTeamFromPick(pick, teams[1]||'', teams[0]||'', legSport) : pick;
-        var _logo = (typeof _pbLobbyLogoImg === 'function') ? _pbLobbyLogoImg(team || pick, legSport, 36) : '';
-        var logoHtml = _logo
-          ? '<div class="dkslip-leg-logo">' + _logo + '</div>'
-          : '<div class="dkslip-leg-logo">' + bsTeamAbbr(pick, matchup) + '</div>';
+        var logoHtml = _slipLegLogoHtml(b);
         var st = bsStakes[b.cellId] || 0;
         var payout = st > 0 ? fmtDollar(st * amToDecimal(b.odds)) : null;
         return '<div class="dkslip-card">' +
@@ -6777,13 +6809,7 @@ function openBetConfirm() {
 
   // Build DK-style light modal content
   var legsHtml = betSlip.map(function(b) {
-    var legSport = b.sport || _currentSport || 'mlb';
-    var teams = (b.game||'').split(' vs ');
-    var team = (typeof extractTeamFromPick === 'function') ? extractTeamFromPick(b.pick, teams[1]||'', teams[0]||'', legSport) : b.pick;
-    var _cLogo = (typeof _pbLobbyLogoImg === 'function') ? _pbLobbyLogoImg(team || b.pick, legSport, 36) : '';
-    var logoHtml = _cLogo
-      ? '<div class="dkslip-leg-logo" style="margin-right:10px">' + _cLogo + '</div>'
-      : '<div class="dkslip-leg-logo" style="margin-right:10px">' + bsTeamAbbr(b.pick, b.game) + '</div>';
+    var logoHtml = _slipLegLogoHtml(b, { style: 'margin-right:10px' });
     var teams = (b.game||'').split(' vs ');
     var shortGame = teams.length===2 ? teams[0].split(' ').pop()+' vs '+teams[1].split(' ').pop() : (b.game||'');
     var stake = bsType==='straight' ? (bsStakes[b.cellId]||0) : null;
@@ -14542,7 +14568,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO (debug panel only with ?debug=1 / pb-debug=1) -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;padding:2px 10px;display:none;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span id="build-info-label" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px">🔍 main · 3018cc2 · Sep 5, 10:27 AM</span>
+  <span id="build-info-label" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px">🔍 main · 01749e3 · Sep 5, 10:36 AM</span>
 </div>
 <script>
 (function(){
