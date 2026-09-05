@@ -85,18 +85,19 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .value-bet-meta{font-size:0.58rem;color:#666;margin-top:2px}
 .value-bet-odds{font-size:0.78rem;font-weight:900;color:#ccc}
 
-/* LIVE SCOREBOARD ON CARDS */
-.mc-live-score{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:6px 16px 8px;font-size:0.72rem;font-weight:800;color:#ddd}
+/* LIVE SCOREBOARD ON CARDS — compact, palette-aligned */
+.mc-live-score{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:5px 14px 7px;font-size:0.7rem;font-weight:800;color:#94a3b8;background:linear-gradient(180deg,rgba(16,26,46,0.55),rgba(8,13,24,0))}
 .mc-live-score-row{display:flex;align-items:center;justify-content:center;gap:10px;width:100%}
-.mc-live-score .mc-live-state{font-size:0.58rem;color:#ff3d57;font-weight:900;text-transform:uppercase;letter-spacing:0.4px}
-.mc-live-extras{display:flex;align-items:center;justify-content:center;gap:10px;font-size:0.55rem;color:#888;font-weight:700;letter-spacing:0.2px}
+.mc-live-score .mc-live-state{font-size:0.56rem;color:#ef4444;font-weight:900;text-transform:uppercase;letter-spacing:0.35px}
+.mc-live-score .mc-live-pts{color:#e2e8f0;font-size:0.92rem;font-weight:900;letter-spacing:0.2px}
+.mc-live-extras{display:flex;align-items:center;justify-content:center;gap:10px;font-size:0.52rem;color:#64748B;font-weight:700;letter-spacing:0.2px}
 .mc-bases{display:inline-grid;grid-template-columns:8px 8px;grid-template-rows:8px 8px;gap:2px;transform:rotate(45deg);margin:0 2px}
-.mc-base{width:8px;height:8px;background:#2a2a2a;border:1px solid #444}
-.mc-base.on{background:#00ff88;border-color:#00ff88;box-shadow:0 0 4px rgba(0,255,136,0.5)}
-.mc-live-badge{margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:rgba(255,61,87,0.12);border:1px solid rgba(255,61,87,0.35);color:#ff3d57;font-size:0.55rem;font-weight:900;letter-spacing:0.5px;text-transform:uppercase;padding:2px 7px;border-radius:6px}
-.mc-live-badge-dot{width:6px;height:6px;border-radius:50%;background:#ff3d57;animation:pbLivePulse 1.4s ease-in-out infinite}
-.sport-tab-live{position:absolute;top:4px;right:4px;display:inline-flex;align-items:center;gap:3px;margin:0;font-size:0.42rem;font-weight:900;color:#ff3d57;background:rgba(255,61,87,0.16);border:1px solid rgba(255,61,87,0.35);border-radius:6px;padding:1px 4px;letter-spacing:0.3px;text-transform:uppercase}
-.sport-tab-live-dot{width:5px;height:5px;border-radius:50%;background:#ff3d57;animation:pbLivePulse 1.4s ease-in-out infinite}
+.mc-base{width:8px;height:8px;background:#1D2B42;border:1px solid #334155}
+.mc-base.on{background:#1677FF;border-color:#1677FF;box-shadow:0 0 4px rgba(22,119,255,0.45)}
+.mc-live-badge{margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.32);color:#ef4444;font-size:0.55rem;font-weight:900;letter-spacing:0.5px;text-transform:uppercase;padding:2px 7px;border-radius:6px}
+.mc-live-badge-dot{width:6px;height:6px;border-radius:50%;background:#ef4444;animation:pbLivePulse 1.4s ease-in-out infinite}
+.sport-tab-live{position:absolute;top:4px;right:4px;display:inline-flex;align-items:center;gap:3px;margin:0;font-size:0.42rem;font-weight:900;color:#ef4444;background:rgba(239,68,68,0.14);border:1px solid rgba(239,68,68,0.32);border-radius:6px;padding:1px 4px;letter-spacing:0.3px;text-transform:uppercase}
+.sport-tab-live-dot{width:5px;height:5px;border-radius:50%;background:#ef4444;animation:pbLivePulse 1.4s ease-in-out infinite}
 
 /* PARLAY BUILDER UX */
 .dkslip-leg-removing{animation:pbLegRemove 0.28s ease forwards}
@@ -2570,6 +2571,7 @@ function _pbFormatLiveStateText(g) {
   var sport = _pbSportKeyOf(g);
   var bits = [];
   if (sport === 'mlb' || sport.indexOf('baseball') >= 0) {
+    if (g.statusDetail) return String(g.statusDetail);
     if (g.inning != null) {
       var half = String(g.inningHalf || g.inning_half || '').toLowerCase();
       var halfLbl = (half === 't' || half === 'top') ? 'Top' : ((half === 'b' || half === 'bot' || half === 'bottom') ? 'Bot' : '');
@@ -2582,16 +2584,25 @@ function _pbFormatLiveStateText(g) {
     if (g.clock) bits.push(String(g.clock));
     if (g.down != null && g.distance != null) bits.push(g.down + ' & ' + g.distance);
     else if (g.down != null) bits.push(_pbOrdinal(g.down) + ' down');
-  } else if (sport === 'nba' || sport === 'wnba' || sport === 'ncaab' || sport === 'nhl' ||
-             sport.indexOf('basketball') >= 0 || sport.indexOf('hockey') >= 0) {
+  } else if (sport === 'nba' || sport === 'wnba' || sport === 'ncaab' || sport.indexOf('basketball') >= 0) {
+    if (g.period != null) bits.push('Q' + g.period);
+    if (g.clock) bits.push(String(g.clock));
+  } else if (sport === 'nhl' || sport.indexOf('hockey') >= 0) {
     if (g.period != null) bits.push('P' + g.period);
     if (g.clock) bits.push(String(g.clock));
+  } else if (sport.indexOf('soccer') >= 0) {
+    if (g.clock) {
+      var c = String(g.clock);
+      bits.push(/'$/.test(c) ? c : c + "'");
+    } else if (g.statusDetail && /^\d/.test(String(g.statusDetail))) {
+      bits.push(String(g.statusDetail));
+    }
   } else if (sport.indexOf('tennis') >= 0) {
-    if (g.setScore != null) bits.push('Sets ' + g.setScore);
-    else if (g.sets != null) bits.push('Sets ' + g.sets);
-    if (g.gameScore != null) bits.push('Game ' + g.gameScore);
-    if (g.period != null && !bits.length) bits.push('Set ' + g.period);
-    if (g.clock) bits.push(String(g.clock));
+    if (g.setScore != null) bits.push(String(g.setScore));
+    else if (g.sets != null) bits.push(String(g.sets));
+    else if (g.period != null) bits.push('Set ' + g.period);
+    if (g.gameScore != null) bits.push(String(g.gameScore));
+    else if (g.statusDetail) bits.push(String(g.statusDetail));
   } else {
     if (g.period != null) bits.push(String(g.period));
     if (g.clock) bits.push(String(g.clock));
@@ -2604,9 +2615,10 @@ function _pbLiveScoreboardHtml(g) {
   if (!_pbMarketIsLive(g)) return '';
   var hasScore = g.homeScore != null || g.awayScore != null || g.gameStateText ||
     g.period != null || g.clock || g.inning != null || g.down != null ||
-    g.setScore != null || g.gameScore != null;
+    g.setScore != null || g.gameScore != null || g.statusDetail;
   if (!hasScore) {
-    return '<div class="mc-live-score"><div class="mc-live-score-row"><span class="mc-live-state">In progress</span></div></div>';
+    // Live odds without scoreboard — keep betting, omit empty scoreboard.
+    return '';
   }
   var aw = (g.away || g.away_team) || '';
   var hw = (g.home || g.home_team) || '';
@@ -2627,21 +2639,21 @@ function _pbLiveScoreboardHtml(g) {
              !(stateTxt && stateTxt.indexOf('&') >= 0)) {
     extras.push('<span>' + g.down + ' &amp; ' + g.distance + '</span>');
   } else if (sport.indexOf('tennis') >= 0) {
-    if (g.setScore != null && stateTxt.indexOf('Sets') < 0) extras.push('<span>Sets ' + g.setScore + '</span>');
-    if (g.gameScore != null && stateTxt.indexOf('Game') < 0) extras.push('<span>Game ' + g.gameScore + '</span>');
+    if (g.setScore != null && stateTxt.indexOf(String(g.setScore)) < 0) extras.push('<span>Sets ' + g.setScore + '</span>');
+    if (g.gameScore != null && stateTxt.indexOf(String(g.gameScore)) < 0) extras.push('<span>' + g.gameScore + '</span>');
   }
   return '<div class="mc-live-score">' +
     '<div class="mc-live-score-row">' +
-      '<span>' + awN + ' <span style="color:#fff;font-size:0.9rem">' + awSc + '</span></span>' +
-      (stateTxt ? '<span class="mc-live-state">' + stateTxt + '</span>' : '<span style="color:#555">—</span>') +
-      '<span><span style="color:#fff;font-size:0.9rem">' + hwSc + '</span> ' + hwN + '</span>' +
+      '<span>' + awN + ' <span class="mc-live-pts">' + awSc + '</span></span>' +
+      (stateTxt ? '<span class="mc-live-state">' + stateTxt + '</span>' : '<span style="color:#64748B">● LIVE</span>') +
+      '<span><span class="mc-live-pts">' + hwSc + '</span> ' + hwN + '</span>' +
     '</div>' +
     (extras.length ? '<div class="mc-live-extras">' + extras.join('') + '</div>' : '') +
   '</div>';
 }
 
 function _pbLiveBadgeHtml() {
-  return '<span class="mc-live-badge"><span class="mc-live-badge-dot"></span>Live</span>';
+  return '<span class="mc-live-badge"><span class="mc-live-badge-dot"></span>LIVE</span>';
 }
 
 function _pbFormatNextStartLabel(iso) {
