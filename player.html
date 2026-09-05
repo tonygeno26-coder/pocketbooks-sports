@@ -1758,6 +1758,7 @@ function _showSessionExpiredModal(result) {
 window.PBS_BUILD_SHA = '9100d35';
 window.PBS_BUILD_DATE = '2026-06-02T09:54:15.131Z';
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
+try { window.API = API; } catch (_eApi) {}
 // ESPN league logos for sport grid (verified working CDN paths; ncaa/soccer/atp/pga/boxing/rugby preferred slugs 404)
 const SPORT_LOGOS = {
   nfl: 'https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png',
@@ -2312,14 +2313,22 @@ function _pbAvatarSportKey(sport) {
   return s;
 }
 
-function teamAvatar(name, sport) {
+function teamAvatar(name, sport, opts) {
   sport = sport || (typeof _currentSport !== 'undefined' ? _currentSport : '') || '';
+  opts = opts || {};
   var kind = _pbAvatarSportKey(sport);
   if (kind === 'tennis' && typeof getTennisPlayerPhotoImg === 'function') {
     return '<div class="mc-jersey mc-jersey-headshot">' + getTennisPlayerPhotoImg(name, 52) + '</div>';
   }
   if (kind === 'soccer' && typeof getSoccerTeamLogoImg === 'function') {
     return '<div class="mc-jersey">' + getSoccerTeamLogoImg(name, 52) + '</div>';
+  }
+  if (opts.logoUrl && (kind === 'ncaaf' || String(sport).toLowerCase().indexOf('ncaaf') >= 0)) {
+    var safeUrl = String(opts.logoUrl).replace(/"/g, '&quot;');
+    var safeName = String(name || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    return '<div class="mc-jersey"><img src="' + safeUrl + '" alt="' + safeName +
+      '" width="52" height="52" style="width:52px;height:52px;object-fit:contain;display:block" ' +
+      'referrerpolicy="no-referrer" loading="lazy" onerror="this.style.display=\'none\'"></div>';
   }
   if (typeof getTeamLogoImg === 'function') {
     return '<div class="mc-jersey">' + getTeamLogoImg(name, sport, 52) + '</div>';
@@ -3203,14 +3212,14 @@ function _pbRenderGameCardHtml(g) {
       splitHtml +
       '<div class="mc-cols"><div></div><div class="mc-col-label">' + spreadLabel + '</div><div class="mc-col-label">Total</div><div class="mc-col-label">To Win</div></div>' +
       '<div class="mc-team-row">' +
-        '<div class="mc-team">' + teamAvatar(aw, sp) + '<div><div class="mc-city">' + awC + '</div><div class="mc-name">' + awN + '</div></div></div>' +
+        '<div class="mc-team">' + teamAvatar(aw, sp, { logoUrl: g.awayLogoUrl || '' }) + '<div><div class="mc-city">' + awC + '</div><div class="mc-name">' + awN + '</div></div></div>' +
         cell(g.id + '-sp-aw', awSp ? (awSp.line > 0 ? '+' : '') + awSp.line : null, awSp ? awSp.odds : null, spreadLabel, aw + ' ' + (awSp ? (awSp.line > 0 ? '+' : '') + awSp.line : ''), aw) +
         cell(g.id + '-ov', ov ? 'O ' + ov.line : null, ov ? ov.odds : null, 'Total', ov ? 'Over ' + ov.line : null) +
         cell(g.id + '-ml-aw', null, awML ? awML.odds : null, 'Moneyline', aw) +
       '</div>' +
       '<div class="mc-divider"></div>' +
       '<div class="mc-team-row">' +
-        '<div class="mc-team">' + teamAvatar(hw, sp) + '<div><div class="mc-city">' + hwC + '</div><div class="mc-name">' + hwN + '</div></div></div>' +
+        '<div class="mc-team">' + teamAvatar(hw, sp, { logoUrl: g.homeLogoUrl || '' }) + '<div><div class="mc-city">' + hwC + '</div><div class="mc-name">' + hwN + '</div></div></div>' +
         cell(g.id + '-sp-hw', hwSp ? (hwSp.line > 0 ? '+' : '') + hwSp.line : null, hwSp ? hwSp.odds : null, spreadLabel, hw + ' ' + (hwSp ? (hwSp.line > 0 ? '+' : '') + hwSp.line : ''), hw) +
         cell(g.id + '-un', un ? 'U ' + un.line : null, un ? un.odds : null, 'Total', un ? 'Under ' + un.line : null) +
         cell(g.id + '-ml-hw', null, hwML ? hwML.odds : null, 'Moneyline', hw) +
