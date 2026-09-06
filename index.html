@@ -1726,6 +1726,12 @@ function _getActorHeaders() {
 async function _pbFetch(url, opts) {
   opts = opts || {};
   var headers = Object.assign(_getActorHeaders(), opts.headers || {});
+  // Always hit Railway for /api/* — same as lobby/player. Relative /api rewrite
+  // works on Vercel, but absolute avoids silent auth/rewrite misses that leave
+  // the Players tab on stale localStorage balance:0.
+  if (typeof url === 'string' && url.indexOf('/api/') === 0 && typeof API === 'string' && API) {
+    url = API + url;
+  }
   return fetch(url, Object.assign({}, opts, { headers: headers }));
 }
 
@@ -2255,7 +2261,9 @@ async function renderSettlementPreviewFromDb() {
     players.forEach(function(p) {
       var owesHost = parseFloat(p.owesHost)||0;
       var hostOwes = parseFloat(p.hostOwes)||0;
-      var bal = _resolveHostPlayerBalance(p, null);
+      var dbpBal = (_hostDbPlayersById && p.playerId != null)
+        ? (_hostDbPlayersById[String(p.playerId)] || null) : null;
+      var bal = _resolveHostPlayerBalance(p, dbpBal);
       var startBal = p.startingBalance != null ? parseFloat(p.startingBalance)
                    : (p.balance_start != null ? parseFloat(p.balance_start) : null);
       var weekWagered = parseFloat(p.weekWagered)||0;
@@ -3212,7 +3220,19 @@ function _hostPlayersFromDbOrLocal(){
       };
     }).filter(Boolean);
   }
-  try { return JSON.parse(localStorage.getItem('pb-club-players')||'[]'); } catch(_e) { return []; }
+  // Unverified local cache often still has balance:0 from older bugs. Without a
+  // balanceSource from /api/host/dashboard, strip bankroll fields so the UI
+  // shows "—" instead of a fake $0.00.
+  try {
+    return (JSON.parse(localStorage.getItem('pb-club-players')||'[]') || []).map(function(p) {
+      if (!p || p.balanceSource) return p;
+      var out = Object.assign({}, p);
+      delete out.availableBalance;
+      delete out.currentBalance;
+      delete out.balance;
+      return out;
+    });
+  } catch(_e) { return []; }
 }
 
 function _hostBetsFromDbOrLocal(){
