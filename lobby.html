@@ -296,11 +296,22 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
   .bnav,.bottom-nav{padding-bottom:max(8px, env(safe-area-inset-bottom))}
 }
 @media (max-width:400px){
-  .auth-content{padding:28px 12px 24px}
-  .auth-card{padding:14px}
-  .auth-submit,.auth-inp{min-height:44px;width:100%;box-sizing:border-box}
+  .auth-content{padding:28px 12px 24px;width:100%;box-sizing:border-box}
+  .auth-card{padding:14px;width:100%;max-width:100%;box-sizing:border-box}
+  .auth-tabs{width:100%;max-width:100%;box-sizing:border-box}
+  .auth-submit,.auth-inp{min-height:44px;width:100%;max-width:100%;box-sizing:border-box}
+  #signin-container,#signup-container{width:100%;max-width:100%}
+  #pb-signin,#pb-signup{width:100%}
   .modal{max-width:100vw;width:100%}
-  .action-grid{grid-template-columns:1fr;padding-left:10px;padding-right:10px}
+  .action-grid{grid-template-columns:1fr 1fr;gap:8px;padding-left:10px;padding-right:10px}
+  .secondary-row{grid-template-columns:1fr 1fr 1fr;padding-left:10px;padding-right:10px}
+}
+@media (max-width:390px){
+  .auth-content{padding:24px 12px 20px}
+  .auth-inp,.auth-submit{width:100%;max-width:100%;box-sizing:border-box}
+  .action-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .action-card{min-width:0}
+  .ac-label{font-size:0.78rem}
 }
 
 </style>
@@ -571,19 +582,41 @@ try {
     </div>
 
     <div class="auth-card">
-      <!-- Exactly one auth form lives in #auth-form-slot at a time.
-           Switching tabs removes the other form from the DOM entirely. -->
-      <div id="auth-form-slot">
-        <form id="pb-signin" method="post" action="" autocomplete="off" onsubmit="event.preventDefault(); submitAuth(); return false;">
+      <!-- Sign In and Create Account are isolated DOM trees — never remounted.
+           Tab switch only toggles display so rapid focus on #pb-id stays stable. -->
+      <div id="signin-container">
+        <form id="pb-signin" method="post" action="" onsubmit="event.preventDefault(); submitAuth(); return false;">
           <div id="login-hint" style="font-size:0.62rem;color:#666;margin:0 0 8px;padding:0 4px">Sign in with your display name or email</div>
-          <input id="pb-id" class="auth-inp" placeholder="Display name, email, or @telegram" type="text" autocapitalize="off" autocorrect="off" spellcheck="false">
-          <input id="pb-pw" class="auth-inp" placeholder="Password" type="password" spellcheck="false">
+          <input id="pb-id" class="auth-inp" placeholder="Display name, email, or @telegram" type="text" tabindex="1" autocapitalize="off" autocorrect="off" spellcheck="false">
+          <input id="pb-pw" class="auth-inp" placeholder="Password" type="password" tabindex="2" spellcheck="false">
           <button type="submit" class="auth-submit" id="auth-submit-btn">Sign In →</button>
           <div id="auth-recovery-links" style="display:flex;justify-content:center;gap:14px;margin-top:14px;font-size:0.72rem">
             <span class="auth-recover-link" style="color:var(--cyan);cursor:pointer" onclick="openRecovery('username')">Forgot Username</span>
             <span style="color:#333">·</span>
             <span class="auth-recover-link" style="color:var(--cyan);cursor:pointer" onclick="openRecovery('password')">Forgot Password</span>
           </div>
+        </form>
+      </div>
+
+      <div id="signup-container" style="display:none" hidden>
+        <form id="pb-signup" method="post" action="" onsubmit="event.preventDefault(); submitAuth(); return false;">
+          <input id="pb-su-name" class="auth-inp" placeholder="Display name" type="text" autocapitalize="off" autocorrect="off" spellcheck="false">
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <select id="pb-su-method" class="auth-inp" style="flex:0 0 auto;width:auto;padding-right:10px;cursor:pointer" onchange="updateSignupContactAttrs()">
+              <option value="telegram">Telegram</option>
+              <option value="signal">Signal</option>
+              <option value="email">Email</option>
+            </select>
+            <input id="pb-su-contact" class="auth-inp" placeholder="@username" type="text" autocapitalize="off" autocorrect="off" spellcheck="false" style="flex:1;margin-bottom:0">
+          </div>
+          <div id="signup-contact-hint" style="font-size:0.62rem;color:#666;margin:-6px 0 10px;padding:0 4px">Select how we can reach you — required for account recovery.</div>
+          <input id="pb-su-pw" class="auth-inp" placeholder="Password" type="password" spellcheck="false">
+          <input id="pb-su-pw2" class="auth-inp" placeholder="Confirm password" type="password" spellcheck="false">
+          <div id="signup-checks">
+            <label class="auth-check"><input type="checkbox" id="check-age"><span class="auth-check-label">I confirm I am 21 years of age or older</span></label>
+            <label class="auth-check"><input type="checkbox" id="check-terms"><span class="auth-check-label">I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a></span></label>
+          </div>
+          <button type="submit" class="auth-submit" id="auth-signup-btn">Create My Account →</button>
         </form>
       </div>
 
@@ -696,44 +729,6 @@ function _authSubmitBtn() {
   return document.getElementById(authMode === 'signup' ? 'auth-signup-btn' : 'auth-submit-btn');
 }
 
-// Sign In markup — painted in HTML initially; also used when switching back
-// from Create Account. No name attrs, no autocomplete attrs on fields.
-var _SIGNIN_FORM_HTML =
-  '<form id="pb-signin" method="post" action="" autocomplete="off" onsubmit="event.preventDefault(); submitAuth(); return false;">' +
-    '<div id="login-hint" style="font-size:0.62rem;color:#666;margin:0 0 8px;padding:0 4px">Sign in with your display name or email</div>' +
-    '<input id="pb-id" class="auth-inp" placeholder="Display name, email, or @telegram" type="text" autocapitalize="off" autocorrect="off" spellcheck="false">' +
-    '<input id="pb-pw" class="auth-inp" placeholder="Password" type="password" spellcheck="false">' +
-    '<button type="submit" class="auth-submit" id="auth-submit-btn">Sign In →</button>' +
-    '<div id="auth-recovery-links" style="display:flex;justify-content:center;gap:14px;margin-top:14px;font-size:0.72rem">' +
-      '<span class="auth-recover-link" style="color:var(--cyan);cursor:pointer" onclick="openRecovery(\'username\')">Forgot Username</span>' +
-      '<span style="color:#333">·</span>' +
-      '<span class="auth-recover-link" style="color:var(--cyan);cursor:pointer" onclick="openRecovery(\'password\')">Forgot Password</span>' +
-    '</div>' +
-  '</form>';
-
-// Create Account — injected only when that tab is active. No name attrs,
-// no autocomplete attrs (password-manager hooks).
-var _SIGNUP_FORM_HTML =
-  '<form id="pb-signup" method="post" action="" autocomplete="off" onsubmit="event.preventDefault(); submitAuth(); return false;">' +
-    '<input id="pb-su-name" class="auth-inp" placeholder="Display name" type="text" autocapitalize="off" autocorrect="off" spellcheck="false">' +
-    '<div style="display:flex;gap:8px;margin-bottom:10px">' +
-      '<select id="pb-su-method" class="auth-inp" style="flex:0 0 auto;width:auto;padding-right:10px;cursor:pointer" onchange="updateSignupContactAttrs()">' +
-        '<option value="telegram">Telegram</option>' +
-        '<option value="signal">Signal</option>' +
-        '<option value="email">Email</option>' +
-      '</select>' +
-      '<input id="pb-su-contact" class="auth-inp" placeholder="@username" type="text" autocapitalize="off" autocorrect="off" spellcheck="false" style="flex:1;margin-bottom:0">' +
-    '</div>' +
-    '<div id="signup-contact-hint" style="font-size:0.62rem;color:#666;margin:-6px 0 10px;padding:0 4px">Select how we can reach you — required for account recovery.</div>' +
-    '<input id="pb-su-pw" class="auth-inp" placeholder="Password" type="password" spellcheck="false">' +
-    '<input id="pb-su-pw2" class="auth-inp" placeholder="Confirm password" type="password" spellcheck="false">' +
-    '<div id="signup-checks">' +
-      '<label class="auth-check"><input type="checkbox" id="check-age"><span class="auth-check-label">I confirm I am 21 years of age or older</span></label>' +
-      '<label class="auth-check"><input type="checkbox" id="check-terms"><span class="auth-check-label">I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a></span></label>' +
-    '</div>' +
-    '<button type="submit" class="auth-submit" id="auth-signup-btn">Create My Account →</button>' +
-  '</form>';
-
 function _authFieldFocused() {
   var ae = document.activeElement;
   if (!ae || !ae.closest) return false;
@@ -741,18 +736,25 @@ function _authFieldFocused() {
 }
 
 function _authDomMatches(mode) {
-  var signinLive = !!document.getElementById('pb-signin');
-  var signupLive = !!document.getElementById('pb-signup');
-  if (mode === 'login') return signinLive && !signupLive;
-  return signupLive && !signinLive;
+  var signin = document.getElementById('signin-container');
+  var signup = document.getElementById('signup-container');
+  if (!signin || !signup) return false;
+  var signinShown = signin.style.display !== 'none' && !signin.hidden;
+  var signupShown = signup.style.display !== 'none' && !signup.hidden;
+  if (mode === 'login') return signinShown && !signupShown;
+  return signupShown && !signinShown;
 }
 
-function _injectAuthForm(mode) {
-  var slot = document.getElementById('auth-form-slot');
-  if (!slot) return;
-  // Nuclear: wipe slot so the inactive form is fully gone from the DOM.
-  slot.innerHTML = '';
-  slot.innerHTML = (mode === 'signup') ? _SIGNUP_FORM_HTML : _SIGNIN_FORM_HTML;
+// Toggle visibility only — never remount Sign In inputs (focus must survive rapid taps).
+function _showAuthForm(mode) {
+  var signin = document.getElementById('signin-container');
+  var signup = document.getElementById('signup-container');
+  if (!signin || !signup) return;
+  var isSignup = mode === 'signup';
+  signin.style.display = isSignup ? 'none' : 'block';
+  signin.hidden = !!isSignup;
+  signup.style.display = isSignup ? 'block' : 'none';
+  signup.hidden = !isSignup;
 }
 
 function _clearAuthError() {
@@ -797,7 +799,7 @@ function setAuthTab(mode) {
   if (tabLogin) tabLogin.classList.toggle('active', mode === 'login');
   if (tabSignup) tabSignup.classList.toggle('active', mode === 'signup');
 
-  _injectAuthForm(mode);
+  _showAuthForm(mode);
   if (mode === 'signup') updateSignupContactAttrs();
 
   var footer = document.getElementById('auth-footer-text');
@@ -2419,9 +2421,8 @@ if (isPreview && !_isAuthScreen) {
 } else {
   checkAuthGate();
   if (typeof hideSportsbookChromeForPlayers === 'function') hideSportsbookChromeForPlayers();
-  // Default HTML already shows the login form. Do not call setAuthTab('login')
-  // on boot — that would wipe and recreate inputs while the user may be typing.
-  // Only mount signup when explicitly forced; signup stays out of the DOM otherwise.
+  // Default HTML already shows the login form. Do not remount Sign In on boot.
+  // Only reveal signup when explicitly forced.
   if (!TOKEN && window.__pbForceAuth === 'signup' && typeof setAuthTab === 'function') {
     setAuthTab('signup');
   }
