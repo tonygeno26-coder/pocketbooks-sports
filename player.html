@@ -1098,7 +1098,9 @@ body{
 #mybets-section .bet-menu-btn{color:var(--light)!important}
 #mybets-section .bet-menu-btn:hover{background:var(--card2)!important;color:#fff!important}
 #mybets-section .bet-menu-dropdown{background:var(--card)!important;border-color:var(--border)!important}
-#mybets-section [style*="background:#fff"],
+/* Use trailing ";" so light reds like #fff0f0 / #fffbeb are NOT matched
+   (those used to force LOST badge text white via color:!important). */
+#mybets-section [style*="background:#fff;"],
 #mybets-section [style*="background:#fafafa"],
 #mybets-section [style*="background:#f5f5f5"],
 #mybets-section [style*="background:#f0f0f0"]{
@@ -1107,6 +1109,10 @@ body{
 #mybets-section [style*="color:#111"]{color:var(--white)!important}
 #mybets-section [style*="color:#444"],
 #mybets-section [style*="color:#555"]{color:var(--light)!important}
+/* Preserve status colors on My Bets receipts (won/lost/push). */
+#mybets-section [style*="color:#22C55E"]{color:#22C55E!important}
+#mybets-section [style*="color:#EF4444"]{color:#EF4444!important}
+#mybets-section [style*="color:#F59E0B"]{color:#F59E0B!important}
 #mybets-section [style*="border-top:1px solid #f0f0f0"],
 #mybets-section [style*="border-bottom:1px solid #f0f0f0"],
 #mybets-section [style*="border:1px solid #e8e8e8"],
@@ -11498,13 +11504,20 @@ function renderMyBets() {
     var ledger = [];
     try { ledger = JSON.parse(localStorage.getItem('pb-ledger') || '[]'); if (!Array.isArray(ledger)) ledger = []; }
     catch(_le){ console.error('[renderMyBets] pb-ledger JSON parse failed', _le); ledger = []; }
-  var sc = { active:'#0064c8', open:'#0064c8', won:'#00875a', lost:'#cc0000', push:'#888', partial:'#f59e0b', cashed_out:'#7c3aed', cashedout:'#7c3aed', canceled:'#555' };
+  var sc = { active:'#0064c8', open:'#0064c8', won:'#22C55E', lost:'#EF4444', push:'#F59E0B', pushed:'#F59E0B', partial:'#F59E0B', cashed_out:'#7c3aed', cashedout:'#7c3aed', canceled:'#888', cancelled:'#888', voided:'#888', deleted:'#888' };
   function ticketCard(t) {
     // Settled display guard: never paint WON/LOST/PUSH on a ticket that
     // fails the 5-guard, even if t.status is stale-set to 'lost'.
     var displayStatus = _displayStatus(t);
     try { _logSettledDisplayGuard(t); } catch(_e){}
     var color = sc[displayStatus] || '#555';
+    var leftBorder =
+      (displayStatus === 'won') ? '#22C55E' :
+      (displayStatus === 'lost') ? '#EF4444' :
+      (displayStatus === 'active' || displayStatus === 'open') ? '#0064c8' :
+      (displayStatus === 'push' || displayStatus === 'pushed') ? '#F59E0B' :
+      (displayStatus === 'canceled' || displayStatus === 'cancelled' || displayStatus === 'voided' || displayStatus === 'deleted') ? '#888' :
+      '#e8e8e8';
     var d = new Date(t.placedAt);
     var dateStr = isNaN(d) ? t.placedAt : d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
 
@@ -11692,6 +11705,17 @@ function renderMyBets() {
       var matchupBlock = (matchupText && matchupText.toLowerCase() !== pickText.toLowerCase())
         ? '<div style="font-size:0.66rem;color:#888;margin-top:2px">' + matchupText + '</div>'
         : '';
+      // Per-leg result color when available; else ticket status for settled singles/parlays.
+      var legRes = String((s && (s.result || s.legResult || s.outcome)) || '').toLowerCase();
+      if (legRes === 'pushed') legRes = 'push';
+      var pickColor = '#111';
+      if (legRes === 'won') pickColor = '#22C55E';
+      else if (legRes === 'lost') pickColor = '#EF4444';
+      else if (legRes === 'push') pickColor = '#F59E0B';
+      else if (displayStatus === 'won') pickColor = '#22C55E';
+      else if (displayStatus === 'lost') pickColor = '#EF4444';
+      else if (displayStatus === 'push' || displayStatus === 'pushed') pickColor = '#F59E0B';
+      else if (displayStatus === 'canceled' || displayStatus === 'cancelled' || displayStatus === 'voided' || displayStatus === 'deleted') pickColor = '#888';
       // Match the sportsbook .mc-team / .mc-city / .mc-name pattern
       // exactly so the avatar inherits the same jersey gradient, size,
       // and responsive breakpoints used on the home odds cards. When the
@@ -11702,7 +11726,7 @@ function renderMyBets() {
             jerseyHtml +
             '<div style="flex:1;min-width:0">' +
               (teamSplit.city ? '<div class="mc-city">'+teamSplit.city+'</div>' : '') +
-              '<div class="mc-name" style="color:#111">'+pickText+'</div>' +
+              '<div class="mc-name" style="color:'+pickColor+'">'+pickText+'</div>' +
               '<div style="font-size:0.7rem;color:#555;margin-top:2px">'+
                 (oddsText ? '<span style="color:#0064c8;font-weight:800">'+oddsText+'</span>' : '') +
                 (marketText ? (oddsText?' · ':'')+'<span style="color:#888">'+marketText+'</span>' : '') +
@@ -11715,7 +11739,7 @@ function renderMyBets() {
       // No team-specific avatar (Over/Under, totals, etc.). Keep the row
       // tidy with just the pick text + odds + market + matchup line.
       return '<div style="padding:8px 0;border-bottom:1px solid #f0f0f0">' +
-        '<div class="mc-name" style="color:#111">'+pickText+'</div>' +
+        '<div class="mc-name" style="color:'+pickColor+'">'+pickText+'</div>' +
         '<div style="font-size:0.7rem;color:#555;margin-top:2px">'+
           (oddsText ? '<span style="color:#0064c8;font-weight:800">'+oddsText+'</span>' : '') +
           (marketText ? (oddsText?' · ':'')+'<span style="color:#888">'+marketText+'</span>' : '') +
@@ -11744,17 +11768,25 @@ function renderMyBets() {
     var isDeletePending = t.deleteRequestStatus === 'pending';
     var isDeleteDenied  = t.deleteRequestStatus === 'denied';
     var isVoided        = displayStatus === 'voided' || displayStatus === 'deleted' || displayStatus === 'canceled';
+    // Badge fills use rgba (not #fff…) so dark-theme attribute overrides
+    // cannot force LOST/WON text white.
     var statusBadge = isDeletePending
-      ? '<span style="font-size:0.68rem;font-weight:800;color:#f59e0b;background:#fffbeb;padding:4px 10px;border-radius:20px;border:1px solid #f59e0b">DELETE REQUESTED</span>'
+      ? '<span style="font-size:0.68rem;font-weight:800;color:#F59E0B;background:rgba(245,158,11,0.14);padding:4px 10px;border-radius:20px;border:1px solid #F59E0B">DELETE REQUESTED</span>'
       : isDeleteDenied
-        ? '<span style="font-size:0.68rem;font-weight:800;color:#cc0000;background:#fff0f0;padding:4px 10px;border-radius:20px;border:1px solid #cc0000">REQUEST DENIED</span>'
+        ? '<span style="font-size:0.68rem;font-weight:800;color:#EF4444;background:rgba(239,68,68,0.14);padding:4px 10px;border-radius:20px;border:1px solid #EF4444">REQUEST DENIED</span>'
         : displayStatus === 'canceled'
-          ? '<span style="font-size:0.68rem;font-weight:800;color:#555;background:#f0f0f0;padding:4px 10px;border-radius:20px;border:1px solid #ccc">CANCELED</span>'
+          ? '<span style="font-size:0.68rem;font-weight:800;color:#888;background:rgba(136,136,136,0.14);padding:4px 10px;border-radius:20px;border:1px solid #888">CANCELED</span>'
           : (displayStatus === 'cashed_out' || displayStatus === 'cashedout')
-            ? '<span style="font-size:0.68rem;font-weight:800;color:#7c3aed;background:#f3e8ff;padding:4px 10px;border-radius:20px;border:1px solid #c4b5fd">CASHED OUT</span>'
+            ? '<span style="font-size:0.68rem;font-weight:800;color:#7c3aed;background:rgba(124,58,237,0.14);padding:4px 10px;border-radius:20px;border:1px solid #c4b5fd">CASHED OUT</span>'
           : isVoided
-            ? '<span style="font-size:0.68rem;font-weight:800;color:#888;background:#f5f5f5;padding:4px 10px;border-radius:20px;border:1px solid #ddd">VOIDED</span>'
-          : '<span style="font-size:0.68rem;font-weight:800;color:'+color+';background:'+(displayStatus==='lost'?'#fff0f0':displayStatus==='won'?'#f0fff4':'#f0f4ff')+';padding:4px 10px;border-radius:20px;border:1px solid '+color+'">'+displayStatus.toUpperCase()+'</span>';
+            ? '<span style="font-size:0.68rem;font-weight:800;color:#888;background:rgba(136,136,136,0.14);padding:4px 10px;border-radius:20px;border:1px solid #888">VOIDED</span>'
+          : displayStatus === 'lost'
+            ? '<span style="font-size:0.68rem;font-weight:800;color:#fff;background:#EF4444;padding:4px 10px;border-radius:20px;border:1px solid #EF4444">LOST</span>'
+          : displayStatus === 'won'
+            ? '<span style="font-size:0.68rem;font-weight:800;color:#fff;background:#22C55E;padding:4px 10px;border-radius:20px;border:1px solid #22C55E">WON</span>'
+          : displayStatus === 'push' || displayStatus === 'pushed'
+            ? '<span style="font-size:0.68rem;font-weight:800;color:#111;background:#F59E0B;padding:4px 10px;border-radius:20px;border:1px solid #F59E0B">PUSH</span>'
+          : '<span style="font-size:0.68rem;font-weight:800;color:#0064c8;background:rgba(0,100,200,0.12);padding:4px 10px;border-radius:20px;border:1px solid #0064c8">'+displayStatus.toUpperCase()+'</span>';
     // Cancel eligibility: pure UI gating. evaluateCancelEligibility() owns
     // the rule. Status-based suppression (settled/voided/pending-request)
     // continues to take precedence so the existing badges keep rendering.
@@ -11820,18 +11852,35 @@ function renderMyBets() {
       var _rrLost = _rrCombosLocal.filter(function(c){ return String(c.status||'').toLowerCase() === 'lost'; }).length;
       var _rrAct  = _rrCombosLocal.filter(function(c){ var s=String(c.status||'').toLowerCase(); return s==='active'||s==='open'; }).length;
       if (_rrAct > 0) {
-        statusBadge = '<span style="font-size:0.68rem;font-weight:800;color:#0064c8;background:#f0f4ff;padding:4px 10px;border-radius:20px;border:1px solid #0064c8">'
+        statusBadge = '<span style="font-size:0.68rem;font-weight:800;color:#0064c8;background:rgba(0,100,200,0.12);padding:4px 10px;border-radius:20px;border:1px solid #0064c8">'
                     + _rrAct + ' ACTIVE' + (_rrWon ? ' · '+_rrWon+' WON' : '') + (_rrLost ? ' · '+_rrLost+' LOST' : '') + '</span>';
       } else if (_rrWon > 0 && _rrLost > 0) {
-        statusBadge = '<span style="font-size:0.68rem;font-weight:800;color:#d97706;background:#fffbeb;padding:4px 10px;border-radius:20px;border:1px solid #d97706">'
+        statusBadge = '<span style="font-size:0.68rem;font-weight:800;color:#F59E0B;background:rgba(245,158,11,0.14);padding:4px 10px;border-radius:20px;border:1px solid #F59E0B">'
                     + _rrWon + ' WON · ' + _rrLost + ' LOST</span>';
       } else if (_rrWon === _rrCombosLocal.length) {
-        statusBadge = '<span style="font-size:0.68rem;font-weight:800;color:#00875a;background:#f0fff4;padding:4px 10px;border-radius:20px;border:1px solid #00875a">ALL WON</span>';
+        statusBadge = '<span style="font-size:0.68rem;font-weight:800;color:#fff;background:#22C55E;padding:4px 10px;border-radius:20px;border:1px solid #22C55E">ALL WON</span>';
       } else if (_rrLost === _rrCombosLocal.length) {
-        statusBadge = '<span style="font-size:0.68rem;font-weight:800;color:#cc0000;background:#fff0f0;padding:4px 10px;border-radius:20px;border:1px solid #cc0000">ALL LOST</span>';
+        statusBadge = '<span style="font-size:0.68rem;font-weight:800;color:#fff;background:#EF4444;padding:4px 10px;border-radius:20px;border:1px solid #EF4444">ALL LOST</span>';
       }
     }
-    return '<div style="background:#fff;border-radius:14px;margin:8px 0;padding:16px;border:1px solid ' + (_isRrSlip ? '#e9d5ff' : '#e8e8e8') + ';box-shadow:0 1px 4px rgba(0,0,0,0.06)">' +
+    var riskColor = (displayStatus === 'lost') ? '#EF4444'
+      : (displayStatus === 'won') ? '#111'
+      : (displayStatus === 'canceled' || displayStatus === 'cancelled' || displayStatus === 'voided' || displayStatus === 'deleted') ? '#888'
+      : '#111';
+    var toWinColor = (displayStatus === 'won') ? '#22C55E'
+      : (displayStatus === 'lost') ? '#888'
+      : (displayStatus === 'push' || displayStatus === 'pushed') ? '#F59E0B'
+      : '#22C55E';
+    var payoutColor = (displayStatus === 'won') ? '#22C55E'
+      : (displayStatus === 'lost') ? '#EF4444'
+      : (displayStatus === 'push' || displayStatus === 'pushed') ? '#F59E0B'
+      : (displayStatus === 'canceled' || displayStatus === 'cancelled' || displayStatus === 'voided' || displayStatus === 'deleted') ? '#888'
+      : '#0064c8';
+    var payoutLabel = (displayStatus === 'won' || displayStatus === 'lost' || displayStatus === 'push' || displayStatus === 'pushed') ? 'PAYOUT' : 'EST PAYOUT';
+    var payoutValue = (displayStatus === 'lost') ? fmtDollar(0)
+      : (displayStatus === 'push' || displayStatus === 'pushed') ? fmtDollar(t.riskAmount)
+      : fmtDollar(t.estimatedPayout);
+    return '<div style="background:#fff;border-radius:14px;margin:8px 0;padding:16px;border:1px solid ' + (_isRrSlip ? '#e9d5ff' : '#e8e8e8') + ';border-left:3px solid '+leftBorder+';box-shadow:0 1px 4px rgba(0,0,0,0.06)">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
         '<div>' +
           '<div style="font-size:0.88rem;font-weight:900;color:#111">' + sportBadge + typeLabel+'</div>' +
@@ -11839,7 +11888,7 @@ function renderMyBets() {
         '</div>' +
         '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
           ((t.insurance_enabled || t.insuranceEnabled)
-            ? '<span style="font-size:0.62rem;font-weight:800;color:#7c3aed;background:#f3e8ff;padding:3px 8px;border-radius:20px;border:1px solid #c4b5fd">INSURED</span>'
+            ? '<span style="font-size:0.62rem;font-weight:800;color:#7c3aed;background:rgba(124,58,237,0.14);padding:3px 8px;border-radius:20px;border:1px solid #c4b5fd">INSURED</span>'
             : '') +
           statusBadge +
           overflowMenu +
@@ -11850,15 +11899,15 @@ function renderMyBets() {
       '<div style="display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid #f0f0f0">' +
         '<div style="text-align:center">' +
           '<div style="font-size:0.6rem;color:#aaa;margin-bottom:2px">RISK</div>' +
-          '<div style="font-size:0.88rem;font-weight:900;color:#111">'+fmtDollar(t.riskAmount)+'</div>' +
+          '<div style="font-size:0.88rem;font-weight:900;color:'+riskColor+'">'+fmtDollar(t.riskAmount)+'</div>' +
         '</div>' +
         '<div style="text-align:center">' +
           '<div style="font-size:0.6rem;color:#aaa;margin-bottom:2px">TO WIN</div>' +
-          '<div style="font-size:0.88rem;font-weight:900;color:#00875a">'+fmtDollar(t.potentialProfit)+'</div>' +
+          '<div style="font-size:0.88rem;font-weight:900;color:'+toWinColor+'">'+fmtDollar(t.potentialProfit)+'</div>' +
         '</div>' +
         '<div style="text-align:center">' +
-          '<div style="font-size:0.6rem;color:#aaa;margin-bottom:2px">EST PAYOUT</div>' +
-          '<div style="font-size:0.88rem;font-weight:900;color:#0064c8">'+fmtDollar(t.estimatedPayout)+'</div>' +
+          '<div style="font-size:0.6rem;color:#aaa;margin-bottom:2px">'+payoutLabel+'</div>' +
+          '<div style="font-size:0.88rem;font-weight:900;color:'+payoutColor+'">'+payoutValue+'</div>' +
         '</div>' +
       '</div>' +
       // ── Audit row ──────────────────────────────────────────────

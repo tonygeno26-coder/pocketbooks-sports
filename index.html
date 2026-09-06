@@ -3326,11 +3326,11 @@ function _hostStatusBadge(status){
   var b = _hostTicketStatusBucket(status);
   var map = {
     active: { label:'ACTIVE', color:'var(--accent-blue-bright)', bg:'var(--accent-dim)', border:'rgba(22,119,255,0.35)' },
-    won:    { label:'WON',    color:'var(--positive)', bg:'var(--win-dim)', border:'rgba(34,197,94,0.3)' },
-    lost:   { label:'LOST',   color:'var(--negative)', bg:'var(--red-dim)', border:'rgba(239,68,68,0.3)' },
-    push:   { label:'PUSH',   color:'var(--gold)', bg:'var(--gold-dim)', border:'rgba(232,197,71,0.3)' },
+    won:    { label:'WON',    color:'#fff', bg:'#22C55E', border:'rgba(34,197,94,0.55)' },
+    lost:   { label:'LOST',   color:'#fff', bg:'#EF4444', border:'rgba(239,68,68,0.55)' },
+    push:   { label:'PUSH',   color:'#111', bg:'#F59E0B', border:'rgba(245,158,11,0.55)' },
     cashed_out: { label:'CASHED OUT', color:'#c4b5fd', bg:'rgba(124,58,237,0.14)', border:'rgba(196,181,253,0.35)' },
-    void:   { label:'VOID',   color:'var(--text-muted)', bg:'rgba(255,255,255,0.06)', border:'var(--border)' }
+    void:   { label:'CANCELED', color:'#9CA3AF', bg:'rgba(156,163,175,0.14)', border:'rgba(156,163,175,0.35)' }
   };
   var m = map[b] || { label:String(status||'UNKNOWN').toUpperCase(), color:'var(--text-muted)', bg:'var(--bg-card)', border:'var(--border)' };
   return '<span style="font-size:0.58rem;font-weight:900;letter-spacing:0.4px;color:'+m.color+';background:'+m.bg+';padding:3px 8px;border-radius:10px;border:1px solid '+m.border+'">'+m.label+'</span>';
@@ -3687,22 +3687,42 @@ function renderHostBets(){
           var statusBadge = t.deleteRequestStatus==='pending'
             ? '<span style="font-size:0.55rem;font-weight:800;color:#f59e0b;background:rgba(245,158,11,0.12);padding:2px 8px;border-radius:10px;border:1px solid #f59e0b">DEL?</span>'
             : _hostStatusBadge(t.status);
+          var statusBucket = _hostTicketStatusBucket(t.status);
+          var leftBorder =
+            statusBucket === 'won' ? '#22C55E' :
+            statusBucket === 'lost' ? '#EF4444' :
+            statusBucket === 'active' ? '#1677FF' :
+            statusBucket === 'push' ? '#F59E0B' :
+            statusBucket === 'void' ? '#9CA3AF' :
+            'var(--border)';
+          var pickColor =
+            statusBucket === 'won' ? '#22C55E' :
+            statusBucket === 'lost' ? '#EF4444' :
+            statusBucket === 'push' ? '#F59E0B' :
+            statusBucket === 'void' ? '#9CA3AF' :
+            'var(--white)';
+          var stakeColor =
+            statusBucket === 'lost' ? '#EF4444' :
+            statusBucket === 'won' ? '#22C55E' :
+            statusBucket === 'push' ? '#F59E0B' :
+            statusBucket === 'void' ? '#9CA3AF' :
+            'var(--white)';
           var canCancel = _hostTicketIsActive(t);
           var multiHint = (t.selections||[]).length > 1
             ? '<div style="font-size:0.58rem;color:var(--gray);margin-top:2px">'+(t.type||'Parlay')+' · '+(t.selections.length)+' legs</div>'
             : '';
-          return '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px;box-shadow:0 2px 10px rgba(0,0,0,0.25)">' +
+          return '<div style="background:var(--card);border:1px solid var(--border);border-left:3px solid '+leftBorder+';border-radius:12px;padding:12px;margin-bottom:8px;box-shadow:0 2px 10px rgba(0,0,0,0.25)">' +
             '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">' +
               '<div style="min-width:0;flex:1">' +
                 '<div style="font-size:0.62rem;color:var(--gray);margin-bottom:2px">'+esc(game)+'</div>' +
-                '<div style="font-size:0.82rem;font-weight:800;color:var(--white)">'+esc(pick)+'</div>' +
+                '<div style="font-size:0.82rem;font-weight:800;color:'+pickColor+'">'+esc(pick)+'</div>' +
                 multiHint +
               '</div>' +
               statusBadge +
             '</div>' +
             '<div class="host-bet-metrics" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:4px">' +
               '<div><div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px">Odds</div><div style="font-size:0.78rem;font-weight:800;color:var(--accent-blue-bright)">'+esc(oddsStr||'—')+'</div></div>' +
-              '<div><div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px">Stake</div><div style="font-size:0.78rem;font-weight:800">'+fmt$(t.riskAmount)+'</div></div>' +
+              '<div><div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px">Stake</div><div style="font-size:0.78rem;font-weight:800;color:'+stakeColor+'">'+fmt$(t.riskAmount)+'</div></div>' +
               '<div><div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px">Placed</div><div style="font-size:0.68rem;font-weight:700;color:var(--light)">'+esc(dt||'—')+'</div></div>' +
             '</div>' +
             (canCancel ? '<button data-host-cashout="'+esc(t.id)+'" data-player-id="'+esc(t.playerId||'')+'" style="width:100%;margin-top:10px;padding:8px;background:transparent;border:1px solid rgba(22,119,255,0.4);border-radius:8px;color:var(--accent-blue-bright);font-size:0.7rem;font-weight:800;cursor:pointer;letter-spacing:0.3px">Offer Cash Out</button>' : '') +
