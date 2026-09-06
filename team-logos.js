@@ -2148,6 +2148,222 @@
       ' onerror="window.handleGolfPhotoError&&window.handleGolfPhotoError(this)">';
   }
 
+  // ── MMA fighter photos (verified ESPN IDs + search fallback) ───────────────
+  var _MMA_VERIFIED_IDS = {
+    'Jon Jones': '2335639',
+    'Islam Makhachev': '3332412',
+    'Alex Pereira': '4705658',
+    'Leon Edwards': '3152929',
+    'Dricus Du Plessis': '3166126',
+    "Sean O'Malley": '4205093',
+    'Ilia Topuria': '4350812',
+    'Tom Aspinall': '4010976',
+    'Arman Tsarukyan': '4419372',
+    'Charles Oliveira': '2504169',
+    'Dustin Poirier': '2506549',
+    'Justin Gaethje': '3022345',
+    'Conor McGregor': '3022677',
+    'Khamzat Chimaev': '4684751',
+    'Robert Whittaker': '3009717',
+    'Kamaru Usman': '3088812',
+    'Israel Adesanya': '4285679',
+    'Max Holloway': '2614933',
+    'Alexander Volkanovski': '3949584',
+    'Paddy Pimblett': '4008549',
+    'Sean Strickland': '3093653',
+    'Jiri Prochazka': '3156612',
+    'Jiří Procházka': '3156612',
+    'Jan Blachowicz': '2506250',
+    'Jan Błachowicz': '2506250',
+    'Magomed Ankalaev': '4273399',
+    'Jamahal Hill': '4425355',
+    'Sergei Pavlovich': '4217395',
+    'Ciryl Gane': '4426000',
+    'Stipe Miocic': '2504951',
+    'Francis Ngannou': '3933168',
+    'Curtis Blaydes': '3922557',
+    'Belal Muhammad': '3172112',
+    'Colby Covington': '3088810',
+    'Jorge Masvidal': '2500857',
+    'Nate Diaz': '2335679',
+    'Amanda Nunes': '2516131',
+    'Valentina Shevchenko': '2554705',
+    'Zhang Weili': '4350762',
+    'Rose Namajunas': '3032973',
+    'Julianna Pena': '2951361',
+    'Julianna Peña': '2951361'
+  };
+  var _mmaIdByNorm = {};
+  var _mmaMiss = {};
+  var _mmaPending = {};
+  Object.keys(_MMA_VERIFIED_IDS).forEach(function (n) {
+    var k = _normKey(n);
+    if (k) _mmaIdByNorm[k] = String(_MMA_VERIFIED_IDS[n]);
+  });
+
+  function _mmaEspnCache() {
+    if (!global._espnPlayerCache) global._espnPlayerCache = {};
+    return global._espnPlayerCache;
+  }
+
+  function _mmaCacheKey(name) {
+    return String(name || '').trim().toLowerCase() + '|mma';
+  }
+
+  function _mmaHeadshotUrl(id) {
+    return 'https://a.espncdn.com/i/headshots/mma/players/full/' + id + '.png';
+  }
+
+  function getMMAFighterPhoto(fighterName) {
+    var name = String(fighterName || '').trim();
+    if (!name) return '';
+    var cache = _mmaEspnCache();
+    var ck = _mmaCacheKey(name);
+    if (cache[ck] && cache[ck].headshotUrl) return cache[ck].headshotUrl;
+    if (cache[ck] && cache[ck].miss) return '';
+
+    if (typeof global.getPlayerHeadshotUrl === 'function') {
+      var verifiedUrl = global.getPlayerHeadshotUrl(name, 'mma');
+      if (verifiedUrl) {
+        cache[ck] = { headshotUrl: verifiedUrl, verified: true };
+        return verifiedUrl;
+      }
+    }
+    var k = _normKey(name);
+    var id = (k && _mmaIdByNorm[k]) || _MMA_VERIFIED_IDS[name] || '';
+    if (!id && typeof global.getVerifiedPlayerId === 'function') {
+      id = global.getVerifiedPlayerId(name, 'mma') || '';
+    }
+    if (!id) return '';
+    var url = _mmaHeadshotUrl(id);
+    cache[ck] = { id: String(id), headshotUrl: url, verified: true };
+    return url;
+  }
+
+  async function _fetchMMAFighterId(fighterName) {
+    var name = String(fighterName || '').trim();
+    var k = _normKey(name);
+    if (!k) return null;
+    if (_mmaIdByNorm[k]) return _mmaIdByNorm[k];
+    if (_mmaMiss[k]) return null;
+    if (_mmaPending[k]) return _mmaPending[k];
+
+    _mmaPending[k] = (async function () {
+      try {
+        var cache = _mmaEspnCache();
+        var ck = _mmaCacheKey(name);
+        if (cache[ck] && cache[ck].id) {
+          _mmaIdByNorm[k] = String(cache[ck].id);
+          return String(cache[ck].id);
+        }
+        if (typeof global.searchEspnPlayerId === 'function') {
+          var hit = await global.searchEspnPlayerId(name, 'mma', '');
+          if (hit && hit.id) {
+            _mmaIdByNorm[k] = String(hit.id);
+            cache[ck] = { id: String(hit.id), headshotUrl: _mmaHeadshotUrl(hit.id) };
+            return String(hit.id);
+          }
+        }
+        var queries = [
+          'https://site.web.api.espn.com/apis/common/v3/search?query=' +
+            encodeURIComponent(name + ' mma') + '&sport=mma&type=athlete&limit=3',
+          'https://site.web.api.espn.com/apis/common/v3/search?query=' +
+            encodeURIComponent(name) + '&type=player&limit=5',
+          'https://site.api.espn.com/apis/common/v3/search?query=' +
+            encodeURIComponent(name + ' mma') + '&sport=mma&type=athlete&limit=3'
+        ];
+        var want = k;
+        var pick = null;
+        for (var qi = 0; qi < queries.length && !pick; qi++) {
+          var res = await fetch(queries[qi], { cache: 'force-cache' });
+          if (!res.ok) continue;
+          var data = await res.json();
+          var items = (data && data.items) || [];
+          var exact = [];
+          for (var i = 0; i < items.length; i++) {
+            var it = items[i];
+            if (!it || !it.id) continue;
+            var sp = String(it.sport || '').toLowerCase();
+            if (sp && sp !== 'mma') continue;
+            var dn = _normKey(it.displayName || it.name || '');
+            if (dn === want) exact.push(it);
+          }
+          if (exact.length === 1) pick = exact[0];
+        }
+        if (!pick || !pick.id) {
+          _mmaMiss[k] = true;
+          cache[ck] = { miss: true };
+          return null;
+        }
+        _mmaIdByNorm[k] = String(pick.id);
+        cache[ck] = { id: String(pick.id), headshotUrl: _mmaHeadshotUrl(pick.id) };
+        if (pick.displayName) {
+          _mmaIdByNorm[_normKey(pick.displayName)] = String(pick.id);
+          cache[_mmaCacheKey(pick.displayName)] = cache[ck];
+        }
+        return String(pick.id);
+      } catch (_e) {
+        _mmaMiss[k] = true;
+        _mmaEspnCache()[_mmaCacheKey(name)] = { miss: true };
+        return null;
+      } finally {
+        delete _mmaPending[k];
+      }
+    })();
+    return _mmaPending[k];
+  }
+
+  function handleMMAPhotoError(img) {
+    if (!img) return;
+    if (typeof global.handlePlayerPhotoError === 'function' && img.getAttribute('data-player-sport')) {
+      return global.handlePlayerPhotoError(img);
+    }
+    var name = img.getAttribute('data-player-name') || img.alt || '';
+    var size = parseInt(img.getAttribute('data-logo-size') || '40', 10);
+    var className = img.getAttribute('data-logo-class') || '';
+    var k = _normKey(name);
+    if (k && _mmaIdByNorm[k]) {
+      _mmaMiss[k] = true;
+      delete _mmaIdByNorm[k];
+    }
+    var cache = _mmaEspnCache();
+    cache[_mmaCacheKey(name)] = { miss: true };
+    img.outerHTML = _initialsFallbackHtml(name, size, className);
+  }
+
+  function getMMAFighterPhotoImg(fighterName, size, className) {
+    size = size || 40;
+    var name = String(fighterName || '').trim();
+    var url = getMMAFighterPhoto(name);
+    if (typeof global.getPlayerPhotoImg === 'function') {
+      return global.getPlayerPhotoImg(name, 'mma', size, {
+        className: className || '',
+        borderRadius: '10px',
+        photoUrl: url || undefined
+      });
+    }
+    var cls = className ? ' class="' + esc(className) + '"' : '';
+    if (!url) {
+      return '<span data-mma-fighter="' + esc(name) + '" data-player-photo="' + esc(name) +
+        '" data-player-name="' + esc(name) + '" data-player-sport="mma" data-logo-size="' + size + '"' +
+        (className ? ' data-logo-class="' + esc(className) + '"' : '') + '>' +
+        _initialsFallbackHtml(name, size, className) + '</span>';
+    }
+    return '<img' + cls +
+      ' src="' + esc(url) + '"' +
+      ' alt="' + esc(name) + '"' +
+      ' width="' + size + '" height="' + size + '"' +
+      ' style="width:' + size + 'px;height:' + size + 'px;object-fit:cover;display:block;border-radius:10px"' +
+      ' referrerpolicy="no-referrer"' +
+      ' data-mma-fighter="' + esc(name) + '"' +
+      ' data-player-photo="' + esc(name) + '"' +
+      ' data-player-name="' + esc(name) + '"' +
+      ' data-player-sport="mma"' +
+      ' data-logo-size="' + size + '"' +
+      (className ? ' data-logo-class="' + esc(className) + '"' : '') +
+      ' onerror="window.handleMMAPhotoError&&window.handleMMAPhotoError(this)">';
+  }
+
   function _replacePlaceholderWithImg(el, imgHtml) {
     if (!el || !el.parentNode) return;
     var tmp = document.createElement('div');
@@ -2326,6 +2542,11 @@
       var n = el.getAttribute('data-golf-player') || el.getAttribute('data-player-name') || el.getAttribute('data-player-photo') || '';
       if (n) golfNames.push(n);
     });
+    var mmaNames = [];
+    mmaEls.forEach(function (el) {
+      var n = el.getAttribute('data-mma-fighter') || el.getAttribute('data-player-name') || el.getAttribute('data-player-photo') || '';
+      if (n) mmaNames.push(n);
+    });
     var ncaafNames = [];
     ncaafEls.forEach(function (el) {
       var n = el.getAttribute('data-ncaaf-team') || el.getAttribute('data-team-name') || '';
@@ -2359,6 +2580,7 @@
       runPool(soccerNames, _fetchSoccerTeamId, 6),
       runPool(tennisNames, _fetchTennisPlayerId, 6),
       runPool(golfNames, _fetchGolfPlayerId, 6),
+      runPool(mmaNames, _fetchMMAFighterId, 6),
       runPool(ncaafNames, searchNcaafTeamId, 6)
     ]);
 
@@ -2367,6 +2589,7 @@
     soccerEls = Array.prototype.slice.call(scope.querySelectorAll('[data-soccer-team]'));
     tennisEls = Array.prototype.slice.call(scope.querySelectorAll('[data-tennis-player],[data-player-photo][data-player-sport="tennis"]'));
     golfEls = Array.prototype.slice.call(scope.querySelectorAll('[data-golf-player],[data-player-photo][data-player-sport="golf"]'));
+    mmaEls = Array.prototype.slice.call(scope.querySelectorAll('[data-mma-fighter],[data-player-photo][data-player-sport="mma"]'));
     ncaafEls = Array.prototype.slice.call(scope.querySelectorAll('[data-ncaaf-team]'));
 
     soccerEls.forEach(function (el) {
@@ -2400,6 +2623,16 @@
       _replacePlaceholderWithImg(el, getGolfPlayerPhotoImg(name, size, className));
     });
 
+    mmaEls.forEach(function (el) {
+      var name = el.getAttribute('data-mma-fighter') || el.getAttribute('data-player-name') || el.getAttribute('data-player-photo') || '';
+      var size = parseInt(el.getAttribute('data-logo-size') || '40', 10);
+      var className = el.getAttribute('data-logo-class') || '';
+      var url = getMMAFighterPhoto(name);
+      if (el.tagName === 'IMG' && url && el.getAttribute('src') === url) return;
+      if (!url) return;
+      _replacePlaceholderWithImg(el, getMMAFighterPhotoImg(name, size, className));
+    });
+
     ncaafEls.forEach(function (el) {
       var name = el.getAttribute('data-ncaaf-team') || el.getAttribute('data-team-name') || '';
       var size = parseInt(el.getAttribute('data-logo-size') || '40', 10);
@@ -2431,6 +2664,9 @@
   global.getGolfPlayerPhoto = getGolfPlayerPhoto;
   global.getGolfPlayerPhotoImg = getGolfPlayerPhotoImg;
   global.handleGolfPhotoError = handleGolfPhotoError;
+  global.getMMAFighterPhoto = getMMAFighterPhoto;
+  global.getMMAFighterPhotoImg = getMMAFighterPhotoImg;
+  global.handleMMAPhotoError = handleMMAPhotoError;
   global.getCountryFlagUrl = getCountryFlagUrl;
   global.getCountryFlagCode = getCountryFlagCode;
   global.warmSoccerTeamsCache = warmSoccerTeamsCache;
