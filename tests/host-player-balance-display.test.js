@@ -95,6 +95,9 @@ test('index.html ships resolver and no longer coerces NaN avail to 0 in playerRo
   assert.ok(html.indexOf('_hostDbPlayersById[uname]') !== -1, 'username secondary lookup key');
   assert.ok(html.indexOf("Object.prototype.hasOwnProperty.call(dp, 'availableBalance')") !== -1,
     'null availableBalance overwrites stale local 0');
+  assert.ok(html.indexOf("if (!p || p.balanceSource) return p;") !== -1,
+    'unverified localStorage bankrolls stripped without balanceSource');
+  assert.ok(html.indexOf("url = API + url;") !== -1, '_pbFetch absolute /api base');
 });
 
 console.log('\n──────────────────────────────────────────────────────');
