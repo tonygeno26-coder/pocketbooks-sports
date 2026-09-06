@@ -1568,7 +1568,17 @@ function renderAdminCrypto() {
   </div>
 </div>
 
-<!-- APPROVE PLAYER MODAL (join request + limits) — opens immediately on Approve -->
+<div class="sec-hdr">
+  <span class="sec-title">Your Players</span>
+  <!-- "+ Add Player" button removed from Players-tab header per host UX cleanup.
+       Modal #modal-add, openAddPlayer(), addPlayer(), and addPlayerToG() are
+       intentionally retained so player creation can still be invoked elsewhere
+       (e.g. approve/invite flow). UI removal only — no functional change. -->
+</div>
+<div class="player-list" id="player-list"></div>
+</div><!-- /home-content -->
+
+<!-- APPROVE PLAYER MODAL — must live OUTSIDE #home-content (hidden on Players tab) -->
 <div id="modal-approve-player" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:320;align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeApprovePlayerModal()">
   <div style="background:#101A2E;border:1px solid #1D2B42;border-radius:20px 20px 0 0;width:100%;max-width:430px;padding:24px;padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 40px rgba(0,0,0,0.55)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -1610,16 +1620,6 @@ function renderAdminCrypto() {
     </div>
   </div>
 </div>
-
-<div class="sec-hdr">
-  <span class="sec-title">Your Players</span>
-  <!-- "+ Add Player" button removed from Players-tab header per host UX cleanup.
-       Modal #modal-add, openAddPlayer(), addPlayer(), and addPlayerToG() are
-       intentionally retained so player creation can still be invoked elsewhere
-       (e.g. approve/invite flow). UI removal only — no functional change. -->
-</div>
-<div class="player-list" id="player-list"></div>
-</div><!-- /home-content -->
 
 <!-- ADD PLAYER MODAL -->
 <div id="modal-add" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:200;align-items:flex-end;justify-content:center">
@@ -3926,7 +3926,24 @@ function getAvailCredit(pid){
 }
 
 function approveRequest(req){
+  console.log('[approve] click fired — opening limit modal', req && (req.playerName || req.playerId || req));
   openApprovePlayerModal(req);
+}
+
+/** Approve button click handler — parses data-req and opens limit modal. */
+function onApproveButtonClick(btn, ev){
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  console.log('[approve] button click fired — opening limit modal');
+  if (!btn || !btn.dataset || !btn.dataset.req) {
+    console.warn('[approve] missing data-req on button');
+    return;
+  }
+  try {
+    var req = JSON.parse(decodeURIComponent(btn.dataset.req));
+    openApprovePlayerModal(req);
+  } catch (e) {
+    console.error('[approve] failed to parse request payload', e);
+  }
 }
 
 var _pendingApproveReq = null;
@@ -3934,6 +3951,7 @@ var pendingRequests = [];
 var editingLimitsFor = null;
 
 function openApprovePlayerModal(req){
+  console.log('[approve] openApprovePlayerModal — showing limit modal', req && (req.playerName || req.playerId || req));
   if (!req) return;
   _pendingApproveReq = req;
   var name = req.playerName || req.username || req.name || 'Player';
@@ -3956,7 +3974,16 @@ function openApprovePlayerModal(req){
   if (mp) mp.value = '';
   if (mo) mo.value = '';
   var modal = document.getElementById('modal-approve-player');
-  if (modal) modal.style.display = 'flex';
+  if (modal) {
+    // Keep modal on <body> so it is not trapped under a display:none section
+    // (e.g. #home-content is hidden while Players / Applicants is active).
+    if (modal.parentElement !== document.body) {
+      document.body.appendChild(modal);
+    }
+    modal.style.display = 'flex';
+  } else {
+    console.error('[approve] #modal-approve-player missing from DOM');
+  }
 }
 
 function closeApprovePlayerModal(){
@@ -4181,7 +4208,7 @@ async function loadRequests(){
             +'<div><div style="font-size:0.9rem;font-weight:800">'+(r.playerName||'Player')+'</div>'
             +'<div style="font-size:0.7rem;color:var(--gray);margin-top:2px">'+(r.email?r.email+' · ':'')+'Wants to join</div></div>'
             +'<div style="display:flex;gap:8px">'
-            +'<button data-req="'+encodeURIComponent(JSON.stringify(r))+'" onclick="openApprovePlayerModal(JSON.parse(decodeURIComponent(this.dataset.req)))" style="padding:7px 14px;background:rgba(0,255,136,0.15);border:1px solid var(--green);color:var(--green);border-radius:8px;font-size:0.75rem;font-weight:800;cursor:pointer">Approve</button>'
+            +'<button data-req="'+encodeURIComponent(JSON.stringify(r))+'" onclick="onApproveButtonClick(this,event)" style="padding:7px 14px;background:rgba(0,255,136,0.15);border:1px solid var(--green);color:var(--green);border-radius:8px;font-size:0.75rem;font-weight:800;cursor:pointer">Approve</button>'
             +'<button data-pid="'+r.playerId+'" onclick="declineRequest(this.dataset.pid);loadRequests()" style="padding:7px 14px;background:rgba(255,61,87,0.1);border:1px solid var(--red);color:var(--red);border-radius:8px;font-size:0.75rem;font-weight:800;cursor:pointer">Deny</button>'
             +'</div></div>';
         }).join('');
@@ -4426,7 +4453,7 @@ function renderPlayersTab(){
       +'</div>'
       +'<div style="display:flex;gap:6px">'
         +'<button data-pid="'+r.playerId+'" onclick="event.stopPropagation();declineRequest(this.dataset.pid)" style="padding:6px 10px;background:rgba(255,61,87,0.1);border:1px solid rgba(255,61,87,0.3);border-radius:8px;color:#ff3d57;font-size:0.72rem;font-weight:700;cursor:pointer">✕</button>'
-        +'<button data-req="'+encodeURIComponent(JSON.stringify(r))+'" onclick="event.stopPropagation();openApprovePlayerModal(JSON.parse(decodeURIComponent(this.dataset.req)))" style="padding:6px 12px;background:var(--accent-blue);border:none;border-radius:8px;color:#041018;font-size:0.72rem;font-weight:900;cursor:pointer">✓ Approve</button>'
+        +'<button data-req="'+encodeURIComponent(JSON.stringify(r))+'" onclick="onApproveButtonClick(this,event)" style="padding:6px 12px;background:var(--accent-blue);border:none;border-radius:8px;color:#041018;font-size:0.72rem;font-weight:900;cursor:pointer">✓ Approve</button>'
       +'</div>'
     +'</div>';
   }
