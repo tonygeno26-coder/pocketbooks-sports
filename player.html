@@ -2243,7 +2243,7 @@ function showPlayerSettings() {
         '<div style="display:flex;gap:8px">' + chip('theme','dark','🌑 Dark', s.theme) + chip('theme','light','☀️ Light', s.theme) + '</div>' +
       '</div>' +
       // Currency
-      '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px">' +
+      '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;margin-bottom:12px">' +
         '<div style="font-size:0.62rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Display Currency</div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">' +
           ['USD','EUR','GBP','CAD','AUD','MXN'].map(function(c){
@@ -2251,6 +2251,13 @@ function showPlayerSettings() {
           }).join('') +
         '</div>' +
         '<div style="font-size:0.62rem;color:#666;margin-top:8px">Bets/balances stored in USD. Display only.</div>' +
+      '</div>' +
+      // Telegram
+      '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px" id="ps-telegram-box">' +
+        '<div style="font-size:0.62rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Telegram</div>' +
+        '<div id="ps-telegram-status" style="font-size:0.82rem;color:#aaa;margin-bottom:10px">Checking link status…</div>' +
+        '<button type="button" id="ps-telegram-link" style="width:100%;padding:12px;background:#1c1c1c;border:1px solid #00c2ff;color:#00c2ff;border-radius:10px;font-size:0.85rem;font-weight:800;cursor:pointer">Link Telegram</button>' +
+        '<div id="ps-telegram-help" style="font-size:0.62rem;color:#666;margin-top:8px;line-height:1.45">Message <b style="color:#bbb">@pocketbookssports_bot</b> on Telegram, then send <b style="color:#bbb">/start YourUsername</b> to get survivor pick reminders and results.</div>' +
       '</div>' +
     '</div>' +
     '<div style="padding:12px 16px 18px;border-top:1px solid #252525">' +
@@ -2268,6 +2275,74 @@ function showPlayerSettings() {
   Array.prototype.forEach.call(ov.querySelectorAll('[data-pset-currency]'), function(b){
     b.addEventListener('click', function() { s.currency = b.dataset.psetCurrency; savePlayerSettings(s); showPlayerSettings(); });
   });
+  (function wireTelegramLink() {
+    var statusEl = ov.querySelector('#ps-telegram-status');
+    var btn = ov.querySelector('#ps-telegram-link');
+    var helpEl = ov.querySelector('#ps-telegram-help');
+    function setLinked() {
+      if (statusEl) {
+        statusEl.textContent = 'Telegram linked ✅';
+        statusEl.style.color = '#22c55e';
+        statusEl.style.fontWeight = '800';
+      }
+      if (btn) {
+        btn.textContent = 'Telegram linked ✅';
+        btn.disabled = true;
+        btn.style.opacity = '0.85';
+        btn.style.borderColor = '#22c55e';
+        btn.style.color = '#22c55e';
+        btn.style.cursor = 'default';
+      }
+      if (helpEl) helpEl.textContent = 'You will receive survivor pick reminders and results in Telegram.';
+    }
+    function setUnlinked(info) {
+      var code = (info && info.startCommand) || '/start YourUsername';
+      if (statusEl) {
+        statusEl.textContent = 'Not linked yet';
+        statusEl.style.color = '#aaa';
+        statusEl.style.fontWeight = '400';
+      }
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Link Telegram';
+        btn.style.opacity = '1';
+        btn.style.borderColor = '#00c2ff';
+        btn.style.color = '#00c2ff';
+        btn.style.cursor = 'pointer';
+      }
+      if (helpEl) {
+        helpEl.innerHTML = '1. Open Telegram and message <b style="color:#bbb">@pocketbookssports_bot</b><br>2. Send <b style="color:#bbb">' +
+          String(code).replace(/</g,'&lt;') + '</b> (or /start YourUsername)<br>3. Return here — status updates to Telegram linked ✅';
+      }
+    }
+    async function refreshTelegramStatus() {
+      try {
+        var data = await api('GET', '/api/survivor/telegram/link-status');
+        if (data && data.ok && data.linked) setLinked();
+        else setUnlinked(data || {});
+      } catch (_e) {
+        if (statusEl) statusEl.textContent = 'Could not check Telegram status';
+        setUnlinked({});
+      }
+    }
+    if (btn) {
+      btn.addEventListener('click', function() {
+        if (btn.disabled) return;
+        var uname = '';
+        try {
+          var pl = JSON.parse(localStorage.getItem('pb-player') || '{}') || {};
+          uname = pl.username || pl.displayName || pl.name || '';
+        } catch (_e) {}
+        var deep = 'https://t.me/pocketbookssports_bot' + (uname ? ('?start=' + encodeURIComponent(uname)) : '');
+        try { window.open(deep, '_blank', 'noopener'); } catch (_e2) {}
+        if (typeof showToast === 'function') {
+          showToast('Open @pocketbookssports_bot and send /start' + (uname ? (' ' + uname) : ' YourUsername'), 'info');
+        }
+        setTimeout(refreshTelegramStatus, 2500);
+      });
+    }
+    refreshTelegramStatus();
+  })();
   ov.querySelector('#ps-save').addEventListener('click', function() {
     var sigEl = ov.querySelector('#ps-signal');
     if (sigEl) s.signalContact = sigEl.value.trim();
