@@ -323,7 +323,7 @@ test('applyHostDashboardPlayers caches club roster', function() {
 
 test('getAvailCredit and getOpenRisk prefer dashboard player rows', function() {
   assert(hostHtml.indexOf('_hostDbPlayersById[String(pid)]') !== -1, 'credit helpers look up DB player');
-  assert(hostHtml.indexOf('dbp.availableBalance') !== -1, 'availableBalance from DB preferred');
+  assert(hostHtml.indexOf('_resolveHostPlayerBalance') !== -1, 'availableBalance resolved via shared helper');
   assert(hostHtml.indexOf('dbp.openRisk') !== -1, 'openRisk from DB preferred');
 });
 

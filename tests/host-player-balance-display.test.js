@@ -92,6 +92,9 @@ test('index.html ships resolver and no longer coerces NaN avail to 0 in playerRo
   assert.ok(html.indexOf('_resolveHostPlayerBalance(p, dbp)') !== -1, 'playerRow uses resolver');
   assert.ok(html.indexOf('if (isNaN(avail)) avail = 0;') === -1, 'no NaN→0 coerce');
   assert.ok(html.indexOf('_fmtHostPlayerBalance(avail)') !== -1, 'playerRow uses formatter');
+  assert.ok(html.indexOf('_hostDbPlayersById[uname]') !== -1, 'username secondary lookup key');
+  assert.ok(html.indexOf("Object.prototype.hasOwnProperty.call(dp, 'availableBalance')") !== -1,
+    'null availableBalance overwrites stale local 0');
 });
 
 console.log('\n──────────────────────────────────────────────────────');

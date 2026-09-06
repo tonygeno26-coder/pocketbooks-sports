@@ -3145,6 +3145,10 @@ function _applyHostDashboardPlayers(players) {
     if (!p) return;
     var pid = p.playerId || p.player_id;
     if (pid != null) _hostDbPlayersById[String(pid)] = p;
+    // Secondary key by username so local roster rows that still use a name/id
+    // alias can resolve the same bankroll (prevents false $0.00 for 3/4 players).
+    var uname = (p.username || p.playerName || '').toString().trim().toLowerCase();
+    if (uname && uname !== String(pid).toLowerCase()) _hostDbPlayersById[uname] = p;
   });
   // Cache roster so other host UI (profiles, limits) sees DB members even
   // before the next render. Merge by playerId; never drop extra local rows.
@@ -3158,16 +3162,23 @@ function _applyHostDashboardPlayers(players) {
       var pid = String(dp.playerId || dp.player_id || '');
       if (!pid || pid === 'unknown') return;
       var prev = byId[pid] || {};
+      // Always prefer API fields when present — including explicit null — so a
+      // stale local balance:0 cannot stick after a successful dashboard fetch.
       byId[pid] = Object.assign({}, prev, {
         playerId: pid,
         playerName: dp.username || dp.playerName || prev.playerName || pid,
         status: prev.status || 'approved',
         realName: prev.realName || ((dp.playerName && dp.playerName !== dp.username) ? dp.playerName : ''),
-        availableBalance: dp.availableBalance != null ? dp.availableBalance : prev.availableBalance,
-        currentBalance: dp.currentBalance != null ? dp.currentBalance
-          : (dp.availableBalance != null ? dp.availableBalance : prev.currentBalance),
-        balance: dp.balance != null ? dp.balance
-          : (dp.availableBalance != null ? dp.availableBalance : prev.balance),
+        availableBalance: Object.prototype.hasOwnProperty.call(dp, 'availableBalance')
+          ? dp.availableBalance : prev.availableBalance,
+        currentBalance: Object.prototype.hasOwnProperty.call(dp, 'currentBalance')
+          ? dp.currentBalance
+          : (Object.prototype.hasOwnProperty.call(dp, 'availableBalance')
+            ? dp.availableBalance : prev.currentBalance),
+        balance: Object.prototype.hasOwnProperty.call(dp, 'balance')
+          ? dp.balance
+          : (Object.prototype.hasOwnProperty.call(dp, 'availableBalance')
+            ? dp.availableBalance : prev.balance),
         openRisk: dp.openRisk != null ? dp.openRisk : prev.openRisk,
         activeBetCount: dp.activeBetCount != null ? dp.activeBetCount : prev.activeBetCount,
         balanceSource: dp.balanceSource || prev.balanceSource || null
@@ -4300,6 +4311,10 @@ function renderPlayersTab(){
   }
   function playerRow(p){
     var dbp = (_hostDbPlayersById && _hostDbPlayersById[String(p.playerId)]) || null;
+    if (!dbp && _hostDbPlayersById) {
+      var alias = (p.username || p.playerName || '').toString().trim().toLowerCase();
+      if (alias) dbp = _hostDbPlayersById[alias] || null;
+    }
     var uname = (dbp && dbp.username) ? dbp.username : (p.username || p.playerName || p.playerId);
     // Authoritative bankroll — never creditLimit, never fake $0 for missing data.
     var avail = _resolveHostPlayerBalance(p, dbp);
