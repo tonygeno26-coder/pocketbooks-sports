@@ -1568,40 +1568,45 @@ function renderAdminCrypto() {
   </div>
 </div>
 
-<!-- APPROVE PLAYER MODAL (join request + limits) -->
+<!-- APPROVE PLAYER MODAL (join request + limits) — opens immediately on Approve -->
 <div id="modal-approve-player" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:320;align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeApprovePlayerModal()">
-  <div style="background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:430px;padding:24px;padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+  <div style="background:#101A2E;border:1px solid #1D2B42;border-radius:20px 20px 0 0;width:100%;max-width:430px;padding:24px;padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 40px rgba(0,0,0,0.55)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <span style="font-size:1.1rem;font-weight:900">Approve Player</span>
       <button onclick="closeApprovePlayerModal()" style="background:none;border:none;color:var(--gray);font-size:1.3rem;cursor:pointer">✕</button>
     </div>
-    <div id="appr-username" style="font-size:0.9rem;font-weight:800;color:var(--cyan);margin-bottom:4px"></div>
-    <div style="font-size:0.72rem;color:var(--gray);margin-bottom:16px">Set starting credit and risk limits, then approve or deny.</div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <div id="appr-avatar" style="width:44px;height:44px;border-radius:50%;background:rgba(22,119,255,0.18);border:1px solid #1D2B42;color:#2F8CFF;display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:900;flex-shrink:0"></div>
+      <div>
+        <div id="appr-username" style="font-size:0.95rem;font-weight:900;color:var(--white)"></div>
+        <div style="font-size:0.68rem;color:var(--gray);margin-top:2px">Set starting credit and risk limits</div>
+      </div>
+    </div>
     <div style="margin-bottom:12px">
       <div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Starting Balance / Credit</div>
-      <input id="appr-balance" type="number" placeholder="1000" value="1000" style="width:100%;padding:12px 14px;background:var(--card2);border:1.5px solid var(--border);border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
+      <input id="appr-balance" type="number" placeholder="1000" value="1000" style="width:100%;padding:12px 14px;background:#0A1120;border:1.5px solid #1D2B42;border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div>
         <div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Max Bet</div>
-        <input id="appr-maxbet" type="number" placeholder="100" value="100" style="width:100%;padding:12px 14px;background:var(--card2);border:1.5px solid var(--border);border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
+        <input id="appr-maxbet" type="number" placeholder="No limit" value="" style="width:100%;padding:12px 14px;background:#0A1120;border:1.5px solid #1D2B42;border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
       </div>
       <div>
         <div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Max Daily Risk</div>
-        <input id="appr-daily" type="number" placeholder="500" value="500" style="width:100%;padding:12px 14px;background:var(--card2);border:1.5px solid var(--border);border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
+        <input id="appr-daily" type="number" placeholder="No limit" value="" style="width:100%;padding:12px 14px;background:#0A1120;border:1.5px solid #1D2B42;border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
       </div>
       <div>
         <div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Max Payout</div>
-        <input id="appr-payout" type="number" placeholder="2000" value="2000" style="width:100%;padding:12px 14px;background:var(--card2);border:1.5px solid var(--border);border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
+        <input id="appr-payout" type="number" placeholder="No limit" value="" style="width:100%;padding:12px 14px;background:#0A1120;border:1.5px solid #1D2B42;border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
       </div>
       <div>
         <div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Max Open Risk</div>
-        <input id="appr-openrisk" type="number" placeholder="optional" style="width:100%;padding:12px 14px;background:var(--card2);border:1.5px solid var(--border);border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
+        <input id="appr-openrisk" type="number" placeholder="No limit" value="" style="width:100%;padding:12px 14px;background:#0A1120;border:1.5px solid #1D2B42;border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
       </div>
     </div>
     <div style="display:flex;gap:10px;margin-top:8px">
-      <button onclick="denyApprovePlayerModal()" style="flex:1;padding:14px;background:transparent;color:var(--red);border:1.5px solid rgba(255,61,87,0.45);border-radius:12px;font-size:0.9rem;font-weight:900;cursor:pointer">Deny</button>
-      <button onclick="confirmApprovePlayerModal()" style="flex:2;padding:14px;background:var(--green);color:#000;border:none;border-radius:12px;font-size:0.95rem;font-weight:900;cursor:pointer">Approve →</button>
+      <button onclick="denyApprovePlayerModal()" style="flex:1;padding:14px;background:transparent;color:var(--red);border:1.5px solid rgba(255,61,87,0.55);border-radius:12px;font-size:0.9rem;font-weight:900;cursor:pointer">Deny</button>
+      <button onclick="confirmApprovePlayerModal()" style="flex:2;padding:14px;background:var(--accent-blue);color:#041018;border:none;border-radius:12px;font-size:0.95rem;font-weight:900;cursor:pointer;box-shadow:0 0 14px var(--accent-glow)">Approve Player</button>
     </div>
   </div>
 </div>
@@ -3934,15 +3939,21 @@ function openApprovePlayerModal(req){
   var name = req.playerName || req.username || req.name || 'Player';
   var el = document.getElementById('appr-username');
   if (el) el.textContent = name;
+  var av = document.getElementById('appr-avatar');
+  if (av) {
+    var abbr = String(name || '?').replace(/[^a-zA-Z0-9]/g,'').slice(0,2).toUpperCase() || '?';
+    av.textContent = abbr;
+  }
   var bal = document.getElementById('appr-balance');
   var mb = document.getElementById('appr-maxbet');
   var md = document.getElementById('appr-daily');
   var mp = document.getElementById('appr-payout');
   var mo = document.getElementById('appr-openrisk');
   if (bal) bal.value = '1000';
-  if (mb) mb.value = '100';
-  if (md) md.value = '500';
-  if (mp) mp.value = '2000';
+  // Blank limit fields = no limit (only starting balance defaults)
+  if (mb) mb.value = '';
+  if (md) md.value = '';
+  if (mp) mp.value = '';
   if (mo) mo.value = '';
   var modal = document.getElementById('modal-approve-player');
   if (modal) modal.style.display = 'flex';
@@ -3972,6 +3983,15 @@ function _notifyPlayerApproved(playerId, clubName, limits){
   } catch(_e){}
 }
 
+function _parseApproveLimitInput(elId){
+  var el = document.getElementById(elId);
+  if (!el) return null;
+  var raw = String(el.value == null ? '' : el.value).trim();
+  if (raw === '') return null; // blank = no limit
+  var n = parseFloat(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
 async function confirmApprovePlayerModal(){
   var req = _pendingApproveReq;
   if (!req) return;
@@ -3981,13 +4001,16 @@ async function confirmApprovePlayerModal(){
   var memberId = req.membershipId || req.memberId || req.id || null;
   var balance = parseFloat(document.getElementById('appr-balance').value);
   if (!Number.isFinite(balance)) balance = 1000;
-  var max_bet = parseFloat(document.getElementById('appr-maxbet').value)||100;
-  var max_daily_risk = parseFloat(document.getElementById('appr-daily').value)||500;
-  var max_payout = parseFloat(document.getElementById('appr-payout').value)||2000;
-  var openRaw = document.getElementById('appr-openrisk').value;
-  var max_open_risk = openRaw === '' ? null : parseFloat(openRaw);
-  var limitsPayload = { max_bet:max_bet, max_daily_risk:max_daily_risk, max_payout:max_payout };
-  if (Number.isFinite(max_open_risk)) limitsPayload.max_open_risk = max_open_risk;
+  var max_bet = _parseApproveLimitInput('appr-maxbet');
+  var max_daily_risk = _parseApproveLimitInput('appr-daily');
+  var max_payout = _parseApproveLimitInput('appr-payout');
+  var max_open_risk = _parseApproveLimitInput('appr-openrisk');
+  // Only send limit fields the host filled; blank = no limit (API applies its own defaults if omitted)
+  var limitsPayload = {};
+  if (max_bet != null) limitsPayload.max_bet = max_bet;
+  if (max_daily_risk != null) limitsPayload.max_daily_risk = max_daily_risk;
+  if (max_payout != null) limitsPayload.max_payout = max_payout;
+  if (max_open_risk != null) limitsPayload.max_open_risk = max_open_risk;
 
   var apiOk = false;
   if (TOKEN && clubId && pid) {
@@ -3997,6 +4020,7 @@ async function confirmApprovePlayerModal(){
         targetActorId: String(pid),
         playerId: String(pid),
         balanceStart: balance,
+        starting_balance: balance,
         credit_limit: balance
       }, limitsPayload);
       var r = await apiCall('POST', '/api/club/members/approve', body);
@@ -4010,7 +4034,7 @@ async function confirmApprovePlayerModal(){
         apiOk = true;
       } catch(_e2) {}
     }
-    if (apiOk) {
+    if (apiOk && Object.keys(limitsPayload).length) {
       try {
         await apiCall('POST', '/api/club/player-limits', Object.assign({
           clubId:clubId, playerId:String(pid)
@@ -4037,10 +4061,14 @@ async function confirmApprovePlayerModal(){
   }
   var lim = getHostPlayerLimits(pid);
   lim.creditLimit = balance;
-  lim.maxBet = max_bet;
-  lim.maxDailyRisk = max_daily_risk;
-  lim.maxPayout = max_payout;
-  if (Number.isFinite(max_open_risk)) lim.maxOpenRisk = max_open_risk;
+  if (max_bet != null) lim.maxBet = max_bet;
+  else delete lim.maxBet;
+  if (max_daily_risk != null) lim.maxDailyRisk = max_daily_risk;
+  else delete lim.maxDailyRisk;
+  if (max_payout != null) lim.maxPayout = max_payout;
+  else delete lim.maxPayout;
+  if (max_open_risk != null) lim.maxOpenRisk = max_open_risk;
+  else delete lim.maxOpenRisk;
   saveHostPlayerLimits(pid, lim);
   if (balance > 0) {
     try { localStorage.setItem('pb-balance-start:'+pid, String(balance)); } catch(_e){}
@@ -4053,7 +4081,7 @@ async function confirmApprovePlayerModal(){
   closeApprovePlayerModal();
   _updateReqBadge();
   renderPlayersTab();
-  showToastHost('Approved: '+pname+' · Credit: $'+balance+(apiOk?'':' (local)'));
+  showToastHost('✅ '+pname+' approved with $'+balance+' starting balance'+(apiOk?'':' (local)'));
 }
 
 async function denyApprovePlayerModal(){
