@@ -2425,12 +2425,15 @@ function _pbAvatarSportKey(sport) {
 function _pbPlayerHeadshotImg(name, sport, size) {
   size = size || 52;
   // Sport-specific helpers first so verified maps in team-logos.js are used
-  // (getPlayerPhotoImg alone misses golf IDs that live outside player-photos.js).
+  // (getPlayerPhotoImg alone misses golf/MMA IDs that live outside player-photos.js).
   if (sport === 'tennis' && typeof getTennisPlayerPhotoImg === 'function') {
     return getTennisPlayerPhotoImg(name, size);
   }
   if (sport === 'golf' && typeof getGolfPlayerPhotoImg === 'function') {
     return getGolfPlayerPhotoImg(name, size);
+  }
+  if (sport === 'mma' && typeof getMMAFighterPhotoImg === 'function') {
+    return getMMAFighterPhotoImg(name, size);
   }
   if (typeof getPlayerPhotoImg === 'function') {
     return getPlayerPhotoImg(name, sport, size, { borderRadius: '10px' });
@@ -2448,6 +2451,10 @@ function teamAvatar(name, sport, opts) {
     if (kind === 'golf' && typeof getGolfPlayerPhotoImg === 'function') {
       var golfShot = getGolfPlayerPhotoImg(name, 52);
       if (golfShot) return '<div class="mc-jersey mc-jersey-headshot">' + golfShot + '</div>';
+    }
+    if (kind === 'mma' && typeof getMMAFighterPhotoImg === 'function') {
+      var mmaShot = getMMAFighterPhotoImg(name, 52);
+      if (mmaShot) return '<div class="mc-jersey mc-jersey-headshot">' + mmaShot + '</div>';
     }
   }
   if (kind === 'soccer' && opts.logoUrl) {
