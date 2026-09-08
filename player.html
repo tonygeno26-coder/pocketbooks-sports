@@ -1856,8 +1856,8 @@ function _showSessionExpiredModal(result) {
 })();
 // ══════════════════════════════════════════════════════════════════════════════
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'golf-lobby';
-window.PBS_BUILD_DATE = '2026-09-05T20:00:00.000Z';
+window.PBS_BUILD_SHA = 'eb0ddc9';
+window.PBS_BUILD_DATE = '2026-09-08T22:11:45.112Z';
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 try { window.API = API; } catch (_eApi) {}
 // ESPN league logos for sport grid (verified working CDN paths; ncaa/soccer/atp/pga/boxing/rugby preferred slugs 404)
@@ -1900,10 +1900,13 @@ function _clearAuthLocalStorage() {
   try { _AUTH_STORAGE_KEYS.forEach(function(k){ localStorage.removeItem(k); }); } catch(_e) {}
   TOKEN = '';
 }
+function _isTestUserPreview() {
+  return !!(_pDev && _pp.get('testUser'));
+}
 function _authRedirectToLogin(msg) {
   if (_authGiveUp) return;
-  // testUser tiles install session async — don't redirect on stale/mock token mid-install
-  if (_devSessionInstalling && _pDev && _pp.get('testUser')) return;
+  // testUser preview: dev.html owns sign-in; never wipe shared localStorage from iframe
+  if (_isTestUserPreview()) return;
   _authGiveUp = true;
   _clearAuthLocalStorage();
   window.location.href = 'lobby.html?screen=signin&msg=' + encodeURIComponent(msg || 'Your session expired — please sign in again');
@@ -1919,7 +1922,7 @@ function _authCanAttempt() {
 }
 function _authHandleResponse(status, data) {
   if (status === 401 || status === 403) {
-    _authRedirectToLogin('Session invalid — please sign in again');
+    if (!_isTestUserPreview()) _authRedirectToLogin('Session invalid — please sign in again');
     return 'fatal';
   }
   if (status === 429) {
@@ -1971,13 +1974,54 @@ var _TEST_USER_CONFIGS = {
   '2': { pid:'12bb68f1-bcca-4e63-8ae4-7065dbb19172', name:'TestRR',      email:'testplayer2@pocketbooks.local' },
   '3': { pid:'bc767309-6fc7-4585-9077-3de7b898df13', name:'TestEdge',    email:'testplayer3@pocketbooks.local' }
 };
+function _tokenMatchesTestUser(token, tc, clubId) {
+  if (!token || !tc || !tc.pid) return false;
+  if (String(token).indexOf('.dev-bypass-sig') !== -1) return false;
+  var payload = _decodeJwtPayload(token);
+  if (!payload) return false;
+  var expMs = payload.exp ? payload.exp * 1000 : 0;
+  if (expMs && expMs <= Date.now() + _TOKEN_SKEW_MS) return false;
+  var actorOk = String(payload.actorId || payload.sub || '') === String(tc.pid);
+  var clubOk = !clubId || String(payload.clubId || '') === String(clubId);
+  return actorOk && clubOk;
+}
+function _seedTestUserLocalState(_tu, _tc, _devCid, _role) {
+  _role = _role || 'player';
+  try { localStorage.setItem('pb-test-user', _tu); } catch (_e) {}
+  if (_tc.email) {
+    try { localStorage.setItem('pb-player-email', _tc.email); } catch (_e) {}
+  }
+  localStorage.setItem('pb-actor-role', _role);
+  localStorage.setItem('pb-player', JSON.stringify({
+    id: _tc.pid, username: _tc.pid, name: _tc.name, role: _role, email: _tc.email
+  }));
+  localStorage.setItem('pb-club', JSON.stringify({
+    id: _devCid, clubId: _devCid, name: 'Dev Club', role: _role, balance: 1000
+  }));
+  localStorage.setItem('pb-active-club', JSON.stringify({
+    id: _devCid, clubId: _devCid, name: 'Dev Club', role: _role
+  }));
+  localStorage.setItem('pb-balance-start', '1000');
+  localStorage.setItem('pb-balance-start:' + _tc.pid, '1000');
+  try { localStorage.removeItem('pb-host'); } catch (_e) {}
+}
 async function _installDevSession() {
   _devSessionInstalling = true;
   var _tu     = _pp.get('testUser');
   var _tc     = _TEST_USER_CONFIGS[_tu] || {};
   var _devCid = REAL_CLUB_ID;
 
-  // Drop stale host/mock tokens so boot hooks cannot 401 before real token arrives.
+  // Reuse token dev.html already minted (same-origin iframe shares localStorage).
+  var _existing = localStorage.getItem('pb-sports-token') || localStorage.getItem('pb-session-token') || '';
+  if (_existing && _tokenMatchesTestUser(_existing, _tc, _devCid)) {
+    TOKEN = _existing;
+    _storeAuthToken(_existing);
+    _seedTestUserLocalState(_tu, _tc, _devCid, localStorage.getItem('pb-actor-role') || 'player');
+    _devSessionInstalling = false;
+    return;
+  }
+
+  // Drop stale host/mock tokens before re-minting for this test user.
   try {
     localStorage.removeItem('pb-sports-token');
     localStorage.removeItem('pb-session-token');
@@ -2000,22 +2044,7 @@ async function _installDevSession() {
         var _role = _data.role || 'player';
         TOKEN = _data.token;
         _storeAuthToken(_data.token, _data.expiresIn);
-        try { localStorage.setItem('pb-test-user', _tu); } catch (_e) {}
-        if (_tc.email) {
-          try { localStorage.setItem('pb-player-email', _tc.email); } catch (_e) {}
-        }
-        localStorage.setItem('pb-actor-role', _role);
-        localStorage.setItem('pb-player', JSON.stringify({
-          id: _tc.pid, username: _tc.pid, name: _tc.name, role: _role, email: _tc.email
-        }));
-        localStorage.setItem('pb-club', JSON.stringify({
-          id: _devCid, clubId: _devCid, name: 'Dev Club', role: _role, balance: 1000
-        }));
-        localStorage.setItem('pb-active-club', JSON.stringify({
-          id: _devCid, clubId: _devCid, name: 'Dev Club', role: _role
-        }));
-        localStorage.setItem('pb-balance-start', '1000');
-        localStorage.setItem('pb-balance-start:' + _tc.pid, '1000');
+        _seedTestUserLocalState(_tu, _tc, _devCid, _role);
         _devSessionInstalling = false;
         return;
       }
@@ -2077,6 +2106,13 @@ function _storedActorClub() {
   var clubId = club && (club.id != null ? String(club.id) : (club.clubId || ''));
   if (actorId && clubId) return { actorId: actorId, clubId: clubId };
   return null;
+}
+function _absApiUrl(url) {
+  var s = String(url || '');
+  if (/^https?:\/\//i.test(s)) return s;
+  var base = (typeof API !== 'undefined' && API) || window._PBS_BACKEND || 'https://pocketbooks-sports-backend-production.up.railway.app';
+  if (s.charAt(0) !== '/') s = '/' + s;
+  return base + s;
 }
 function _pathFromUrl(url) {
   try {
@@ -10802,15 +10838,17 @@ async function _pollPlayerDashboardForGrades() {
 (function _startPlayerGradePoll() {
   if (_pbGradePollTimer) return;
   _pbGradePollTimer = setInterval(_pollPlayerDashboardForGrades, 60000);
-  // Seed previous-active map shortly after load without toasting history
-  setTimeout(function() {
-    loadPlayerDashboardFromDb().then(function(data) {
-      if (!data || !data.ok || !data.tickets) return;
-      var m = {};
-      (data.tickets.active || []).forEach(function(t){ if (t && t.id) m[t.id] = true; });
-      _pbGradePollPrevActive = m;
-    }).catch(function(){});
-  }, 4000);
+  // Seed previous-active map after dev session is ready (avoid 401 during token install)
+  _devSessionReady.then(function() {
+    return new Promise(function(r){ setTimeout(r, 4000); });
+  }).then(function() {
+    return loadPlayerDashboardFromDb();
+  }).then(function(data) {
+    if (!data || !data.ok || !data.tickets) return;
+    var m = {};
+    (data.tickets.active || []).forEach(function(t){ if (t && t.id) m[t.id] = true; });
+    _pbGradePollPrevActive = m;
+  }).catch(function(){});
   document.addEventListener('visibilitychange', function() {
     if (!document.hidden) _pollPlayerDashboardForGrades();
   });
@@ -11282,6 +11320,7 @@ function _generateIdemKey(prefix) {
 // _pbFetch: wraps fetch() with auth headers + idempotency key for money actions
 async function _pbFetch(url, opts) {
   opts = opts || {};
+  url = _absApiUrl(url);
   var path = _pathFromUrl(url);
   var retried = !!opts._retried;
   if (_authGiveUp) return new Response(JSON.stringify({ error: 'auth_give_up' }), { status: 401 });
@@ -15324,7 +15363,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO (debug panel only with ?debug=1 / pb-debug=1) -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;padding:2px 10px;display:none;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span id="build-info-label" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px">🔍 main · 01749e3 · Sep 5, 10:36 AM</span>
+  <span id="build-info-label" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px">🔍 main · eb0ddc9 · Sep 8, 03:11 PM</span>
 </div>
 <script>
 (function(){

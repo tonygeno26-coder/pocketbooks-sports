@@ -226,10 +226,17 @@ var TEST_PLAYERS = {
   '3': { pid:'bc767309-6fc7-4585-9077-3de7b898df13', name:'TestEdge',    label:'Test Edge' }
 };
 
-function seedTestPlayerSession(token, tc, role) {
+function seedTestPlayerSession(token, tc, role, testUserNum) {
   role = role || 'player';
   localStorage.setItem('pb-sports-token', token);
   localStorage.setItem('pb-session-token', token);
+  var payload = decodeJwtPayload(token);
+  if (payload && payload.exp) {
+    try { localStorage.setItem('pb-token-expires', String(payload.exp * 1000)); } catch (_e) {}
+  }
+  if (testUserNum) {
+    try { localStorage.setItem('pb-test-user', String(testUserNum)); } catch (_e) {}
+  }
   localStorage.setItem('pb-actor-role', role);
   localStorage.setItem('pb-player', JSON.stringify({
     id: tc.pid, username: tc.pid, name: tc.name, role: role
@@ -257,7 +264,7 @@ async function loginTestPlayer(testUserNum, url) {
     loadUrl(url);
     return;
   }
-  seedTestPlayerSession(token, tc, (res.data && res.data.role) || 'player');
+  seedTestPlayerSession(token, tc, (res.data && res.data.role) || 'player', testUserNum);
   setBypassStatus(tc.label + ' signed in — loading player dashboard', 'ok');
   loadUrl(url);
 }
