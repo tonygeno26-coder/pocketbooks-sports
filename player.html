@@ -1357,7 +1357,8 @@ body{
 <script>
 (function(){
   try {
-    if (new URLSearchParams(location.search).get('preview') === '1') return;
+    var _bootQs = new URLSearchParams(location.search);
+    if (_bootQs.get('preview') === '1' || _bootQs.get('testUser')) return;
     if (!localStorage.getItem('pb-sports-token')) {
       location.replace('lobby.html');
       return;
@@ -1661,6 +1662,16 @@ function _debugClearTickets() {
 <script src="player-photos.js"></script>
 <script src="team-logos.js"></script>
 <script>
+// Preview/dev params — hoisted before session gate (avoids TDZ ReferenceError on _pDev)
+var _pp = new URLSearchParams(window.location.search);
+var _pPreview = _pp.get('preview') === '1';
+var _pDev = _pp.get('dev') === '1'
+         || _pPreview
+         || _pp.get('from') === 'dev'
+         || !!_pp.get('testUser')
+         || (typeof window !== 'undefined' && window.location.pathname.includes('dev.html'));
+var _devSessionReady = Promise.resolve();
+
 // ══ SESSION VALIDATION GATE ══════════════════════════════════════════════════
 // Runs on load. Blocks bet placement if no valid player/club session exists.
 // Bypassed for ?preview=1 or known dev identities (P1001/demo/test).
@@ -1767,6 +1778,10 @@ function _showSessionExpiredModal(result) {
   }
   
   if (!_sgResult.ok) {
+    // Test P1/RR/Edge tiles install session asynchronously — don't flash expired modal
+    if (_pDev && _pp.get('testUser')) {
+      return;
+    }
     // ── Token recovery: if player+club state exists but token is missing, try to reissue ──
     if (_sgResult.canRecover && (
       (_sgResult.missing && _sgResult.missing.indexOf('token') !== -1) ||
@@ -1880,6 +1895,91 @@ function _storeAuthToken(token, expiresInSec) {
     localStorage.setItem('pb-token-expires', String(expMs));
   } catch (_e) {}
 }
+
+// ── DEV SESSION BYPASS (early — before dashboard hydrate) ───────────────────
+// When ?testUser=N is present (from dev.html tiles), fetch a real session token.
+var REAL_CLUB_ID = 'd616dc2a-95a6-473a-97b1-7da330878479';
+var _TEST_USER_CONFIGS = {
+  '1': { pid:'2a3e6819-be2f-4df3-8112-54ce19d0929e', name:'TestPlayer1', email:'testplayer1@pocketbooks.local' },
+  '2': { pid:'12bb68f1-bcca-4e63-8ae4-7065dbb19172', name:'TestRR',      email:'testplayer2@pocketbooks.local' },
+  '3': { pid:'bc767309-6fc7-4585-9077-3de7b898df13', name:'TestEdge',    email:'testplayer3@pocketbooks.local' }
+};
+async function _installDevSession() {
+  var _tu     = _pp.get('testUser');
+  var _tc     = _TEST_USER_CONFIGS[_tu] || {};
+  var _devCid = REAL_CLUB_ID;
+
+  if (_tc.pid && _tc.pid.indexOf('-') !== -1) {
+    try {
+      var _BASE = (typeof window !== 'undefined' && window._PBS_BACKEND)
+        || 'https://pocketbooks-sports-backend-production.up.railway.app';
+      var _resp = await fetch(_BASE + '/api/auth/token', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ actorId: _tc.pid, clubId: _devCid })
+      });
+      var _data = await _resp.json();
+      if (_data.ok && _data.token) {
+        var _role = _data.role || 'player';
+        TOKEN = _data.token;
+        _storeAuthToken(_data.token, _data.expiresIn);
+        try { localStorage.setItem('pb-test-user', _tu); } catch (_e) {}
+        if (_tc.email) {
+          try { localStorage.setItem('pb-player-email', _tc.email); } catch (_e) {}
+        }
+        localStorage.setItem('pb-actor-role', _role);
+        localStorage.setItem('pb-player', JSON.stringify({
+          id: _tc.pid, username: _tc.pid, name: _tc.name, role: _role, email: _tc.email
+        }));
+        localStorage.setItem('pb-club', JSON.stringify({
+          id: _devCid, clubId: _devCid, name: 'Dev Club', role: _role, balance: 1000
+        }));
+        localStorage.setItem('pb-active-club', JSON.stringify({
+          id: _devCid, clubId: _devCid, name: 'Dev Club', role: _role
+        }));
+        localStorage.setItem('pb-balance-start', '1000');
+        localStorage.setItem('pb-balance-start:' + _tc.pid, '1000');
+        return;
+      }
+      console.warn('[devSession] token rejected:', JSON.stringify(_data));
+    } catch (_err) {
+      console.warn('[devSession] token fetch failed:', _err.message, '— falling back to mock');
+    }
+  }
+
+  var _devPid   = _tc.pid   || 'dev-player';
+  var _devName  = _tc.name  || 'Dev Player';
+  var _devEmail = _tc.email || 'dev@pocketbooks.local';
+  var _devRole  = 'owner';
+  var _mockPayload = { sub:_devPid, actorId:_devPid, role:_devRole,
+    clubId:_devCid, exp: Math.floor(Date.now()/1000) + 86400*7, iat: Math.floor(Date.now()/1000) };
+  var _b64u = function(s){ return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); };
+  var _mockToken = _b64u('{"alg":"HS256","typ":"JWT"}')
+    + '.' + _b64u(JSON.stringify(_mockPayload))
+    + '.dev-bypass-sig';
+  localStorage.setItem('pb-sports-token', _mockToken);
+  TOKEN = _mockToken;
+  localStorage.setItem('pb-player', JSON.stringify({
+    id: _devPid, username: _devPid, name: _devName, role: _devRole, email: _devEmail
+  }));
+  localStorage.setItem('pb-club', JSON.stringify({
+    id: _devCid, clubId: _devCid, name: 'Dev Club', role: _devRole, balance: 1000
+  }));
+  localStorage.setItem('pb-active-club', JSON.stringify({ id:_devCid, clubId:_devCid, name:'Dev Club', role:_devRole }));
+  localStorage.setItem('pb-balance-start', '1000');
+  localStorage.setItem('pb-balance-start:'+_devPid, '1000');
+  try { localStorage.removeItem('pb-session-token'); } catch(_){}
+}
+if (_pDev) {
+  _devSessionReady = _installDevSession().then(function() {
+    _sessionValid = true;
+    var _m = document.getElementById('session-expired-modal');
+    if (_m) _m.remove();
+  }).catch(function(err) {
+    console.warn('[devSession] install failed:', err && err.message || err);
+  });
+}
+
 function _redirectToSignIn() {
   window.location.href = 'lobby.html?screen=signin&msg=' + encodeURIComponent('Your session expired — please sign in again');
 }
@@ -5831,106 +5931,13 @@ function showToast(msg, type) {
 }
 // ════════════════════════════════════════════════════════════════════════════
 
-// Preview mode — standardized params
-const _pp = new URLSearchParams(window.location.search);
-const _pPreview = _pp.get('preview') === '1';
-// Dev bypass: ?dev=1, ?preview=1, ?from=dev, or loading from /dev.html
-const _pDev = _pp.get('dev') === '1'
-           || _pp.get('preview') === '1'
-           || _pp.get('from') === 'dev'
-           || (typeof window !== 'undefined' && window.location.pathname.includes('dev.html'));
+// Preview mode — standardized params (_pp/_pPreview/_pDev hoisted at script top)
 const _pScreen = _pp.get('screen') || 'home';
 const _pRole = _pp.get('role') || 'player';
 const _pState = _pp.get('state') || 'active';
 const _pTheme = _pp.get('theme') || 'dark';
 const _pAnim = _pp.get('anim') !== 'off';
 const _pDevice = _pp.get('device') || 'iphone';
-// ── DEV SESSION BYPASS ───────────────────────────────────────────────────────
-// When ?testUser=N is present (from dev.html tiles), fetches a real session
-// token from /api/auth/token using the Supabase actor_id for each beta test
-// account. Falls back to a mock JWT if the fetch fails (non-production only).
-//
-//   testUser=1 → TestPlayer1  (actor: 2a3e6819-...)
-//   testUser=2 → TestRR       (actor: 12bb68f1-...)
-//   testUser=3 → TestEdge     (actor: bc767309-...)
-var REAL_CLUB_ID = 'd616dc2a-95a6-473a-97b1-7da330878479';
-var _TEST_USER_CONFIGS = {
-  '1': { pid:'2a3e6819-be2f-4df3-8112-54ce19d0929e', name:'TestPlayer1', email:'testplayer1@pocketbooks.local' },
-  '2': { pid:'12bb68f1-bcca-4e63-8ae4-7065dbb19172', name:'TestRR',      email:'testplayer2@pocketbooks.local' },
-  '3': { pid:'bc767309-6fc7-4585-9077-3de7b898df13', name:'TestEdge',    email:'testplayer3@pocketbooks.local' }
-};
-async function _installDevSession() {
-  var _tu     = _pp.get('testUser');
-  var _tc     = _TEST_USER_CONFIGS[_tu] || {};
-  var _devCid = REAL_CLUB_ID;
-
-  // Real test accounts: UUID pid = Supabase actor_id → fetch a proper session token
-  if (_tc.pid && _tc.pid.indexOf('-') !== -1) {
-    try {
-      var _BASE = (typeof window !== 'undefined' && window._PBS_BACKEND)
-        || 'https://pocketbooks-sports-backend-production.up.railway.app';
-      var _resp = await fetch(_BASE + '/api/auth/token', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ actorId: _tc.pid, clubId: _devCid })
-      });
-      var _data = await _resp.json();
-      if (_data.ok && _data.token) {
-        var _role = _data.role || 'player';
-        TOKEN = _data.token;
-        _storeAuthToken(_data.token, _data.expiresIn);
-        try { localStorage.setItem('pb-test-user', _tu); } catch (_e) {}
-        if (_tc.email) {
-          try { localStorage.setItem('pb-player-email', _tc.email); } catch (_e) {}
-        }
-        localStorage.setItem('pb-actor-role', _role);
-        localStorage.setItem('pb-player', JSON.stringify({
-          id: _tc.pid, username: _tc.pid, name: _tc.name, role: _role, email: _tc.email
-        }));
-        localStorage.setItem('pb-club', JSON.stringify({
-          id: _devCid, clubId: _devCid, name: 'Dev Club', role: _role, balance: 1000
-        }));
-        localStorage.setItem('pb-active-club', JSON.stringify({
-          id: _devCid, clubId: _devCid, name: 'Dev Club', role: _role
-        }));
-        localStorage.setItem('pb-balance-start', '1000');
-        localStorage.setItem('pb-balance-start:' + _tc.pid, '1000');
-        
-        return;
-      }
-      console.warn('[devSession] token rejected:', JSON.stringify(_data));
-    } catch (_err) {
-      console.warn('[devSession] token fetch failed:', _err.message, '— falling back to mock');
-    }
-  }
-
-  // Fallback: mock token (works only when backend dev-bypass is active, i.e. non-production)
-  var _devPid   = _tc.pid   || 'dev-player';
-  var _devName  = _tc.name  || 'Dev Player';
-  var _devEmail = _tc.email || 'dev@pocketbooks.local';
-  var _devRole  = 'owner';
-  var _mockPayload = { sub:_devPid, actorId:_devPid, role:_devRole,
-    clubId:_devCid, exp: Math.floor(Date.now()/1000) + 86400*7, iat: Math.floor(Date.now()/1000) };
-  var _b64u = function(s){ return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); };
-  var _mockToken = _b64u('{"alg":"HS256","typ":"JWT"}')
-    + '.' + _b64u(JSON.stringify(_mockPayload))
-    + '.dev-bypass-sig';
-  localStorage.setItem('pb-sports-token', _mockToken);
-  TOKEN = _mockToken;
-  localStorage.setItem('pb-player', JSON.stringify({
-    id: _devPid, username: _devPid, name: _devName, role: _devRole, email: _devEmail
-  }));
-  localStorage.setItem('pb-club', JSON.stringify({
-    id: _devCid, clubId: _devCid, name: 'Dev Club', role: _devRole, balance: 1000
-  }));
-  localStorage.setItem('pb-active-club', JSON.stringify({ id:_devCid, clubId:_devCid, name:'Dev Club', role:_devRole }));
-  localStorage.setItem('pb-balance-start', '1000');
-  localStorage.setItem('pb-balance-start:'+_devPid, '1000');
-  try { localStorage.removeItem('pb-session-token'); } catch(_){}
-  
-}
-if (_pDev) { _installDevSession().catch(console.error); }
-// ─────────────────────────────────────────────────────────────────────────────
 
 if (_pPreview) {
   if (_pDevice === 'tablet') document.body.style.maxWidth = '600px';
@@ -15656,6 +15663,7 @@ window.toggleNotifDropdown = toggleNotifDropdown;
 
 // Initialize grading authority badge + verify session on page load
 document.addEventListener('DOMContentLoaded', function() {
+  _devSessionReady.then(function() {
   _updateGradingSourceBadge(_GRADING_MODE === 'server_authoritative' ? 'Server' : 'BrowserFallback DEV');
   
   // Verify session if token stored
@@ -15672,6 +15680,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // Phase T: start event poller
   if (typeof _startEventPoller === 'function') _startEventPoller();
   _initNotifications();
+  }).catch(function(_e){});
 });
 
 </script>

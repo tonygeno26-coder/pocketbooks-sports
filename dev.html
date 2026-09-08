@@ -161,9 +161,7 @@ var SECTIONS = [
 var SCREENS = SECTIONS.reduce(function(acc, sec){ return acc.concat(sec.screens); }, []);
 
 var HOST_BYPASS = {
-  api: (location.protocol === 'file:')
-    ? 'https://pocketbooks-sports-backend-production.up.railway.app'
-    : '',
+  api: 'https://pocketbooks-sports-backend-production.up.railway.app',
   clubId: 'd616dc2a-95a6-473a-97b1-7da330878479',
   actorId: '16',
   ssEmail: 'pb-dev-host-email',
@@ -220,6 +218,48 @@ function seedHostSession(token, rec) {
   localStorage.setItem('pb-club', JSON.stringify(club));
   localStorage.setItem('pb-active-club', JSON.stringify(club));
   localStorage.setItem('pb-clubs', JSON.stringify([club]));
+}
+
+var TEST_PLAYERS = {
+  '1': { pid:'2a3e6819-be2f-4df3-8112-54ce19d0929e', name:'TestPlayer1', label:'Test P1' },
+  '2': { pid:'12bb68f1-bcca-4e63-8ae4-7065dbb19172', name:'TestRR',      label:'Test RR' },
+  '3': { pid:'bc767309-6fc7-4585-9077-3de7b898df13', name:'TestEdge',    label:'Test Edge' }
+};
+
+function seedTestPlayerSession(token, tc, role) {
+  role = role || 'player';
+  localStorage.setItem('pb-sports-token', token);
+  localStorage.setItem('pb-session-token', token);
+  localStorage.setItem('pb-actor-role', role);
+  localStorage.setItem('pb-player', JSON.stringify({
+    id: tc.pid, username: tc.pid, name: tc.name, role: role
+  }));
+  var club = {
+    id: HOST_BYPASS.clubId, clubId: HOST_BYPASS.clubId,
+    name: 'Test Club', role: role, status: 'approved'
+  };
+  localStorage.setItem('pb-club', JSON.stringify(club));
+  localStorage.setItem('pb-active-club', JSON.stringify(club));
+  localStorage.setItem('pb-balance-start', '1000');
+  localStorage.setItem('pb-balance-start:' + tc.pid, '1000');
+  try { localStorage.removeItem('pb-host'); } catch (_e) {}
+}
+
+async function loginTestPlayer(testUserNum, url) {
+  var tc = TEST_PLAYERS[String(testUserNum)];
+  if (!tc) { loadUrl(url); return; }
+  setBypassStatus('Signing in ' + tc.label + '…');
+  var res = await bypassApi('/api/auth/token', { actorId: tc.pid, clubId: HOST_BYPASS.clubId });
+  var token = res.data && res.data.token;
+  if (!res.ok || !token) {
+    var err = (res.data && (res.data.error || res.data.message)) || ('HTTP ' + res.status);
+    setBypassStatus(tc.label + ' login failed: ' + err + ' — loading preview anyway', 'bad');
+    loadUrl(url);
+    return;
+  }
+  seedTestPlayerSession(token, tc, (res.data && res.data.role) || 'player');
+  setBypassStatus(tc.label + ' signed in — loading player dashboard', 'ok');
+  loadUrl(url);
 }
 
 async function bypassApi(path, body) {
@@ -359,6 +399,16 @@ function loadUrl(url) {
           var run = s.action === 'loginHost' ? loginAsHost() : mintHostToken();
           Promise.resolve(run).catch(function(err){
             setBypassStatus('Host bypass error: ' + (err && err.message ? err.message : err), 'bad');
+          }).then(function(){ btn.classList.remove('busy'); });
+          return;
+        }
+        var tuMatch = s.url && s.url.match(/[?&]testUser=(\d)/);
+        if (tuMatch) {
+          if (btn.classList.contains('busy')) return;
+          btn.classList.add('busy');
+          loginTestPlayer(tuMatch[1], s.url).catch(function(err){
+            setBypassStatus('Test player error: ' + (err && err.message ? err.message : err), 'bad');
+            loadUrl(s.url);
           }).then(function(){ btn.classList.remove('busy'); });
           return;
         }
