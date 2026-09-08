@@ -3925,25 +3925,81 @@ function getAvailCredit(pid){
   return Math.max(0,(lim.creditLimit||0)-getOpenRisk(pid));
 }
 
+function _allPendingRequests(){
+  return (pendingRequests && pendingRequests.length) ? pendingRequests : loadJoinRequests();
+}
+
+function _findPendingRequest(playerId, membershipId){
+  var reqs = _allPendingRequests();
+  var mid = membershipId != null ? String(membershipId) : '';
+  var pid = playerId != null ? String(playerId) : '';
+  if (mid) {
+    var byMid = reqs.find(function(r){ return String(r.membershipId || r.id) === mid; });
+    if (byMid) return byMid;
+  }
+  if (pid) return reqs.find(function(r){ return String(r.playerId) === pid; }) || null;
+  return null;
+}
+
+function _parseReqPayload(raw){
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch(_e1) {}
+  try { return JSON.parse(decodeURIComponent(raw)); } catch(_e2) {}
+  return null;
+}
+
+/** Resolve pending request from button — prefers data-pid/data-mid lookup over embedded JSON. */
+function _resolvePendingRequestFromBtn(btn){
+  if (!btn) return null;
+  var pid = btn.getAttribute('data-pid') || (btn.dataset && btn.dataset.pid) || '';
+  var mid = btn.getAttribute('data-mid') || (btn.dataset && btn.dataset.mid) || '';
+  var found = _findPendingRequest(pid, mid);
+  if (found) return found;
+  var raw = btn.getAttribute('data-req');
+  if (!raw && btn.dataset && btn.dataset.req) raw = btn.dataset.req;
+  return _parseReqPayload(raw);
+}
+
 function approveRequest(req){
-  console.log('[approve] click fired — opening limit modal', req && (req.playerName || req.playerId || req));
   openApprovePlayerModal(req);
 }
 
-/** Approve button click handler — parses data-req and opens limit modal. */
+/** Approve button click handler — opens limit-setting modal for a pending request. */
 function onApproveButtonClick(btn, ev){
   if (ev && ev.stopPropagation) ev.stopPropagation();
-  console.log('[approve] button click fired — opening limit modal');
-  if (!btn || !btn.dataset || !btn.dataset.req) {
-    console.warn('[approve] missing data-req on button');
-    return;
+  var req = _resolvePendingRequestFromBtn(btn);
+  if (req) openApprovePlayerModal(req);
+}
+
+function onDenyRequestClick(btn, ev){
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  var pid = btn && (btn.getAttribute('data-pid') || (btn.dataset && btn.dataset.pid));
+  if (!pid) {
+    var req = _resolvePendingRequestFromBtn(btn);
+    pid = req && req.playerId;
   }
-  try {
-    var req = JSON.parse(decodeURIComponent(btn.dataset.req));
-    openApprovePlayerModal(req);
-  } catch (e) {
-    console.error('[approve] failed to parse request payload', e);
+  if (!pid) return;
+  declineRequest(pid);
+}
+
+function _pendingRequestActionBtnsHtml(r, variant){
+  var pid = String(r.playerId || '').replace(/"/g, '');
+  var mid = String(r.membershipId || r.id || '').replace(/"/g, '');
+  var midAttr = mid ? ' data-mid="'+mid+'"' : '';
+  if (variant === 'home') {
+    return '<div style="display:flex;gap:8px">'
+      +'<button type="button" data-action="approve-request" data-pid="'+pid+'"'+midAttr
+      +' style="padding:7px 14px;background:rgba(0,255,136,0.15);border:1px solid var(--green);color:var(--green);border-radius:8px;font-size:0.75rem;font-weight:800;cursor:pointer">Approve</button>'
+      +'<button type="button" data-action="deny-request" data-pid="'+pid+'"'+midAttr
+      +' style="padding:7px 14px;background:rgba(255,61,87,0.1);border:1px solid var(--red);color:var(--red);border-radius:8px;font-size:0.75rem;font-weight:800;cursor:pointer">Deny</button>'
+      +'</div>';
   }
+  return '<div style="display:flex;gap:6px">'
+    +'<button type="button" data-action="deny-request" data-pid="'+pid+'"'+midAttr
+    +' style="padding:6px 10px;background:rgba(255,61,87,0.1);border:1px solid rgba(255,61,87,0.3);border-radius:8px;color:#ff3d57;font-size:0.72rem;font-weight:700;cursor:pointer">✕</button>'
+    +'<button type="button" data-action="approve-request" data-pid="'+pid+'"'+midAttr
+    +' style="padding:6px 12px;background:var(--accent-blue);border:none;border-radius:8px;color:#041018;font-size:0.72rem;font-weight:900;cursor:pointer">✓ Approve</button>'
+    +'</div>';
 }
 
 var _pendingApproveReq = null;
@@ -3951,7 +4007,6 @@ var pendingRequests = [];
 var editingLimitsFor = null;
 
 function openApprovePlayerModal(req){
-  console.log('[approve] openApprovePlayerModal — showing limit modal', req && (req.playerName || req.playerId || req));
   if (!req) return;
   _pendingApproveReq = req;
   var name = req.playerName || req.username || req.name || 'Player';
@@ -4107,6 +4162,7 @@ async function confirmApprovePlayerModal(){
   _notifyPlayerApproved(pid, req.clubName || (currentClub && currentClub.name), limitsPayload);
   closeApprovePlayerModal();
   _updateReqBadge();
+  try { await loadRequests(); } catch(_lr){}
   renderPlayersTab();
   showToastHost('✅ '+pname+' approved with $'+balance+' starting balance'+(apiOk?'':' (local)'));
 }
@@ -4207,10 +4263,8 @@ async function loadRequests(){
           return '<div style="background:var(--card);border:1px solid rgba(255,61,87,0.2);border-radius:14px;padding:13px 15px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">'
             +'<div><div style="font-size:0.9rem;font-weight:800">'+(r.playerName||'Player')+'</div>'
             +'<div style="font-size:0.7rem;color:var(--gray);margin-top:2px">'+(r.email?r.email+' · ':'')+'Wants to join</div></div>'
-            +'<div style="display:flex;gap:8px">'
-            +'<button data-req="'+encodeURIComponent(JSON.stringify(r))+'" onclick="onApproveButtonClick(this,event)" style="padding:7px 14px;background:rgba(0,255,136,0.15);border:1px solid var(--green);color:var(--green);border-radius:8px;font-size:0.75rem;font-weight:800;cursor:pointer">Approve</button>'
-            +'<button data-pid="'+r.playerId+'" onclick="declineRequest(this.dataset.pid);loadRequests()" style="padding:7px 14px;background:rgba(255,61,87,0.1);border:1px solid var(--red);color:var(--red);border-radius:8px;font-size:0.75rem;font-weight:800;cursor:pointer">Deny</button>'
-            +'</div></div>';
+            +_pendingRequestActionBtnsHtml(r, 'home')
+            +'</div>';
         }).join('');
       }
     } else {
@@ -4234,19 +4288,23 @@ async function handleRequest(memberId, action){
     renderPlayersTab();
   } catch(e) { showToast('❌ '+(e.message||'failed')); }
 }
-function declineRequest(pid){
+async function declineRequest(pid){
   var clubId = (currentClub && currentClub.id) || null;
   try {
     var club = JSON.parse(localStorage.getItem('pb-club')||'{}');
     if (!clubId) clubId = club.id || club.clubId || null;
   } catch(_e){}
   if (TOKEN && clubId && pid) {
-    apiCall('POST', '/api/club/members/deny', { clubId:clubId, targetActorId:String(pid), playerId:String(pid) }).catch(function(){});
+    try {
+      await apiCall('POST', '/api/club/members/deny', { clubId:clubId, targetActorId:String(pid), playerId:String(pid) });
+    } catch(_e){}
   }
   saveJoinRequests(loadJoinRequests().filter(function(r){return String(r.playerId)!==String(pid);}));
   pendingRequests = loadJoinRequests();
   _updateReqBadge();
+  try { await loadRequests(); } catch(_lr){}
   renderPlayersTab();
+  showToastHost('Request denied');
 }
 function blockPlayer(pid){
   var players=loadClubPlayers();
@@ -4451,10 +4509,7 @@ function renderPlayersTab(){
         +'<div style="font-size:0.88rem;font-weight:800">'+r.playerName+'</div>'
         +'<div style="font-size:0.65rem;color:#f5c842;margin-top:2px">Wants to join</div>'
       +'</div>'
-      +'<div style="display:flex;gap:6px">'
-        +'<button data-pid="'+r.playerId+'" onclick="event.stopPropagation();declineRequest(this.dataset.pid)" style="padding:6px 10px;background:rgba(255,61,87,0.1);border:1px solid rgba(255,61,87,0.3);border-radius:8px;color:#ff3d57;font-size:0.72rem;font-weight:700;cursor:pointer">✕</button>'
-        +'<button data-req="'+encodeURIComponent(JSON.stringify(r))+'" onclick="onApproveButtonClick(this,event)" style="padding:6px 12px;background:var(--accent-blue);border:none;border-radius:8px;color:#041018;font-size:0.72rem;font-weight:900;cursor:pointer">✓ Approve</button>'
-      +'</div>'
+      +_pendingRequestActionBtnsHtml(r)
     +'</div>';
   }
   function emptyOrLoadingHtml() {
@@ -5014,6 +5069,24 @@ if(TOKEN){
 
 renderPlayersTab();
 
+// Pending join-request action delegation (stable parent — survives innerHTML re-renders)
+document.addEventListener('click', function(e) {
+  var approveBtn = e.target.closest ? e.target.closest('[data-action="approve-request"]') : null;
+  if (approveBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    onApproveButtonClick(approveBtn, e);
+    return;
+  }
+  var denyBtn = e.target.closest ? e.target.closest('[data-action="deny-request"]') : null;
+  if (denyBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    onDenyRequestClick(denyBtn, e);
+    return;
+  }
+});
+
 // Delete request action delegation
 document.addEventListener('click', function(e) {
   var btn = e.target.closest ? e.target.closest('[data-delaction]') : null;
@@ -5023,6 +5096,14 @@ document.addEventListener('click', function(e) {
   if (action === 'approve') hostApproveDelete(id);
   else if (action === 'deny') hostDenyDelete(id);
 });
+
+window.onApproveButtonClick = onApproveButtonClick;
+window.onDenyRequestClick = onDenyRequestClick;
+window.openApprovePlayerModal = openApprovePlayerModal;
+window.closeApprovePlayerModal = closeApprovePlayerModal;
+window.confirmApprovePlayerModal = confirmApprovePlayerModal;
+window.denyApprovePlayerModal = denyApprovePlayerModal;
+window.declineRequest = declineRequest;
 
 // ═══ HOST DIAMOND PILL (display) ════════════════════════════════════════════════════════════
 // Header pill prefers /api/host/diamond-usage. localStorage is cache/fallback only.
