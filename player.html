@@ -1671,6 +1671,7 @@ var _pDev = _pp.get('dev') === '1'
          || !!_pp.get('testUser')
          || (typeof window !== 'undefined' && window.location.pathname.includes('dev.html'));
 var _devSessionReady = Promise.resolve();
+var _devSessionInstalling = false;
 
 // ══ SESSION VALIDATION GATE ══════════════════════════════════════════════════
 // Runs on load. Blocks bet placement if no valid player/club session exists.
@@ -1901,6 +1902,8 @@ function _clearAuthLocalStorage() {
 }
 function _authRedirectToLogin(msg) {
   if (_authGiveUp) return;
+  // testUser tiles install session async — don't redirect on stale/mock token mid-install
+  if (_devSessionInstalling && _pDev && _pp.get('testUser')) return;
   _authGiveUp = true;
   _clearAuthLocalStorage();
   window.location.href = 'lobby.html?screen=signin&msg=' + encodeURIComponent(msg || 'Your session expired — please sign in again');
@@ -1969,9 +1972,19 @@ var _TEST_USER_CONFIGS = {
   '3': { pid:'bc767309-6fc7-4585-9077-3de7b898df13', name:'TestEdge',    email:'testplayer3@pocketbooks.local' }
 };
 async function _installDevSession() {
+  _devSessionInstalling = true;
   var _tu     = _pp.get('testUser');
   var _tc     = _TEST_USER_CONFIGS[_tu] || {};
   var _devCid = REAL_CLUB_ID;
+
+  // Drop stale host/mock tokens so boot hooks cannot 401 before real token arrives.
+  try {
+    localStorage.removeItem('pb-sports-token');
+    localStorage.removeItem('pb-session-token');
+    localStorage.removeItem('pb-token-expires');
+    localStorage.removeItem('pb-host');
+  } catch (_e) {}
+  TOKEN = '';
 
   if (_tc.pid && _tc.pid.indexOf('-') !== -1) {
     try {
@@ -2003,11 +2016,17 @@ async function _installDevSession() {
         }));
         localStorage.setItem('pb-balance-start', '1000');
         localStorage.setItem('pb-balance-start:' + _tc.pid, '1000');
+        _devSessionInstalling = false;
         return;
       }
       console.warn('[devSession] token rejected:', JSON.stringify(_data));
     } catch (_err) {
-      console.warn('[devSession] token fetch failed:', _err.message, '— falling back to mock');
+      console.warn('[devSession] token fetch failed:', _err.message);
+    }
+    // Real test UUID configured — never fall back to mock (verify rejects .dev-bypass-sig).
+    if (_tu) {
+      _devSessionInstalling = false;
+      return;
     }
   }
 
@@ -2033,13 +2052,16 @@ async function _installDevSession() {
   localStorage.setItem('pb-balance-start', '1000');
   localStorage.setItem('pb-balance-start:'+_devPid, '1000');
   try { localStorage.removeItem('pb-session-token'); } catch(_){}
+  _devSessionInstalling = false;
 }
 if (_pDev) {
   _devSessionReady = _installDevSession().then(function() {
+    _devSessionInstalling = false;
     _sessionValid = true;
     var _m = document.getElementById('session-expired-modal');
     if (_m) _m.remove();
   }).catch(function(err) {
+    _devSessionInstalling = false;
     console.warn('[devSession] install failed:', err && err.message || err);
   });
 }
@@ -6156,7 +6178,9 @@ try { startAutoGradeDaemon(); } catch(e) { console.error('[auto grade daemon] fa
 try { revertFutureGrades(); }   catch(e) { console.error('[revertFutureGrades] startup error:', e.message); }
 
 try {
-  _maybeAutoEnableDbPrimaryReads().then(function(){
+  _devSessionReady.then(function(){
+    return _maybeAutoEnableDbPrimaryReads();
+  }).then(function(){
     return loadPlayerDashboardFromDb();
   }).then(function(){
     try { renderMyBets(); } catch(_e){}
@@ -11432,7 +11456,7 @@ async function _verifyOrRefreshSession() {
   if (!token) return { ok:false, reason:'no_token' };
 
   try {
-    var resp = await _pbFetch('/api/auth/verify');
+    var resp = await _pbFetch((typeof API !== 'undefined' && API ? API : '') + '/api/auth/verify');
     if (resp.status === 401 || resp.status === 403) {
       _authRedirectToLogin('Session invalid — please sign in again');
       return { ok:false, reason:'invalid', cleared:true };
