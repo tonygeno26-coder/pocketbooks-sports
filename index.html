@@ -3075,6 +3075,14 @@ function _normalizeHostTicket(t) {
     if (!s || typeof s !== 'object') return s;
     var home = s.homeTeam || s.home_team || '';
     var away = s.awayTeam || s.away_team || '';
+    var cgk = s.canonicalGameKey || s.canonical_game_key || '';
+    if ((!home || !away) && cgk) {
+      var kp = String(cgk).split('|');
+      if (kp.length >= 3) {
+        if (!away) away = kp[1] || '';
+        if (!home) home = kp[2] || '';
+      }
+    }
     var odds = s.odds;
     if (odds != null && typeof odds === 'number') odds = odds > 0 ? '+'+odds : String(odds);
     return Object.assign({}, s, {
@@ -3448,14 +3456,44 @@ async function hostOfferCashout(ticketId, playerId) {
   }
 }
 
-function hostApproveDelete(ticketId) {
+async function hostApproveDelete(ticketId) {
   if (!can('cancelBet')) { _denyToast('Cancel bet'); return false; }
   var now = new Date().toISOString();
+  var dbTicket = null;
+  try {
+    dbTicket = (_hostAllTicketsDeduped() || []).find(function(t){ return t.id === ticketId; }) || null;
+  } catch(_e) {}
   var bets = JSON.parse(localStorage.getItem('hostActiveBets')||'[]');
   var idx = bets.findIndex(function(t){ return t.id === ticketId; });
+  if (idx === -1 && !dbTicket) { alert('Bet not found'); return; }
+  var refundAmount = parseFloat((dbTicket && dbTicket.riskAmount) || (idx >= 0 && bets[idx].riskAmount) || 0);
+  var playerId     = (dbTicket && dbTicket.playerId) || (idx >= 0 && bets[idx].playerId) || null;
+  // DB-authoritative cancel when club context is available (host privilege).
+  try {
+    var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+    var cid = club.id || club.clubId || '';
+    if (cid && playerId && typeof _pbFetch === 'function') {
+      var iKey = 'HOST_CANCEL_' + ticketId + '_' + Date.now();
+      var resp = await _pbFetch('/api/bets/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticketId: ticketId, playerId: playerId, clubId: cid, idempotencyKey: iKey, reason: 'host_cancel', force: true })
+      });
+      var data = await resp.json();
+      if (data && data.ok) {
+        showToastHost('✅ Bet ' + ticketId + ' canceled · $' + (parseFloat(data.refundAmount || refundAmount) || 0).toFixed(2) + ' refunded');
+        try { await loadHostDashboardFromDb('host_cancel'); } catch(_e){}
+        renderHostBets();
+        renderHostStats();
+        return true;
+      }
+      if (data && data.error && String(data.error).indexOf('game_already_started') >= 0) {
+        alert('Cannot cancel: game has already started');
+        return false;
+      }
+    }
+  } catch(_e) { /* fall through to localStorage mirror */ }
   if (idx === -1) { alert('Bet not found'); return; }
-  var refundAmount = parseFloat(bets[idx].riskAmount || 0);
-  var playerId     = bets[idx].playerId || null;
   // Audit fields
   bets[idx].status                = 'canceled';
   bets[idx].deleteRequestStatus   = 'approved';
@@ -3716,6 +3754,23 @@ function renderHostBets(){
           var multiHint = (t.selections||[]).length > 1
             ? '<div style="font-size:0.58rem;color:var(--gray);margin-top:2px">'+(t.type||'Parlay')+' · '+(t.selections.length)+' legs</div>'
             : '';
+          var payoutInfo = _hostTicketPayoutLabel(t);
+          var stakeNum = parseFloat(t.riskAmount)||0;
+          var netPl = statusBucket === 'won' ? (parseFloat(payoutInfo.value)||0) - stakeNum
+            : statusBucket === 'lost' ? -stakeNum
+            : statusBucket === 'push' ? 0 : null;
+          var gradedDt = '';
+          if (t.gradedAt) {
+            var gd = new Date(t.gradedAt);
+            gradedDt = isNaN(gd) ? '' : gd.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+          }
+          var settledMetrics = (statusBucket === 'won' || statusBucket === 'lost' || statusBucket === 'push' || statusBucket === 'void')
+            ? '<div class="host-bet-metrics" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px;border-top:1px solid var(--border);padding-top:6px">' +
+                '<div><div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px">'+esc(payoutInfo.label)+'</div><div style="font-size:0.78rem;font-weight:800;color:'+pickColor+'">'+fmt$(payoutInfo.value)+'</div></div>' +
+                '<div><div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px">Net P&L</div><div style="font-size:0.78rem;font-weight:800;color:'+(netPl!=null&&netPl>=0?'#22C55E':'#EF4444')+'">'+(netPl!=null?(netPl>=0?'+':'')+fmt$(Math.abs(netPl)): '—')+'</div></div>' +
+                '<div><div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px">Graded</div><div style="font-size:0.68rem;font-weight:700;color:var(--light)">'+esc(gradedDt||'—')+'</div></div>' +
+              '</div>'
+            : '';
           return '<div style="background:var(--card);border:1px solid var(--border);border-left:3px solid '+leftBorder+';border-radius:12px;padding:12px;margin-bottom:8px;box-shadow:0 2px 10px rgba(0,0,0,0.25)">' +
             '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">' +
               '<div style="min-width:0;flex:1">' +
@@ -3730,6 +3785,7 @@ function renderHostBets(){
               '<div><div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px">Stake</div><div style="font-size:0.78rem;font-weight:800;color:'+stakeColor+'">'+fmt$(t.riskAmount)+'</div></div>' +
               '<div><div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px">Placed</div><div style="font-size:0.68rem;font-weight:700;color:var(--light)">'+esc(dt||'—')+'</div></div>' +
             '</div>' +
+            settledMetrics +
             (canCancel ? '<button data-host-cashout="'+esc(t.id)+'" data-player-id="'+esc(t.playerId||'')+'" style="width:100%;margin-top:10px;padding:8px;background:transparent;border:1px solid rgba(22,119,255,0.4);border-radius:8px;color:var(--accent-blue-bright);font-size:0.7rem;font-weight:800;cursor:pointer;letter-spacing:0.3px">Offer Cash Out</button>' : '') +
             (canCancel ? '<button data-host-cancel="'+esc(t.id)+'" style="width:100%;margin-top:8px;padding:8px;background:transparent;border:1px solid rgba(239,68,68,0.4);border-radius:8px;color:var(--negative);font-size:0.7rem;font-weight:800;cursor:pointer;letter-spacing:0.3px">Cancel Bet</button>' : '') +
           '</div>';
@@ -6617,6 +6673,50 @@ async function _dispatchHostStatsRefresh(trigger) {
   // Poll host dashboard every 60s so P&L / owe totals update when bets grade
   setInterval(function() { _dispatchHostStatsRefresh('poll_60s'); }, 60000);
 })();
+
+// ── Host event poller (12s) — faster grade/P&L refresh vs 60s poll alone ──
+var _hostEvCursor = null;
+var _hostEvPollTimer = null;
+var _hostEvPolling = false;
+var _HOST_EV_ACTIONS = {
+  ticket_graded:   function() { _dispatchHostStatsRefresh('event:ticket_graded'); try { renderHostBets(); } catch(_e){} },
+  balance_changed: function() { _dispatchHostStatsRefresh('event:balance_changed'); },
+  ticket_placed:   function() { _dispatchHostStatsRefresh('event:ticket_placed'); try { renderHostBets(); } catch(_e){} },
+  ticket_canceled: function() { _dispatchHostStatsRefresh('event:ticket_canceled'); try { renderHostBets(); } catch(_e){} }
+};
+async function _pollHostEvents() {
+  if (_hostEvPolling || document.hidden) return;
+  _hostEvPolling = true;
+  try {
+    var cl = {}; try { cl = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+    var cid = cl.id || cl.clubId || '';
+    if (!cid || typeof _pbFetch !== 'function') return;
+    var url = '/api/events?clubId=' + encodeURIComponent(cid) + '&limit=50';
+    if (_hostEvCursor) url += '&since=' + encodeURIComponent(_hostEvCursor);
+    var resp = await _pbFetch(url);
+    var data = await resp.json();
+    if (!data.ok || !data.events || !data.events.length) {
+      if (data.latestCursor) _hostEvCursor = data.latestCursor;
+      return;
+    }
+    _hostEvCursor = data.latestCursor;
+    var actionSet = new Set();
+    data.events.forEach(function(ev) { if (_HOST_EV_ACTIONS[ev.type]) actionSet.add(ev.type); });
+    actionSet.forEach(function(type) {
+      try { _HOST_EV_ACTIONS[type](data.events.filter(function(e){ return e.type === type; })); } catch(_e){}
+    });
+  } catch(_e) { /* never block UI */ } finally { _hostEvPolling = false; }
+}
+function _startHostEventPoller() {
+  if (_hostEvPollTimer) return;
+  _hostEvPollTimer = setInterval(_pollHostEvents, 12000);
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) { clearInterval(_hostEvPollTimer); _hostEvPollTimer = null; }
+    else { _hostEvPollTimer = setInterval(_pollHostEvents, 12000); _pollHostEvents(); }
+  });
+  _pollHostEvents();
+}
+try { _startHostEventPoller(); } catch(_e){}
 
 </script>
 
