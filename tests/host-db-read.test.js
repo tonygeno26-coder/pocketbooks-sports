@@ -288,9 +288,9 @@ test('does not pin Bets tab to activeTickets[0]', function() {
   );
 });
 
-test('Bets tab expands all player groups by default', function() {
-  assert(hostHtml.indexOf('window._hostBetsExpanded[key] === undefined') !== -1, 'default-expand guard present');
-  assert(hostHtml.indexOf('_hostBetsExpanded[key] = true') !== -1, 'groups start expanded');
+test('Bets tab uses single-player accordion', function() {
+  assert(hostHtml.indexOf('_hostBetsExpandedPlayer') !== -1, '_hostBetsExpandedPlayer defined');
+  assert(hostHtml.indexOf('_hostBetsExpandedPlayer === k') !== -1 || hostHtml.indexOf('_hostBetsExpandedPlayer === key') !== -1, 'accordion compare present');
 });
 
 test('Players tab is DB-first via _hostPlayersFromDbOrLocal', function() {
@@ -300,10 +300,10 @@ test('Players tab is DB-first via _hostPlayersFromDbOrLocal', function() {
   assert(hostHtml.indexOf("loadHostDashboardFromDb('players_tab')") !== -1, 'Players tab refetches dashboard');
 });
 
-test('Your Players list is filled from the same rows as the Players tab', function() {
+test('Player Risk list is filled from the same rows as the Players tab', function() {
   assert(hostHtml.indexOf("getElementById('player-list')") !== -1, 'renderPlayersTab writes #player-list');
   assert(hostHtml.indexOf('id="players-tab-list"') !== -1, 'Players tab has dedicated #players-tab-list');
-  assert(hostHtml.indexOf('Your Players') !== -1, 'Your Players heading present');
+  assert(hostHtml.indexOf('Player Risk') !== -1, 'Player Risk heading present');
 });
 
 test('Players tab does not show empty state before dashboard fetch completes', function() {
