@@ -1726,6 +1726,9 @@ var _devSessionInstalling = false;
 // Bypassed for ?preview=1 or known dev identities (P1001/demo/test).
 // ══════════════════════════════════════════════════════════════════════════════
 var _sessionValid = false; // set true by _validatePlayerSession if all checks pass
+// Early definition — later Phase B script also defines _safeId; first script must not race.
+function _safeId(val) { return val != null ? String(val) : null; }
+
 
 function _validatePlayerSession() {
   // Dev / preview bypass
@@ -1908,8 +1911,8 @@ function _showSessionExpiredModal(result) {
 })();
 // ══════════════════════════════════════════════════════════════════════════════
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'eb0ddc9';
-window.PBS_BUILD_DATE = '2026-09-08T22:11:45.112Z';
+window.PBS_BUILD_SHA = '9652a24';
+window.PBS_BUILD_DATE = '2026-09-09T21:28:26.350Z';
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 try { window.API = API; } catch (_eApi) {}
 // ESPN league logos for sport grid (verified working CDN paths; ncaa/soccer/atp/pga/boxing/rugby preferred slugs 404)
@@ -6376,7 +6379,9 @@ try { revertFutureGrades(); }   catch(e) { console.error('[revertFutureGrades] s
 
 try {
   _devSessionReady.then(function(){
-    return _maybeAutoEnableDbPrimaryReads();
+    return (typeof _maybeAutoEnableDbPrimaryReads === 'function')
+      ? _maybeAutoEnableDbPrimaryReads()
+      : Promise.resolve();
   }).then(function(){
     return loadPlayerDashboardFromDb();
   }).then(function(){
@@ -15634,7 +15639,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO (debug panel only with ?debug=1 / pb-debug=1) -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;padding:2px 10px;display:none;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span id="build-info-label" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px">🔍 main · eb0ddc9 · Sep 8, 03:11 PM</span>
+  <span id="build-info-label" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px">🔍 main · 9652a24 · Sep 9, 02:28 PM</span>
 </div>
 <script>
 (function(){

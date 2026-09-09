@@ -477,7 +477,7 @@ try {
     <div class="wallet-item">
       <span class="wallet-icon">🟣</span>
       <span class="wallet-val" id="w-credits">59</span>
-      <div class="wallet-add" onclick="showSection('buy-credits')">+</div>
+      <div class="wallet-add" onclick="typeof openBuyDiamondsModal==='function'&&openBuyDiamondsModal()" title="Buy Diamonds">+</div>
     </div>
   </div>
 
@@ -543,7 +543,7 @@ try {
       <div class="sec-label">Requests</div>
       <div class="sec-badge" id="pending-badge" style="display:none">0</div>
     </div>
-    <div class="sec-card" onclick="showSection('messages')">
+    <div class="sec-card" onclick="showSection('messages')" data-beta-hidden="NOT_IMPLEMENTED" style="display:none!important" aria-hidden="true">
       <div class="sec-icon">💬</div>
       <div class="sec-label">Messages</div>
     </div>
@@ -2198,7 +2198,12 @@ function showSection(s) {
     if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
     return;
   }
-  showToast(s + ' coming soon!');
+  if (s === 'settings') {
+    if (typeof showPlayerSettings === 'function') showPlayerSettings();
+    return;
+  }
+  // Beta: hide NOT IMPLEMENTED surfaces (no coming-soon toast spam)
+  if (typeof _pbDebugWarn === 'function') _pbDebugWarn('[lobby] section not implemented:', s);
 }
 
 function _lobbyLoadJoinRequests(){
@@ -2418,6 +2423,7 @@ function showPlayerSettings() {
         '<button type="button" id="ps-telegram-link" style="width:100%;padding:12px;background:#0A1120;border:1px solid #1677FF;color:#2F8CFF;border-radius:10px;font-size:0.85rem;font-weight:800;cursor:pointer">Link Telegram</button>' +
         '<div id="ps-telegram-help" style="font-size:0.62rem;color:#64748B;margin-top:8px;line-height:1.45">Message <b style="color:#94A3B8">@pocketbookssports_bot</b> on Telegram, then send <b style="color:#94A3B8">/start YourUsername</b> for reminders.</div>' +
       '</div>' +
+      (typeof _pbSettingsExtrasHtml === 'function' ? _pbSettingsExtrasHtml() : '') +
       '<button id="ps-signout" style="width:100%;padding:13px;background:transparent;color:#EF4444;border:1.5px solid #EF4444;border-radius:12px;font-size:0.85rem;font-weight:900;cursor:pointer;margin-top:4px">Sign Out</button>' +
     '</div>' +
     '<div style="padding:12px 16px 18px;border-top:1px solid #1D2B42">' +
@@ -2430,6 +2436,7 @@ function showPlayerSettings() {
   
   ov.addEventListener('click', function(e){ if (e.target===ov) ov.remove(); });
   ov.querySelector('#ps-close').addEventListener('click', function(){ ov.remove(); });
+  if (typeof _pbWireSettingsExtras === 'function') _pbWireSettingsExtras(ov);
   Array.prototype.forEach.call(ov.querySelectorAll('[data-pset-theme]'), function(b){
     b.addEventListener('click', function() { s.theme = b.dataset.psetTheme; savePlayerSettings(s); applyPlayerTheme(); showPlayerSettings(); });
   });
@@ -2661,5 +2668,22 @@ if (activeClub) setActiveClub(activeClub);
 </script>
 <script src="team-logos.js"></script>
 <script src="diamonds.js"></script>
+<script src="beta-polish.js"></script>
+<script>
+try {
+  if (!window.PBS_BUILD_SHA) {
+    fetch('/build.json?_=' + Date.now(), { cache: 'no-store' })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){
+        if (!d) return;
+        if (d.sha) window.PBS_BUILD_SHA = d.sha;
+        if (d.builtAt) window.PBS_BUILD_DATE = d.builtAt;
+      }).catch(function(){});
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    if (typeof _pbMaybeStartOnboarding === 'function') _pbMaybeStartOnboarding();
+  });
+} catch (_e) {}
+</script>
 </body>
 </html>
