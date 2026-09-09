@@ -976,12 +976,35 @@ body{
 .mc-props-tab.active{color:#041018;background:var(--accent)}
 .mc-prop-team-pill.active{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 .mc-prop-ou{background:#0d1420;border:1px solid var(--border);border-radius:10px}
-.mc-live-badge{border-radius:8px}
+.mc-prop-ou.selected,.mc-prop-ou.sel{
+  border-color:var(--accent)!important;background:rgba(61,139,253,0.14)!important;
+  box-shadow:0 0 0 1px rgba(61,139,253,0.3)!important;
+}
+.mc-live-badge{border-radius:8px;margin-left:auto;letter-spacing:0.45px}
+.mc-live-score{padding:6px 14px 8px}
+.mc-header{gap:8px;align-items:center}
+.mc-sport{letter-spacing:0.7px;font-weight:800}
+.market-card .mc-name{letter-spacing:-0.15px}
+.pb-empty,.pb-error{margin:12px 12px 16px}
+.pb-loading{margin:16px 12px}
+.sport-grid{gap:14px 8px}
+.sport-tab-name{letter-spacing:0.2px}
 .value-bets-section{
   margin:0 12px 14px;background:linear-gradient(180deg,#121a27,#0e1520);
   border:1px solid rgba(61,139,253,0.22);border-radius:14px;
 }
 .value-bets-title{color:var(--accent)}
+/* Slip failure banner — fail-closed placement UX */
+.dkslip-fail-banner{
+  display:none;margin:0;padding:10px 14px;background:#fff7ed;border-bottom:1px solid #fdba74;
+  color:#9a3412;font-size:0.72rem;font-weight:700;line-height:1.35;flex-shrink:0;
+}
+.dkslip-fail-banner.show{display:block}
+.dkslip-fail-banner .dkslip-fail-title{font-size:0.78rem;font-weight:900;color:#7c2d12;margin-bottom:2px}
+.dkslip-fail-banner.warn{background:#fffbeb;border-bottom-color:#fcd34d;color:#92400e}
+.dkslip-fail-banner.warn .dkslip-fail-title{color:#78350f}
+.dkslip-fail-banner.error{background:#fef2f2;border-bottom-color:#fca5a5;color:#991b1b}
+.dkslip-fail-banner.error .dkslip-fail-title{color:#7f1d1d}
 
 /* BOTTOM NAV */
 .bnav{
@@ -1176,9 +1199,11 @@ body{
   .sport-tab-emoji{width:50px;height:50px}
   .sport-tab-emoji img{width:30px;height:30px}
   .sport-tab-name{font-size:0.66rem;max-width:100%;overflow:hidden;text-overflow:ellipsis}
-  .filter-row{padding:8px 8px 2px;gap:2px}
+  .filter-row{padding:8px 8px 4px;gap:4px}
   .pill{padding:10px 10px 12px;font-size:0.78rem}
   .market-card{margin:0 8px 10px;max-width:calc(100vw - 16px)}
+  .pb-empty,.pb-error,.pb-loading{margin-left:8px;margin-right:8px}
+  .odds-box.sel .odds-num,.odds-cell.selected .odds-num{font-weight:900}
   .h-right{gap:5px;flex-shrink:1}
   .h-left{gap:6px}
   .notif-dd{width:min(300px,calc(100vw - 20px));right:-8px}
@@ -6412,11 +6437,14 @@ function setBNav(el,tab){
         loadPlayerDashboardFromDb().then(function(){ try { renderMyBets(); } catch(_){} }).catch(function(){});
       } catch(_){}
     }
+    try { if (typeof _pbRescheduleGradePoll === 'function') _pbRescheduleGradePoll(); } catch(_){}
+    try { if (typeof _pollPlayerDashboardForGrades === 'function') _pollPlayerDashboardForGrades(); } catch(_){}
   } else {
     const sec=document.getElementById('sportsbook-section');
     if(sec) sec.style.display='block';
     if(ss) ss.style.display='flex';
     if(pb) pb.style.display='flex';
+    try { if (typeof _pbRescheduleGradePoll === 'function') _pbRescheduleGradePoll(); } catch(_){}
     if(tab==='search') showToast('🔍 Search coming soon');
   }
 }
@@ -8402,6 +8430,137 @@ function _makeSelection(b) {
   };
 }
 
+// ── Place-bet failure UX (fail-closed, no raw API codes, never imply accept) ─
+function _pbPlaceBetFailureUX(code, opts) {
+  opts = opts || {};
+  var raw = String(code || opts.error || '').toLowerCase().trim();
+  var http = opts.httpStatus != null ? Number(opts.httpStatus) : null;
+  var firstErr = '';
+  if (Array.isArray(opts.errors) && opts.errors.length) {
+    firstErr = String(opts.errors[0] || '').toLowerCase();
+  }
+  var blob = [raw, firstErr, String(opts.reason || '').toLowerCase()].join(' ');
+
+  function pack(kind, title, message, tone, action) {
+    return {
+      kind: kind,
+      title: title,
+      message: message,
+      tone: tone || 'error',
+      action: action || 'none',
+      reconcile: action === 'reconcile',
+      accepted: false
+    };
+  }
+
+  if (raw === 'odds_changed' || blob.indexOf('odds_changed') >= 0) {
+    return pack('odds_changed', 'Odds changed',
+      'The price moved. Review the new odds before placing — nothing was accepted.',
+      'warn', 'accept_odds');
+  }
+  if (raw === 'line_changed' || blob.indexOf('line_changed') >= 0) {
+    return pack('line_changed', 'Line moved',
+      'The point line changed. Review your slip before placing — nothing was accepted.',
+      'warn', 'review_slip');
+  }
+  if (raw === 'market_closed' || blob.indexOf('market_closed') >= 0
+      || blob.indexOf('market_suspended') >= 0
+      || (blob.indexOf('suspended') >= 0 && blob.indexOf('player_suspended') < 0)) {
+    return pack('suspended', 'Market suspended',
+      'This market is suspended. Remove it from your slip or wait until it reopens.',
+      'error', 'review_slip');
+  }
+  if (blob.indexOf('game_started') >= 0 || blob.indexOf('event_started') >= 0
+      || blob.indexOf('market_started') >= 0 || raw === 'event_started') {
+    return pack('event_started', 'Event started',
+      'This event has already started. Pre-game placement is closed for this selection.',
+      'error', 'review_slip');
+  }
+  if (blob.indexOf('insufficient_balance') >= 0 || blob.indexOf('insufficient_bankroll') >= 0
+      || raw === 'insufficient_bankroll') {
+    var have = opts.available != null ? String(opts.available) : '';
+    return pack('insufficient_bankroll', 'Insufficient bankroll',
+      have ? ('You need more available balance (have ' + have + '). No bet was placed.')
+           : 'You do not have enough available balance. No bet was placed.',
+      'error', 'none');
+  }
+  if (blob.indexOf('balance_unavailable') >= 0 || blob.indexOf('awaiting_server_balance') >= 0
+      || blob.indexOf('missing_balance') >= 0) {
+    return pack('balance_unavailable', 'Balance unavailable',
+      'Could not refresh your bankroll from the server. Placement is blocked until balance loads.',
+      'error', 'reconcile');
+  }
+  if (raw === 'timeout' || blob.indexOf('fetch_timeout') >= 0 || blob.indexOf('abort') >= 0
+      || blob.indexOf('uncertain') >= 0) {
+    return pack('timeout', 'Placement unconfirmed',
+      'We could not confirm placement. Check My Bets before trying again — do not assume it was accepted.',
+      'warn', 'reconcile');
+  }
+  if (blob.indexOf('duplicate') >= 0 || blob.indexOf('already_placed') >= 0
+      || blob.indexOf('idempotency') >= 0 && blob.indexOf('conflict') >= 0) {
+    return pack('duplicate', 'Possible duplicate',
+      'This looks like a duplicate request. Check My Bets — do not place again until you verify.',
+      'warn', 'reconcile');
+  }
+  if (blob.indexOf('parlay_conflict') >= 0 || blob.indexOf('same_game_conflict') >= 0
+      || blob.indexOf('sgp_conflict') >= 0 || blob.indexOf('slip_conflict') >= 0
+      || blob.indexOf('active_ticket_conflict') >= 0 || blob.indexOf('conflict_active_bet') >= 0
+      || (blob.indexOf('conflict') >= 0 && blob.indexOf('club_scope') < 0)) {
+    return pack('parlay_conflict', 'Parlay conflict',
+      'These selections conflict. Adjust your slip and try again — nothing was accepted.',
+      'error', 'review_slip');
+  }
+  if (blob.indexOf('invalid_selection') >= 0 || blob.indexOf('invalid_leg') >= 0
+      || blob.indexOf('selection_invalid') >= 0 || blob.indexOf('odds_stale') >= 0
+      || blob.indexOf('snapshot_missing') >= 0 || blob.indexOf('odds_service_unavailable') >= 0) {
+    return pack('invalid_selection', 'Invalid selection',
+      'One or more selections are no longer valid. Refresh the board and rebuild your slip.',
+      'error', 'review_slip');
+  }
+  if (http >= 500 || raw === 'server_error' || blob.indexOf('server_error') >= 0
+      || blob.indexOf('internal') >= 0) {
+    return pack('server_error', 'Server error',
+      'Bet could not be placed due to a server error. Your balance and tickets were not changed.',
+      'error', 'reconcile');
+  }
+  if (opts.userMessage) {
+    return pack('rejected', 'Bet not placed', String(opts.userMessage), 'error', 'none');
+  }
+  return pack('rejected', 'Bet not placed',
+    'The server rejected this bet. Nothing was accepted — review your slip and try again.',
+    'error', 'none');
+}
+function _pbClearSlipFailureBanner() {
+  var el = document.getElementById('dkslip-fail-banner');
+  if (!el) return;
+  el.className = 'dkslip-fail-banner';
+  el.hidden = true;
+  el.innerHTML = '';
+}
+function _pbShowSlipFailureBanner(ux) {
+  var el = document.getElementById('dkslip-fail-banner');
+  if (!el || !ux) return;
+  el.hidden = false;
+  el.className = 'dkslip-fail-banner show ' + (ux.tone === 'warn' ? 'warn' : 'error');
+  el.innerHTML = '<div class="dkslip-fail-title">' + String(ux.title || 'Bet not placed').replace(/</g, '&lt;') +
+    '</div><div>' + String(ux.message || '').replace(/</g, '&lt;') + '</div>';
+}
+async function _pbPresentPlaceBetFailure(code, opts) {
+  opts = opts || {};
+  var ux = _pbPlaceBetFailureUX(code, opts);
+  try { _pbShowSlipFailureBanner(ux); } catch (_e) {}
+  try { showToast(ux.message, ux.tone === 'warn' ? 'warning' : 'error'); } catch (_e2) {}
+  if (ux.reconcile && typeof loadPlayerDashboardFromDb === 'function') {
+    try {
+      await loadPlayerDashboardFromDb({ keepPending: false });
+      try { renderMyBets(); } catch (_e3) {}
+    } catch (_e4) {}
+  }
+  return ux;
+}
+window._pbPlaceBetFailureUX = _pbPlaceBetFailureUX;
+window._pbPresentPlaceBetFailure = _pbPresentPlaceBetFailure;
+
 // NOTE: `async` is required — this function uses `await _pbFetch(...)` for
 // the DB-side bet placement. The legacy declaration omitted async even
 // though the body has been awaiting since the DB path was added; Vercel's
@@ -8553,14 +8712,18 @@ async function confirmBet() {
   bsStake = riskAmount;
   if (typeof _DB_PRIMARY_READS_ENABLED !== 'undefined' && _DB_PRIMARY_READS_ENABLED
       && !_hasAuthoritativeBalance()) {
-    showToast('Unable to refresh balance. Placement blocked until balance loads.', 'error');
     _cbErr('CONFIRM_BET_ERROR', null, 'reason=balance_unavailable');
+    try { await _pbPresentPlaceBetFailure('balance_unavailable'); } catch (_balUx) {}
     try { loadPlayerDashboardFromDb(); } catch(_balRefreshErr) {}
     return;
   }
   if (!(typeof _avail === 'number') || isNaN(_avail) || _avail < riskAmount) {
-    showToast('Insufficient balance \xb7 have '+fmtBalance(), 'error');
     _cbErr('CONFIRM_BET_ERROR', null, 'reason=insufficient_balance avail='+_avail+' risk='+riskAmount);
+    try {
+      await _pbPresentPlaceBetFailure('insufficient_bankroll', {
+        available: (typeof fmtBalance === 'function' ? fmtBalance() : String(_avail))
+      });
+    } catch (_insUx) {}
     return;
   }
 
@@ -8747,7 +8910,8 @@ async function confirmBet() {
         _cbErr('CONFIRM_BET_ERROR', _parseErr,
           'reason=invalid_json status='+_cbRespStatus
           +' body_preview='+(_cbRespText||'').slice(0,200).replace(/\n/g,' '));
-        showToast('Server error — please try again.', 'error');
+        try { await _pbPresentPlaceBetFailure('server_error', { httpStatus: _cbRespStatus }); }
+        catch (_jx) { showToast('Server error — please try again.', 'error'); }
         closeBetConfirm();
         return;
       }
@@ -8815,6 +8979,7 @@ async function confirmBet() {
         try { closeBetConfirm(); } catch(_) {}
         try { closeBetSlip();   } catch(_) {}
         try { clearSlip();      } catch(_) {}
+        try { _pbClearSlipFailureBanner(); } catch(_) {}
 
         // Keep the just-placed ticket in-memory so renderMyBets does not
         // reload an empty/stale pb-tickets list before the DB refetch lands.
@@ -8844,6 +9009,9 @@ async function confirmBet() {
         _cbErr('CONFIRM_BET_ERROR', null, 'code=odds_changed leg='+_dbData.leg
           +' old='+_dbData.submittedOdds+' new='+_dbData.serverOdds);
         closeBetConfirm();
+        try {
+          _pbShowSlipFailureBanner(_pbPlaceBetFailureUX('odds_changed'));
+        } catch (_odBanner) {}
         var _od = _dbData;
         var _odModal = document.createElement('div');
         _odModal.id = 'odds-changed-modal';
@@ -8872,6 +9040,7 @@ async function confirmBet() {
             var _r2=await _pbFetch('/api/bets/place',{method:'POST',body:JSON.stringify(_rp)});
             var _rt=await _r2.text(); var _rd2; try{ _rd2=JSON.parse(_rt); }catch(_){ _rd2={}; }
             if (_rd2.ok) {
+              try { _pbClearSlipFailureBanner(); } catch(_){}
               showToast('\u2705 Bet placed at new odds','success');
               try {
                 if (_rd2.balanceAfter != null && !isNaN(Number(_rd2.balanceAfter))) {
@@ -8881,8 +9050,19 @@ async function confirmBet() {
               } catch(_){}
               try{ loadPlayerDashboardFromDb({ keepPending: true }).then(function(){ try{renderMyBets();}catch(_){} }); }catch(_){ try{renderMyBets();}catch(_){} }
             }
-            else { showToast((_rd2.code||_rd2.error||'placement failed').replace(/_/g,' '),'error'); }
-          } catch(_e2){ showToast('Network error \u2014 try again','error'); }
+            else {
+              try {
+                await _pbPresentPlaceBetFailure(_rd2.code || _rd2.error || 'server_error', {
+                  errors: _rd2.errors, userMessage: _rd2.userMessage, httpStatus: _r2 && _r2.status
+                });
+              } catch (_oaUx) {
+                showToast('Bet could not be placed at the new odds. Nothing was accepted.', 'error');
+              }
+            }
+          } catch(_e2){
+            try { await _pbPresentPlaceBetFailure('timeout', { reason: 'odds_accept_network' }); }
+            catch(_e3){ showToast('Could not confirm placement. Check My Bets before trying again.', 'warning'); }
+          }
         };
         return;
 
@@ -8908,31 +9088,21 @@ async function confirmBet() {
           }, 'confirmBet_backend_403');
           return;
         }
-        var _rejMsg;
-        if (_dbData.userMessage) {
-          _rejMsg = String(_dbData.userMessage);
-        } else if (Array.isArray(_dbData.errors) && _dbData.errors.length) {
-          _rejMsg='Bet rejected: '+_dbData.errors.join(', ').replace(/_/g,' ');
-        } else if (_dbData.code) {
-          _rejMsg='Bet rejected: '+String(_dbData.code).replace(/_/g,' ');
-        } else if (_dbData.error) {
-          _rejMsg='Bet rejected: '+String(_dbData.error).replace(/_/g,' ');
-        } else {
-          _rejMsg='Bet rejected by server (HTTP '+_cbRespStatus+')';
+        var _rejCode = _dbData.code || _dbData.error || (_cbRespStatus >= 500 ? 'server_error' : 'rejected');
+        // Prefer first structured error token when present (e.g. conflict_active_bet:…)
+        if ((!_dbData.code || _dbData.code === 'rejected') && Array.isArray(_dbData.errors) && _dbData.errors.length) {
+          _rejCode = String(_dbData.errors[0]).split(':')[0];
         }
-        showToast(_rejMsg, 'error');
-        var _hardBlock=String(_dbData.code||_dbData.error||'');
-        var _RISK_CODES=new Set(['player_suspended','stake_below_min','stake_above_max','payout_above_max',
-          'parlays_disabled','teasers_disabled','round_robins_disabled','too_many_parlay_legs',
-          'sport_blocked','sport_not_allowed','market_blocked','live_betting_disabled',
-          'player_open_risk_exceeded','club_open_risk_exceeded','event_risk_exceeded','market_risk_exceeded']);
-        if (_RISK_CODES.has(_hardBlock)||_hardBlock.includes('host_diamond')||
-            _hardBlock.includes('insufficient_balance')||_hardBlock.includes('conflict')||
-            _hardBlock.includes('market_closed')||_hardBlock.includes('game_started')) {
-          closeBetConfirm();
-          return;
+        try {
+          await _pbPresentPlaceBetFailure(_rejCode, {
+            errors: _dbData.errors,
+            userMessage: _dbData.userMessage,
+            httpStatus: _cbRespStatus,
+            reason: _dbData.reason
+          });
+        } catch (_rejUx) {
+          showToast('Bet could not be placed. Nothing was accepted.', 'error');
         }
-        // Soft rejection: close confirm, let user try again
         closeBetConfirm();
         return;
       }
@@ -8940,28 +9110,27 @@ async function confirmBet() {
     } catch(_e) {
       if (_cbAbortTimer) { clearTimeout(_cbAbortTimer); _cbAbortTimer=null; }
       var _isAbort = _e && (_e.name==='AbortError'||String(_e.message||'').toLowerCase().includes('abort'));
-      if (_isAbort) {
-        // Timeout: request may have reached the server — do NOT fabricate local success.
-        // Do NOT auto-retry money POST; reconcile authoritative dashboard state instead.
-        _cbErr('CONFIRM_BET_ERROR', _e, 'reason=fetch_aborted_uncertain step='+_cbStep);
-        try {
-          if (typeof loadPlayerDashboardFromDb === 'function') {
-            await loadPlayerDashboardFromDb({ keepPending: false });
-            try { renderMyBets(); } catch(_) {}
-          }
-        } catch(_rec) {
-          _cbErr('CONFIRM_BET_RECONCILE_WARN', _rec, 'non-fatal');
+      // Timeout/network: never fabricate local success. Uncertain → reconcile only.
+      _cbErr('CONFIRM_BET_ERROR', _e, _isAbort
+        ? ('reason=fetch_aborted_uncertain step='+_cbStep)
+        : ('phase=network step='+_cbStep+' endpoint=/api/bets/place respStatus='+_cbRespStatus));
+      try {
+        await _pbPresentPlaceBetFailure(_isAbort ? 'timeout' : 'server_error', {
+          reason: _isAbort ? 'fetch_timeout_uncertain' : (_hasLiveLeg ? 'live_network' : 'network'),
+          userMessage: _isAbort ? undefined : (_hasLiveLeg
+            ? 'Live bet not placed — connection required. Nothing was accepted.'
+            : 'Bet could not be placed. Your balance and tickets were not changed. Please try again.')
+        });
+      } catch (_netUx) {
+        if (_isAbort) {
+          try { if (typeof loadPlayerDashboardFromDb === 'function') await loadPlayerDashboardFromDb({ keepPending: false }); } catch(_rec) {}
+          try { renderMyBets(); } catch(_) {}
+          showToast('Placement could not be confirmed. Check My Bets — your bet may or may not have been accepted. Do not place again until you verify.', 'warning');
+        } else {
+          showToast(_hasLiveLeg
+            ? 'Live bet not placed \u2014 connection required.'
+            : 'Bet could not be placed. Your balance and tickets were not changed. Please try again.', 'error');
         }
-        showToast('Placement could not be confirmed. Check My Bets — your bet may or may not have been accepted. Do not place again until you verify.', 'warning');
-      } else {
-        _cbErr('CONFIRM_BET_ERROR', _e,
-          'phase=network step='+_cbStep
-          +' endpoint=/api/bets/place'
-          +' respStatus='+_cbRespStatus
-          +' respBodyPreview='+(_cbRespText||'').slice(0,200).replace(/\n/g,' '));
-        showToast(_hasLiveLeg
-          ? 'Live bet not placed \u2014 connection required.'
-          : 'Bet could not be placed. Your balance and tickets were not changed. Please try again.', 'error');
       }
       // P0: never fall through to localStorage success when DB-primary is on
       return;
@@ -11328,9 +11497,11 @@ window.loadPlayerDashboardFromDb  = loadPlayerDashboardFromDb;
 window.runPlayerDashboardDbAudit  = runPlayerDashboardDbAudit;
 // ────────────────────────────────────────────────────────────────────────────
 
-// ── Real-time balance / grade poll (60s) ─────────────────────────────────────
+// ── Real-time balance / grade poll (server-authoritative; no client-grade) ───
 var _pbGradePollPrevActive = null; // map ticketId -> true
 var _pbGradePollTimer = null;
+var _PB_GRADE_POLL_IDLE_MS = 60000;
+var _PB_GRADE_POLL_MYBETS_MS = 15000;
 function _pbTicketLabel(t) {
   try {
     var sels = t.selections || t.legs || [];
@@ -11345,17 +11516,49 @@ function _pbTicketLabel(t) {
   } catch (_e) {}
   return (t.type || 'bet').toString();
 }
+/** Pure: tickets that left ACTIVE and appear in settled (server truth only). */
+function _pbFindNewlyGradedTickets(prevActiveMap, activeMap, settledList) {
+  var out = [];
+  if (!prevActiveMap) return out;
+  var settledById = {};
+  (settledList || []).forEach(function(t){ if (t && t.id) settledById[t.id] = t; });
+  Object.keys(prevActiveMap).forEach(function(id) {
+    if (activeMap && activeMap[id]) return;
+    var t = settledById[id];
+    if (t) out.push(t);
+  });
+  return out;
+}
 function _pbNotifyGradedTicket(t) {
   var st = String(t.status || '').toLowerCase();
   var label = _pbTicketLabel(t);
   var profit = parseFloat(t.potential_profit != null ? t.potential_profit : t.potentialProfit) || 0;
+  var payout = parseFloat(t.estimated_payout != null ? t.estimated_payout : t.estimatedPayout);
   if (st === 'won') {
-    try { showToast('🎉 Your bet on ' + label + ' WON! +$' + profit.toFixed(2) + ' added to your balance', 'success'); } catch (_e) {}
+    try { showToast('Your bet on ' + label + ' WON! +$' + profit.toFixed(2) + ' added to your balance', 'success'); } catch (_e) {}
   } else if (st === 'lost') {
     try { showToast('Your bet on ' + label + ' lost.', 'info'); } catch (_e) {}
   } else if (st === 'push' || st === 'pushed') {
     try { showToast('Your bet on ' + label + ' pushed — stake returned.', 'info'); } catch (_e) {}
+  } else if (st === 'void' || st === 'voided' || st === 'canceled' || st === 'cancelled') {
+    try { showToast('Your bet on ' + label + ' was voided — stake returned.', 'info'); } catch (_e) {}
+  } else if (isFinite(payout) && payout > 0) {
+    try { showToast('Your bet on ' + label + ' updated. Check My Bets for details.', 'info'); } catch (_e) {}
   }
+}
+function _pbIsMyBetsVisible() {
+  try {
+    var sec = document.getElementById('mybets-section');
+    if (sec && sec.style && sec.style.display && sec.style.display !== 'none') return true;
+    var bn = document.getElementById('bn-mybets');
+    if (bn && bn.classList && bn.classList.contains('active')) return true;
+  } catch (_e) {}
+  return false;
+}
+function _pbRescheduleGradePoll() {
+  try { if (_pbGradePollTimer) clearInterval(_pbGradePollTimer); } catch (_e) {}
+  var ms = _pbIsMyBetsVisible() ? _PB_GRADE_POLL_MYBETS_MS : _PB_GRADE_POLL_IDLE_MS;
+  _pbGradePollTimer = setInterval(_pollPlayerDashboardForGrades, ms);
 }
 async function _pollPlayerDashboardForGrades() {
   if (document.hidden) return;
@@ -11366,16 +11569,10 @@ async function _pollPlayerDashboardForGrades() {
     var settled = data.tickets.settled || [];
     var activeMap = {};
     active.forEach(function(t){ if (t && t.id) activeMap[t.id] = true; });
-    if (_pbGradePollPrevActive) {
-      var settledById = {};
-      settled.forEach(function(t){ if (t && t.id) settledById[t.id] = t; });
-      Object.keys(_pbGradePollPrevActive).forEach(function(id) {
-        if (activeMap[id]) return;
-        var t = settledById[id];
-        if (t) _pbNotifyGradedTicket(t);
-      });
-    }
+    var newly = _pbFindNewlyGradedTickets(_pbGradePollPrevActive, activeMap, settled);
+    newly.forEach(function(t){ try { _pbNotifyGradedTicket(t); } catch (_n) {} });
     _pbGradePollPrevActive = activeMap;
+    // Always re-render My Bets after authoritative hydrate so status/payout/details match server.
     try { renderMyBets(); } catch (_e) {}
   } catch (e) {
     console.warn('[grade-poll] dashboard refresh failed:', e && e.message || e);
@@ -11383,7 +11580,7 @@ async function _pollPlayerDashboardForGrades() {
 }
 (function _startPlayerGradePoll() {
   if (_pbGradePollTimer) return;
-  _pbGradePollTimer = setInterval(_pollPlayerDashboardForGrades, 60000);
+  _pbRescheduleGradePoll();
   // Seed previous-active map after dev session is ready (avoid 401 during token install)
   _devSessionReady.then(function() {
     return new Promise(function(r){ setTimeout(r, 4000); });
@@ -11399,6 +11596,8 @@ async function _pollPlayerDashboardForGrades() {
     if (!document.hidden) _pollPlayerDashboardForGrades();
   });
 })();
+window._pbFindNewlyGradedTickets = _pbFindNewlyGradedTickets;
+window._pbRescheduleGradePoll = _pbRescheduleGradePoll;
 
 // ════════════════════════════════════════════════════════════════════════════
 // GRADE TODAY'S ACTIVE TICKETS — on-demand audit helper
@@ -13516,6 +13715,7 @@ function shareParlaySlip() {
 
 function clearSlip() {
   if (betSlip.length && !confirm('Clear all ' + betSlip.length + ' selection' + (betSlip.length !== 1 ? 's' : '') + ' from your slip?')) return;
+  try { _pbClearSlipFailureBanner(); } catch (_e) {}
   bsStakes = {}; bsStake = 0; rrStakes = {}; _pendingRisk = 0; _pendingPayout = 0; _pendingProfit = 0; _pendingSnapshot = null;
   // Clear footer stake input DOM immediately
   var inp = document.getElementById('bs-stake-inp');
@@ -15812,6 +16012,7 @@ window.openGradingConsole = openGradingConsole;
     <button id="bs-tab-teaser"   class="dkslip-tab"        onclick="bsSetType('teaser')">Teaser</button>
     <button id="bs-tab-rr"       class="dkslip-tab"        onclick="bsSetType('rr')">R.Robin</button>
   </div>
+  <div id="dkslip-fail-banner" class="dkslip-fail-banner" role="alert" aria-live="polite" hidden></div>
   <!-- Scrollable legs -->
   <div class="dkslip-scroll" id="bs-legs-container"></div>
   <!-- Confirm panel — slides up inside drawer -->
