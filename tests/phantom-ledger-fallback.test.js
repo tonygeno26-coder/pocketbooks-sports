@@ -249,5 +249,17 @@ test('authoritative-looking financial keys are not written on blocked fallback',
   assert(gateIdx < saveIdx, 'phantom gate must run before legacy saveTickets');
 });
 
+test('Check Results under DB-primary prefers server grade (no local ledger invent)', function() {
+  var checkFn = extractFn(playerSrc, 'checkOpenTickets');
+  assert(checkFn.includes('_DB_PRIMARY_READS_ENABLED'), 'missing DB-primary gate in checkOpenTickets');
+  assert(checkFn.includes('runServerGrade'), 'DB-primary Check Results must call runServerGrade');
+  var gateIdx = checkFn.indexOf('_DB_PRIMARY_READS_ENABLED');
+  var localGradeIdx = checkFn.indexOf('_gradeTicket');
+  assert(gateIdx !== -1, 'DB gate missing');
+  if (localGradeIdx !== -1) {
+    assert(gateIdx < localGradeIdx, 'server-grade gate must precede local _gradeTicket');
+  }
+});
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);
