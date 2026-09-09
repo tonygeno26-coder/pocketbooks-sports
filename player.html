@@ -1419,6 +1419,31 @@ body{
 
 
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PROPS UX — Caesars-style grouping readability + search chrome
+   ═══════════════════════════════════════════════════════════════════════════ */
+.mc-props-toolbar{
+  display:flex;flex-direction:column;gap:8px;padding:8px 0 10px;
+  border-bottom:1px solid var(--border);
+}
+.mc-props-search{
+  width:100%;min-height:40px;padding:10px 12px;border-radius:10px;
+  border:1px solid var(--border);background:var(--bg-elev,#0C1424);
+  color:var(--white);font-size:0.8rem;font-weight:700;outline:none;
+}
+.mc-props-search::placeholder{color:var(--gray);font-weight:600}
+.mc-props-search:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(22,119,255,0.15)}
+.mc-prop-ou{min-width:58px;padding:7px 5px}
+.mc-prop-ou-label{font-size:0.58rem;font-weight:900;letter-spacing:0.4px;text-transform:uppercase}
+.mc-prop-ou[data-side="over"] .mc-prop-ou-label,.mc-prop-ou.over .mc-prop-ou-label{color:#22C55E}
+.mc-prop-ou[data-side="under"] .mc-prop-ou-label,.mc-prop-ou.under .mc-prop-ou-label{color:#EF4444}
+.mc-prop-ou-line{font-size:0.72rem;font-weight:800;color:var(--white)}
+.mc-prop-ou .odds-num,.mc-prop-ou-odds{font-size:0.72rem;font-weight:800;color:var(--light)}
+.mc-prop-name{font-size:0.8rem}
+.mc-prop-row.is-hidden-by-filter{display:none!important}
+.mc-props-filter-empty{padding:16px 8px;text-align:center;color:var(--gray);font-size:0.75rem;font-weight:700}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    BET SLIP PREMIUM POLISH — clarity only; preserve light sheet + logo hierarchy
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -5098,7 +5123,7 @@ function _pbRenderInlinePropsHtml(props, gameId, sport, meta) {
   var teamFilter = ui.team || 'all';
 
   var html = '<div class="mc-props-shell" data-props-game="' + String(gameId).replace(/"/g, '') + '">';
-  html += '<div class="mc-props-tabs">';
+  html += '<div class="mc-props-toolbar"><input class="mc-props-search" type="search" placeholder="Search players or props" aria-label="Search props"></div><div class="mc-props-tabs">';
   tabs.forEach(function(t) {
     html += '<button type="button" class="mc-props-tab' + (ui.tab === t.id ? ' active' : '') + '" data-prop-tab="' + t.id + '" onclick="_pbSetPropTab(this,\'' + t.id + '\')">' + t.label + '</button>';
   });
@@ -16039,6 +16064,39 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 </script>
-<script src="diamonds.js"></script>
+<script src="diamonds.js">
+function _pbFilterPropsPanel(panel, q){
+  if (!panel) return;
+  q = String(q || '').trim().toLowerCase();
+  var rows = panel.querySelectorAll('.mc-prop-row');
+  var shown = 0;
+  rows.forEach(function(row){
+    var nameEl = row.querySelector('.mc-prop-name');
+    var metaEl = row.querySelector('.mc-prop-type');
+    var name = (nameEl && nameEl.textContent) || '';
+    var meta = (metaEl && metaEl.textContent) || '';
+    var hit = !q || (name + ' ' + meta).toLowerCase().indexOf(q) !== -1;
+    row.classList.toggle('is-hidden-by-filter', !hit);
+    if (hit) shown++;
+  });
+  var empty = panel.querySelector('.mc-props-filter-empty');
+  if (!empty) {
+    empty = document.createElement('div');
+    empty.className = 'mc-props-filter-empty';
+    empty.textContent = 'No props match your search';
+    empty.style.display = 'none';
+    var body = panel.querySelector('.mc-props-body') || panel;
+    body.appendChild(empty);
+  }
+  empty.style.display = (q && shown === 0) ? 'block' : 'none';
+}
+document.addEventListener('input', function(e){
+  var t = e.target;
+  if (!t || !t.classList || !t.classList.contains('mc-props-search')) return;
+  var panel = t.closest('.mc-props-panel') || t.closest('.market-card');
+  _pbFilterPropsPanel(panel, t.value);
+});
+
+</script>
 </body>
 </html>
