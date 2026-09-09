@@ -15,7 +15,8 @@
   .mc-live-badge{margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.32);color:#ef4444;font-size:.55rem;font-weight:900;letter-spacing:.5px;text-transform:uppercase;padding:2px 7px;border-radius:6px}
   .mc-live-badge-dot{width:6px;height:6px;border-radius:50%;background:#ef4444}
   .mc-live-score{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:5px 14px 7px;font-size:.7rem;font-weight:800;color:#94a3b8;background:linear-gradient(180deg,rgba(16,26,46,.55),rgba(8,13,24,0))}
-  .mc-live-score-row{display:flex;align-items:center;justify-content:center;gap:10px;width:100%}
+  .mc-live-score--context-only{padding:8px 14px}
+  .mc-live-score-row{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;flex-wrap:wrap}
   .mc-live-state{font-size:.56rem;color:#ef4444;font-weight:900;text-transform:uppercase;letter-spacing:.35px}
   .mc-live-pts{color:#e2e8f0;font-size:.92rem;font-weight:900}
   .mc-live-extras{display:flex;gap:10px;font-size:.52rem;color:var(--muted);font-weight:700}
@@ -24,30 +25,37 @@
   .cell span{display:block;color:var(--accent);margin-top:4px}
   .note{font-size:.7rem;color:var(--muted);margin-top:6px}
   .bp{font-size:.65rem;color:#94a3b8;margin:0 0 12px}
+  @media (max-width:390px){.market-card{width:100%}.mc-live-score-row{gap:6px;font-size:.62rem}}
+  @media (min-width:768px){.row{gap:20px}}
+  @media (min-width:1440px){body{padding:32px 48px}.market-card{width:380px}}
 </style>
 </head>
 <body>
   <h1>Live score cards — visual gate</h1>
-  <p class="bp">Breakpoints: resize to 390 / 768 / 1280 / 1440. Pregame has no scoreboard. Live without score omits board.</p>
+  <p class="bp">Breakpoints: 390 / 768 / 1440. Pregame has no scoreboard. Unsafe live match shows LIVE + context only (no invented numbers).</p>
   <div class="row" id="cards"></div>
 <script>
 const samples = [
-  { sport:'MLB', away:'Cubs', home:'Marlins', aw:3, hw:0, state:'Top 4th', note:'MLB inning' },
-  { sport:'NCAAF', away:'Boise St', home:'Oregon', aw:17, hw:14, state:'Q3 · 8:41', note:'College football' },
-  { sport:'SOCCER', away:'Le Mans', home:'Nice', aw:2, hw:3, state:"58'", note:'Soccer minute' },
-  { sport:'TENNIS', away:'Khachanov', home:'Bonzi', aw:2, hw:0, state:'2-0 · 15-0', note:'Tennis sets/games' },
+  { sport:'SOCCER', away:'Le Mans', home:'Nice', aw:1, hw:2, state:"58'", note:'Soccer minute + safe numeric' },
+  { sport:'SOCCER', away:'Barcelona', home:'Real Madrid', aw:0, hw:1, state:"72'", note:'Soccer crest names' },
+  { sport:'TENNIS', away:'Khachanov', home:'Bonzi', aw:2, hw:0, state:'2-0 · 15-0', note:'Tennis sets/games safe match' },
+  { sport:'TENNIS', away:'Paardekooper', home:'Comino', aw:0, hw:1, state:'Set 2', contextOnly:true, note:'Live context only — no unsafe numeric' },
   { sport:'NBA', away:'Celtics', home:'Pistons', aw:null, hw:null, state:null, liveNoScore:true, note:'Live odds, no score → no board' },
   { sport:'NFL', away:'Patriots', home:'Seahawks', pregame:true, note:'Pregame → no scoreboard' },
 ];
 function card(s){
   const liveBadge = s.pregame ? '' : '<span class="mc-live-badge"><span class="mc-live-badge-dot"></span>LIVE</span>';
   let score = '';
-  if (!s.pregame && !s.liveNoScore && (s.aw!=null || s.hw!=null || s.state)) {
-    score = `<div class="mc-live-score"><div class="mc-live-score-row">
-      <span>${s.away} <span class="mc-live-pts">${s.aw??'—'}</span></span>
-      <span class="mc-live-state">${s.state||'● LIVE'}</span>
-      <span><span class="mc-live-pts">${s.hw??'—'}</span> ${s.home}</span>
-    </div></div>`;
+  if (!s.pregame && !s.liveNoScore) {
+    if (s.contextOnly) {
+      score = `<div class="mc-live-score mc-live-score--context-only"><span class="mc-live-state">${s.state||'● LIVE'}</span></div>`;
+    } else if (s.aw!=null || s.hw!=null || s.state) {
+      score = `<div class="mc-live-score"><div class="mc-live-score-row">
+        <span>${s.away} <span class="mc-live-pts">${s.aw}</span></span>
+        <span class="mc-live-state">${s.state||'● LIVE'}</span>
+        <span><span class="mc-live-pts">${s.hw}</span> ${s.home}</span>
+      </div></div>`;
+    }
   }
   return `<div class="market-card">
     <div class="mc-header"><span>${s.sport}</span><span style="color:#64748B">${s.away} @ ${s.home}</span>${liveBadge}</div>
