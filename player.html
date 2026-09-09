@@ -186,10 +186,10 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .market-card{margin:0 16px 12px;background:linear-gradient(180deg,#1e1e1e,#181818);border-radius:18px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.5);border:1px solid #2a2a2a}
 .mc-header{padding:12px 16px 6px;display:flex;align-items:center;gap:6px}
 .mc-sport{font-size:0.62rem;font-weight:800;color:var(--gray);text-transform:uppercase;letter-spacing:0.8px}
-.mc-cols{display:grid;grid-template-columns:1fr 90px 90px 90px;gap:6px;padding:0 16px 8px}
-.mc-cols.mc-cols-ml-only,.mc-team-row.mc-team-row-ml-only{grid-template-columns:1fr 90px}
+.mc-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,90px) minmax(0,90px) minmax(0,90px);gap:6px;padding:0 16px 8px}
+.mc-cols.mc-cols-ml-only,.mc-team-row.mc-team-row-ml-only{grid-template-columns:minmax(0,1fr) minmax(0,90px)}
 .mc-col-label{text-align:center;font-size:0.58rem;color:#555;font-weight:700;text-transform:uppercase;letter-spacing:0.5px}
-.mc-team-row{display:grid;grid-template-columns:1fr 90px 90px 90px;gap:6px;padding:0 16px;margin-bottom:10px;align-items:center}
+.mc-team-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,90px) minmax(0,90px) minmax(0,90px);gap:6px;padding:0 16px;margin-bottom:10px;align-items:center}
 .market-card-golf .mc-vs{font-size:0.58rem;font-weight:800;color:#666;text-transform:uppercase;letter-spacing:0.6px;padding:0 16px 6px}
 .mc-team{display:flex;align-items:center;gap:10px}
 .mc-jersey{width:52px;height:52px;border-radius:0;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:900;background:transparent;border:none;padding:0;overflow:visible;box-shadow:none;flex-shrink:0}
@@ -1426,17 +1426,39 @@ body{
    MOBILE-FIRST — 390 / 430 / 768 / 1280 / 1440
    ═══════════════════════════════════════════════════════════════════════════ */
 @media (max-width:390px){
-  .market-card{margin:0 6px 10px}
+  .market-card{margin:0 6px 10px;max-width:calc(100vw - 12px)}
   .mc-name{font-size:0.8rem}
   .odds-box .odds-num{font-size:0.78rem}
   .odds-box{min-height:46px;padding:6px 2px}
   .sport-tab-emoji{width:48px;height:48px}
   .hdr-chip-val{font-size:0.8rem}
+  .mc-live-extras{flex-wrap:wrap;gap:6px;max-width:100%}
+  .mc-prop-ous{max-width:52%}
+  .mc-prop-ou{min-width:48px}
+  .top-tabs{overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .top-tabs::-webkit-scrollbar{display:none}
 }
 @media (max-width:430px){
   .header{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
   .bnav{padding-left:max(4px,env(safe-area-inset-left));padding-right:max(4px,env(safe-area-inset-right))}
   .dkslip.open{max-height:min(85vh,calc(100dvh - 12px))}
+  #games-list,#live-games-list{overflow-x:hidden;max-width:100%;box-sizing:border-box}
+  .filter-row{
+    padding-left:max(8px,env(safe-area-inset-left));
+    padding-right:max(8px,env(safe-area-inset-right));
+    max-width:100%;box-sizing:border-box;
+  }
+  .market-card .mc-cols.mc-cols-ml-only,
+  .market-card .mc-team-row.mc-team-row-ml-only{
+    grid-template-columns:minmax(0,1fr) minmax(0,72px);
+    gap:4px;padding:0 8px;
+  }
+  .mc-live-score{padding:4px 8px 6px;max-width:100%;box-sizing:border-box}
+  .mc-live-score-row{flex-wrap:wrap;gap:6px;row-gap:2px;max-width:100%}
+  .mc-live-score .mc-live-pts{font-size:0.85rem}
+  .mc-live-score .mc-live-state{font-size:0.52rem;flex-shrink:0;text-align:center}
+  .mc-header{min-width:0;flex-wrap:wrap}
+  .mc-sport{max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 }
 @media (min-width:768px){
   body{max-width:720px}
@@ -16116,41 +16138,40 @@ document.addEventListener('DOMContentLoaded', function() {
   }).catch(function(_e){});
 });
 
-</script>
-<script src="diamonds.js">
-
-function _pbLiveScoreMissingHtml(stateLabel){
-  var label = stateLabel ? String(stateLabel) : 'Live';
-  return '<div class="mc-live-score is-missing"><span class="mc-live-state">' + label +
-    '</span><span class="mc-live-score-missing">Score unavailable</span></div>';
-}
-
-function _pbFilterPropsPanel(panel, q){
+function _pbFilterPropsPanel(panel, q) {
   if (!panel) return;
   q = String(q || '').trim().toLowerCase();
   var rows = panel.querySelectorAll('.mc-prop-row');
   var shown = 0;
-  rows.forEach(function(row){
+  rows.forEach(function(row) {
     var nameEl = row.querySelector('.mc-prop-name');
     var metaEl = row.querySelector('.mc-prop-type');
+    var secTitle = row.closest('.mc-prop-section');
+    var secLabel = secTitle && secTitle.querySelector('.mc-prop-sec-title');
     var name = (nameEl && nameEl.textContent) || '';
     var meta = (metaEl && metaEl.textContent) || '';
-    var hit = !q || (name + ' ' + meta).toLowerCase().indexOf(q) !== -1;
+    var section = (secLabel && secLabel.textContent) || '';
+    var hit = !q || (name + ' ' + meta + ' ' + section).toLowerCase().indexOf(q) !== -1;
     row.classList.toggle('is-hidden-by-filter', !hit);
     if (hit) shown++;
+  });
+  panel.querySelectorAll('.mc-prop-section').forEach(function(sec) {
+    var visible = sec.querySelector('.mc-prop-row:not(.is-hidden-by-filter)');
+    sec.classList.toggle('is-hidden-by-filter', !!q && !visible);
   });
   var empty = panel.querySelector('.mc-props-filter-empty');
   if (!empty) {
     empty = document.createElement('div');
     empty.className = 'mc-props-filter-empty';
-    empty.textContent = 'No props match your search';
+    empty.innerHTML = '<div class="mc-props-filter-empty-title">No matching props</div>' +
+      '<div class="mc-props-filter-empty-body">Try a player name or market type.</div>';
     empty.style.display = 'none';
     var body = panel.querySelector('.mc-props-body') || panel;
     body.appendChild(empty);
   }
   empty.style.display = (q && shown === 0) ? 'block' : 'none';
 }
-document.addEventListener('input', function(e){
+document.addEventListener('input', function(e) {
   var t = e.target;
   if (!t || !t.classList || !t.classList.contains('mc-props-search')) return;
   var panel = t.closest('.mc-props-panel') || t.closest('.market-card');
@@ -16158,5 +16179,6 @@ document.addEventListener('input', function(e){
 });
 
 </script>
+<script src="diamonds.js"></script>
 </body>
 </html>
