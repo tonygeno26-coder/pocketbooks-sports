@@ -856,12 +856,12 @@ body.theme-light [style*="color:#00ff88"],body.theme-light [style*="color:#00ff8
     width:100%!important;
   }
 }
-@media (min-width:768px){
-  #settlements-section #settlement-db-preview > div[style*="padding:12px 16px"]{
-    padding-left:20px!important;
-    padding-right:20px!important;
-  }
-}
+#settlements-section [data-settle-direction],#_settle_modal [data-settle-direction]{letter-spacing:0.35px!important}
+#_settle_modal #_settle_flow_grid > div{min-width:0}
+@media (min-width:390px){#_settle_modal > div{max-width:min(480px,100%)!important}#settlements-section [data-db-settle-card]{padding:14px 16px!important}}
+@media (min-width:768px){#settlements-section #settlement-db-preview > div[style*="padding:12px 16px"]{padding-left:20px!important;padding-right:20px!important}
+#_settle_modal{align-items:center!important;padding:20px!important}#_settle_modal > div{border-radius:20px!important;max-width:480px!important;padding-bottom:24px!important}
+#settlements-section #_settlement_records_section,#settlements-section #_weekly_history_section{max-width:720px;margin-left:auto;margin-right:auto}}
 @media (min-width:1280px){
   #settlements-section [data-db-settle-card],
   #settlements-section [data-settle-card]{
@@ -2282,28 +2282,33 @@ async function renderSettlementPreviewFromDb() {
       var weekLost = parseFloat(p.weekLost)||0;
       var weekNet = p.weekNet != null ? parseFloat(p.weekNet) : parseFloat(p.settledNet)||0;
       var isSettled = (Math.abs(settleBal) < 0.005);
-      var isOwes = settleBal < -0.005;
+      var isPlayerOwes = settleBal < -0.005;
       // Host view: player owes host = income (green); host owes player = outflow (red)
-      var color  = isOwes ? 'var(--positive,#22C55E)' : (settleBal>0.005 ? 'var(--negative,#EF4444)' : '#888');
-      var amtTxt = isOwes ? 'owes host '+_money(Math.abs(settleBal))
-                 : (settleBal>0.005 ? 'host owes '+_money(settleBal) : 'Settled');
+      var color  = isPlayerOwes ? 'var(--positive,#22C55E)' : (settleBal>0.005 ? 'var(--negative,#EF4444)' : '#888');
+      var dirLabel = isSettled ? 'Settled' : (isPlayerOwes ? 'Player owes host' : 'Host owes player');
+      var dirBg    = isPlayerOwes ? 'rgba(34,197,94,0.12)' : (settleBal>0.005 ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.04)');
+      var dirBorder= isPlayerOwes ? 'rgba(34,197,94,0.28)' : (settleBal>0.005 ? 'rgba(239,68,68,0.28)' : 'rgba(255,255,255,0.08)');
+      var amtTxt = isPlayerOwes ? _money(Math.abs(settleBal))
+                 : (settleBal>0.005 ? _money(settleBal) : '$0.00');
       var settleBtn = isSettled
         ? '<span style="font-size:0.65rem;font-weight:800;padding:4px 10px;border-radius:10px;background:rgba(255,255,255,0.04);color:#888">Settled</span>'
         : '<button onclick="openSettlePlayerModal('+JSON.stringify(String(p.playerId))+','+JSON.stringify(String(p.username||p.playerId))+','+owesHost+','+hostOwes+','+settleBal+')"'+
           ' style="font-size:0.7rem;font-weight:900;padding:8px 14px;border-radius:10px;border:none;background:'+color+';color:#000;cursor:pointer;white-space:nowrap">Record</button>';
       var netColor = Math.abs(weekNet)<0.005 ? 'var(--text-muted,#64748B)' : (weekNet>0 ? 'var(--positive,#22C55E)' : 'var(--negative,#EF4444)');
       var settleBalColor = Math.abs(settleBal)<0.005 ? '#888' : (settleBal<0 ? 'var(--positive,#22C55E)' : 'var(--negative,#EF4444)');
-      html += '<div data-db-settle-card="'+_escAttr(p.playerId)+'" style="background:var(--card,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:14px;padding:14px;margin-bottom:10px">' +
+      html += '<div data-db-settle-card="'+_escAttr(p.playerId)+'" style="background:var(--card,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:14px;padding:14px;margin-bottom:10px;border-left:3px solid '+(isSettled?'var(--border,#2a2a2a)':color)+'">' +
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px">' +
           '<div style="min-width:0;flex:1">' +
             '<div style="font-size:0.92rem;font-weight:800">'+(p.username||p.playerId)+'</div>' +
-            '<div style="font-size:0.62rem;color:#666;margin-top:2px">Ledger: <span style="color:'+settleBalColor+';font-weight:800">'+(settleBal>=0?'+':'−')+_money(Math.abs(settleBal))+'</span>' +
+            '<div data-settle-direction style="display:inline-block;font-size:0.58rem;font-weight:800;padding:3px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:0.35px;margin-top:4px;color:'+color+';background:'+dirBg+';border:1px solid '+dirBorder+'">'+dirLabel+'</div>' +
+            '<div style="font-size:0.62rem;color:#666;margin-top:6px">Ledger: <span style="color:'+settleBalColor+';font-weight:800">'+(settleBal>=0?'+':'−')+_money(Math.abs(settleBal))+'</span>' +
               (bankroll!=null ? ' · bankroll <span style="color:#fff;font-weight:800">'+_money(bankroll)+'</span>' : '') +
               (p.openRisk>0 ? ' · open risk '+_money(p.openRisk) : '') +
             '</div>' +
           '</div>' +
           '<div style="text-align:right;flex-shrink:0">' +
-            '<div style="font-size:0.88rem;font-weight:900;color:'+color+'">'+amtTxt+'</div>' +
+            '<div style="font-size:0.95rem;font-weight:900;color:'+color+';line-height:1.1">'+amtTxt+'</div>' +
+            '<div style="font-size:0.55rem;color:#666;margin-top:2px;text-transform:uppercase;letter-spacing:0.3px">Outstanding</div>' +
             '<div style="margin-top:8px">'+settleBtn+'</div>' +
           '</div>' +
         '</div>' +
@@ -2400,6 +2405,7 @@ async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes, s
   }
   var direction = before < 0 ? 'player_paid_host' : 'host_paid_player';
   var color     = before < 0 ? 'var(--positive,#22C55E)' : 'var(--negative,#EF4444)';
+  var dirLabel  = before < 0 ? 'Player owes host' : 'Host owes player';
   var beforeTxt = (before>=0?'+':'−')+'$'+Math.abs(before).toFixed(2);
 
   function _previewAfter(amt) {
@@ -2418,15 +2424,19 @@ async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes, s
   ov.id = '_settle_modal';
   ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.65);display:flex;align-items:flex-end;justify-content:center';
   ov.innerHTML = '<div style="background:#111;width:100%;max-width:430px;border-radius:20px 20px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px));box-sizing:border-box">'+
-    '<div style="font-size:1rem;font-weight:900;margin-bottom:10px">Record Settlement: '+playerName+'</div>'+
-    '<div style="font-size:0.68rem;color:#888;margin:-4px 0 12px;line-height:1.35">PocketBooks records settlements completed outside the app. No money is transferred through PocketBooks.</div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:12px;padding:12px;text-align:center">'+
-      '<div><div style="font-size:0.5rem;color:#666;text-transform:uppercase;letter-spacing:0.4px">Ledger Position</div>'+
+    '<div style="font-size:1rem;font-weight:900;margin-bottom:4px">Record Settlement: '+playerName+'</div>'+
+    '<div data-settle-direction style="display:inline-block;font-size:0.58rem;font-weight:800;padding:3px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:0.35px;margin-bottom:8px;color:'+color+';background:'+(before<0?'rgba(34,197,94,0.12)':'rgba(239,68,68,0.12)')+';border:1px solid '+(before<0?'rgba(34,197,94,0.28)':'rgba(239,68,68,0.28)')+'">'+dirLabel+'</div>'+
+    '<div style="font-size:0.68rem;color:#888;margin:0 0 12px;line-height:1.35">PocketBooks records settlements completed outside the app. No money is transferred through PocketBooks.</div>'+
+    '<div id="_settle_flow_grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:12px;padding:12px;text-align:center">'+
+      '<div><div style="font-size:0.5rem;color:#666;text-transform:uppercase;letter-spacing:0.4px">Before</div>'+
+        '<div style="font-size:0.52rem;color:#555;margin-top:2px">Ledger Position</div>'+
         '<div id="_settle_cur" style="font-size:0.95rem;font-weight:900;color:'+color+';margin-top:4px">'+beforeTxt+'</div></div>'+
-      '<div><div style="font-size:0.5rem;color:#666;text-transform:uppercase;letter-spacing:0.4px">Amount Settled</div>'+
+      '<div><div style="font-size:0.5rem;color:#666;text-transform:uppercase;letter-spacing:0.4px">Settled</div>'+
+        '<div style="font-size:0.52rem;color:#555;margin-top:2px">Amount Settled</div>'+
         '<div id="_settle_amt_lbl" style="font-size:0.95rem;font-weight:900;color:#888;margin-top:4px">—</div></div>'+
-      '<div><div style="font-size:0.5rem;color:#666;text-transform:uppercase;letter-spacing:0.4px">Outstanding</div>'+
-        '<div id="_settle_new" style="font-size:0.95rem;font-weight:900;color:#888;margin-top:4px">'+beforeTxt+'</div></div>'+
+      '<div><div style="font-size:0.5rem;color:#666;text-transform:uppercase;letter-spacing:0.4px">After</div>'+
+        '<div style="font-size:0.52rem;color:#555;margin-top:2px">Outstanding</div>'+
+        '<div id="_settle_new" style="font-size:0.95rem;font-weight:900;color:'+color+';margin-top:4px">'+beforeTxt+'</div></div>'+
     '</div>'+
     '<div style="margin-bottom:14px">'+
       '<label style="font-size:0.7rem;color:#666;text-transform:uppercase;letter-spacing:0.5px" for="_settle_amount">Amount Settled ($)</label>'+
@@ -2439,7 +2449,7 @@ async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes, s
     '</div>'+
     '<div style="margin-bottom:16px">'+
       '<label style="font-size:0.7rem;color:#666;text-transform:uppercase;letter-spacing:0.5px">Note (optional)</label>'+
-      '<input id="_settle_note" type="text" placeholder="Cash, Venmo, Zelle, etc. (off-platform)"'+
+      '<input id="_settle_note" type="text" placeholder="Method used off-platform (cash, Zelle, etc.)"'+
         ' style="width:100%;box-sizing:border-box;background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:8px 12px;color:#fff;font-size:0.85rem;outline:none;margin-top:4px">'+
     '</div>'+
     '<div style="display:flex;gap:10px">'+
@@ -2478,7 +2488,7 @@ async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes, s
       amtLbl.textContent = '—';
       amtLbl.style.color = '#888';
       newEl.textContent = beforeTxt;
-      newEl.style.color = '#888';
+      newEl.style.color = color;
       _setApplyEnabled(false);
       return;
     }
@@ -2556,6 +2566,7 @@ async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes, s
       }
       ov.remove();
       try { await renderSettlementPreviewFromDb(); } catch(_e){}
+      try { await loadSettlementRecords(); } catch(_e){}
       try { await loadWeeklyHistory(); } catch(_e){}
       try { await loadHostDashboardFromDb('post_settlement'); } catch(_e){}
       var afterTxt = data.balanceAfter != null ? _fmtCarry(data.balanceAfter) : '';
@@ -2572,6 +2583,52 @@ async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes, s
   });
 }
 window.openSettlePlayerModal = openSettlePlayerModal;
+
+async function loadSettlementRecords(targetEl) {
+  var el = targetEl || document.getElementById('_settlement_records_section');
+  if (!el) return;
+  var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
+  var cid  = club.id || club.clubId || null;
+  try {
+    var qs = cid ? '?clubId='+encodeURIComponent(cid)+'&limit=8' : '?limit=8';
+    var resp = await (typeof _pbFetch === 'function'
+      ? _pbFetch('/api/host/settlement-records'+qs)
+      : fetch('/api/host/settlement-records'+qs));
+    if (resp.status === 503) { el.innerHTML = ''; return; }
+    var data = await resp.json();
+    if (!data.ok) { el.innerHTML = ''; return; }
+    var records = data.records || data.history || [];
+    if (!records.length) { el.innerHTML = ''; return; }
+    var html = '<div style="padding:8px 0 4px">' +
+      '<div style="font-size:0.75rem;font-weight:800;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Settlement History</div>';
+    records.slice(0, 8).forEach(function(r) {
+      var amt = parseFloat(r.amount||0);
+      var dir = r.direction || '';
+      var isPlayerPaid = dir === 'player_paid_host';
+      var rowColor = isPlayerPaid ? 'var(--positive,#22C55E)' : 'var(--negative,#EF4444)';
+      var dirTxt = isPlayerPaid ? 'Player → Host' : 'Host → Player';
+      var playerLabel = r.playerName || r.username || r.playerId || 'Player';
+      var when = r.recordedAt || r.created_at || r.createdAt;
+      var whenStr = when ? new Date(when).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+      var afterBal = r.balanceAfter != null ? parseFloat(r.balanceAfter) : null;
+      var afterTxt = afterBal != null ? ((afterBal>=0?'+':'−')+'$'+Math.abs(afterBal).toFixed(2)) : '';
+      html += '<div style="background:var(--card,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:12px;padding:10px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:10px">' +
+        '<div style="min-width:0">' +
+          '<div style="font-size:0.78rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+playerLabel+'</div>' +
+          '<div style="font-size:0.58rem;color:#666;margin-top:2px">'+dirTxt+(whenStr?' · '+whenStr:'')+(r.note?' · '+String(r.note).slice(0,24):'')+'</div>' +
+        '</div>' +
+        '<div style="text-align:right;flex-shrink:0">' +
+          '<div style="font-size:0.85rem;font-weight:900;color:'+rowColor+'">$'+amt.toFixed(2)+'</div>' +
+          (afterTxt ? '<div style="font-size:0.55rem;color:#666;margin-top:2px">Outstanding '+afterTxt+'</div>' : '') +
+        '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+    el.innerHTML = html;
+  } catch(_e) { el.innerHTML = ''; }
+}
+window.loadSettlementRecords = loadSettlementRecords;
+
 
 async function runSettlementExecutionAudit() {
   
@@ -6291,6 +6348,7 @@ function renderSettlements() {
     (diamondHtml || '<div id="host-diamond-card" style="padding:10px 8px 0"></div>') +
     '<div id="settlement-db-preview"><div style="padding:24px;text-align:center;color:#555;font-size:0.78rem">Loading settlements from DB…</div></div>' +
     '<div id="phase-p-settlements" style="margin:0 8px 8px"></div>' +
+    '<div id="_settlement_records_section" style="padding:0 16px 8px"></div>' +
     '<div id="_weekly_history_section" style="padding:0 16px 24px"></div>' +
     '<div id="settlements-local-fallback" style="display:none"></div>';
 
@@ -6305,6 +6363,7 @@ function renderSettlements() {
 
   renderSettlementPreviewFromDb().then(function(data) {
     if (data && data.ok) {
+      loadSettlementRecords(document.getElementById('_settlement_records_section'));
       loadWeeklyHistory(document.getElementById('_weekly_history_section'));
       return;
     }
