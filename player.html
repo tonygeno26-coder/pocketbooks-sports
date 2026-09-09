@@ -874,6 +874,8 @@ body{
 }
 .hdr-chip-lbl{font-size:0.5rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.55px}
 .hdr-chip-val{font-size:0.88rem;font-weight:800;color:var(--white);letter-spacing:-0.2px}
+.hdr-bal-refresh{margin-left:4px;background:transparent;border:1px solid #334155;color:#94a3b8;border-radius:6px;width:22px;height:22px;font-size:0.75rem;line-height:1;cursor:pointer;padding:0}
+.hdr-bal-refresh:hover{color:#fff;border-color:#64748b}
 .buy-diamonds-nav-btn{
   background:var(--card)!important;border:1px solid var(--border)!important;color:var(--cyan)!important;
   width:auto!important;min-width:36px;height:36px;border-radius:12px!important;
@@ -1559,9 +1561,12 @@ function _debugClearTickets() {
     </div>
   </div>
   <div class="h-right">
-    <div class="hdr-chip" title="Cash balance">
+    <div class="hdr-chip" id="player-balance-chip" title="Cash balance">
       <div class="hdr-chip-lbl">Cash</div>
       <div class="hdr-chip-val" id="player-balance-display">...</div>
+      <button type="button" id="player-balance-refresh" class="hdr-bal-refresh" hidden
+        onclick="try{loadPlayerDashboardFromDb();}catch(_e){}"
+        aria-label="Refresh balance" title="Refresh balance">↻</button>
     </div>
     <button type="button" class="buy-diamonds-nav-btn" id="buy-diamonds-btn" onclick="openBuyDiamondsModal()" aria-label="Buy Diamonds" title="Buy Diamonds"><span aria-hidden="true">💎</span><span class="hdr-diamond-lbl">Buy</span></button>
     <div class="notif-wrap" id="notif-wrap">
@@ -2352,7 +2357,7 @@ try {
 // ═══ CENTRALIZED BALANCE ENGINE ══════════════════════════════════════════════
 // availableBalance = startingBalance - openRisk + settledWinnings + refunds
 // Display authority: /api/player/dashboard (availableBalance / balanceAfter).
-// localStorage['pb-balance-start'] + ['pb-tickets'] is fallback only.
+// DB-primary: NO localStorage / $1000 / derived fallback for displayed bankroll.
 var _BASE_BALANCE = 1000; // default starting balance
 // Migrate: if old pb-balance exists and no pb-balance-start, use it as starting balance
 (function(){
@@ -2452,9 +2457,41 @@ function calcAvailableBalance() {
   };
 }
 var _balanceFromServer = false;
+var _balanceLoadState = 'idle'; // idle | loading | ok | unavailable
+var _balanceFailReason = null;
+function _hasAuthoritativeBalance() {
+  return !!( _balanceFromServer && typeof playerBalance === 'number' && !isNaN(playerBalance) );
+}
+function _setBalanceRefreshVisible(show) {
+  var btn = document.getElementById('player-balance-refresh');
+  if (btn) btn.hidden = !show;
+  var chip = document.getElementById('player-balance-chip');
+  if (chip) {
+    if (show) chip.setAttribute('title', 'Unable to refresh balance');
+    else chip.setAttribute('title', 'Cash balance');
+  }
+}
+function _paintBalanceText(text) {
+  ['player-balance-display','header-balance','pb-balance-header'].forEach(function(id){
+    var el = document.getElementById(id); if (el) el.textContent = text;
+  });
+}
+function applyBalanceUnavailable(reason) {
+  // P0.5 fail-closed: never paint localStorage / $1000 / derived bankroll as current.
+  _balanceFromServer = false;
+  _balanceLoadState = 'unavailable';
+  _balanceFailReason = reason || 'balance_unavailable';
+  playerBalance = null;
+  window.playerBalance = null;
+  _paintBalanceText('\u2014');
+  _setBalanceRefreshVisible(true);
+  return { available: null, unavailable: true, reason: _balanceFailReason };
+}
 function _liveAvailableBalance() {
-  if (_balanceFromServer && typeof playerBalance === 'number' && !isNaN(playerBalance)) {
-    return playerBalance;
+  if (_hasAuthoritativeBalance()) return playerBalance;
+  // DB-primary: no local financial authority for placement / display math
+  if (typeof _DB_PRIMARY_READS_ENABLED !== 'undefined' && _DB_PRIMARY_READS_ENABLED) {
+    return NaN;
   }
   return calcAvailableBalance().available;
 }
@@ -2463,30 +2500,41 @@ function applyDisplayedBalance(amount) {
   if (isNaN(n)) return false;
   playerBalance = n;
   window.playerBalance = n;
+  _balanceFromServer = true;
+  _balanceLoadState = 'ok';
+  _balanceFailReason = null;
   var bal = '$' + n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  ['player-balance-display','header-balance','pb-balance-header'].forEach(function(id){
-    var el = document.getElementById(id); if (el) el.textContent = bal;
-  });
+  _paintBalanceText(bal);
+  _setBalanceRefreshVisible(false);
   return true;
 }
 function syncBalanceDisplays() {
-  // Server value wins. localStorage (pb-balance-start) is fallback only.
-  if (_balanceFromServer && typeof playerBalance === 'number' && !isNaN(playerBalance)) {
+  // Server value wins. Under DB-primary, never fall back to localStorage bankroll.
+  if (_hasAuthoritativeBalance()) {
     applyDisplayedBalance(playerBalance);
     return { available: playerBalance, starting: playerBalance, openRisk: 0, settledGains: 0, settledLosses: 0, refunds: 0 };
   }
+  if (typeof _DB_PRIMARY_READS_ENABLED !== 'undefined' && _DB_PRIMARY_READS_ENABLED) {
+    return applyBalanceUnavailable(_balanceFailReason || 'awaiting_server_balance');
+  }
   var s = calcAvailableBalance();
-  applyDisplayedBalance(s.available);
-  // Balance recalc complete — dbgBanner removed (production)
-  
+  // Legacy offline only — do not mark as server-authoritative
+  var n = Number(s.available);
+  if (!isNaN(n)) {
+    playerBalance = n;
+    window.playerBalance = n;
+    _paintBalanceText('$' + n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
+    _setBalanceRefreshVisible(false);
+  }
   return s;
 }
-var playerBalance = calcAvailableBalance().available;
+var playerBalance = null;
 // Signed-in sessions wait for /api/player/dashboard. Do not flash localStorage.
 document.addEventListener('DOMContentLoaded', function(){
   if (_balanceFromServer) return;
   var tok = '';
   try { tok = localStorage.getItem('pb-sports-token') || localStorage.getItem('pb-session-token') || ''; } catch(_e){}
+  // Signed-in: wait for /api/player/dashboard — never flash localStorage bankroll.
   if (tok) return;
   syncBalanceDisplays();
 });
@@ -2524,7 +2572,12 @@ try {
 } catch(_e) {}
 // ═══════════════════════════════════════════════════════════════════════════════
 function fmtBalance(){
-  return _fmtCurrency(_liveAvailableBalance());
+  if (!_hasAuthoritativeBalance()) {
+    if (typeof _DB_PRIMARY_READS_ENABLED !== 'undefined' && _DB_PRIMARY_READS_ENABLED) return '\u2014';
+  }
+  var v = _liveAvailableBalance();
+  if (typeof v !== 'number' || isNaN(v)) return '\u2014';
+  return _fmtCurrency(v);
 }
 
 function showPlayerSettings() {
@@ -2685,9 +2738,13 @@ function showPlayerSettings() {
 }
 function saveBalance(){ /* no-op: balance is derived, not stored directly */ }
 function loadBalance(){
-  if (_balanceFromServer && typeof playerBalance === 'number' && !isNaN(playerBalance)) {
+  if (_hasAuthoritativeBalance()) {
     applyDisplayedBalance(playerBalance);
     return playerBalance;
+  }
+  if (typeof _DB_PRIMARY_READS_ENABLED !== 'undefined' && _DB_PRIMARY_READS_ENABLED) {
+    applyBalanceUnavailable(_balanceFailReason || 'no_server_balance');
+    return null;
   }
   var s = syncBalanceDisplays(); playerBalance = s.available; return playerBalance;
 }
@@ -7894,7 +7951,8 @@ function openBetConfirm() {
   }).join('');
 
   var _avBal = _liveAvailableBalance();
-  var insufficient = _avBal < bsStake;
+  var _balUnknown = !(typeof _avBal === 'number') || isNaN(_avBal);
+  var insufficient = _balUnknown || _avBal < bsStake;
   var confirmLabel = insufficient ? 'Insufficient Balance'
     : (bsType==='straight' && betSlip.length > 1 ? 'Confirm '+betSlip.length+' Bets' : 'Confirm Bet');
 
@@ -8493,7 +8551,14 @@ async function confirmBet() {
   var _avail = _liveAvailableBalance();
   var riskAmount = snap.risk;
   bsStake = riskAmount;
-  if (_avail < riskAmount) {
+  if (typeof _DB_PRIMARY_READS_ENABLED !== 'undefined' && _DB_PRIMARY_READS_ENABLED
+      && !_hasAuthoritativeBalance()) {
+    showToast('Unable to refresh balance. Placement blocked until balance loads.', 'error');
+    _cbErr('CONFIRM_BET_ERROR', null, 'reason=balance_unavailable');
+    try { loadPlayerDashboardFromDb(); } catch(_balRefreshErr) {}
+    return;
+  }
+  if (!(typeof _avail === 'number') || isNaN(_avail) || _avail < riskAmount) {
     showToast('Insufficient balance \xb7 have '+fmtBalance(), 'error');
     _cbErr('CONFIRM_BET_ERROR', null, 'reason=insufficient_balance avail='+_avail+' risk='+riskAmount);
     return;
@@ -9229,7 +9294,7 @@ function _refreshFromStorage(reason) {
 window.addEventListener('storage', function(e) {
   if (e.key === 'pb-balance' || e.key === 'pb-balance-start') {
     if (typeof loadPlayerDashboardFromDb === 'function') {
-      try { loadPlayerDashboardFromDb(); } catch(_e) { loadBalance(); }
+      try { loadPlayerDashboardFromDb(); } catch(_e) { try { applyBalanceUnavailable('dashboard_refresh_failed'); } catch(__e){} }
     } else {
       loadBalance();
       syncBalanceDisplays();
@@ -11145,20 +11210,29 @@ function _applyDashboardTickets(data, opts) {
 
 async function loadPlayerDashboardFromDb(opts) {
   opts = opts || {};
+  _balanceLoadState = 'loading';
   var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
   var pid  = _safeId(pl.id != null ? pl.id : pl.username);
   var cid  = _safeId(club.id != null ? club.id : club.clubId);
   if (!pid) {
-    _balanceFromServer = false;
-    try { syncBalanceDisplays(); } catch(_e){}
-    return { ok:false, fallbackReason:'no_player_id' };
+    try { applyBalanceUnavailable('no_player_id'); } catch(_e){}
+    return { ok:false, fallbackReason:'no_player_id', balanceUnavailable:true };
   }
   try {
     var qs   = '?playerId='+encodeURIComponent(pid)+(cid?'&clubId='+encodeURIComponent(cid):'');
     var resp = await (typeof _pbFetch === 'function' ? _pbFetch('/api/player/dashboard'+qs) : fetch('/api/player/dashboard'+qs));
-    var data = await resp.json();
-    if (!data.ok) throw new Error(data.error||'dashboard not ok');
+    // Fail-closed on any non-2xx: never invent local bankroll (covers 401/403/404/409/429/500/502).
+    if (!resp || typeof resp.ok === 'undefined') throw new Error('dashboard_no_response');
+    if (!resp.ok) throw new Error('dashboard_http_' + resp.status);
+    var data;
+    try {
+      data = await resp.json();
+    } catch(_je) {
+      throw new Error('dashboard_malformed_json');
+    }
+    if (!data || typeof data !== 'object') throw new Error('dashboard_malformed_json');
+    if (!data.ok) throw new Error(data.error || data.code || ('dashboard_not_ok_' + (resp.status || '')));
     if (data.tickets) {
       try {
         var _fetcher = typeof _pbFetch === 'function' ? _pbFetch : fetch;
@@ -11190,20 +11264,25 @@ async function loadPlayerDashboardFromDb(opts) {
     if (b && b.availableBalance != null && !isNaN(Number(b.availableBalance))) {
       applyDisplayedBalance(Number(b.availableBalance));
       _balanceFromServer = true;
+      _updatePlayerSourceBadge('db');
     } else {
-      _balanceFromServer = false;
-      syncBalanceDisplays();
+      // Authoritative response without usable balance — fail closed (no $1000 / local calc).
+      applyBalanceUnavailable('missing_balance');
+      _updatePlayerSourceBadge('unavailable');
     }
-    _updatePlayerSourceBadge('db');
     var _activeN = (data.tickets && data.tickets.active) ? data.tickets.active.length : 0;
     
     return data;
   } catch(e) {
-    console.warn('[player dashboard db] fallback to localStorage:', e.message);
-    _balanceFromServer = false;
-    try { syncBalanceDisplays(); } catch(_e){}
-    _updatePlayerSourceBadge('localStorage');
-    return { ok:false, fallbackReason:e.message };
+    var msg = (e && e.message) ? e.message : 'dashboard_error';
+    // Offline / abort / timeout → same fail-closed UI (no synthetic bankroll).
+    if (/abort|timeout|failed to fetch|networkerror|offline/i.test(String(msg))) {
+      msg = 'dashboard_unreachable';
+    }
+    console.warn('[player dashboard db] fail-closed (no local balance):', msg);
+    try { applyBalanceUnavailable(msg); } catch(_e){}
+    _updatePlayerSourceBadge('unavailable');
+    return { ok:false, fallbackReason:msg, balanceUnavailable:true };
   }
 }
 
@@ -11217,10 +11296,11 @@ function _updatePlayerSourceBadge(source) {
     document.body.appendChild(badge);
   }
   var isDb = source === 'db';
-  badge.style.background = isDb ? '#0c1a2e' : '#1a0a00';
-  badge.style.border = '1px solid '+(isDb?'#2563eb':'#ea580c');
-  badge.style.color  = isDb ? '#93c5fd' : '#fdba74';
-  badge.textContent  = '👤 Player:'+(isDb?'DB':'Local');
+  var isUnavail = source === 'unavailable';
+  badge.style.background = isDb ? '#0c1a2e' : (isUnavail ? '#1a1010' : '#1a0a00');
+  badge.style.border = '1px solid '+(isDb?'#2563eb':(isUnavail?'#b91c1c':'#ea580c'));
+  badge.style.color  = isDb ? '#93c5fd' : (isUnavail ? '#fca5a5' : '#fdba74');
+  badge.textContent  = isDb ? '👤 Player:DB' : (isUnavail ? '👤 Player:Balance unavailable' : '👤 Player:Local');
 }
 
 async function runPlayerDashboardDbAudit() {

@@ -3,7 +3,7 @@
 **Date:** 2026-09-09  
 **FE repo:** `pocketbooks-sports`  
 **BE verification (read-only):** `~/.openclaw/workspace/pocketbooks-sports-backend`  
-**Branch:** `cursor/trust-boundary-audit`  
+**Branch:** `cursor/pre-beta-trust-stack` (includes trust-boundary-audit + p0 + nav + P0.5)  
 **Scope:** Frontend assumptions where the browser may act more authoritatively than the server for money, identity, or settlement.  
 **Constraint honored:** No production accounting API redesign. Settlement recording remains gated OFF (`SETTLEMENT_RECORDING_ENABLED` must stay false until owner bootstrap sign-off). No production financial data mutations from this work.
 
@@ -75,13 +75,15 @@ Backend spot-check (read-only): `/api/bets/place` recalculates payout from odds 
 
 ## P1 findings
 
-### P1-1 — Dashboard failure falls back to `calcAvailableBalance()` from `pb-tickets` / `pb-balance-start`
+### P1-1 — Dashboard failure falls back to `calcAvailableBalance()` from `pb-tickets` / `pb-balance-start` (**fixed on pre-beta trust stack**)
 
 | Field | Detail |
 |-------|--------|
-| **Where** | `loadPlayerDashboardFromDb` catch → `_balanceFromServer = false` → `syncBalanceDisplays()` |
-| **Class** | **RISK** (display authority) |
-| **Notes** | Signed-in boot already skips painting localStorage balance before hydrate. If dashboard 500s after hydrate, UI may show client-derived bankroll. Prefer “—” / last server value (further display-only hardening optional). |
+| **Where** | `loadPlayerDashboardFromDb` / `syncBalanceDisplays` / `_liveAvailableBalance` |
+| **Class before** | **RISK** (display authority) |
+| **Class after fix** | **SERVER VERIFIED** display under DB-primary — fail-closed |
+| **Fix** | Non-2xx / timeout / offline / malformed JSON / missing balance → paint `—`, show refresh, never `$1000` / `pb-balance-start` / client-derived bankroll. Placement blocked until authoritative balance loads. |
+
 
 ### P1-2 — Host overview / settlements local stores
 
