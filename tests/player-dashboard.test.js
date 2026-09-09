@@ -322,6 +322,13 @@ test('dashboard apply sets _balanceFromServer from availableBalance', function()
   assert(playerHtml.indexOf('_balanceFromServer = true') !== -1, 'marks server as authoritative');
 });
 
+test('dashboard failure is fail-closed (no local $1000 / calcAvailableBalance paint)', function() {
+  assert(playerHtml.indexOf('applyBalanceUnavailable') !== -1, 'applyBalanceUnavailable present');
+  assert(playerHtml.indexOf('dashboard_http_') !== -1, 'HTTP status fail-closed');
+  assert(playerHtml.indexOf('[player dashboard db] fallback to localStorage:') === -1, 'localStorage fallback log removed');
+  assert(playerHtml.indexOf('Unable to refresh balance') !== -1, 'unable-to-refresh UX');
+});
+
 test('visibility/pageshow refresh dashboard from server', function() {
   assert(playerHtml.indexOf("window.addEventListener('pageshow'") !== -1, 'pageshow refreshes dashboard');
   assert(playerHtml.indexOf('loadPlayerDashboardFromDb();') !== -1, 'visibility/pageshow calls dashboard');
