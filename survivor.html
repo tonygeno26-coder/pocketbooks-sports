@@ -356,8 +356,8 @@ function _authCanAttempt() {
   return true;
 }
 function _authHandleResponse(status, data) {
+  // Classify-only — never redirect here (redirects during refresh break recovery).
   if (status === 401 || status === 403) {
-    _authRedirectToLogin('Session invalid — please sign in again');
     return 'fatal';
   }
   if (status === 429) {

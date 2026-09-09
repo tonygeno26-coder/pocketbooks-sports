@@ -1386,8 +1386,8 @@ function _authCanAttempt() {
   return true;
 }
 function _authHandleResponse(status, data) {
+  // Classify-only — never redirect here (redirects during refresh break recovery).
   if (status === 401 || status === 403) {
-    _authRedirectToLogin('Session invalid — please sign in again');
     return 'fatal';
   }
   if (status === 429) {
@@ -2516,21 +2516,10 @@ async function apiCall(method, path, body, _retried) {
   if (!_retried && !_isAuthApiPath(path)) {
     try { await _ensureFreshToken(); } catch (_e) {}
   }
-  var token = TOKEN || localStorage.getItem('pb-sports-token') || '';
+  var token = TOKEN || localStorage.getItem('pb-sports-token') || localStorage.getItem('pb-session-token') || '';
   const r = await fetch(API+path, {method, headers:{'Content-Type':'application/json',...(token?{'Authorization':'Bearer '+token}:{})}, body:body?JSON.stringify(body):undefined});
   var data = {};
   try { data = await r.json(); } catch (_e) { data = {}; }
-  if (r.status === 401 || r.status === 403) {
-    if (_isAuthApiPath(path)) {
-      _authRedirectToLogin('Session invalid — please sign in again');
-      return data;
-    }
-    var hard403 = r.status === 403 && data && data.error !== 'expired_token' && !/expired token/i.test(String(data.error || ''));
-    if (r.status === 401 || hard403) {
-      _authRedirectToLogin('Session invalid — please sign in again');
-      return data;
-    }
-  }
   if (r.status === 429 && _isAuthApiPath(path)) {
     _authHandleResponse(429, data);
     return data;
@@ -2540,6 +2529,18 @@ async function apiCall(method, path, body, _retried) {
     var ok = await _refreshAuthToken();
     if (ok && !_authGiveUp) return apiCall(method, path, body, true);
     if (!_authGiveUp) _authRedirectToLogin('Your session expired — please sign in again');
+    return data;
+  }
+  if (r.status === 401 || r.status === 403) {
+    if (_isAuthApiPath(path)) {
+      _authRedirectToLogin('Session invalid — please sign in again');
+      return data;
+    }
+    var hard403 = r.status === 403 && data && data.error !== 'expired_token' && !/expired token/i.test(String(data.error || ''));
+    if (hard403 && !_authGiveUp) {
+      _authRedirectToLogin('Session invalid — please sign in again');
+      return data;
+    }
   }
   return data;
 }

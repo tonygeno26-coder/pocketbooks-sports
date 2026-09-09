@@ -11,7 +11,12 @@
 <script>
 (function(){
   try {
-    var _bootTok = localStorage.getItem('pb-sports-token') || '';
+    // Visual QA / design-system parity: ?preview=1 must not bounce to lobby
+    // (host already has preview helpers later; top-of-file redirect was the escape gap).
+    var _hPrev = false;
+    try { _hPrev = new URLSearchParams(location.search).get('preview') === '1'; } catch(_e){}
+    if (_hPrev) return;
+    var _bootTok = localStorage.getItem('pb-sports-token') || localStorage.getItem('pb-session-token') || '';
     if (!_bootTok) {
       location.replace('lobby.html' + (location.search || ''));
       return;
@@ -39,7 +44,7 @@
     try { var ar = localStorage.getItem('pb-actor-role'); if (ar && _isHost(ar)) role = ar; } catch(_e){}
     try {
       if (!_isHost(role)) {
-        var tok = localStorage.getItem('pb-sports-token')||'';
+        var tok = localStorage.getItem('pb-sports-token')||localStorage.getItem('pb-session-token')||'';
         var parts = tok.split('.');
         if (parts.length === 3) {
           var payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
@@ -1717,9 +1722,11 @@ function renderAdminCrypto() {
 <script src="team-logos.js"></script>
 <script>
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
-let TOKEN=localStorage.getItem('pb-sports-token')||'';
+let TOKEN=localStorage.getItem('pb-sports-token')||localStorage.getItem('pb-session-token')||'';
+
 var _TOKEN_SKEW_MS = 5 * 60 * 1000;
 var _tokenRefreshInFlight = null;
+// ── Auth retry guard — max 3 retries, backoff, no spiral on 401/403/429 ──
 var _AUTH_MAX_RETRIES = 3;
 var _authFailCount = 0;
 var _authBlockedUntil = 0;
@@ -1736,6 +1743,10 @@ function _clearAuthLocalStorage() {
   TOKEN = '';
 }
 function _authRedirectToLogin(msg) {
+  // Visual QA: ?preview=1 must stay on host shell (no lobby bounce / token wipe).
+  try {
+    if (new URLSearchParams(location.search).get('preview') === '1') return;
+  } catch (_e) {}
   if (_authGiveUp) return;
   _authGiveUp = true;
   _clearAuthLocalStorage();
@@ -1750,9 +1761,9 @@ function _authCanAttempt() {
   if (Date.now() < _authBlockedUntil) return false;
   return true;
 }
+// Classify-only — never redirect here (redirects during refresh break recovery).
 function _authHandleResponse(status, data) {
   if (status === 401 || status === 403) {
-    _authRedirectToLogin('Session invalid — please sign in again');
     return 'fatal';
   }
   if (status === 429) {
@@ -1813,6 +1824,10 @@ function _pathFromUrl(url) {
 }
 function _isAuthApiPath(path) {
   return /^\/api\/auth\/(token|refresh|login|signup|logout|verify)\b/.test(path || '');
+}
+function _isSoftAuthPath(path) {
+  // Soft-fail notifications — never session-nuke / never wipe on poll 401.
+  return /\/api\/notifications(\/|$)/.test(path || '');
 }
 function _isExpiredAuth(status, data) {
   if (status === 401) return true;
@@ -1911,6 +1926,9 @@ function _getActorHeaders() {
 }
 async function _pbFetch(url, opts) {
   opts = opts || {};
+  // Always hit Railway for /api/* — same as lobby/player. Relative /api rewrite
+  // works on Vercel, but absolute avoids silent auth/rewrite misses that leave
+  // the Players tab on stale localStorage balance:0.
   if (typeof url === 'string' && url.indexOf('/api/') === 0 && typeof API === 'string' && API) {
     url = API + url;
   }
@@ -1925,18 +1943,9 @@ async function _pbFetch(url, opts) {
   delete fetchOpts._retried;
   var resp = await fetch(url, fetchOpts);
   if (!retried && !_isAuthApiPath(path)) {
-    if (resp.status === 401 || resp.status === 403) {
-      var fatal = resp.status === 401;
-      if (!fatal && resp.status === 403) {
-        try {
-          var peek403 = await resp.clone().json();
-          fatal = !(peek403 && (peek403.error === 'expired_token' || /expired token/i.test(String(peek403.error || peek403.message || ''))));
-        } catch (_e) { fatal = true; }
-      }
-      if (fatal) {
-        _authRedirectToLogin('Session invalid — please sign in again');
-        return resp;
-      }
+    // Soft-fail notifications — never session-nuke / never wipe on poll 401.
+    if (_isSoftAuthPath(path) && (resp.status === 401 || resp.status === 403)) {
+      return resp;
     }
     if (resp.status === 429 && _isAuthApiPath(path)) {
       try { _authHandleResponse(429, await resp.clone().json()); } catch (_e) { _authHandleResponse(429, {}); }
@@ -1949,10 +1958,22 @@ async function _pbFetch(url, opts) {
         expired = peek && (peek.error === 'expired_token' || /expired token/i.test(String(peek.error || peek.message || '')));
       } catch (_e) {}
     }
+    // Refresh-before-redirect: never treat first 401 as immediately fatal.
     if (expired && _authCanAttempt()) {
       var refreshed = await _refreshAuthToken();
       if (refreshed && !_authGiveUp) return _pbFetch(url, Object.assign({}, opts, { _retried: true }));
       if (!_authGiveUp) _authRedirectToLogin('Your session expired — please sign in again');
+      return resp;
+    }
+    if (resp.status === 403) {
+      var hard403 = true;
+      try {
+        var peek403 = await resp.clone().json();
+        hard403 = !(peek403 && (peek403.error === 'expired_token' || /expired token/i.test(String(peek403.error || peek403.message || ''))));
+      } catch (_e) { hard403 = true; }
+      if (hard403 && !_authGiveUp) _authRedirectToLogin('Session invalid — please sign in again');
+    } else if (resp.status === 401 && !_authCanAttempt() && !_authGiveUp) {
+      _authRedirectToLogin('Session invalid — please sign in again');
     }
   }
   if (_isAuthApiPath(path) && (resp.status === 401 || resp.status === 403)) {
@@ -1974,16 +1995,8 @@ async function apiCall(method, path, body, _retried) {
   });
   var data = {};
   try { data = await r.json(); } catch (_e) { data = {}; }
-  if (r.status === 401 || r.status === 403) {
-    if (_isAuthApiPath(path)) {
-      _authRedirectToLogin('Session invalid — please sign in again');
-      return data;
-    }
-    var hard403 = r.status === 403 && data && data.error !== 'expired_token' && !/expired token/i.test(String(data.error || ''));
-    if (r.status === 401 || hard403) {
-      _authRedirectToLogin('Session invalid — please sign in again');
-      return data;
-    }
+  if (_isSoftAuthPath(path) && (r.status === 401 || r.status === 403)) {
+    return data;
   }
   if (r.status === 429 && _isAuthApiPath(path)) {
     _authHandleResponse(429, data);
@@ -1994,6 +2007,17 @@ async function apiCall(method, path, body, _retried) {
     var ok = await _refreshAuthToken();
     if (ok && !_authGiveUp) return apiCall(method, path, body, true);
     if (!_authGiveUp) _authRedirectToLogin('Your session expired — please sign in again');
+    return data;
+  }
+  if (r.status === 401 || r.status === 403) {
+    if (_isAuthApiPath(path)) {
+      _authRedirectToLogin('Session invalid — please sign in again');
+      return data;
+    }
+    var hard403b = r.status === 403 && data && data.error !== 'expired_token' && !/expired token/i.test(String(data.error || ''));
+    if (hard403b && !_authGiveUp) {
+      _authRedirectToLogin('Session invalid — please sign in again');
+    }
   }
   return data;
 }
@@ -4212,7 +4236,7 @@ window.switchHostTab = switchHostTab;
 // ── MOCK PLAYER FOR TESTING ───────────────────────────────────────────────────
 (function(){
   var hasToken = false;
-  try { hasToken = !!localStorage.getItem('pb-sports-token'); } catch(_e){}
+  try { hasToken = !!(localStorage.getItem('pb-sports-token') || localStorage.getItem('pb-session-token')); } catch(_e){}
   var existing = [];
   try { existing = JSON.parse(localStorage.getItem('pb-club-players')||'[]'); } catch(_e){}
   // Real host sessions must not keep the demo P1001 row — it looks like
