@@ -1095,10 +1095,34 @@ button[style*="background:#00ff87"],
 .sc-red .sc-amount{color:var(--negative)!important}
 .pr-amount.pos,.pr-amount.owe-you{color:var(--positive)}
 .pr-amount.neg,.pr-amount.owe-players{color:var(--negative)}
-.host-section-note{font-size:0.7rem;color:var(--text-muted);font-weight:600;padding:0 16px 8px}
+.host-section-note{font-size:0.7rem;color:var(--text-muted);font-weight:600;padding:0 16px 8px;line-height:1.45}
+#home-content .pb-empty,#bets-section .pb-empty,#players-section .pb-empty,
+#home-content .pb-loading,#bets-section .pb-loading,#players-section .pb-loading{margin:12px 16px 16px}
+.pb-empty{padding:28px 18px;text-align:center;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius)}
+.pb-empty-title{font-size:0.95rem;font-weight:800;color:var(--text-primary);margin-bottom:6px}
+.pb-empty-body{font-size:0.78rem;color:var(--text-secondary);line-height:1.45}
+.pb-loading{padding:24px;text-align:center;color:var(--text-secondary);font-size:0.8rem;font-weight:700}
+.pb-loading::before{content:'';display:block;width:22px;height:22px;margin:0 auto 10px;border-radius:50%;border:2px solid var(--border);border-top-color:var(--accent-blue);animation:hostSpin 0.8s linear infinite}
+@keyframes hostSpin{to{transform:rotate(360deg)}}
+.pb-error{margin:12px 16px;padding:12px 14px;border-radius:12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.28);color:#fecaca;font-size:0.78rem;font-weight:700;line-height:1.4}
+.host-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+#host-bets-list .host-bet-metrics{min-width:0}
+#host-bets-list [data-host-group],#players-tab-list [onclick*="togglePlayerExpand"]{min-height:44px}
+@media (min-width:600px){
+  #host-bets-filters{grid-template-columns:1fr 1fr 1fr!important}
+  #host-bets-tabs{flex-direction:row!important}
+  #host-bets-tabs .host-bets-tab{width:auto!important;flex:1}
+}
 @media (min-width:768px){
   body{max-width:920px}
   .bnav{max-width:920px}
+  .settlement{gap:12px}
+}
+@media (min-width:1100px){
+  #host-bets-list .host-bet-metrics{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+}
+@media (prefers-reduced-motion:reduce){
+  .pb-loading::before{animation:none!important;border-top-color:var(--text-secondary)}
 }
 
 
@@ -1114,6 +1138,29 @@ try {
   function syncBody(){ if (!document.body) return; if (document.documentElement.classList.contains('theme-light')) document.body.classList.add('theme-light'); }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',syncBody); else syncBody();
 })();
+
+// Host presentation helpers — empty / loading / error chrome (no data logic)
+function _hostEsc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+}
+function _hostStateHtml(kind, title, body, icon) {
+  title = title || '';
+  body = body || '';
+  icon = icon || '';
+  if (kind === 'loading') {
+    return '<div class="pb-loading" role="status" aria-live="polite">' + _hostEsc(title || 'Loading…') + '</div>';
+  }
+  if (kind === 'error') {
+    return '<div class="pb-error" role="alert"><strong>' + _hostEsc(title) + '</strong>'
+      + (body ? '<div style="margin-top:6px;font-weight:600;opacity:0.92">' + _hostEsc(body) + '</div>' : '')
+      + '</div>';
+  }
+  return '<div class="pb-empty" role="status">'
+    + (icon ? '<div style="font-size:2rem;margin-bottom:10px" aria-hidden="true">' + icon + '</div>' : '')
+    + '<div class="pb-empty-title">' + _hostEsc(title) + '</div>'
+    + (body ? '<div class="pb-empty-body">' + body + '</div>' : '')
+    + '</div>';
+}
 
 // ═══ BUY DIAMONDS ══════════════════════════════════════════════════════════════
 // Purchase UI lives in diamonds.js. Keep entry-point names as thin wrappers.
@@ -1547,6 +1594,7 @@ function renderAdminCrypto() {
     <div class="stat-lbl">At Risk</div>
   </div>
 </div>
+<p class="host-section-note">Overview balances and weekly stats refresh from the club database when online.</p>
 
 <!-- SPORT FILTER -->
 <div class="sport-filter" style="display:none">
@@ -1600,7 +1648,8 @@ function renderAdminCrypto() {
        intentionally retained so player creation can still be invoked elsewhere
        (e.g. approve/invite flow). UI removal only — no functional change. -->
 </div>
-<div class="player-list" id="player-list"></div>
+<p class="host-section-note">Home shows a snapshot — open the Players tab for search, limits, and profiles.</p>
+<div class="player-list" id="player-list"><div class="pb-loading" role="status" aria-live="polite">Loading players…</div></div>
 </div><!-- /home-content -->
 
 <!-- APPROVE PLAYER MODAL — must live OUTSIDE #home-content (hidden on Players tab) -->
@@ -1664,17 +1713,18 @@ function renderAdminCrypto() {
 </div>
 
 <!-- BOTTOM NAV -->
-<div id="players-section" style="display:none;padding-bottom:100px"></div>
+<div id="players-section" style="display:none;padding-bottom:100px" role="region" aria-label="Club players"></div>
 <div id="settlements-section" style="display:none;background:var(--bg);min-height:100vh;padding-bottom:100px"></div>
 <div id="crypto-section" style="display:none;padding-bottom:100px"></div>
 <!-- Phase U: Admin System Panel (full_admin+ only) -->
 <div id="_admin-system-panel" style="display:none;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:12px;margin:8px;overflow:hidden"></div>
-<div id="bets-section" style="display:none;padding-bottom:100px">
+<div id="bets-section" style="display:none;padding-bottom:100px" role="region" aria-label="Host bets">
   <div style="padding:16px 16px 8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
     <span style="font-size:1rem;font-weight:900">Host Bets</span>
     <span id="host-bets-count">0 bets</span>
   </div>
-  <div id="host-bets-tabs">
+  <p class="host-section-note">Filter by player, status, or date. Expand a row to review legs and actions.</p>
+  <div id="host-bets-tabs" role="tablist" aria-label="Bet status">
     <button type="button" class="host-bets-tab active" data-bets-tab="all">ALL <span id="host-bets-tab-all">0</span></button>
     <button type="button" class="host-bets-tab" data-bets-tab="active">ACTIVE <span id="host-bets-tab-active">0</span></button>
     <button type="button" class="host-bets-tab" data-bets-tab="settled">SETTLED <span id="host-bets-tab-settled">0</span></button>
@@ -1699,10 +1749,10 @@ function renderAdminCrypto() {
       <option value="90">Last 90 days</option>
     </select>
   </div>
-  <div id="host-bets-list"></div>
+  <div id="host-bets-list" class="host-table-scroll"><div class="pb-loading" role="status" aria-live="polite">Loading bets…</div></div>
 </div>
 
-<div class="bnav">
+<div class="bnav" role="navigation" aria-label="Host dashboard">
   <div class="bn active" onclick="setBN(this,'home')">
     <div class="bn-ico"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>
     <div class="bn-lbl">Home</div>
@@ -3681,10 +3731,13 @@ function renderHostBets(){
   }
 
   if(!list.length){
-    var emptyMsg = _hostBetsTab==='settled' ? 'No settled bets in the last 7 days'
+    var emptyTitle = _hostBetsTab==='settled' ? 'No settled bets in the last 7 days'
       : (_hostBetsTab==='canceled' ? 'No canceled bets'
       : (_hostBetsTab==='all' ? 'No bets found' : 'No active bets'));
-    el.innerHTML = delSection + '<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">'+emptyMsg+'</div>';
+    var emptyBody = _hostBetsTab==='active'
+      ? 'Active tickets appear here once players place bets.'
+      : 'Try widening the date filter or switching tabs.';
+    el.innerHTML = delSection + _hostStateHtml('empty', emptyTitle, emptyBody, '🎫');
     return;
   }
 
@@ -4595,16 +4648,9 @@ function renderPlayersTab(){
   }
   function emptyOrLoadingHtml() {
     if (!dbReady) {
-      return '<div style="margin:16px;background:var(--bg-card);border:1px solid var(--border);border-radius:18px;padding:32px 20px;text-align:center">'
-        +'<div style="font-size:0.9rem;font-weight:800;margin-bottom:6px">Loading players…</div>'
-        +'<div style="font-size:0.8rem;color:var(--gray)">Fetching club roster</div>'
-      +'</div>';
+      return _hostStateHtml('loading', 'Loading players…', '', '');
     }
-    return '<div style="margin:16px;background:var(--bg-card);border:1px solid var(--border);border-radius:18px;padding:32px 20px;text-align:center">'
-      +'<div style="font-size:2.5rem;margin-bottom:12px">👥</div>'
-      +'<div style="font-size:1rem;font-weight:800;margin-bottom:6px">No players yet</div>'
-      +'<div style="font-size:0.8rem;color:var(--gray)">Share your club code to get join requests</div>'
-    +'</div>';
+    return _hostStateHtml('empty', 'No players yet', 'Share your club invite code — join requests land under Applicants.', '👥');
   }
 
   // Filter by search + tab
@@ -4654,7 +4700,7 @@ function renderPlayersTab(){
   var listInner = '';
   if (_playersActiveTab==='applicants') {
     if (!filteredReqs.length) {
-      listInner='<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">No pending applicants</div>';
+      listInner=_hostStateHtml('empty', 'No pending applicants', 'When someone requests to join, approve them here.', '✉️');
     } else {
       listInner=filteredReqs.map(requestRow).join('');
     }
@@ -4684,9 +4730,9 @@ function renderPlayersTab(){
     if (_playersActiveTab==='applicants') {
       listEl.innerHTML = filteredReqs.length ? filteredReqs.map(requestRow).join('') : '';
     } else if (!dbReady) {
-      listEl.innerHTML = '<div style="text-align:center;padding:24px 12px;color:#555;font-size:0.82rem">Loading players…</div>';
+      listEl.innerHTML = _hostStateHtml('loading', 'Loading players…', '', '');
     } else if (!filtered.length) {
-      listEl.innerHTML = '<div style="text-align:center;padding:24px 12px;color:#555;font-size:0.82rem">No players yet</div>';
+      listEl.innerHTML = _hostStateHtml('empty', 'No players yet', 'Share your club invite code to add players.', '👥');
     } else {
       listEl.innerHTML = filtered.map(playerRow).join('');
     }
