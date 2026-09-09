@@ -60,5 +60,16 @@ test('idempotency key still sent', function() {
   assert.ok(modal.indexOf('idempotencyKey') !== -1);
 });
 
+test('FE sign convention: − owes host, + host owes; no inversion', function() {
+  const modal = src.slice(src.indexOf('async function openSettlePlayerModal'), src.indexOf('window.openSettlePlayerModal'));
+  // Signed settlementBalance preferred; owesHost → negative
+  assert.ok(modal.indexOf('owesHost > 0 ? -Math.round') !== -1 ||
+            modal.indexOf('owesHost > 0 ? -') !== -1);
+  assert.ok(modal.indexOf("before < 0 ? 'player_paid_host' : 'host_paid_player'") !== -1);
+  // Must not negate settlementBalance when provided
+  assert.ok(modal.indexOf('-parseFloat(settlementBalance)') === -1);
+  assert.ok(modal.indexOf('overpay_blocked') !== -1);
+});
+
 console.log('\n── Results: ' + pass + ' passed, ' + fail + ' failed ──');
 process.exit(fail ? 1 : 0);
