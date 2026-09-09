@@ -47,11 +47,11 @@ Viewports captured: **390 / 768 / 1440** (plus host overview **430 / 1280**). In
 |---|---|---|---|
 | H1 | Was P1 | Host `?preview=1` bounced to lobby | **FIXED** (`440c07f` lineage) |
 | H2 | Was P1 | Trailing `body{max-width:920px}` fought wide MQ | **FIXED** |
-| H3 | P1→mitigated | 390 right-edge crop / Settle tab clip | **Mitigated** (bnav + 100vw). Re-check on device after merge. |
+| H3 | P1 residual | 390 right-edge crop / Settle tab not visible in headless shots | **OPEN for device confirm** — 768/1440 PASS; do not treat as clear until iPhone/390 device check. |
 | P1 | MINOR | Player 390 sport-grid 3rd column | Accept for beta; not merge-blocking |
 | S1 | Merge note | Host settlements terminology incomplete until Option A FE merges | Not a UX-stack blocker |
 
-**No open BLOCKER** for UX stack owner merge review, contingent on post-merge 390 device spot-check of Host Overview + Settle tab.
+**Residual P1:** Host 390 right-edge / Settle tab visibility in headless captures — owner should device-check before calling host fully green. 768/1440 host PASS.
 
 ---
 
@@ -141,9 +141,9 @@ Viewports captured: **390 / 768 / 1440** (plus host overview **430 / 1280**). In
 
 ```
 STATUS: UX STACK READY FOR OWNER MERGE REVIEW
-HOST PREVIEW: FIXED (preview=1 escape + containment; 390 device spot-check recommended)
+HOST PREVIEW: FIXED auth/breakpoints; RESIDUAL 390 right-crop (Settle) — device spot-check required
 SCREENSHOT QA: PASS/MINOR matrix above; artifacts in docs/visual-qa/morning/
-VISUAL BLOCKERS: NONE open (H3 mitigated)
+VISUAL BLOCKERS: H3 residual @390 host (Settle/right-edge) — confirm on device
 STACK DEPENDENCIES: design-system first; player.html stack sequential; host then a11y; settlement held
 SAFE MERGE ORDER: design-system → game-cards → live → props → bet-slip → player-dashboard → host → a11y
 BET SLIP BUSY GUARD: PASS (FE _confirmBetInFlight + unified idem keys)
