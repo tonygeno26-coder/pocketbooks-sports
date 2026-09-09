@@ -853,6 +853,9 @@ function mergeEspnRecords(oddsList, espnList){
 }
 function isPreseasonTestMode(){
   // Regular-season Week 1+ slate from ESPN means we are past preseason testing.
+  // Browse-only weeks (scheduleLocked) must never look like live pick mode.
+  if (scheduleLocked && browseWeek && currentDetail && currentDetail.pool
+      && browseWeek !== currentDetail.pool.currentWeek) return false;
   if (nflGames && nflGames.length) return false;
   if (espnCache[1] && (espnCache[1].games||[]).length) return false;
   return !oddsGames.length;
@@ -1174,6 +1177,8 @@ function teamCellHtml(game, team, side, used, gameId, gi, locked){
 }
 
 function selectMatchupTeam(gi, side){
+  // Never allow pick UI on browse-only / non-pool weeks (preseason/test separation).
+  if (browseWeek && currentDetail && currentDetail.pool && browseWeek !== currentDetail.pool.currentWeek) return;
   if (scheduleLocked || picksAreLocked(currentDetail)) return;
   var g = nflGames[gi];
   if (!g) return;
@@ -1366,6 +1371,10 @@ function renderWeekPicks(standings, detail){
 }
 
 async function submitPick(){
+  if (browseWeek && currentDetail && currentDetail.pool && browseWeek !== currentDetail.pool.currentWeek) {
+    toast('Browse-only week — switch back to the current pool week to pick');
+    return;
+  }
   if (scheduleLocked || picksAreLocked(currentDetail)) {
     toast('Picks are locked — waiting for games to finish');
     return;
