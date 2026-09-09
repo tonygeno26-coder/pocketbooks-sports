@@ -1424,19 +1424,31 @@ body{
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   PROPS UX — Caesars-style grouping readability + search chrome
+   PROPS DISCOVERY 2.0 — dual search, sticky filters, player grouping
    ═══════════════════════════════════════════════════════════════════════════ */
+.mc-props-sticky-bar{
+  position:sticky;top:0;z-index:8;
+  background:linear-gradient(180deg,var(--card,#0C1424) 88%,rgba(12,20,36,0));
+  margin:0 -12px;padding:0 12px 6px;
+}
 .mc-props-toolbar{
-  display:flex;flex-direction:column;gap:8px;padding:8px 0 10px;
+  display:flex;flex-direction:column;gap:8px;padding:8px 0 6px;
   border-bottom:1px solid var(--border);
 }
+.mc-props-search-row{display:flex;gap:8px;align-items:stretch}
 .mc-props-search{
-  width:100%;min-height:40px;padding:10px 12px;border-radius:10px;
+  flex:1;min-width:0;min-height:40px;padding:10px 12px;border-radius:10px;
   border:1px solid var(--border);background:var(--bg-elev,#0C1424);
   color:var(--white);font-size:0.8rem;font-weight:700;outline:none;
 }
 .mc-props-search::placeholder{color:var(--gray);font-weight:600}
 .mc-props-search:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(22,119,255,0.15)}
+.mc-props-search-player{flex:1.2}
+.mc-props-search-type{flex:1}
+.mc-props-results-count{
+  font-size:0.62rem;font-weight:700;color:var(--gray);padding:0 2px 2px;min-height:14px;
+}
+.mc-props-tabs{padding-top:4px}
 .mc-prop-ou{min-width:58px;padding:7px 5px}
 .mc-prop-ou-label{font-size:0.58rem;font-weight:900;letter-spacing:0.4px;text-transform:uppercase}
 .mc-prop-ou[data-side="over"] .mc-prop-ou-label,.mc-prop-ou.over .mc-prop-ou-label{color:#22C55E}
@@ -1445,11 +1457,49 @@ body{
 .mc-prop-ou .odds-num,.mc-prop-ou-odds{font-size:0.72rem;font-weight:800;color:var(--light)}
 .mc-prop-name{font-size:0.8rem}
 .mc-prop-row.is-hidden-by-filter{display:none!important}
-.mc-prop-section.is-hidden-by-filter{display:none!important}
+.mc-prop-section.is-hidden-by-filter,.mc-prop-player-group.is-hidden-by-filter{display:none!important}
+.mc-prop-type-block.is-hidden-by-filter{display:none!important}
+.mc-prop-row.has-selection{
+  background:rgba(22,119,255,0.06);border-radius:10px;margin:0 -4px;padding-left:4px;padding-right:4px;
+}
+.mc-prop-player-group{
+  margin-top:10px;border:1px solid var(--border);border-radius:12px;overflow:hidden;
+  background:rgba(255,255,255,0.02);
+}
+.mc-prop-player-group:first-child{margin-top:4px}
+.mc-prop-player-hdr{
+  display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;user-select:none;
+  border-bottom:1px solid var(--border);
+}
+.mc-prop-player-hdr .mc-prop-name{font-size:0.84rem}
+.mc-prop-player-count{
+  margin-left:auto;font-size:0.58rem;font-weight:800;color:var(--gray);
+  padding:3px 8px;border-radius:10px;background:rgba(255,255,255,0.04);
+}
+.mc-prop-player-chev{font-size:0.55rem;color:var(--gray);transition:transform 0.15s}
+.mc-prop-player-group.collapsed .mc-prop-player-chev{transform:rotate(-90deg)}
+.mc-prop-player-group.collapsed .mc-prop-player-body{display:none}
+.mc-prop-player-body{padding:0 10px 8px}
+.mc-prop-type-block{padding:8px 0 4px;border-top:1px solid rgba(255,255,255,0.06)}
+.mc-prop-type-block:first-child{border-top:none}
+.mc-prop-type-label{
+  font-size:0.62rem;font-weight:900;color:var(--gray);text-transform:uppercase;
+  letter-spacing:0.7px;padding:0 2px 6px;
+}
+.mc-prop-type-block .mc-prop-row{border-top:none;padding:6px 0}
+.mc-prop-type-block .mc-prop-player{gap:0}
+.mc-prop-type-block .mc-prop-info{display:none}
 .mc-props-filter-empty{padding:18px 12px;text-align:center;background:rgba(255,255,255,0.02);border:1px dashed var(--border);border-radius:12px;margin:8px 0}
 .mc-props-filter-empty-title{font-size:0.82rem;font-weight:800;color:var(--white);margin-bottom:4px}
 .mc-props-filter-empty-body{font-size:0.72rem;color:var(--gray);line-height:1.45;font-weight:600}
 .mc-prop-sec-title{color:var(--white);font-size:0.66rem;letter-spacing:0.8px}
+@media (max-width:400px){
+  .mc-props-sticky-bar{margin:0 -6px;padding:0 6px 4px}
+  .mc-props-search-row{flex-direction:column;gap:6px}
+  .mc-props-search{min-height:44px;font-size:0.78rem}
+  .mc-prop-ous{max-width:52%}
+  .mc-prop-player-hdr{padding:10px 8px}
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    BET SLIP PREMIUM POLISH — clarity only; preserve light sheet + logo hierarchy
@@ -4959,7 +5009,7 @@ function _pbRenderPropOddsBtn(p, gameId, gameLabel, sport, sideLabel, lineLabel)
     '</div>';
 }
 
-function _pbRenderPlayerPropRowHtml(row, gameId, gameLabel, sport, away, home, teamMap) {
+function _pbRenderPlayerPropRowHtml(row, gameId, gameLabel, sport, away, home, teamMap, propTypeLabel) {
   var s = _pbNormalizePropSport(sport);
   var sportLabel = s.toUpperCase();
   var lines = row.lineList || [];
@@ -4989,10 +5039,15 @@ function _pbRenderPlayerPropRowHtml(row, gameId, gameLabel, sport, away, home, t
     }
   }
   var bucket = _pbPropTeamBucket(row, away, home, teamMap);
-  return '<div class="mc-prop-row" data-prop-team="' + bucket + '" data-player-team="' + String(row.team || '').replace(/"/g, '&quot;') + '">' +
+  var pType = String(propTypeLabel || row.propType || '').replace(/"/g, '&quot;');
+  var pName = String(row.playerName || '').replace(/"/g, '&quot;');
+  return '<div class="mc-prop-row" data-prop-team="' + bucket + '" data-player-team="' + String(row.team || '').replace(/"/g, '&quot;') +
+    '" data-player-name="' + pName + '" data-prop-type="' + pType + '">' +
     '<div class="mc-prop-player">' +
       _pbPlayerPropAvatar(row.playerName, row.team, s) +
-      '<div class="mc-prop-info"><div class="mc-prop-name">' + (row.playerName || '') + '</div></div>' +
+      '<div class="mc-prop-info"><div class="mc-prop-name">' + (row.playerName || '') + '</div>' +
+      (propTypeLabel ? '' : ('<div class="mc-prop-type">' + (row.propType || '') + '</div>')) +
+      '</div>' +
     '</div>' +
     '<div class="mc-prop-ous">' + oddsHtml + '</div>' +
   '</div>';
@@ -5046,9 +5101,92 @@ function _pbSectionizeProps(props) {
 function _pbGetPropsUiState(gameId) {
   var key = String(gameId);
   if (!_pbPropsUiState[key]) {
-    _pbPropsUiState[key] = { tab: 'popular', team: 'all', showAll: {}, collapsed: {} };
+    _pbPropsUiState[key] = { tab: 'popular', team: 'all', playerQ: '', propQ: '', showAll: {}, collapsed: {}, playerCollapsed: {} };
   }
+  if (_pbPropsUiState[key].playerQ == null) _pbPropsUiState[key].playerQ = '';
+  if (_pbPropsUiState[key].propQ == null) _pbPropsUiState[key].propQ = '';
+  if (!_pbPropsUiState[key].playerCollapsed) _pbPropsUiState[key].playerCollapsed = {};
   return _pbPropsUiState[key];
+}
+
+function _pbPropsUsePlayerGrouping(ui, propCount) {
+  return !!(ui && String(ui.playerQ || '').trim()) || (propCount >= 120 && ui && ui.tab !== 'popular');
+}
+
+function _pbPropsNeedsLayoutRerender(gameId, ui) {
+  var cached = _pbPropsCache[String(gameId)];
+  if (!cached || !cached.props) return false;
+  var tabProps = _pbFilterPropsForTab(cached.props, ui.tab, cached.sport);
+  var want = _pbPropsUsePlayerGrouping(ui, tabProps.length) ? 'player' : 'category';
+  var card = document.querySelector('.market-card[data-game-id="' + String(gameId).replace(/"/g, '\\"') + '"]');
+  var body = card && card.querySelector('.mc-props-body');
+  return !!(body && body.getAttribute('data-props-layout') !== want);
+}
+
+function _pbFocusPropsSearch(gameId, kind) {
+  var card = document.querySelector('.market-card[data-game-id="' + String(gameId).replace(/"/g, '\\"') + '"]');
+  if (!card) return;
+  var sel = kind === 'type' ? '.mc-props-search-type' : '.mc-props-search-player';
+  var input = card.querySelector(sel);
+  if (input) {
+    input.focus();
+    var len = input.value.length;
+    try { input.setSelectionRange(len, len); } catch (_e) {}
+  }
+}
+
+function _pbBuildPlayerGroups(props, away, home, teamMap) {
+  var byPlayer = {};
+  var order = [];
+  (props || []).forEach(function(p) {
+    var name = String(p.playerName || '').trim() || 'Unknown';
+    if (!byPlayer[name]) {
+      byPlayer[name] = { playerName: name, team: p.team, props: [] };
+      order.push(name);
+    }
+    if (p.team && !byPlayer[name].team) byPlayer[name].team = p.team;
+    byPlayer[name].props.push(p);
+  });
+  return order.map(function(name) {
+    var g = byPlayer[name];
+    g.sections = _pbSectionizeProps(g.props);
+    g.lineRows = _pbGroupPlayerPropRows(g.props, away, home, teamMap);
+    return g;
+  }).sort(function(a, b) {
+    return String(a.playerName || '').localeCompare(String(b.playerName || ''));
+  });
+}
+
+function _pbRenderPlayerGroupHtml(group, gameId, gameLabel, sport, away, home, ui, teamMap) {
+  var s = _pbNormalizePropSport(sport);
+  var pgKey = String(group.playerName || '').replace(/"/g, '');
+  var collapsed = !!(ui.playerCollapsed && ui.playerCollapsed[pgKey]);
+  var sections = group.sections || [];
+  var bodyHtml = sections.map(function(sec) {
+    var rows = _pbGroupPlayerPropRows(sec.props, away, home, teamMap);
+    var teamFilter = ui.team || 'all';
+    if (teamFilter !== 'all') {
+      rows = rows.filter(function(r) {
+        return _pbPropMatchesTeamFilter(r, away, home, teamMap, teamFilter);
+      });
+    }
+    if (!rows.length) return '';
+    var oddsHtml = rows.map(function(r) {
+      return _pbRenderPlayerPropRowHtml(r, gameId, gameLabel, sport, away, home, teamMap, sec.title);
+    }).join('');
+    return '<div class="mc-prop-type-block" data-prop-type="' + String(sec.title || '').replace(/"/g, '&quot;') + '">' +
+      '<div class="mc-prop-type-label">' + String(sec.title || 'Props') + '</div>' + oddsHtml + '</div>';
+  }).join('');
+  if (!bodyHtml) return '';
+  return '<div class="mc-prop-player-group' + (collapsed ? ' collapsed' : '') + '" data-player-group="' + pgKey + '">' +
+    '<div class="mc-prop-player-hdr" onclick="_pbTogglePropPlayerGroup(this)">' +
+      _pbPlayerPropAvatar(group.playerName, group.team, s) +
+      '<div class="mc-prop-info"><div class="mc-prop-name">' + (group.playerName || '') + '</div></div>' +
+      '<span class="mc-prop-player-count">' + (group.lineRows ? group.lineRows.length : sections.length) + ' markets</span>' +
+      '<span class="mc-prop-player-chev">▾</span>' +
+    '</div>' +
+    '<div class="mc-prop-player-body">' + bodyHtml + '</div>' +
+  '</div>';
 }
 
 function _pbRenderPropSectionHtml(section, gameId, gameLabel, sport, away, home, ui, secKey, teamMap) {
@@ -5135,13 +5273,23 @@ function _pbRenderInlinePropsHtml(props, gameId, sport, meta) {
   var tabProps = _pbFilterPropsForTab(props, ui.tab, s);
   var sections = _pbSectionizeProps(tabProps);
   var teamFilter = ui.team || 'all';
+  var usePlayerGroups = _pbPropsUsePlayerGrouping(ui, tabProps.length);
+  var escVal = function(v) { return String(v || '').replace(/"/g, '&quot;'); };
 
   var html = '<div class="mc-props-shell" data-props-game="' + String(gameId).replace(/"/g, '') + '">';
-  html += '<div class="mc-props-toolbar"><input class="mc-props-search" type="search" placeholder="Search players or props" aria-label="Search props"></div><div class="mc-props-tabs">';
+  html += '<div class="mc-props-sticky-bar">';
+  html += '<div class="mc-props-toolbar">';
+  html += '<div class="mc-props-search-row">';
+  html += '<input class="mc-props-search mc-props-search-player" type="search" placeholder="Search player" aria-label="Search player" value="' + escVal(ui.playerQ) + '">';
+  html += '<input class="mc-props-search mc-props-search-type" type="search" placeholder="Search prop type" aria-label="Search prop type" value="' + escVal(ui.propQ) + '">';
+  html += '</div>';
+  html += '<div class="mc-props-results-count" aria-live="polite"></div>';
+  html += '</div>';
+  html += '<div class="mc-props-tabs">';
   tabs.forEach(function(t) {
     html += '<button type="button" class="mc-props-tab' + (ui.tab === t.id ? ' active' : '') + '" data-prop-tab="' + t.id + '" onclick="_pbSetPropTab(this,\'' + t.id + '\')">' + t.label + '</button>';
   });
-  html += '</div><div class="mc-props-body">';
+  html += '</div>';
   if (away && home) {
     html += '<div class="mc-prop-team-pills">' +
       '<button type="button" class="mc-prop-team-pill' + (teamFilter === 'all' ? ' active' : '') + '" onclick="_pbSetPropTeamFilter(this,\'all\')">All</button>' +
@@ -5149,8 +5297,16 @@ function _pbRenderInlinePropsHtml(props, gameId, sport, meta) {
       '<button type="button" class="mc-prop-team-pill' + (teamFilter === 'home' ? ' active' : '') + '" onclick="_pbSetPropTeamFilter(this,\'home\')">' + _pbTeamShort(home) + '</button>' +
       '</div>';
   }
-  if (!sections.length) {
+  html += '</div>';
+  html += '<div class="mc-props-body" data-props-layout="' + (usePlayerGroups ? 'player' : 'category') + '">';
+  if (!tabProps.length) {
     html += _pbPropsEmptyHtml('No props in this category', 'Switch tabs to browse other markets.');
+  } else if (usePlayerGroups) {
+    var groups = _pbBuildPlayerGroups(tabProps, away, home, teamMap);
+    var groupHtml = groups.map(function(g) {
+      return _pbRenderPlayerGroupHtml(g, gameId, gameLabel, s, away, home, ui, teamMap);
+    }).filter(Boolean).join('');
+    html += groupHtml || _pbPropsEmptyHtml('No props for this filter', 'Try another team or search term.');
   } else {
     sections.forEach(function(sec) {
       var secKey = ui.tab + '::' + sec.title;
@@ -5173,6 +5329,7 @@ function _pbRerenderPropsPanel(gameId) {
   if (!meta.home && cached.home) meta.home = cached.home;
   panel.innerHTML = _pbRenderInlinePropsHtml(cached.props, gameId, cached.sport, meta);
   _pbResyncBetSlipSelections();
+  _pbApplyPropsDiscoveryFilter(panel);
   _pbHydratePropHeadshots(panel, cached.props, cached.sport);
 }
 
@@ -5216,6 +5373,18 @@ function _pbTogglePropShowMore(btn) {
   var ui = _pbGetPropsUiState(gameId);
   ui.showAll[key] = !ui.showAll[key];
   _pbRerenderPropsPanel(gameId);
+}
+
+function _pbTogglePropPlayerGroup(hdr) {
+  var grp = hdr && hdr.closest('.mc-prop-player-group');
+  var shell = hdr && hdr.closest('.mc-props-shell');
+  if (!grp || !shell) return;
+  var gameId = shell.getAttribute('data-props-game');
+  var key = grp.getAttribute('data-player-group') || '';
+  var ui = _pbGetPropsUiState(gameId);
+  var nowCollapsed = !grp.classList.contains('collapsed');
+  grp.classList.toggle('collapsed', nowCollapsed);
+  ui.playerCollapsed[key] = nowCollapsed;
 }
 
 function _pbSyncInlinePropsInPlace(props, gameId) {
@@ -5290,6 +5459,7 @@ async function _pbLoadGameProps(gameId, sport, panel, card) {
     if (_pbExpandedPropsGameId !== String(gameId)) return;
     panel.innerHTML = _pbRenderInlinePropsHtml(data.props, gameId, s, meta);
     _pbResyncBetSlipSelections();
+    _pbApplyPropsDiscoveryFilter(panel);
     await _pbHydratePropHeadshots(panel, data.props, s);
   } catch (_e) {
     if (_pbExpandedPropsGameId === String(gameId)) {
@@ -5342,6 +5512,7 @@ async function _pbRefreshExpandedGameProps(opts) {
     } else {
       panel.innerHTML = _pbRenderInlinePropsHtml(data.props, gameId, s, meta);
       _pbResyncBetSlipSelections();
+      _pbApplyPropsDiscoveryFilter(panel);
       await _pbHydratePropHeadshots(panel, data.props, s);
     }
   } catch (_e) {}
@@ -16077,44 +16248,146 @@ document.addEventListener('DOMContentLoaded', function() {
   }).catch(function(_e){});
 });
 
-function _pbFilterPropsPanel(panel, q) {
+function _pbPropRowHasSelection(row) {
+  if (!row) return false;
+  return !!row.querySelector('.mc-prop-ou.selected, .odds-cell.selected');
+}
+
+function _pbPropRowMatchesFilter(row, playerQ, propQ) {
+  if (_pbPropRowHasSelection(row)) return true;
+  var name = (row.getAttribute('data-player-name') || '').toLowerCase();
+  var pType = (row.getAttribute('data-prop-type') || '').toLowerCase();
+  if (!name) {
+    var nameEl = row.querySelector('.mc-prop-name');
+    name = ((nameEl && nameEl.textContent) || '').toLowerCase();
+  }
+  if (!pType) {
+    var metaEl = row.querySelector('.mc-prop-type');
+    pType = ((metaEl && metaEl.textContent) || '').toLowerCase();
+    var typeBlock = row.closest('.mc-prop-type-block');
+    var typeLabel = typeBlock && typeBlock.querySelector('.mc-prop-type-label');
+    if (typeLabel) pType = (typeLabel.textContent || '').toLowerCase();
+    var sec = row.closest('.mc-prop-section');
+    var secLabel = sec && sec.querySelector('.mc-prop-sec-title');
+    if (secLabel) pType = pType || (secLabel.textContent || '').toLowerCase();
+  }
+  if (playerQ && name.indexOf(playerQ) === -1) return false;
+  if (propQ && pType.indexOf(propQ) === -1) return false;
+  return true;
+}
+
+function _pbApplyPropsDiscoveryFilter(panel) {
   if (!panel) return;
-  q = String(q || '').trim().toLowerCase();
-  var rows = panel.querySelectorAll('.mc-prop-row');
+  var t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
+  var shell = panel.querySelector('.mc-props-shell') || panel;
+  var playerInput = shell.querySelector('.mc-props-search-player');
+  var propInput = shell.querySelector('.mc-props-search-type');
+  var gameId = shell.getAttribute('data-props-game');
+  var ui = gameId ? _pbGetPropsUiState(gameId) : null;
+  var playerQ = String((playerInput && playerInput.value) || (ui && ui.playerQ) || '').trim().toLowerCase();
+  var propQ = String((propInput && propInput.value) || (ui && ui.propQ) || '').trim().toLowerCase();
+  if (ui) {
+    ui.playerQ = playerInput ? playerInput.value : ui.playerQ;
+    ui.propQ = propInput ? propInput.value : ui.propQ;
+  }
+  var hasFilter = !!(playerQ || propQ);
+  var rows = shell.querySelectorAll('.mc-prop-row');
   var shown = 0;
   rows.forEach(function(row) {
-    var nameEl = row.querySelector('.mc-prop-name');
-    var metaEl = row.querySelector('.mc-prop-type');
-    var secTitle = row.closest('.mc-prop-section');
-    var secLabel = secTitle && secTitle.querySelector('.mc-prop-sec-title');
-    var name = (nameEl && nameEl.textContent) || '';
-    var meta = (metaEl && metaEl.textContent) || '';
-    var section = (secLabel && secLabel.textContent) || '';
-    var hit = !q || (name + ' ' + meta + ' ' + section).toLowerCase().indexOf(q) !== -1;
+    var hit = _pbPropRowMatchesFilter(row, playerQ, propQ);
     row.classList.toggle('is-hidden-by-filter', !hit);
+    row.classList.toggle('has-selection', _pbPropRowHasSelection(row));
     if (hit) shown++;
   });
-  panel.querySelectorAll('.mc-prop-section').forEach(function(sec) {
+  shell.querySelectorAll('.mc-prop-section').forEach(function(sec) {
     var visible = sec.querySelector('.mc-prop-row:not(.is-hidden-by-filter)');
-    sec.classList.toggle('is-hidden-by-filter', !!q && !visible);
+    sec.classList.toggle('is-hidden-by-filter', hasFilter && !visible);
+    if (hasFilter && visible && sec.classList.contains('collapsed')) {
+      sec.classList.remove('collapsed');
+    }
   });
-  var empty = panel.querySelector('.mc-props-filter-empty');
+  shell.querySelectorAll('.mc-prop-type-block').forEach(function(block) {
+    var visible = block.querySelector('.mc-prop-row:not(.is-hidden-by-filter)');
+    block.classList.toggle('is-hidden-by-filter', hasFilter && !visible);
+  });
+  shell.querySelectorAll('.mc-prop-player-group').forEach(function(grp) {
+    var visible = grp.querySelector('.mc-prop-row:not(.is-hidden-by-filter)');
+    grp.classList.toggle('is-hidden-by-filter', hasFilter && !visible);
+    if (hasFilter && visible && grp.classList.contains('collapsed')) {
+      grp.classList.remove('collapsed');
+    }
+  });
+  var countEl = shell.querySelector('.mc-props-results-count');
+  if (countEl) {
+    countEl.textContent = hasFilter ? (shown + ' prop' + (shown === 1 ? '' : 's') + ' shown') : '';
+  }
+  var body = shell.querySelector('.mc-props-body') || shell;
+  var empty = body.querySelector('.mc-props-filter-empty');
   if (!empty) {
     empty = document.createElement('div');
     empty.className = 'mc-props-filter-empty';
     empty.innerHTML = '<div class="mc-props-filter-empty-title">No matching props</div>' +
-      '<div class="mc-props-filter-empty-body">Try a player name or market type.</div>';
+      '<div class="mc-props-filter-empty-body">Try another player, prop type, or category tab.</div>';
     empty.style.display = 'none';
-    var body = panel.querySelector('.mc-props-body') || panel;
     body.appendChild(empty);
   }
-  empty.style.display = (q && shown === 0) ? 'block' : 'none';
+  empty.style.display = (hasFilter && shown === 0) ? 'block' : 'none';
+  if (window._PB_PROPS_PERF && t0) {
+    var ms = performance.now() - t0;
+    window._pbPropsPerfLast = { ms: ms, shown: shown, rows: rows.length, filtered: hasFilter };
+    if (ms > 8) console.info('[props-perf] filter', window._pbPropsPerfLast);
+  }
 }
+
+var _pbPropsFilterRaf = null;
+function _pbSchedulePropsDiscoveryFilter(panel) {
+  if (_pbPropsFilterRaf) cancelAnimationFrame(_pbPropsFilterRaf);
+  _pbPropsFilterRaf = requestAnimationFrame(function() {
+    _pbPropsFilterRaf = null;
+    _pbApplyPropsDiscoveryFilter(panel);
+  });
+}
+
 document.addEventListener('input', function(e) {
   var t = e.target;
   if (!t || !t.classList || !t.classList.contains('mc-props-search')) return;
   var panel = t.closest('.mc-props-panel') || t.closest('.market-card');
-  _pbFilterPropsPanel(panel, t.value);
+  var shell = panel && (panel.querySelector('.mc-props-shell') || panel);
+  var gameId = shell && shell.getAttribute('data-props-game');
+  if (gameId) {
+    var ui = _pbGetPropsUiState(gameId);
+    if (t.classList.contains('mc-props-search-player')) ui.playerQ = t.value;
+    if (t.classList.contains('mc-props-search-type')) ui.propQ = t.value;
+    if (t.classList.contains('mc-props-search-player') && _pbPropsNeedsLayoutRerender(gameId, ui)) {
+      var kind = 'player';
+      _pbRerenderPropsPanel(gameId);
+      _pbFocusPropsSearch(gameId, kind);
+      return;
+    }
+  }
+  _pbSchedulePropsDiscoveryFilter(panel);
+});
+
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Escape') return;
+  var t = e.target;
+  if (!t || !t.classList || !t.classList.contains('mc-props-search')) return;
+  var kind = t.classList.contains('mc-props-search-type') ? 'type' : 'player';
+  t.value = '';
+  var panel = t.closest('.mc-props-panel') || t.closest('.market-card');
+  var shell = panel && (panel.querySelector('.mc-props-shell') || panel);
+  var gameId = shell && shell.getAttribute('data-props-game');
+  if (gameId) {
+    var ui = _pbGetPropsUiState(gameId);
+    if (t.classList.contains('mc-props-search-player')) ui.playerQ = '';
+    if (t.classList.contains('mc-props-search-type')) ui.propQ = '';
+    if (t.classList.contains('mc-props-search-player') && _pbPropsNeedsLayoutRerender(gameId, ui)) {
+      _pbRerenderPropsPanel(gameId);
+      _pbFocusPropsSearch(gameId, kind);
+      return;
+    }
+  }
+  _pbSchedulePropsDiscoveryFilter(panel);
 });
 
 </script>
