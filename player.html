@@ -1428,7 +1428,13 @@ body{
 .mc-live-score-missing,.mc-live-score.is-missing{
   color:var(--gray);font-size:0.68rem;font-weight:700;letter-spacing:0.2px;
 }
+.mc-live-score.is-missing{
+  display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;
+  padding:6px 0 4px;text-align:center;
+}
 .mc-live-score.is-missing .mc-live-pts{display:none}
+.mc-live-score.is-missing .mc-live-state{color:#ef4444;font-size:0.58rem}
+.mc-live-score-missing{font-size:0.62rem;color:var(--gray);font-weight:700}
 .market-card.is-suspended{opacity:0.72}
 .market-card.is-suspended .odds-box,
 .market-card.is-suspended .mkt-odds-box{
@@ -1440,6 +1446,12 @@ body{
   color:#e8c547;font-size:0.62rem;font-weight:800;letter-spacing:0.35px;text-transform:uppercase;
 }
 .sport-tab-live{z-index:2}
+.live-section-hdr{display:flex;align-items:center;gap:8px;padding:0 16px 14px}
+.live-section-dot{width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 8px rgba(239,68,68,0.55);animation:pbLivePulse 1.4s ease-in-out infinite;flex-shrink:0}
+.live-section-title{font-size:1rem;font-weight:900;letter-spacing:0.3px;color:var(--white)}
+.live-section-count{margin-left:auto;font-size:0.62rem;color:var(--gray);font-weight:800;text-transform:uppercase;letter-spacing:0.5px;padding:4px 10px;border-radius:8px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.18);min-height:24px;display:inline-flex;align-items:center}
+.live-section-count:not(:empty){color:#ef4444;border-color:rgba(239,68,68,0.32);background:rgba(239,68,68,0.1)}
+#live-section{background:var(--bg)!important;padding:14px 0 100px}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    PROPS UX — Caesars-style grouping readability + search chrome
@@ -1755,13 +1767,13 @@ function _debugClearTickets() {
 <div id="games-list"><div class="empty">Loading games...</div></div>
 </div><!-- /sportsbook-section -->
 <div id="mybets-section" style="display:none;background:#070b12;min-height:100vh;padding-bottom:100px"></div>
-<div id="live-section" style="display:none;background:#0a0a0a;min-height:100vh;padding:14px 0 100px">
-  <div style="display:flex;align-items:center;gap:8px;padding:0 16px 14px">
-    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff3d57;box-shadow:0 0 8px rgba(255,61,87,0.7);animation:pbLivePulse 1.4s ease-in-out infinite"></span>
-    <span style="font-size:1rem;font-weight:900;letter-spacing:0.3px;color:#fff">Live & In-Game</span>
-    <span id="live-count" style="margin-left:auto;font-size:0.62rem;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:0.5px"></span>
+<div id="live-section" style="display:none;min-height:100vh;padding:14px 0 100px">
+  <div class="live-section-hdr">
+    <span class="live-section-dot" aria-hidden="true"></span>
+    <span class="live-section-title">Live & In-Game</span>
+    <span id="live-count" class="live-section-count" aria-live="polite"></span>
   </div>
-  <div id="live-games-list"><div class="empty">Loading...</div></div>
+  <div id="live-games-list"><div class="pb-loading">Loading live games…</div></div>
 </div>
 <!-- RESULTS -->
 <div id="results-section" style="display:none;background:#0a0a0a;min-height:100vh;padding-bottom:100px"></div>
@@ -3184,14 +3196,22 @@ function _pbFormatLiveStateText(g) {
   return bits.join(' · ');
 }
 
+function _pbLiveScoreMissingHtml(stateLabel) {
+  var label = stateLabel ? String(stateLabel) : 'Live';
+  return '<div class="mc-live-score is-missing">' +
+    '<span class="mc-live-state">' + label + '</span>' +
+    '<span class="mc-live-score-missing">Score unavailable</span></div>';
+}
+
 function _pbLiveScoreboardHtml(g) {
   if (!_pbMarketIsLive(g)) return '';
-  var hasScore = g.homeScore != null || g.awayScore != null || g.gameStateText ||
-    g.period != null || g.clock || g.inning != null || g.down != null ||
-    g.setScore != null || g.gameScore != null || g.statusDetail;
-  if (!hasScore) {
-    // Live odds without scoreboard — keep betting, omit empty scoreboard.
-    return '';
+  var hasNumericScore = g.homeScore != null || g.awayScore != null;
+  var stateTxt = _pbFormatLiveStateText(g);
+  var hasContext = !!(stateTxt || g.gameStateText || g.period != null || g.clock || g.inning != null ||
+    g.down != null || g.setScore != null || g.gameScore != null || g.statusDetail ||
+    g.outs != null || g.basesOccupied);
+  if (!hasNumericScore) {
+    return _pbLiveScoreMissingHtml(stateTxt || (hasContext ? 'Live' : 'Live'));
   }
   var aw = (g.away || g.away_team) || '';
   var hw = (g.home || g.home_team) || '';
@@ -3199,7 +3219,7 @@ function _pbLiveScoreboardHtml(g) {
   var hwN = hw.split(' ').slice(-1)[0] || hw;
   var awSc = g.awayScore != null ? g.awayScore : '—';
   var hwSc = g.homeScore != null ? g.homeScore : '—';
-  var stateTxt = _pbFormatLiveStateText(g);
+  stateTxt = stateTxt || _pbFormatLiveStateText(g);
   var sport = _pbSportKeyOf(g);
   var extras = [];
   if (sport === 'mlb' || sport.indexOf('baseball') >= 0) {
@@ -3735,6 +3755,7 @@ function _pbUpdateGameCardInPlace(card, g) {
   window.gamesCache[String(g.id)] = g;
   if (g.providerGameId != null) window.gamesCache[String(g.providerGameId)] = g;
   var isLive = _pbMarketIsLive(g);
+  card.classList.toggle('is-live', isLive);
   var aw = d.aw, hw = d.hw, gid = d.gid;
   function spreadPick(team, sp) {
     if (!sp) return null;
@@ -3928,7 +3949,7 @@ function _pbRenderGameCardHtml(g) {
 
     // Golf matchups: Player A vs Player B + moneyline only (no fake spread/total columns).
     if (isGolfCard) {
-      return '<div class="market-card market-card-golf" data-game-id="' + safeGameId + '" data-home="' + safeHome + '" data-away="' + safeAway + '" data-sport="golf" style="margin-bottom:14px">' +
+      return '<div class="market-card market-card-golf' + (isLiveMarket ? ' is-live' : '') + '" data-game-id="' + safeGameId + '" data-home="' + safeHome + '" data-away="' + safeAway + '" data-sport="golf" style="margin-bottom:14px">' +
         '<div class="mc-header"><span style="font-size:0.9rem">' + icon + '</span><span class="mc-sport">' + headerSport + '</span>' +
         (isLiveMarket ? _pbLiveBadgeHtml() : '') +
         '</div>' +
@@ -3950,7 +3971,7 @@ function _pbRenderGameCardHtml(g) {
         '</div>';
     }
 
-    return '<div class="market-card" data-game-id="' + safeGameId + '" data-home="' + safeHome + '" data-away="' + safeAway + '" style="margin-bottom:14px">' +
+    return '<div class="market-card' + (isLiveMarket ? ' is-live' : '') + '" data-game-id="' + safeGameId + '" data-home="' + safeHome + '" data-away="' + safeAway + '" style="margin-bottom:14px">' +
       '<div class="mc-header"><span style="font-size:0.9rem">' + icon + '</span><span class="mc-sport">' + headerSport + '</span>' +
       (isLiveMarket ? _pbLiveBadgeHtml() : '') +
       '</div>' +
@@ -5702,7 +5723,7 @@ async function loadAllLiveGames(opts) {
   opts = opts || {};
   var el = document.getElementById('live-games-list');
   if (!el) return;
-  if (!opts.silent) el.innerHTML = '<div class="empty">Loading...</div>';
+  if (!opts.silent) el.innerHTML = '<div class="pb-loading">Loading live games…</div>';
   try {
     var fetchKeys = await _pbResolveLiveSportKeys();
     var packs = await Promise.all(fetchKeys.map(function(k) {
@@ -5752,7 +5773,10 @@ async function loadAllLiveGames(opts) {
     _pbHydrateLobbyAvatars(el);
   } catch (e) {
     console.error('[live tab fetch failed]', e && e.message || e);
-    if (!opts.silent) el.innerHTML = '<div class="empty" style="color:#ff4444">' + (e && e.message || 'Failed to load live games') + '</div>';
+    if (!opts.silent) {
+      el.innerHTML = '<div class="pb-empty"><div class="pb-empty-title">Could not load live games</div>' +
+        '<div class="pb-empty-body">' + (e && e.message || 'Check your connection and try again.') + '</div></div>';
+    }
   }
 }
 window.loadAllLiveGames = loadAllLiveGames;
@@ -16084,41 +16108,40 @@ document.addEventListener('DOMContentLoaded', function() {
   }).catch(function(_e){});
 });
 
-</script>
-<script src="diamonds.js">
-
-function _pbLiveScoreMissingHtml(stateLabel){
-  var label = stateLabel ? String(stateLabel) : 'Live';
-  return '<div class="mc-live-score is-missing"><span class="mc-live-state">' + label +
-    '</span><span class="mc-live-score-missing">Score unavailable</span></div>';
-}
-
-function _pbFilterPropsPanel(panel, q){
+function _pbFilterPropsPanel(panel, q) {
   if (!panel) return;
   q = String(q || '').trim().toLowerCase();
   var rows = panel.querySelectorAll('.mc-prop-row');
   var shown = 0;
-  rows.forEach(function(row){
+  rows.forEach(function(row) {
     var nameEl = row.querySelector('.mc-prop-name');
     var metaEl = row.querySelector('.mc-prop-type');
+    var secTitle = row.closest('.mc-prop-section');
+    var secLabel = secTitle && secTitle.querySelector('.mc-prop-sec-title');
     var name = (nameEl && nameEl.textContent) || '';
     var meta = (metaEl && metaEl.textContent) || '';
-    var hit = !q || (name + ' ' + meta).toLowerCase().indexOf(q) !== -1;
+    var section = (secLabel && secLabel.textContent) || '';
+    var hit = !q || (name + ' ' + meta + ' ' + section).toLowerCase().indexOf(q) !== -1;
     row.classList.toggle('is-hidden-by-filter', !hit);
     if (hit) shown++;
+  });
+  panel.querySelectorAll('.mc-prop-section').forEach(function(sec) {
+    var visible = sec.querySelector('.mc-prop-row:not(.is-hidden-by-filter)');
+    sec.classList.toggle('is-hidden-by-filter', !!q && !visible);
   });
   var empty = panel.querySelector('.mc-props-filter-empty');
   if (!empty) {
     empty = document.createElement('div');
     empty.className = 'mc-props-filter-empty';
-    empty.textContent = 'No props match your search';
+    empty.innerHTML = '<div class="mc-props-filter-empty-title">No matching props</div>' +
+      '<div class="mc-props-filter-empty-body">Try a player name or market type.</div>';
     empty.style.display = 'none';
     var body = panel.querySelector('.mc-props-body') || panel;
     body.appendChild(empty);
   }
   empty.style.display = (q && shown === 0) ? 'block' : 'none';
 }
-document.addEventListener('input', function(e){
+document.addEventListener('input', function(e) {
   var t = e.target;
   if (!t || !t.classList || !t.classList.contains('mc-props-search')) return;
   var panel = t.closest('.mc-props-panel') || t.closest('.market-card');
@@ -16126,5 +16149,6 @@ document.addEventListener('input', function(e){
 });
 
 </script>
+<script src="diamonds.js"></script>
 </body>
 </html>
