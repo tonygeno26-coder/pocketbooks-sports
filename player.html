@@ -1452,6 +1452,17 @@ body{
   background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;
   font-size:0.75rem;font-weight:700;line-height:1.35;
 }
+.dk-stake-summary{
+  display:none;flex-direction:column;gap:6px;
+  background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;
+  padding:10px 12px;margin-bottom:10px;
+}
+.dk-stake-row{display:flex;justify-content:space-between;align-items:center}
+.dk-stake-row-win{padding-top:6px;margin-top:2px;border-top:1px solid #e8ecf1}
+.dk-stake-label{font-size:0.72rem;color:#64748B;font-weight:700;text-transform:uppercase;letter-spacing:0.04em}
+.dk-stake-val{font-size:0.92rem;font-weight:900;color:#0f172a}
+.dk-stake-row-win .dk-stake-val{color:#16a34a;font-size:1rem}
+#bs-place-btn[data-busy="1"]{opacity:0.72;pointer-events:none!important;cursor:wait}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    GAME CARD HIERARCHY — LIVE → teams → score → odds → secondary
@@ -6586,6 +6597,7 @@ var _pendingProfit = 0;
 // (from re-renders, async events, paste handlers, etc.) cannot corrupt the
 // ticket(s) ultimately written. See REGRESSION.md §15.
 var _pendingSnapshot = null;
+var _confirmBetInFlight = false;
 
 // ── MODULE-LEVEL helpers (used by confirm, renderLegs, syncBtn) ──
 function nCr(n, r) {
@@ -7461,7 +7473,7 @@ function bsRenderLegs() {
                 'data-cid="'+b.cellId+'" oninput="bsSingleInput(this)" onclick="event.stopPropagation()" ' +
                 'style="width:100%">' +
             '</div>' +
-            '<div class="single-payout" data-payout-cid="'+b.cellId+'" style="color:#00875a;font-weight:700;font-size:0.7rem;min-height:1em">'+(payout?'Payout: '+payout:'')+'</div>' +
+            '<div class="single-payout" data-payout-cid="'+b.cellId+'" style="color:#00875a;font-weight:700;font-size:0.7rem;min-height:1em">'+(payout?'To Win: '+payout:'')+'</div>' +
           '</div>' +
         '</div>';
       }).join('');
@@ -7480,7 +7492,6 @@ function bsRenderLegs() {
         })() +
             '<span class="parlay-mini-odds">'+co+'</span>' +
           '</div>' +
-          '<div style="font-size:0.65rem;color:#aaa;margin-bottom:8px">Tap Parlay tab to wager</div>' +
         '</div>';
       }
       return stakeAllHtml + cards + parlayMini;
@@ -7504,6 +7515,7 @@ function bsRenderLegs() {
 
 
 window.bsPlaceBet = function bsPlaceBet() {
+  if (_confirmBetInFlight) return;
   // ── Session scope gate: hard block before any UI action ───────────────────────────
   // Dev bypass: skip scope gate entirely
   if (!_pDev) {
@@ -7711,8 +7723,9 @@ function openBetConfirm() {
     '<div style="flex-shrink:0;background:#fff;border-top:1px solid #e8e8e8;box-shadow:0 -4px 16px rgba(0,0,0,0.08);padding:12px 16px calc(14px + env(safe-area-inset-bottom,0px))">' +
       '<div style="background:#f8f8f8;border:1px solid #eee;border-radius:12px;padding:11px 13px;margin-bottom:10px">' +
         '<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:0.75rem;color:#888">Current Balance</span><span style="font-size:0.8rem;font-weight:800;color:#0064c8">'+fmtBalance()+'</span></div>' +
-        '<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:0.75rem;color:#888;font-weight:700">Risk</span><span style="font-size:0.8rem;font-weight:800;color:'+(insufficient?'#cc0000':'#111')+'">'+fmtDollar(bsStake)+'</span></div>' +
-        '<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:0.75rem;color:#888;font-weight:700">Total Payout</span><span style="font-size:0.8rem;font-weight:800;color:#00875a">'+fmtDollar(payout)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:0.75rem;color:#888;font-weight:700">Risk (Stake)</span><span style="font-size:0.8rem;font-weight:800;color:'+(insufficient?'#cc0000':'#111')+'">'+fmtDollar(bsStake)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:0.75rem;color:#888;font-weight:700">To Win</span><span style="font-size:0.8rem;font-weight:800;color:#00875a">'+fmtDollar(toWin)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:0.72rem;color:#aaa">Total Return</span><span style="font-size:0.78rem;font-weight:700;color:#555">'+fmtDollar(payout)+'</span></div>' +
         '<div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid #e0e0e0"><span style="font-size:0.8rem;font-weight:800;color:#111">Remaining Balance</span><span style="font-size:0.88rem;font-weight:900;color:'+(remainingBalance>=0?'#0064c8':'#cc0000')+'">'+fmtDollar(Math.max(0,remainingBalance))+'</span></div>' +
         (insufficient?'<div style="margin-top:6px;font-size:0.72rem;color:#cc0000;font-weight:700;text-align:center">⚠️ Insufficient balance</div>':'') +
       '</div>' +
@@ -7741,8 +7754,7 @@ function openBetConfirm() {
   // Wire ALL cancel buttons (X in header + Cancel in footer)
   var _cancelBtns = sheet.querySelectorAll('[data-action="cancel"]');
   if (_confirmBtn) _confirmBtn.addEventListener('click', function(){
-    // ── DIAGNOSTIC: trace every confirm click — catches "button does nothing" reports
-    
+    if (_confirmBetInFlight || _confirmBtn.dataset.cbBusy === '1' || _confirmBtn.disabled) return;
     try {
       confirmBet();
     } catch (_clickErr) {
@@ -8138,6 +8150,9 @@ function _makeSelection(b) {
 // no more lenient than Node here — the page lived on the prior build
 // that didn't have these awaits).
 async function confirmBet() {
+  if (_confirmBetInFlight) return;
+  _confirmBetInFlight = true;
+  try {
   // ══════════════════════════════════════════════════════════════════════════
   //  FULL PLACEMENT TRACE — every step logged; any throw surfaces stack+body
   // ══════════════════════════════════════════════════════════════════════════
@@ -8755,6 +8770,9 @@ async function confirmBet() {
   showToast('\u2705 '+newTickets.length+' bet'+(newTickets.length>1?'s':'')+' placed \xb7 Balance: '+fmtBalance());
   _cbLog('CONFIRM_BET_COMPLETE', 'path=localStorage tickets='+newTickets.length);
   _cbBtnReady();
+  } finally {
+    _confirmBetInFlight = false;
+  }
 }
 
 
@@ -8762,7 +8780,7 @@ async function confirmBet() {
 document.addEventListener('click', function(e) {
   var btn = e.target.closest('[data-action="place-bet"]');
   if (!btn) return;
-  if (btn.dataset.disabled === 'true') return; // not ready
+  if (btn.dataset.disabled === 'true' || _confirmBetInFlight) return;
   
   window.bsPlaceBet();
 }, true);
@@ -12536,7 +12554,7 @@ function bsSetStakeAll(val) {
     if (!b) return;
     inp.value = amt > 0 ? amt : '';
     var payEl = document.querySelector('[data-payout-cid="'+inp.dataset.cid+'"]');
-    if (payEl) payEl.textContent = amt > 0 ? 'Payout: '+fmtDollar(amt * amToDecimal(b.odds)) : '';
+    if (payEl) payEl.textContent = amt > 0 ? 'To Win: '+fmtDollar(amt * amToDecimal(b.odds)) : '';
   });
   // Sync button + payout row immediately
   bsSyncPlaceBtn();
@@ -12568,7 +12586,7 @@ function bsSingleInput(el) {
   var payEl = document.querySelector('[data-payout-cid="'+cellId+'"]');
   if (payEl) {
     var b = betSlip.find(function(x){ return x.cellId === cellId; });
-    payEl.textContent = amt > 0 && b ? 'Payout: '+fmtDollar(amt * amToDecimal(b.odds)) : '';
+    payEl.textContent = amt > 0 && b ? 'To Win: '+fmtDollar(amt * amToDecimal(b.odds)) : '';
   }
 }
 
@@ -12679,7 +12697,7 @@ function bsAddStake(a) {
     var payEl = document.querySelector('[data-payout-cid="'+cardInp.dataset.cid+'"]');
     if (payEl) {
       var _b = betSlip.find(function(x){ return x.cellId === cardInp.dataset.cid; });
-      payEl.textContent = _b ? 'Payout: '+fmtDollar(bsStake * amToDecimal(_b.odds)) : '';
+      payEl.textContent = _b ? 'To Win: '+fmtDollar(bsStake * amToDecimal(_b.odds)) : '';
     }
   });
   
@@ -12789,7 +12807,7 @@ function numpadKey(k) {
     var payEl = document.querySelector('[data-payout-cid="'+numpadTarget.cellId+'"]');
     if (payEl) {
       var _b = betSlip.find(function(x){ return x.cellId === numpadTarget.cellId; });
-      payEl.textContent = val > 0 && _b ? 'Payout: '+fmtDollar(val * amToDecimal(_b.odds)) : '';
+      payEl.textContent = val > 0 && _b ? 'To Win: '+fmtDollar(val * amToDecimal(_b.odds)) : '';
     }
     bsSyncPlaceBtn();
     
@@ -12848,7 +12866,8 @@ function bsSyncPlaceBtn() {
   }
   var btn = document.getElementById('bs-place-btn');
   var payRow = document.getElementById('dk-payout-row');
-  var payVal = document.getElementById('dk-payout-val');
+  var riskVal = document.getElementById('dk-risk-val');
+  var toWinVal = document.getElementById('dk-towin-val');
   var badge2 = document.getElementById('bs-badge2');
   if (badge2) badge2.textContent = betSlip.length;
   var _insWrap = document.getElementById('parlay-insure-wrap');
@@ -13032,10 +13051,12 @@ function bsSyncPlaceBtn() {
     }
   }
 
-  // ── Payout row: hidden until valid ─────────────────────────────────────
-  if (payRow && payVal) {
-    if (valid && totalPay > 0) {
-      payVal.textContent = fmtDollar(totalPay);
+  // ── Stake summary: Risk + To Win (hidden until valid) ───────────────────
+  if (payRow && riskVal && toWinVal) {
+    if (valid && totalRisk > 0) {
+      var toWinAmt = Math.max(0, totalPay - totalRisk);
+      riskVal.textContent = fmtDollar(totalRisk);
+      toWinVal.textContent = fmtDollar(toWinAmt);
       payRow.style.display = 'flex';
     } else {
       payRow.style.display = 'none';
@@ -15439,9 +15460,15 @@ window.openGradingConsole = openGradingConsole;
         ontouchstart="event.stopPropagation()" onpointerdown="event.stopPropagation()"
         style="flex:1;background:none;border:none;outline:none;font-size:1rem;font-weight:900;color:#111;pointer-events:auto;user-select:text;-webkit-user-select:text;position:relative;z-index:20;-webkit-user-select:text">
     </div>
-    <div class="dkslip-payout" id="dk-payout-row" style="display:none;margin-bottom:8px">
-      <span style="font-size:0.72rem;color:#888">Total Payout</span>
-      <span id="dk-payout-val" style="font-weight:800;color:#00875a"></span>
+    <div class="dk-stake-summary" id="dk-payout-row" style="display:none">
+      <div class="dk-stake-row">
+        <span class="dk-stake-label">Risk</span>
+        <span class="dk-stake-val" id="dk-risk-val">$0.00</span>
+      </div>
+      <div class="dk-stake-row dk-stake-row-win">
+        <span class="dk-stake-label">To Win</span>
+        <span class="dk-stake-val" id="dk-towin-val">$0.00</span>
+      </div>
     </div>
     <div class="parlay-insure" id="parlay-insure-wrap">
       <label><input type="checkbox" id="parlay-insure-chk"> Parlay Insurance</label>
