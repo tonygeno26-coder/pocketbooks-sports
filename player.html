@@ -30,7 +30,8 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .notif-badge.show{display:inline-flex}
 .notif-dd{display:none;position:absolute;right:0;top:calc(100% + 10px);width:300px;max-height:360px;overflow:auto;background:#161616;border:1px solid #2a2a2a;border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,0.55);z-index:200}
 .notif-dd.open{display:block}
-.notif-dd-hd{padding:12px 14px 8px;font-size:0.72rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.4px;border-bottom:1px solid #222}
+.notif-dd-hd{padding:12px 14px 8px;font-size:0.72rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.4px;border-bottom:1px solid #222;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.notif-dd-close{display:none;background:none;border:none;color:#888;font-size:1.1rem;line-height:1;cursor:pointer;padding:4px 6px}
 .notif-item{padding:12px 14px;border-bottom:1px solid #1e1e1e}
 .notif-item:last-child{border-bottom:none}
 .notif-item.unread{background:rgba(0,255,135,0.05)}
@@ -38,6 +39,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .notif-item-msg{font-size:0.72rem;color:#aaa;line-height:1.35}
 .notif-item-time{font-size:0.62rem;color:#555;margin-top:6px}
 .notif-empty{padding:24px 14px;text-align:center;color:#666;font-size:0.78rem}
+.notif-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:199}
 
 /* TOP TABS */
 .top-tabs{display:flex;gap:0;padding:4px 16px 0;border-bottom:1px solid var(--border)}
@@ -321,6 +323,42 @@ body.theme-light .stake-input{background:#fff;border:1px solid #d8dee8;color:#11
 .place-btn{display:block;width:calc(100% - 32px);margin:0 16px 32px;padding:16px;background:var(--green);color:#000;border:none;border-radius:12px;font-size:1rem;font-weight:900;cursor:pointer}
 .place-btn:disabled{opacity:0.4}
 .empty{text-align:center;padding:30px;color:var(--gray);font-size:0.85rem}
+
+/* STATES — empty / loading / error (compact sportsbook chrome) */
+.pb-empty{
+  margin:16px;padding:18px 14px;text-align:center;
+  background:var(--card,#101A2E);border:1px solid var(--border,#1D2B42);border-radius:12px;
+}
+.pb-empty-title{font-size:0.88rem;font-weight:800;color:var(--white,#fff);margin-bottom:4px}
+.pb-empty-body{font-size:0.72rem;color:var(--light,#94a3b8);line-height:1.4}
+.pb-empty-action{margin-top:12px}
+.pb-empty-action button,.pb-retry-btn{
+  padding:8px 14px;border-radius:10px;border:1px solid var(--border,#1D2B42);
+  background:var(--accent-soft,rgba(22,119,255,0.12));color:var(--accent,#1677FF);
+  font-size:0.72rem;font-weight:800;cursor:pointer;
+}
+.pb-loading{
+  margin:20px 16px;padding:18px 14px;text-align:center;color:var(--light,#94a3b8);
+  font-size:0.78rem;font-weight:700;
+}
+.pb-loading::before{
+  content:'';display:block;width:18px;height:18px;margin:0 auto 8px;border-radius:50%;
+  border:2px solid var(--border,#1D2B42);border-top-color:var(--accent,#1677FF);
+  animation:pbSpin 0.8s linear infinite;
+}
+@keyframes pbSpin{to{transform:rotate(360deg)}}
+.pb-error{
+  margin:16px;padding:12px 14px;border-radius:12px;text-align:center;
+  background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.28);
+  color:#fecaca;font-size:0.78rem;font-weight:700;line-height:1.4;
+}
+.pb-error .pb-empty-title{color:#fecaca;margin-bottom:4px}
+.pb-error .pb-empty-body{color:#fca5a5}
+.mc-props-loading,.mc-props-empty{padding:12px 0;text-align:center;font-size:0.72rem;color:#64748B}
+.notif-empty{padding:16px 12px;text-align:center;color:#64748B;font-size:0.72rem;line-height:1.4}
+@media (prefers-reduced-motion: reduce){
+  .pb-loading::before{animation:none!important;border-top-color:var(--light,#94a3b8)}
+}
 
 /* BET SLIP */
 .bs-bar{display:none;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:406px;background:#00ff88;border-radius:14px;padding:13px 18px;justify-content:space-between;align-items:center;z-index:9000;cursor:pointer;box-shadow:0 8px 28px rgba(0,255,136,0.35)}
@@ -1143,7 +1181,12 @@ body{
   .market-card{margin:0 8px 10px;max-width:calc(100vw - 16px)}
   .h-right{gap:5px;flex-shrink:1}
   .h-left{gap:6px}
-  .notif-dd{width:min(300px,calc(100vw - 20px));right:-8px}
+  .notif-dd{
+    position:fixed;left:0;right:0;bottom:0;top:auto;width:100%;max-width:100vw;
+    max-height:min(72vh,520px);border-radius:16px 16px 0 0;right:0;
+  }
+  .notif-dd-close{display:inline-flex}
+  .notif-backdrop.open{display:block}
 }
 @media (max-width:390px){
   .sport-grid{
@@ -1528,12 +1571,13 @@ function _debugClearTickets() {
       <div class="hdr-chip-val" id="player-balance-display">...</div>
     </div>
     <button type="button" class="buy-diamonds-nav-btn" id="buy-diamonds-btn" onclick="openBuyDiamondsModal()" aria-label="Buy Diamonds" title="Buy Diamonds"><span aria-hidden="true">💎</span><span class="hdr-diamond-lbl">Buy</span></button>
+    <div class="notif-backdrop" id="notif-backdrop" onclick="toggleNotifDropdown(event)" aria-hidden="true"></div>
     <div class="notif-wrap" id="notif-wrap">
       <button type="button" class="notif-bell" id="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications" title="Notifications">🔔</button>
       <span class="notif-badge" id="notif-badge"></span>
-      <div class="notif-dd" id="notif-dd">
-        <div class="notif-dd-hd">Notifications</div>
-        <div id="notif-list"><div class="notif-empty">Loading…</div></div>
+      <div class="notif-dd" id="notif-dd" role="dialog" aria-label="Notifications">
+        <div class="notif-dd-hd"><span>Notifications</span><button type="button" class="notif-dd-close" onclick="toggleNotifDropdown(event)" aria-label="Close notifications">✕</button></div>
+        <div id="notif-list"><div class="pb-loading" style="margin:8px">Loading notifications…</div></div>
       </div>
     </div>
     <span class="icon-btn" id="open-profile-btn" style="cursor:pointer" onclick="showPlayerSettings()" role="button" aria-label="Account">👤</span>
@@ -1575,7 +1619,7 @@ function _debugClearTickets() {
 
 <!-- GAMES -->
 <div style="height:20px"></div>
-<div id="games-list"><div class="empty">Loading games...</div></div>
+<div id="games-list"><div class="pb-loading">Loading events…</div></div>
 </div><!-- /sportsbook-section -->
 <div id="mybets-section" style="display:none;background:#070b12;min-height:100vh;padding-bottom:100px"></div>
 <div id="live-section" style="display:none;background:#0a0a0a;min-height:100vh;padding:14px 0 100px">
@@ -1584,11 +1628,11 @@ function _debugClearTickets() {
     <span style="font-size:1rem;font-weight:900;letter-spacing:0.3px;color:#fff">Live & In-Game</span>
     <span id="live-count" style="margin-left:auto;font-size:0.62rem;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:0.5px"></span>
   </div>
-  <div id="live-games-list"><div class="empty">Loading...</div></div>
+  <div id="live-games-list"><div class="pb-loading">Loading live events…</div></div>
 </div>
 <!-- RESULTS -->
 <div id="results-section" style="display:none;background:#0a0a0a;min-height:100vh;padding-bottom:100px"></div>
-<div id="predictions-section" style="display:none;padding:60px 20px;text-align:center"><div style="font-size:2rem;margin-bottom:14px">🔮</div><div style="font-size:1rem;font-weight:800;color:#111;margin-bottom:8px">Predictions</div><div style="font-size:0.82rem;color:#888">Prediction markets coming soon</div></div>
+<div id="predictions-section" style="display:none!important;padding:60px 20px;text-align:center" aria-hidden="true" data-beta-hidden="NOT_IMPLEMENTED"><div style="font-size:2rem;margin-bottom:14px">🔮</div><div style="font-size:1rem;font-weight:800;color:#111;margin-bottom:8px">Predictions</div><div style="font-size:0.82rem;color:#888">Prediction markets coming soon</div></div>
 
 <!-- BET SLIP BAR -->
 <div class="slip-bar" id="slip-bar" onclick="openSlip()">
@@ -1664,6 +1708,7 @@ function _debugClearTickets() {
 
 <script src="player-photos.js"></script>
 <script src="team-logos.js"></script>
+<script src="beta-polish.js"></script>
 <script>
 // Preview/dev params — hoisted before session gate (avoids TDZ ReferenceError on _pDev)
 var _pp = new URLSearchParams(window.location.search);
@@ -1706,8 +1751,11 @@ function _validatePlayerSession() {
 
   if (missing.length > 0) {
     _sessionValid = false;
-    console.warn('[session-gate] INVALID missing='+missing.join(',')+' tok='+(_tok?'set':'(none)')+' pid='+(pid||'(none)')+' cid='+(cid||'(none)'));
-    console.warn('TOKEN_MISSING_ON_PLAYER_LOAD pid='+(pid||'(none)')+' cid='+(cid||'(none)'));
+    // Expected on cold/preview loads — debug-only to avoid prod console spam
+    if (typeof _pbDebugWarn === 'function') {
+      _pbDebugWarn('[session-gate] INVALID missing='+missing.join(',')+' tok='+(_tok?'set':'(none)')+' pid='+(pid||'(none)')+' cid='+(cid||'(none)'));
+      _pbDebugWarn('TOKEN_MISSING_ON_PLAYER_LOAD pid='+(pid||'(none)')+' cid='+(cid||'(none)'));
+    }
     return { ok:false, missing:missing, canRecover: !!(pid && cid) };
   }
 
@@ -1724,13 +1772,14 @@ function _validatePlayerSession() {
 
   if (tokenExpired) {
     _sessionValid = false;
-    console.warn('[session-gate] INVALID reason=token_expired');
+    if (typeof _pbDebugWarn === 'function') _pbDebugWarn('[session-gate] INVALID reason=token_expired');
     return { ok:false, missing:[], reason:'token_expired', canRecover: !!(pid && cid) };
   }
 
   // Auto-repair club mismatch at load time (same logic as confirmBet)
   if (tokenClubId && cid && tokenClubId !== cid) {
-    console.warn('[session-gate] club mismatch tokenClub='+tokenClubId+' localClub='+cid+' — auto-repairing pb-club');
+    if (typeof _pbWarnOnce === 'function') _pbWarnOnce('session_club_mismatch', '[session-gate] club mismatch — auto-repairing pb-club');
+    else console.warn('[session-gate] club mismatch tokenClub='+tokenClubId+' localClub='+cid+' — auto-repairing pb-club');
     var _fixedClub = Object.assign({}, _club, { id:tokenClubId, clubId:tokenClubId });
     try { localStorage.setItem('pb-club', JSON.stringify(_fixedClub)); } catch(_){}
     cid = tokenClubId;
@@ -2542,6 +2591,7 @@ function showPlayerSettings() {
         '<button type="button" id="ps-telegram-link" style="width:100%;padding:12px;background:#1c1c1c;border:1px solid #00c2ff;color:#00c2ff;border-radius:10px;font-size:0.85rem;font-weight:800;cursor:pointer">Link Telegram</button>' +
         '<div id="ps-telegram-help" style="font-size:0.62rem;color:#666;margin-top:8px;line-height:1.45">Message <b style="color:#bbb">@pocketbookssports_bot</b> on Telegram, then send <b style="color:#bbb">/start YourUsername</b> to get survivor pick reminders and results.</div>' +
       '</div>' +
+      (typeof _pbSettingsExtrasHtml === 'function' ? _pbSettingsExtrasHtml() : '') +
     '</div>' +
     '<div style="padding:12px 16px 18px;border-top:1px solid #252525">' +
       '<button id="ps-save" style="width:100%;padding:14px;background:#00c2ff;border:none;color:#000;border-radius:12px;font-size:0.92rem;font-weight:900;cursor:pointer">Save</button>' +
@@ -2551,6 +2601,7 @@ function showPlayerSettings() {
   
   ov.addEventListener('click', function(e){ if (e.target===ov) ov.remove(); });
   ov.querySelector('#ps-close').addEventListener('click', function(){ ov.remove(); });
+  if (typeof _pbWireSettingsExtras === 'function') _pbWireSettingsExtras(ov);
   // chip wiring
   Array.prototype.forEach.call(ov.querySelectorAll('[data-pset-theme]'), function(b){
     b.addEventListener('click', function() { s.theme = b.dataset.psetTheme; savePlayerSettings(s); applyPlayerTheme(); showPlayerSettings(); });
@@ -2685,6 +2736,15 @@ async function api(method,path,body,_retried){
   const r=await fetch(API+path,{method,headers:{'Content-Type':'application/json',...(token?{'Authorization':'Bearer '+token}:{})},body:body?JSON.stringify(body):undefined});
   var data = {};
   try { data = await r.json(); } catch (_e) { data = {}; }
+  // Attach normalized error fields for callers (does not rewrite BE payloads)
+  if (!r.ok && typeof _pbNormalizeApiError === 'function') {
+    try {
+      var _ne = _pbNormalizeApiError(data, r.status);
+      if (!data.error) data.error = _ne.error;
+      if (!data.message) data.message = _ne.message;
+      data._pbNormalized = _ne;
+    } catch (_neErr) {}
+  }
   if (r.status === 401 || r.status === 403) {
     if (_isAuthApiPath(path)) {
       _authRedirectToLogin('Session invalid — please sign in again');
@@ -3065,14 +3125,66 @@ function _pbFormatNextStartLabel(iso) {
   return d.toLocaleString('en-US', opts);
 }
 
+function _pbEscState(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** Compact empty / loading / error card. kind: empty | loading | error */
+function _pbStateHtml(opts) {
+  opts = opts || {};
+  var kind = opts.kind || 'empty';
+  var title = _pbEscState(opts.title || '');
+  var body = opts.body != null ? _pbEscState(opts.body) : '';
+  var action = opts.actionHtml || '';
+  if (kind === 'loading') {
+    return '<div class="pb-loading" role="status">' + (title || 'Loading…') +
+      (body ? '<div class="pb-empty-body" style="margin-top:6px">' + body + '</div>' : '') + '</div>';
+  }
+  if (kind === 'error') {
+    return '<div class="pb-error" role="alert">' +
+      (title ? '<div class="pb-empty-title">' + title + '</div>' : '') +
+      (body ? '<div class="pb-empty-body">' + body + '</div>' : '') +
+      (action ? '<div class="pb-empty-action">' + action + '</div>' : '') +
+      '</div>';
+  }
+  return '<div class="pb-empty" role="status">' +
+    (title ? '<div class="pb-empty-title">' + title + '</div>' : '') +
+    (body ? '<div class="pb-empty-body">' + body + '</div>' : '') +
+    (action ? '<div class="pb-empty-action">' + action + '</div>' : '') +
+    '</div>';
+}
+
+function _pbNoEventsHtml() {
+  return _pbStateHtml({ title: 'No events scheduled', body: 'Check back soon or try another sport.' });
+}
+
+function _pbNoMarketsHtml() {
+  return _pbStateHtml({ title: 'No markets posted', body: 'Lines will appear when this slate opens.' });
+}
+
+function _pbGamesHaveMarkets(games) {
+  if (!games || !games.length) return false;
+  for (var i = 0; i < games.length; i++) {
+    var g = games[i];
+    if (!g) continue;
+    if ((Array.isArray(g.spreads) && g.spreads.length) ||
+        (Array.isArray(g.totals) && g.totals.length) ||
+        (Array.isArray(g.moneyline) && g.moneyline.length) ||
+        (Array.isArray(g.alt_spreads) && g.alt_spreads.length) ||
+        (Array.isArray(g.alt_totals) && g.alt_totals.length)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function _pbLiveEmptyStateHtml(nextStartIso) {
   var next = _pbFormatNextStartLabel(nextStartIso);
-  return '<div class="empty" style="padding:60px 20px;text-align:center;color:#888">' +
-    '<div style="font-size:0.95rem;font-weight:800;color:#bbb;margin-bottom:8px">No live games right now</div>' +
-    (next
-      ? '<div style="font-size:0.72rem;color:#666">Next game starts <span style="color:#aaa;font-weight:700">' + next + '</span></div>'
-      : '<div style="font-size:0.72rem;color:#555">Check back when games tip off</div>') +
-  '</div>';
+  return _pbStateHtml({
+    title: 'No live events',
+    body: next ? ('Next tip-off ' + next) : 'Check back when games tip off.'
+  });
 }
 
 function _pbTeamNameMatch(a, b) {
@@ -4905,7 +5017,7 @@ function _pbRenderPropSectionHtml(section, gameId, gameLabel, sport, away, home,
     '<span class="mc-prop-sec-chev">▾</span></div>';
   html += '<div class="mc-prop-sec-body">';
   if (!visibleRows.length) {
-    html += '<div class="mc-props-empty" style="padding:8px 0">No props for this filter.</div>';
+    html += '<div class="mc-props-empty">No props match this filter</div>';
   } else {
     html += visibleRows.map(function(r) { return _pbRenderPlayerPropRowHtml(r, gameId, gameLabel, sport, away, home, teamMap); }).join('');
   }
@@ -4941,7 +5053,7 @@ function _pbRenderInlinePropsHtml(props, gameId, sport, meta) {
   var away = resolved.away;
   var home = resolved.home;
   var gameLabel = (away && home) ? (away + ' vs ' + home) : '';
-  if (!props || !props.length) return '<div class="mc-props-empty">No player props for this game.</div>';
+  if (!props || !props.length) return '<div class="mc-props-empty">No props for this game</div>';
 
   var rosterGameId = (meta && meta.gameId) || (props[0] && props[0].gameId) || gameId;
   var inferred = _pbInferPlayerTeamMap(props, away, home);
@@ -4980,7 +5092,7 @@ function _pbRenderInlinePropsHtml(props, gameId, sport, meta) {
       '</div>';
   }
   if (!sections.length) {
-    html += '<div class="mc-props-empty">No props in this category.</div>';
+    html += '<div class="mc-props-empty">No props in this category</div>';
   } else {
     sections.forEach(function(sec) {
       var secKey = ui.tab + '::' + sec.title;
@@ -5100,7 +5212,7 @@ async function _pbLoadGameProps(gameId, sport, panel, card) {
     var data = await res.json();
     if (_pbExpandedPropsGameId !== String(gameId)) return;
     if (!res.ok || !data.props || !data.props.length) {
-      panel.innerHTML = '<div class="mc-props-empty">No player props for this game.</div>';
+      panel.innerHTML = '<div class="mc-props-empty">No props for this game</div>';
       return;
     }
     var meta = data.props[0] || {};
@@ -5123,7 +5235,7 @@ async function _pbLoadGameProps(gameId, sport, panel, card) {
     await _pbHydratePropHeadshots(panel, data.props, s);
   } catch (_e) {
     if (_pbExpandedPropsGameId === String(gameId)) {
-      panel.innerHTML = '<div class="mc-props-empty">Could not load props.</div>';
+      panel.innerHTML = '<div class="mc-props-empty">Props unavailable — retry</div>';
     }
   }
 }
@@ -5142,7 +5254,7 @@ async function _pbRefreshExpandedGameProps(opts) {
     if (_pbExpandedPropsGameId !== String(gameId)) return;
     if (!res.ok || !data.props) return;
     if (!data.props.length) {
-      panel.innerHTML = '<div class="mc-props-empty">No player props for this game.</div>';
+      panel.innerHTML = '<div class="mc-props-empty">No props for this game</div>';
       return;
     }
     var meta = data.props[0] || {};
@@ -5332,7 +5444,7 @@ async function loadGames(sport, opts){
   const _liveOnly = !!opts.liveOnly;
   const el=document.getElementById(_targetId);
   if (!el) return;
-  if (!opts.silent) el.innerHTML='<div class="empty">Loading...</div>';
+  if (!opts.silent) el.innerHTML = _pbStateHtml({ kind: 'loading', title: 'Loading events…' });
   try{
     // Normalize sport key. Odds now come from the backend Owls-only pipeline;
     // live refresh paths intentionally avoid local proxy fallback.
@@ -5419,7 +5531,7 @@ async function loadGames(sport, opts){
       if (_liveOnly) {
         el.innerHTML = _pbLiveEmptyStateHtml(null);
       } else {
-        el.innerHTML='<div class="empty" style="padding:60px 20px;text-align:center;color:#888">No games available right now.</div>';
+        el.innerHTML = _pbNoEventsHtml();
       }
       return;
     }
@@ -5440,7 +5552,7 @@ async function loadGames(sport, opts){
       if (_liveOnly) {
         el.innerHTML = _pbLiveEmptyStateHtml(null);
       } else {
-        el.innerHTML='<div class="empty" style="padding:60px 20px;text-align:center;color:#888">No games available right now.</div>';
+        el.innerHTML = _pbNoEventsHtml();
       }
       return;
     }
@@ -5470,6 +5582,12 @@ async function loadGames(sport, opts){
       _pbUpdateSportTabLiveBadge(_sportLc, liveN);
     }
     try { await _loadOddsComparison(_sport); } catch(_ce) {}
+    if (!_pbGamesHaveMarkets(games) && !_liveOnly) {
+      if (!(opts.silent && el.querySelector('.market-card[data-game-id]'))) {
+        el.innerHTML = _pbNoMarketsHtml();
+      }
+      return;
+    }
     if (opts.silent && el.querySelector('.market-card[data-game-id]')) {
       _pbSyncGamesListInPlace(el, games);
       _pbHydrateLobbyAvatars(el);
@@ -5482,7 +5600,16 @@ async function loadGames(sport, opts){
     _pbApplyLiveFreshnessState();
     _pbResyncBetSlipSelections();
     _pbHydrateLobbyAvatars(el);
-  }catch(e){console.error('[sportsbook fetch failed]',e.message);el.innerHTML='<div class="empty" style="color:#ff4444">'+e.message+'</div>';}
+  }catch(e){
+    console.error('[sportsbook fetch failed]',e.message);
+    var retrySport = (_currentSport || 'mlb').replace(/'/g, '');
+    el.innerHTML = _pbStateHtml({
+      kind: 'error',
+      title: 'Couldn’t load events',
+      body: 'Check your connection, then retry.',
+      actionHtml: '<button type="button" class="pb-retry-btn" onclick="loadGames(\'' + retrySport + '\')">Retry</button>'
+    });
+  }
 }
 
 // Live tab: fetch isLive=true games across Owls sports (via /api/sports + /api/odds/:sport).
@@ -5525,7 +5652,7 @@ async function loadAllLiveGames(opts) {
   opts = opts || {};
   var el = document.getElementById('live-games-list');
   if (!el) return;
-  if (!opts.silent) el.innerHTML = '<div class="empty">Loading...</div>';
+  if (!opts.silent) el.innerHTML = _pbStateHtml({ kind: 'loading', title: 'Loading live events…' });
   try {
     var fetchKeys = await _pbResolveLiveSportKeys();
     var packs = await Promise.all(fetchKeys.map(function(k) {
@@ -5936,7 +6063,11 @@ function _updateSportTabs() {
 async function _loadSportsCatalog() {
   try {
     var res = await fetch(API + '/api/sports', { cache: 'no-store' });
-    if (!res.ok) { console.warn('[sports catalog] HTTP '+res.status+' — using hardcoded tabs'); return; }
+    if (!res.ok) {
+      if (typeof _pbWarnOnce === 'function') _pbWarnOnce('sports_catalog_http', '[sports catalog] HTTP '+res.status+' — using hardcoded tabs');
+      else console.warn('[sports catalog] HTTP '+res.status+' — using hardcoded tabs');
+      return;
+    }
     var data = await res.json();
     if (data && Array.isArray(data.sports)) {
       window._sportsCatalog = data;
@@ -5946,7 +6077,8 @@ async function _loadSportsCatalog() {
       try { _updateSportTabs(); } catch(e) { console.warn('[sports catalog] _updateSportTabs after refresh failed:', e && e.message || e); }
     }
   } catch (e) {
-    console.warn('[sports catalog] fetch failed (legacy tabs remain):', e && e.message || e);
+    if (typeof _pbWarnOnce === 'function') _pbWarnOnce('sports_catalog_fetch', '[sports catalog] fetch failed (legacy tabs remain): ' + (e && e.message || e));
+    else console.warn('[sports catalog] fetch failed (legacy tabs remain):', e && e.message || e);
   }
 }
 try { _loadSportsCatalog(); setInterval(_loadSportsCatalog, 5 * 60 * 1000); } catch(_se) { console.warn('[sports catalog] init failed:', _se && _se.message || _se); }
@@ -5981,7 +6113,13 @@ async function setSport(el,sport){
 }
 // setFilter removed — replaced by setMarketFilter
 function setBNav(el,tab){
-  
+  // Beta: hide NOT IMPLEMENTED surfaces (predictions / global search)
+  if (tab === 'predictions' || tab === 'search') {
+    if (typeof _pbIsBetaFeatureHidden === 'function' && _pbIsBetaFeatureHidden(tab === 'search' ? 'search_tab' : 'predictions')) {
+      tab = 'sportsbook';
+      el = document.getElementById('bn-sportsbook') || el;
+    }
+  }
   _pbActiveTab = (tab==='home'||tab==='sportsbook'||tab==='sports') ? 'sportsbook' : tab;
   document.querySelectorAll('.bn').forEach(function(n){ n.classList.remove('active'); });
   el.classList.add('active');
@@ -6014,8 +6152,7 @@ function setBNav(el,tab){
       _pbScheduleSportsbookLiveRefresh();
     }
   } else if(tab==='predictions'){
-    const sec=document.getElementById('predictions-section');
-    if(sec) sec.style.display='block';
+    // Unreachable in beta (gated above); keep section hidden
     if(ss) ss.style.display='none';
     if(pb) pb.style.display='none';
   } else if(tab==='results'){
@@ -6045,7 +6182,7 @@ function setBNav(el,tab){
     if(sec) sec.style.display='block';
     if(ss) ss.style.display='flex';
     if(pb) pb.style.display='flex';
-    if(tab==='search') showToast('🔍 Search coming soon');
+    // search was remapped above — no coming-soon toast in beta
   }
 }
 
@@ -6224,7 +6361,7 @@ function _handleScopeFailure(scope, source) {
 // ── If session is invalid: show modal + skip game loading ─────────────────
 if (!_sessionValid) {
   var _glEl = document.getElementById('games-list');
-  if (_glEl) _glEl.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#666;font-size:0.85rem">Sign in to view games.</div>';
+  if (_glEl) _glEl.innerHTML = _pbStateHtml({ title: 'Sign in required', body: 'Sign in to view events and markets.' });
 } else {
   
   try { _currentSport = 'mlb'; } catch(e) { console.error('[PBS init] set _currentSport failed:', e && e.message || e); }
@@ -6257,11 +6394,12 @@ setTimeout(function(){
   if (txt.indexOf('Loading') !== -1) {
     if (_sessionValid) {
       // Session is fine — odds endpoint stalled
-      gl.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#888">'
-        +'<div style="font-size:1rem;font-weight:700;margin-bottom:8px">⚠️ Odds failed to load</div>'
-        +'<div style="font-size:0.8rem;margin-bottom:14px">Check your connection or try again</div>'
-        +'<button onclick="loadGames(\'mlb\')" style="padding:10px 20px;background:#00ff88;color:#000;border:none;border-radius:10px;font-weight:800;cursor:pointer">🔄 Retry</button>'
-        +'</div>';
+      gl.innerHTML = _pbStateHtml({
+        kind: 'error',
+        title: 'Odds failed to load',
+        body: 'Check your connection, then retry.',
+        actionHtml: '<button type="button" class="pb-retry-btn" onclick="loadGames(\'mlb\')">Retry</button>'
+      });
     } else {
       _showSessionExpiredModal({ missing:[], reason:'startup_stall' });
     }
@@ -6348,7 +6486,10 @@ function closeMarkets() {
 }
 
 function setMktTab(tab) {
-  if (tab === 'props' || tab === 'specials') { showToast('More markets coming soon'); return; }
+  if (tab === 'props' || tab === 'specials') {
+    // Beta: dead/not-implemented market tabs — no toast spam
+    return;
+  }
   currentMktTab = tab;
   document.querySelectorAll('.mkt-tab').forEach(function(t){ t.classList.remove('active'); });
   var btn = document.getElementById('mkt-tab-'+tab);
@@ -8494,6 +8635,11 @@ async function confirmBet() {
         var _rejMsg;
         if (_dbData.userMessage) {
           _rejMsg = String(_dbData.userMessage);
+        } else if (typeof _pbErrorToastMessage === 'function') {
+          var _normRej = _pbNormalizeApiError(_dbData, _cbRespStatus);
+          _rejMsg = (_normRej.error !== 'unknown_error' || _dbData.error || _dbData.code)
+            ? ('Bet rejected: ' + _normRej.message)
+            : ('Bet rejected by server (HTTP ' + _cbRespStatus + ')');
         } else if (Array.isArray(_dbData.errors) && _dbData.errors.length) {
           _rejMsg='Bet rejected: '+_dbData.errors.join(', ').replace(/_/g,' ');
         } else if (_dbData.code) {
@@ -10442,6 +10588,29 @@ window._isSupportedForGrading  = _isSupportedForGrading;
 
 async function checkOpenTickets() {
   
+  // DB-primary: Check Results must not invent grades/ledger in the browser.
+  // Server grades via /api/grade/run; UI hydrates from /api/player/dashboard.
+  if (typeof _DB_PRIMARY_READS_ENABLED !== 'undefined' && _DB_PRIMARY_READS_ENABLED
+      && typeof runServerGrade === 'function') {
+    var btnSrv = document.getElementById('check-results-btn');
+    if (btnSrv) { btnSrv.textContent = '⏳ Checking…'; btnSrv.disabled = true; }
+    try {
+      var srv = await runServerGrade({ daysBack: 3 });
+      if (srv && srv.ok === false && !srv.skipped && srv.error) {
+        showToast('Could not check results: ' + String(srv.error).replace(/_/g, ' '), 'error');
+      } else if (!srv || (!srv.graded && !srv.skipped && srv.ok !== true)) {
+        // Soft: hydrate anyway so display stays server-truthful
+        try { await loadPlayerDashboardFromDb(); try { renderMyBets(); } catch(_e){} } catch(_e2){}
+      }
+    } catch (e) {
+      console.warn('[checkOpenTickets] server grade failed:', e && e.message);
+      showToast('Could not check results right now. Your tickets were not changed locally.', 'error');
+    } finally {
+      if (btnSrv) { btnSrv.textContent = 'Check Results'; btnSrv.disabled = false; }
+    }
+    return;
+  }
+
   var btn = document.getElementById('check-results-btn');
   if (btn) { btn.textContent = '⏳ Checking…'; btn.disabled = true; }
 
@@ -10768,11 +10937,22 @@ function _applyDashboardTickets(data, opts) {
   try { localStorage.setItem('pb-tickets', JSON.stringify(allTix)); } catch(_e) {}
 }
 
+function _sessionActorIdFromToken() {
+  try {
+    var tok = (typeof TOKEN === 'string' && TOKEN) || localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token') || '';
+    var parts = String(tok).split('.');
+    if (parts.length !== 3) return '';
+    var pl = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return _safeId(pl.sub || pl.actorId || pl.id || '');
+  } catch (_e) { return ''; }
+}
+
 async function loadPlayerDashboardFromDb(opts) {
   opts = opts || {};
   var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
-  var pid  = _safeId(pl.id != null ? pl.id : pl.username);
+  // Prefer JWT subject over localStorage — blocks client IDOR via pb-player tampering.
+  var pid  = _sessionActorIdFromToken() || _safeId(pl.id != null ? pl.id : pl.username);
   var cid  = _safeId(club.id != null ? club.id : club.clubId);
   if (!pid) {
     _balanceFromServer = false;
@@ -10781,12 +10961,12 @@ async function loadPlayerDashboardFromDb(opts) {
   }
   try {
     var qs   = '?playerId='+encodeURIComponent(pid)+(cid?'&clubId='+encodeURIComponent(cid):'');
-    var resp = await (typeof _pbFetch === 'function' ? _pbFetch('/api/player/dashboard'+qs) : fetch('/api/player/dashboard'+qs));
+    var resp = await (typeof _pbFetch === 'function' ? _pbFetch('/api/player/dashboard'+qs) : fetch('/api/player/dashboard'+qs, { headers: typeof _getActorHeaders==='function' ? _getActorHeaders() : {} }));
     var data = await resp.json();
     if (!data.ok) throw new Error(data.error||'dashboard not ok');
     if (data.tickets) {
       try {
-        var _fetcher = typeof _pbFetch === 'function' ? _pbFetch : fetch;
+        var _fetcher = typeof _pbFetch === 'function' ? _pbFetch : function(u){ return fetch(u, { headers: typeof _getActorHeaders==='function' ? _getActorHeaders() : {} }); };
         var lr = await _fetcher('/api/mirror/tickets-with-legs'+qs);
         var ld = await lr.json();
         if (ld && Array.isArray(ld.legs) && ld.legs.length) {
@@ -12372,9 +12552,9 @@ function renderMyBets() {
   var _lg = localStorage.getItem('pb-last-graded');
   if (_lg) html += '<div style="padding:0 14px 6px;font-size:0.65rem;color:#aaa">Last graded: ' + new Date(_lg).toLocaleString() + '</div>';
   if (!betTickets.length) {
-    html += '<div style="text-align:center;padding:50px 20px;color:#aaa;font-size:0.9rem">No bets yet</div>';
+    html += _pbStateHtml({ title: 'No bets yet', body: 'Place a wager from the sportsbook to see it here.' });
   } else if (!active.length && !settled.length) {
-    html += '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:0.88rem">No bets match these filters</div>';
+    html += _pbStateHtml({ title: 'No matching bets', body: 'Try a different filter or date range.' });
   } else {
     if (active.length) {
       html += '<div style="padding:4px 14px;font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#0064c8">Active Bets ('+active.length+')</div>';
@@ -14959,7 +15139,7 @@ function loadLiveGamesFromSportsDataIO(){
     
     return;
   }
-  el.innerHTML = '<div class="empty">Loading…</div>';
+  el.innerHTML = _pbStateHtml({ kind: 'loading', title: 'Loading live events…' });
   _liveFetchToday().then(function(games){
     games = Array.isArray(games) ? games : [];
     var live = games.filter(function(g){ return g && _liveIsLiveStatus(g.Status); });
@@ -15805,7 +15985,8 @@ function _notifFmtTime(iso) {
   if (diff < 60000) return 'Just now';
   if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
   if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) +
+    ' · ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
 function _notifUpdateBadge(count) {
@@ -15818,6 +15999,37 @@ function _notifUpdateBadge(count) {
     badge.textContent = '';
     badge.classList.remove('show');
   }
+}
+
+function _notifSanitizeCopy(title, message) {
+  var t = String(title || '');
+  var m = String(message || '');
+  // Settlement / cash-out wording: club ledger language only — never payment rails.
+  t = t.replace(/\bpayment\s+process(ed|ing)?\b/gi, 'settlement recorded')
+       .replace(/\bpayment\s+received\b/gi, 'settlement recorded')
+       .replace(/\bstripe\b/gi, 'settlement')
+       .replace(/\bcash out offer\b/gi, 'Cash-out offer');
+  m = m.replace(/\bpayment\s+process(ed|ing)?\b/gi, 'settlement recorded')
+       .replace(/\bpayment\s+received\b/gi, 'settlement recorded')
+       .replace(/\bfunds\s+transferr?ed\b/gi, 'balance updated')
+       .replace(/\bstripe\b/gi, 'settlement')
+       .replace(/\bcash out offer\b/gi, 'Cash-out offer');
+  return { title: t, message: m };
+}
+
+function _notifDedupe(list) {
+  var out = [];
+  var seen = {};
+  (list || []).forEach(function(n) {
+    if (!n) return;
+    var id = n.id != null ? String(n.id) : '';
+    var day = String(n.created_at || '').slice(0, 10);
+    var key = id || (String(n.type || '') + '|' + String(n.title || '') + '|' + String(n.message || '') + '|' + day);
+    if (seen[key]) return;
+    seen[key] = true;
+    out.push(n);
+  });
+  return out;
 }
 
 function _notifCashoutMeta(n) {
@@ -15839,13 +16051,16 @@ function _notifCashoutMeta(n) {
 function _notifRenderList(list) {
   var el = document.getElementById('notif-list');
   if (!el) return;
-  if (!list || !list.length) {
-    el.innerHTML = '<div class="notif-empty">No notifications yet</div>';
+  var rows = _notifDedupe(list);
+  if (!rows.length) {
+    el.innerHTML = '<div class="notif-empty">No notifications<br><span style="opacity:.85">You’re all caught up</span></div>';
     return;
   }
-  el.innerHTML = list.map(function(n) {
+  el.innerHTML = rows.map(function(n) {
     var cls = n.read ? 'notif-item' : 'notif-item unread';
-    var isCash = String(n.type || '').toLowerCase() === 'cashout_offer' || /cash out offer/i.test(n.message || '');
+    var type = String(n.type || '').toLowerCase();
+    var isCash = type === 'cashout_offer' || /cash-?out offer/i.test(n.title || '') || /cash-?out offer/i.test(n.message || '');
+    var copy = _notifSanitizeCopy(n.title, n.message);
     var meta = isCash ? _notifCashoutMeta(n) : null;
     var actions = (isCash && meta && meta.ticketId)
       ? '<div class="notif-item-actions">' +
@@ -15853,9 +16068,9 @@ function _notifRenderList(list) {
           '<button type="button" class="notif-act decline" data-cashout-decline="'+_notifEscHtml(meta.ticketId)+'" data-notif-id="'+_notifEscHtml(n.id||'')+'">Decline</button>' +
         '</div>'
       : '';
-    return '<div class="' + cls + '">' +
-      '<div class="notif-item-title">' + _notifEscHtml(n.title || '') + '</div>' +
-      '<div class="notif-item-msg">' + _notifEscHtml(String(n.message || '').replace(/\s*\[ticket:[^\]]+\]\s*$/, '')) + '</div>' +
+    return '<div class="' + cls + '" data-notif-type="'+_notifEscHtml(type)+'">' +
+      '<div class="notif-item-title">' + _notifEscHtml(copy.title || '') + '</div>' +
+      '<div class="notif-item-msg">' + _notifEscHtml(String(copy.message || '').replace(/\s*\[ticket:[^\]]+\]\s*$/, '')) + '</div>' +
       actions +
       '<div class="notif-item-time">' + _notifFmtTime(n.created_at) + '</div>' +
       '</div>';
@@ -15900,15 +16115,34 @@ async function _playerRespondCashout(action, ticketId, notificationId) {
 }
 
 async function _loadNotifications() {
+  var listEl = document.getElementById('notif-list');
   try {
+    if (_notifOpen && listEl && /Loading/.test(listEl.textContent || '')) {
+      /* keep loading chrome while open */
+    } else if (_notifOpen && listEl && !(listEl.querySelector('.notif-item'))) {
+      listEl.innerHTML = '<div class="pb-loading" style="margin:8px">Loading notifications…</div>';
+    }
     var resp = await (typeof _pbFetch === 'function'
       ? _pbFetch(API + '/api/notifications')
       : fetch(API + '/api/notifications', { headers: _getActorHeaders() }));
     var d = await resp.json();
-    if (!d || !d.ok) return;
-    _notifUpdateBadge(d.unread || 0);
-    if (_notifOpen) _notifRenderList(d.notifications || []);
-  } catch (_e) {}
+    if (!d || !d.ok) {
+      if (_notifOpen && listEl) {
+        listEl.innerHTML = '<div class="notif-empty">Notifications unavailable<br><span style="opacity:.85">Pull to reopen and retry</span></div>';
+      }
+      return;
+    }
+    var notes = _notifDedupe(d.notifications || []);
+    var unread = typeof d.unread === 'number'
+      ? d.unread
+      : notes.filter(function(n){ return !n.read; }).length;
+    _notifUpdateBadge(unread);
+    if (_notifOpen) _notifRenderList(notes);
+  } catch (_e) {
+    if (_notifOpen && listEl) {
+      listEl.innerHTML = '<div class="notif-empty">Couldn’t load notifications<br><span style="opacity:.85">Check connection and reopen</span></div>';
+    }
+  }
 }
 
 async function _markNotificationsRead() {
@@ -15924,28 +16158,42 @@ async function _markNotificationsRead() {
   } catch (_e) {}
 }
 
+function _notifSetOpen(open) {
+  _notifOpen = !!open;
+  var dd = document.getElementById('notif-dd');
+  var backdrop = document.getElementById('notif-backdrop');
+  if (dd) {
+    if (_notifOpen) dd.classList.add('open');
+    else dd.classList.remove('open');
+  }
+  if (backdrop) {
+    if (_notifOpen) backdrop.classList.add('open');
+    else backdrop.classList.remove('open');
+  }
+}
+
 function toggleNotifDropdown(ev) {
   if (ev) ev.stopPropagation();
   var dd = document.getElementById('notif-dd');
   if (!dd) return;
-  _notifOpen = !_notifOpen;
   if (_notifOpen) {
-    dd.classList.add('open');
-    _loadNotifications().then(function() { _markNotificationsRead(); });
-  } else {
-    dd.classList.remove('open');
+    _notifSetOpen(false);
+    return;
   }
+  _notifSetOpen(true);
+  _loadNotifications().then(function() { _markNotificationsRead(); });
 }
 
 function _initNotifications() {
   document.addEventListener('click', function(e) {
     var wrap = document.getElementById('notif-wrap');
+    var backdrop = document.getElementById('notif-backdrop');
+    if (backdrop && backdrop.contains(e.target)) return;
     if (wrap && !wrap.contains(e.target)) {
-      _notifOpen = false;
-      var dd = document.getElementById('notif-dd');
-      if (dd) dd.classList.remove('open');
+      _notifSetOpen(false);
     }
   });
+  // Server-backed only — never invent placeholder / demo notifications.
   _loadNotifications();
   setInterval(_loadNotifications, 60000);
 }
@@ -15969,6 +16217,7 @@ document.addEventListener('DOMContentLoaded', function() {
   setInterval(_checkMarketStatus, 60000);
   // Phase T: start event poller
   if (typeof _startEventPoller === 'function') _startEventPoller();
+  if (typeof _pbMaybeStartOnboarding === 'function') _pbMaybeStartOnboarding();
   _initNotifications();
   }).catch(function(_e){});
 });
