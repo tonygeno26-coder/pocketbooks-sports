@@ -1742,6 +1742,14 @@ function _validatePlayerSession() {
 
   var missing = [];
   if (!_tok) missing.push('token');
+  else {
+    var _tokParts = _tok.split('.');
+    if (_tokParts.length !== 3) missing.push('token_malformed');
+    else {
+      try { JSON.parse(atob(_tokParts[1].replace(/-/g,'+').replace(/_/g,'/'))); }
+      catch(_e) { missing.push('token_malformed'); }
+    }
+  }
   if (!pid)  missing.push('playerId');
   if (!cid)  missing.push('clubId');
 
@@ -1842,6 +1850,7 @@ function _showSessionExpiredModal(result) {
         try { return window._PBS_BACKEND || 'https://pocketbooks-sports-backend-production.up.railway.app'; }
         catch(_){ return 'https://pocketbooks-sports-backend-production.up.railway.app'; }
       })();
+      window._bootTokenRecoveryInFlight = true;
       fetch(_rBase + '/api/auth/token', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ actorId: _rPid, clubId: _rCid })
@@ -1851,12 +1860,14 @@ function _showSessionExpiredModal(result) {
             ['pb-sports-token','pb-session-token','pb-token-expires','pb-actor-role','pb-test-user']
               .forEach(function(k){ localStorage.removeItem(k); });
           } catch(_e){}
+          window._bootTokenRecoveryInFlight = false;
           window.location.href = 'lobby.html?screen=signin&msg=' + encodeURIComponent('Session invalid — please sign in again');
           return;
         }
         if (res.status === 429) {
           console.warn('TOKEN_RECOVERY_RATE_LIMITED — not retrying');
-          _showSessionExpiredModal(_sgResult);
+          window._bootTokenRecoveryInFlight = false;
+          _showSessionExpiredModal(Object.assign({}, _sgResult, { reason: 'too_many_requests' }));
           return;
         }
         var data = res.data || {};
@@ -1866,7 +1877,7 @@ function _showSessionExpiredModal(result) {
           localStorage.setItem('pb-session-token', data.token);
           var _expIn = data.expiresIn || 86400;
           localStorage.setItem('pb-token-expires', String(Date.now() + (_expIn * 1000)));
-          
+          window._bootTokenRecoveryInFlight = false;
           var _recheck = _validatePlayerSession();
           if (_recheck.ok) {
             
@@ -1876,9 +1887,11 @@ function _showSessionExpiredModal(result) {
             return;
           }
         }
+        window._bootTokenRecoveryInFlight = false;
         console.warn('TOKEN_RECOVERY_FAILED reason='+(data.error||data.code||'no_token'));
         _showSessionExpiredModal(_sgResult);
       }).catch(function(e){
+        window._bootTokenRecoveryInFlight = false;
         console.warn('TOKEN_RECOVERY_FAILED reason=network err='+e.message);
         _showSessionExpiredModal(_sgResult);
       });
@@ -8467,8 +8480,13 @@ async function confirmBet() {
         || document.querySelector('[data-action="confirm"]')
         || document.querySelector('[data-action="confirm-bet"]')
         || document.querySelector('.bs-confirm-btn');
+  if (_confirmBetInFlight || (_cbBtn && _cbBtn.dataset.cbBusy === '1')) {
+    _cbLog('CONFIRM_BET_DEDUPED', 'in_flight');
+    return;
+  }
   function _cbBtnBusy(label) {
     if (!_cbBtn) return;
+    _confirmBetInFlight = true;
     _cbBtn.disabled = true;
     _cbBtn.dataset.cbBusy = '1';
     _cbBtn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px">'
@@ -8479,6 +8497,7 @@ async function confirmBet() {
   }
   function _cbBtnReady() {
     if (!_cbBtn) return;
+    _confirmBetInFlight = false;
     _cbBtn.disabled = false;
     _cbBtn.dataset.cbBusy = '';
     _cbBtn.textContent = 'Confirm Bet';
@@ -11922,7 +11941,7 @@ async function _pbFetch(url, opts) {
         return resp;
       }
     }
-    if (resp.status === 429) {
+    if (resp.status === 429 && _isAuthApiPath(path)) {
       try {
         var peek429 = await resp.clone().json();
         _authHandleResponse(429, peek429);
@@ -12053,6 +12072,7 @@ window._pollEvents       = _pollEvents;
 var _SESSION_REFRESH_THRESHOLD_SEC = 5 * 60; // refresh if <5min left
 
 async function _verifyOrRefreshSession() {
+  if (window._bootTokenRecoveryInFlight) return { ok:false, reason:'boot_recovery_in_flight' };
   if (!_authCanAttempt()) return { ok:false, reason:'auth_give_up' };
   var token = null;
   try { token = localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token'); } catch(_e){}
