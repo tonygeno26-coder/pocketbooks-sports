@@ -783,38 +783,48 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
    CLEAN DARK SPORTSBOOK REDESIGN (presentation only)
    ═══════════════════════════════════════════════════════════════════════════ */
 :root{
-  --bg:#070b12;
-  --bg-elev:#0c121c;
-  --card:#121a27;
+  /* PocketBooks canonical (match host index.html) */
+  --bg-main:#080D18;
+  --bg-secondary:#0C1424;
+  --bg-card:#101A2E;
+  --bg:#080D18;
+  --bg-elev:#0C1424;
+  --card:#101A2E;
   --card2:#162032;
-  --border:#1e2a3c;
+  --border:#1D2B42;
   --border-soft:rgba(255,255,255,0.06);
-  --green:#3d8bfd;
-  --green-dim:rgba(61,139,253,0.14);
-  --accent:#3d8bfd;
-  --accent-soft:rgba(61,139,253,0.16);
-  --accent-glow:rgba(61,139,253,0.45);
-  --white:#f4f7fb;
-  --gray:#7a8799;
-  --light:#a8b3c4;
-  --red:#ff4d6a;
-  --red-dim:rgba(255,77,106,0.12);
+  --accent-blue:#1677FF;
+  --accent-blue-bright:#2F8CFF;
+  --green:#1677FF; /* board interactive primary (slip Place Bet stays product green) */
+  --green-dim:rgba(22,119,255,0.14);
+  --accent:#1677FF;
+  --accent-soft:rgba(22,119,255,0.16);
+  --accent-glow:rgba(22,119,255,0.22);
+  --white:#F5F7FA;
+  --gray:#64748B;
+  --light:#94A3B8;
+  --red:#EF4444;
+  --red-dim:rgba(239,68,68,0.12);
   --cyan:#5eb1ff;
   --cyan-dim:rgba(94,177,255,0.12);
-  --win:#3dd68c;
+  --win:#22C55E;
   --shadow:0 8px 28px rgba(0,0,0,0.35);
+  --radius:16px;
+  --radius-sm:12px;
+  --touch:44px;
 }
 body{
   font-family:'SF Pro Display',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-  background:radial-gradient(1200px 600px at 50% -120px,rgba(61,139,253,0.08),transparent 60%),var(--bg);
+  background:radial-gradient(1200px 600px at 50% -120px,rgba(22,119,255,0.07),transparent 60%),var(--bg);
   color:var(--white);
   max-width:430px;margin:0 auto;min-height:100vh;overflow-x:hidden;padding-bottom:80px;
+  -webkit-font-smoothing:antialiased;
 }
 
 /* HEADER */
 .header{
   display:flex;justify-content:space-between;align-items:center;gap:10px;
-  padding:12px 14px;background:rgba(7,11,18,0.92);backdrop-filter:blur(12px);
+  padding:12px 14px;background:rgba(8,13,24,0.92);backdrop-filter:blur(12px);
   position:sticky;top:0;z-index:100;border-bottom:1px solid var(--border);
 }
 .h-left{display:flex;align-items:center;gap:8px;min-width:0}
@@ -883,8 +893,8 @@ body{
 }
 .sport-tab.active .sport-tab-emoji{
   background:radial-gradient(circle at 50% 35%,#22314a 0%,#152033 55%,#0d1522 100%);
-  border-color:rgba(61,139,253,0.9);
-  box-shadow:0 0 0 2px #3d8bfd,0 0 14px rgba(61,139,253,0.4),inset 0 2px 8px rgba(0,0,0,0.4);
+  border-color:rgba(22,119,255,0.85);
+  box-shadow:0 0 0 2px var(--accent),inset 0 2px 8px rgba(0,0,0,0.4);
 }
 .sport-tab-name{color:var(--light);font-weight:650}
 .sport-tab.active .sport-tab-name{color:#fff}
@@ -921,8 +931,8 @@ body{
 .odds-box:hover{border-color:#2a3a52;background:#121c2c}
 .odds-box.sel,.odds-cell.selected{
   border:1.5px solid var(--accent)!important;outline:none!important;
-  box-shadow:0 0 0 1px rgba(61,139,253,0.35),0 0 14px rgba(61,139,253,0.28)!important;
-  background:rgba(61,139,253,0.14)!important;
+  box-shadow:none!important;
+  background:rgba(22,119,255,0.14)!important;
 }
 .odds-pos{color:var(--win);text-shadow:none}
 .odds-neg{color:#d7dde8}
@@ -931,8 +941,8 @@ body{
 .mc-col-label{color:#5d6b7e}
 .mkt-odds-box{background:#0d1420;border:1px solid var(--border);border-radius:10px}
 .mkt-odds-box.selected{
-  border-color:var(--accent)!important;box-shadow:0 0 10px rgba(61,139,253,0.3)!important;
-  background:rgba(61,139,253,0.14)!important;
+  border-color:var(--accent)!important;box-shadow:none!important;
+  background:rgba(22,119,255,0.14)!important;
 }
 .mkt-odds-num.pos{color:var(--win)}
 .mc-props-tab.active{color:#041018;background:var(--accent)}
@@ -947,13 +957,15 @@ body{
 
 /* BOTTOM NAV */
 .bnav{
-  background:rgba(7,11,18,0.98);border-top:1px solid var(--border);
+  background:rgba(8,13,24,0.98);border-top:1px solid var(--border);
   box-shadow:0 -6px 24px rgba(0,0,0,0.45);
+  padding-bottom:max(10px,env(safe-area-inset-bottom,0px));
 }
 .bn-label{color:#5d6b7e}
 .bn-icon svg{stroke:#5d6b7e}
 .bn.active .bn-label{color:var(--accent)}
-.bn.active .bn-icon svg{stroke:var(--accent);filter:drop-shadow(0 0 5px rgba(61,139,253,0.45))}
+.bn.active .bn-icon svg{stroke:var(--accent);filter:none}
+.bn{min-height:var(--touch);min-width:64px}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    BET SLIP — restore pre-redesign PocketBooks colors (ref: 5bb0c9d)
@@ -1353,6 +1365,56 @@ body{
     white-space:normal!important;overflow-wrap:break-word
   }
   .market-card .mc-team > div{min-width:0;flex:1}
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BETA UX POLISH — presentation only (dashboard / a11y / empty states)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.hdr-chip:focus-visible,
+.hdr-back:focus-visible,
+.icon-btn:focus-visible,
+.notif-bell:focus-visible,
+.buy-diamonds-nav-btn:focus-visible,
+.sport-tab:focus-visible,
+.top-tab:focus-visible,
+.pill:focus-visible,
+.odds-box:focus-visible,
+.mc-prop-ou:focus-visible,
+.bn:focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:2px;
+}
+.pb-empty{
+  margin:24px 16px;padding:28px 18px;text-align:center;
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+}
+.pb-empty-title{font-size:0.95rem;font-weight:800;color:var(--white);margin-bottom:6px}
+.pb-empty-body{font-size:0.78rem;color:var(--light);line-height:1.45}
+.pb-loading{
+  margin:28px 16px;padding:24px;text-align:center;color:var(--light);font-size:0.8rem;font-weight:700;
+}
+.pb-loading::before{
+  content:'';display:block;width:22px;height:22px;margin:0 auto 10px;border-radius:50%;
+  border:2px solid var(--border);border-top-color:var(--accent);
+  animation:pbSpin 0.8s linear infinite;
+}
+@keyframes pbSpin{to{transform:rotate(360deg)}}
+.empty{
+  margin:24px 16px!important;padding:28px 18px!important;text-align:center!important;
+  background:var(--card)!important;border:1px solid var(--border)!important;border-radius:16px!important;
+  color:var(--light)!important;font-size:0.82rem!important;font-weight:700!important;
+}
+.value-bets-section{
+  border-color:rgba(22,119,255,0.22)!important;
+  background:linear-gradient(180deg,#101A2E,#0C1424)!important;
+}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important}
+  .mc-live-badge-dot,.sport-tab-live-dot{animation:none!important}
+  .pb-loading::before{animation:none!important;border-top-color:var(--light)}
+}
+@media (hover:none){
+  .market-card:hover{transform:none!important}
 }
 
 </style>
