@@ -17,20 +17,30 @@ function test(name, fn) {
 console.log('\n── Settlements partial-carry UI ──');
 
 test('modal shows Current Balance / Amount to Apply / Preview / Apply Settlement', function() {
-  assert.ok(src.indexOf('Current Balance:') !== -1);
+  assert.ok(src.indexOf('Current Balance') !== -1);
   assert.ok(src.indexOf('Amount to Apply') !== -1);
   assert.ok(src.indexOf('Preview:') !== -1);
   assert.ok(src.indexOf('Apply Settlement') !== -1);
 });
 
-test('blank/$0 is no-op; overpay blocked client-side', function() {
-  assert.ok(src.indexOf("Blank/$0 — no settlement applied") !== -1);
+test('blank/$0 disables Apply; overpay blocked client-side', function() {
+  assert.ok(src.indexOf('blank/$0 disables Apply') !== -1 || src.indexOf('disables Apply') !== -1);
+  assert.ok(src.indexOf('_setApplyEnabled(false)') !== -1);
   assert.ok(src.indexOf('Cannot cross zero') !== -1);
-  assert.ok(src.indexOf('0.00 = no op') !== -1);
 });
 
-test('double-click guard disables button', function() {
-  assert.ok(src.indexOf('if (btn.disabled) return') !== -1);
+test('double-click / busy guard on Apply', function() {
+  assert.ok(src.indexOf("btn.dataset.busy") !== -1 || src.indexOf('if (btn.disabled) return') !== -1);
+});
+
+test('modal shows Current / Amount / New Balance grid', function() {
+  assert.ok(src.indexOf('Current Balance') !== -1);
+  assert.ok(src.indexOf('New Balance') !== -1);
+  assert.ok(src.indexOf('_settle_new') !== -1);
+});
+
+test('idempotency key includes clubId', function() {
+  assert.ok(src.indexOf("return 'SETTLE_'+clubId+'_'+playerId+'_'") !== -1);
 });
 
 test('modal refresh after settle calls renderSettlementPreviewFromDb', function() {

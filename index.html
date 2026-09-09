@@ -2417,26 +2417,33 @@ async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes, s
   var ov = document.createElement('div');
   ov.id = '_settle_modal';
   ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.65);display:flex;align-items:flex-end;justify-content:center';
-  ov.innerHTML = '<div style="background:#111;width:100%;max-width:430px;border-radius:20px 20px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px))">'+
-    '<div style="font-size:1rem;font-weight:900;margin-bottom:6px">Apply Settlement: '+playerName+'</div>'+
-    '<div style="font-size:0.78rem;color:'+color+';font-weight:700;margin-bottom:12px">Current Balance: '+beforeTxt+'</div>'+
-    '<div style="margin-bottom:14px">'+
-      '<label style="font-size:0.7rem;color:#666;text-transform:uppercase;letter-spacing:0.5px">Amount to Apply ($)</label>'+
-      '<input id="_settle_amount" type="number" step="0.01" min="0" max="'+maxAmt+'" value="" placeholder="0.00 = no op"'+
-        ' style="width:100%;background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:10px 12px;color:#fff;font-size:1rem;font-weight:700;outline:none;margin-top:4px">'+
-      '<div style="font-size:0.62rem;color:#666;margin-top:4px">Max $'+maxAmt.toFixed(2)+' (cannot cross zero)</div>'+
+  ov.innerHTML = '<div style="background:#111;width:100%;max-width:430px;border-radius:20px 20px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px));box-sizing:border-box">'+
+    '<div style="font-size:1rem;font-weight:900;margin-bottom:10px">Apply Settlement: '+playerName+'</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:12px;padding:12px;text-align:center">'+
+      '<div><div style="font-size:0.5rem;color:#666;text-transform:uppercase;letter-spacing:0.4px">Current Balance</div>'+
+        '<div id="_settle_cur" style="font-size:0.95rem;font-weight:900;color:'+color+';margin-top:4px">'+beforeTxt+'</div></div>'+
+      '<div><div style="font-size:0.5rem;color:#666;text-transform:uppercase;letter-spacing:0.4px">Amount to Apply</div>'+
+        '<div id="_settle_amt_lbl" style="font-size:0.95rem;font-weight:900;color:#888;margin-top:4px">—</div></div>'+
+      '<div><div style="font-size:0.5rem;color:#666;text-transform:uppercase;letter-spacing:0.4px">New Balance</div>'+
+        '<div id="_settle_new" style="font-size:0.95rem;font-weight:900;color:#888;margin-top:4px">'+beforeTxt+'</div></div>'+
     '</div>'+
-    '<div id="_settle_preview" style="background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:0.82rem;font-weight:700">'+
-      'Preview: '+beforeTxt+' → enter amount'+
+    '<div style="margin-bottom:14px">'+
+      '<label style="font-size:0.7rem;color:#666;text-transform:uppercase;letter-spacing:0.5px" for="_settle_amount">Amount to Apply ($)</label>'+
+      '<input id="_settle_amount" type="number" inputmode="decimal" step="0.01" min="0" max="'+maxAmt+'" value="" placeholder="Enter amount"'+
+        ' style="width:100%;box-sizing:border-box;background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:12px;color:#fff;font-size:1.05rem;font-weight:700;outline:none;margin-top:4px">'+
+      '<div style="font-size:0.62rem;color:#666;margin-top:4px">Max $'+maxAmt.toFixed(2)+' · cannot cross zero · blank/$0 disables Apply</div>'+
+    '</div>'+
+    '<div id="_settle_preview" style="background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:0.82rem;font-weight:700;color:#888">'+
+      'Preview: '+beforeTxt+' → (no op)'+
     '</div>'+
     '<div style="margin-bottom:16px">'+
       '<label style="font-size:0.7rem;color:#666;text-transform:uppercase;letter-spacing:0.5px">Note (optional)</label>'+
       '<input id="_settle_note" type="text" placeholder="Cash, Venmo, etc."'+
-        ' style="width:100%;background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:8px 12px;color:#fff;font-size:0.85rem;outline:none;margin-top:4px">'+
+        ' style="width:100%;box-sizing:border-box;background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:8px 12px;color:#fff;font-size:0.85rem;outline:none;margin-top:4px">'+
     '</div>'+
     '<div style="display:flex;gap:10px">'+
-      '<button onclick="document.getElementById(\'_settle_modal\').remove()" style="flex:1;height:48px;background:#1a1a1a;border:1px solid #333;border-radius:12px;color:#888;font-weight:700;cursor:pointer">Cancel</button>'+
-      '<button id="_settle_confirm_btn" style="flex:2;height:48px;background:var(--green,#00c853);border:none;border-radius:12px;color:#000;font-size:0.95rem;font-weight:900;cursor:pointer">Apply Settlement</button>'+
+      '<button type="button" onclick="document.getElementById(\'_settle_modal\').remove()" style="flex:1;height:48px;background:#1a1a1a;border:1px solid #333;border-radius:12px;color:#888;font-weight:700;cursor:pointer">Cancel</button>'+
+      '<button type="button" id="_settle_confirm_btn" disabled style="flex:2;height:48px;background:#333;border:none;border-radius:12px;color:#666;font-size:0.95rem;font-weight:900;cursor:not-allowed;opacity:0.55">Apply Settlement</button>'+
     '</div>'+
   '</div>';
   document.body.appendChild(ov);
@@ -2444,31 +2451,72 @@ async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes, s
 
   var amtEl = document.getElementById('_settle_amount');
   var previewEl = document.getElementById('_settle_preview');
+  var amtLbl = document.getElementById('_settle_amt_lbl');
+  var newEl = document.getElementById('_settle_new');
+  var btn = document.getElementById('_settle_confirm_btn');
+  function _setApplyEnabled(on) {
+    btn.disabled = !on;
+    if (on) {
+      btn.style.background = 'var(--green,#00c853)';
+      btn.style.color = '#000';
+      btn.style.cursor = 'pointer';
+      btn.style.opacity = '1';
+    } else {
+      btn.style.background = '#333';
+      btn.style.color = '#666';
+      btn.style.cursor = 'not-allowed';
+      btn.style.opacity = '0.55';
+    }
+  }
   function _refreshPreview() {
-    var after = _previewAfter(amtEl.value);
-    if (amtEl.value === '' || parseFloat(amtEl.value) === 0) {
+    var raw = amtEl.value;
+    var a = parseFloat(raw);
+    if (raw === '' || isNaN(a) || a <= 0) {
       previewEl.textContent = 'Preview: '+beforeTxt+' → (no op)';
       previewEl.style.color = '#888';
+      amtLbl.textContent = '—';
+      amtLbl.style.color = '#888';
+      newEl.textContent = beforeTxt;
+      newEl.style.color = '#888';
+      _setApplyEnabled(false);
       return;
     }
+    if (a < 0) {
+      previewEl.textContent = 'Amount must be positive';
+      previewEl.style.color = 'var(--red,#ff3d57)';
+      _setApplyEnabled(false);
+      return;
+    }
+    var after = _previewAfter(raw);
+    amtLbl.textContent = '$'+a.toFixed(2);
+    amtLbl.style.color = '#fff';
     if (after == null) {
       previewEl.textContent = 'Cannot cross zero — max $'+maxAmt.toFixed(2);
       previewEl.style.color = 'var(--red,#ff3d57)';
+      newEl.textContent = '—';
+      newEl.style.color = 'var(--red,#ff3d57)';
+      _setApplyEnabled(false);
       return;
     }
-    previewEl.textContent = 'Preview: '+beforeTxt+' → '+_fmtCarry(after);
+    var afterTxt = _fmtCarry(after);
+    previewEl.textContent = 'Preview: '+beforeTxt+' → '+afterTxt;
     previewEl.style.color = '#fff';
+    newEl.textContent = afterTxt;
+    newEl.style.color = Math.abs(after)<0.005 ? '#888' : (after<0 ? 'var(--positive,#22C55E)' : 'var(--negative,#EF4444)');
+    _setApplyEnabled(true);
   }
   amtEl.addEventListener('input', _refreshPreview);
   _refreshPreview();
+  try { amtEl.focus(); } catch(_f){}
 
-  document.getElementById('_settle_confirm_btn').addEventListener('click', async function() {
+  btn.addEventListener('click', async function() {
     var noteEl = document.getElementById('_settle_note');
     var amt    = parseFloat(amtEl.value);
+    if (btn.disabled) return;
     if (isNaN(amt) || amt <= 0) {
-      amtEl.style.borderColor = '#333';
+      _setApplyEnabled(false);
       if (typeof showToastHost === 'function') showToastHost('Blank/$0 — no settlement applied');
-      return; // blank/$0 = no op
+      return;
     }
     if (amt > maxAmt + 0.01) {
       amtEl.style.borderColor = 'red';
@@ -2476,8 +2524,8 @@ async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes, s
       return;
     }
     amtEl.style.borderColor='#333';
-    var btn = document.getElementById('_settle_confirm_btn');
-    if (btn.disabled) return; // double-click guard
+    if (btn.dataset.busy === '1') return;
+    btn.dataset.busy = '1';
     btn.textContent = 'Processing...'; btn.disabled = true;
 
     var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
@@ -2514,7 +2562,9 @@ async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes, s
         showToastHost('Settlement applied: $'+Number(data.amount||amt).toFixed(2)+(afterTxt?' → '+afterTxt:''));
       
     } catch(e) {
-      btn.textContent = 'Apply Settlement'; btn.disabled = false;
+      btn.dataset.busy = '0';
+      btn.textContent = 'Apply Settlement';
+      _setApplyEnabled(true);
       if (typeof showToastHost === 'function') showToastHost('Settlement failed: '+e.message);
       console.error('[settlement execution] error:', e.message);
     }
