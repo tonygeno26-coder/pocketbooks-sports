@@ -1424,6 +1424,7 @@ function _storeAuthToken(token, expiresInSec) {
   TOKEN = token;
   try {
     localStorage.setItem('pb-sports-token', token);
+    localStorage.setItem('pb-session-token', token);
     var expMs = expiresInSec ? (Date.now() + Number(expiresInSec) * 1000) : _tokenExpMs(token);
     if (!expMs) expMs = Date.now() + 86400 * 1000;
     localStorage.setItem('pb-token-expires', String(expMs));
@@ -1941,15 +1942,22 @@ function selectClub(id, action) {
 // Called before navigating to player.html or index.html.
 // Issues a club-scoped JWT via /api/auth/token so player.html always has one.
 async function _acquireClubToken(playerId, clubId) {
-  
+  if (!_authCanAttempt()) {
+    return { ok:false, error:'auth_give_up' };
+  }
   try {
-    var resp = await fetch(API + '/api/auth/token', {
+    var tok = await _authFetchOnce(API + '/api/auth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json',
                  'Authorization': TOKEN ? ('Bearer ' + TOKEN) : '' },
       body: JSON.stringify({ actorId: playerId, clubId: clubId })
     });
-    var data = await resp.json();
+    var verdict = _authHandleResponse(tok.status, tok.data);
+    if (verdict === 'fatal') return { ok:false, error:'session_invalid' };
+    if (verdict === 'rate_limited') {
+      return { ok:false, error:'too_many_requests', message:'Too many requests — wait a minute and try again' };
+    }
+    var data = tok.data || {};
     if (data.ok && data.token) {
       _storeAuthToken(data.token, data.expiresIn);
       // Decode token and sync pb-player.id to token's actorId so backend self-check passes
@@ -1966,12 +1974,14 @@ async function _acquireClubToken(playerId, clubId) {
         }
       } catch(_td){}
       
+      _authFailCount = 0;
       return { ok:true, token:data.token, role:data.role, status:data.status || 'active', club_id:data.club_id || data.clubId || clubId };
-    } else {
-      console.warn('TOKEN_WRITE_FAILED reason='+(data.error||data.code||'no_token_in_response'));
-      return { ok:false, error:data.error||data.code||'token_denied', status:data.status || null };
     }
+    _authFailCount++;
+    console.warn('TOKEN_WRITE_FAILED reason='+(data.error||data.code||'no_token_in_response'));
+    return { ok:false, error:data.error||data.code||'token_denied', status:data.status || null };
   } catch(e) {
+    _authFailCount++;
     console.warn('TOKEN_WRITE_FAILED reason=network err='+e.message);
     return { ok:false, error:'network_error', message:e.message };
   }
@@ -2027,7 +2037,11 @@ function enterActiveClub(action) {
       if (!result || !result.ok) {
         console.warn('TOKEN_WRITE_FAILED — navigation blocked reason='+(result&&result.error||'unknown'));
         if (result && (result.error === 'membership_not_found' || result.error === 'membership_inactive')) clearSelectedClubStorage();
-        showToast('Club access could not be verified: '+((result&&result.error)||'session error').replace(/_/g,' '));
+        if (result && result.error === 'too_many_requests') {
+          showToast(result.message || 'Too many requests — wait a minute and try again');
+        } else {
+          showToast('Club access could not be verified: '+((result&&result.error)||'session error').replace(/_/g,' '));
+        }
         return;
       }
       var canonicalRole = result.role || 'player';
