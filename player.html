@@ -1420,6 +1420,27 @@ body{
 
 
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIVE BETTING VISUAL — LIVE → GAME STATE → SCORE → MARKETS
+   ═══════════════════════════════════════════════════════════════════════════ */
+.mc-live-badge{letter-spacing:0.55px}
+.mc-live-score-missing,.mc-live-score.is-missing{
+  color:var(--gray);font-size:0.68rem;font-weight:700;letter-spacing:0.2px;
+}
+.mc-live-score.is-missing .mc-live-pts{display:none}
+.market-card.is-suspended{opacity:0.72}
+.market-card.is-suspended .odds-box,
+.market-card.is-suspended .mkt-odds-box{
+  opacity:0.4;pointer-events:none;filter:grayscale(0.35);
+}
+.mc-suspended-banner{
+  margin:0 14px 8px;padding:6px 10px;border-radius:8px;
+  background:rgba(232,197,71,0.1);border:1px solid rgba(232,197,71,0.28);
+  color:#e8c547;font-size:0.62rem;font-weight:800;letter-spacing:0.35px;text-transform:uppercase;
+}
+.sport-tab-live{z-index:2}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    PROPS UX — Caesars-style grouping readability + search chrome
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -16065,6 +16086,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
 </script>
 <script src="diamonds.js">
+
+function _pbLiveScoreMissingHtml(stateLabel){
+  var label = stateLabel ? String(stateLabel) : 'Live';
+  return '<div class="mc-live-score is-missing"><span class="mc-live-state">' + label +
+    '</span><span class="mc-live-score-missing">Score unavailable</span></div>';
+}
+
 function _pbFilterPropsPanel(panel, q){
   if (!panel) return;
   q = String(q || '').trim().toLowerCase();
