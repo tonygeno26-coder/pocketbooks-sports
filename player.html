@@ -1422,6 +1422,16 @@ body{
 
 
 
+
+/* STATES — empty / loading / error */
+.pb-error{
+  margin:16px;padding:12px 14px;border-radius:12px;
+  background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.28);
+  color:#fecaca;font-size:0.78rem;font-weight:700;line-height:1.4;
+}
+.pb-unavailable{opacity:0.55;pointer-events:none;filter:grayscale(0.2)}
+img.pb-broken{display:none!important}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    MOBILE-FIRST — 390 / 430 / 768 / 1280 / 1440
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -5628,7 +5638,7 @@ async function loadGames(sport, opts){
       if (_liveOnly) {
         el.innerHTML = _pbLiveEmptyStateHtml(null);
       } else {
-        el.innerHTML='<div class="empty" style="padding:60px 20px;text-align:center;color:#888">No games available right now.</div>';
+        el.innerHTML='<div class="pb-empty"><div class="pb-empty-title">No games available</div><div class="pb-empty-body">Check back soon or try another sport.</div></div>';
       }
       return;
     }
@@ -5649,7 +5659,7 @@ async function loadGames(sport, opts){
       if (_liveOnly) {
         el.innerHTML = _pbLiveEmptyStateHtml(null);
       } else {
-        el.innerHTML='<div class="empty" style="padding:60px 20px;text-align:center;color:#888">No games available right now.</div>';
+        el.innerHTML='<div class="pb-empty"><div class="pb-empty-title">No games available</div><div class="pb-empty-body">Check back soon or try another sport.</div></div>';
       }
       return;
     }
@@ -16118,6 +16128,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
 </script>
 <script src="diamonds.js">
+
+
+function _pbHideBrokenImg(img){
+  try {
+    if (!img) return;
+    img.classList.add('pb-broken');
+    img.removeAttribute('src');
+    img.alt = '';
+  } catch (_e) {}
+}
 
 function _pbLiveScoreMissingHtml(stateLabel){
   var label = stateLabel ? String(stateLabel) : 'Live';
