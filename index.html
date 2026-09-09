@@ -2266,31 +2266,39 @@ async function renderSettlementPreviewFromDb() {
     players.forEach(function(p) {
       var owesHost = parseFloat(p.owesHost)||0;
       var hostOwes = parseFloat(p.hostOwes)||0;
+      var settleBal = p.settlementBalance != null ? parseFloat(p.settlementBalance)
+                    : (p.currentBalance != null && p.balanceSource === 'settlement_carry'
+                        ? parseFloat(p.currentBalance)
+                        : (owesHost > 0 ? -owesHost : hostOwes));
       var dbpBal = (_hostDbPlayersById && p.playerId != null)
         ? (_hostDbPlayersById[String(p.playerId)] || null) : null;
-      var bal = _resolveHostPlayerBalance(p, dbpBal);
+      var bankroll = (p.bankrollBalance != null ? parseFloat(p.bankrollBalance) : null);
+      if (bankroll == null) bankroll = _resolveHostPlayerBalance(
+        { availableBalance: p.availableBalance, currentBalance: null, balance: null }, dbpBal);
       var startBal = p.startingBalance != null ? parseFloat(p.startingBalance)
                    : (p.balance_start != null ? parseFloat(p.balance_start) : null);
       var weekWagered = parseFloat(p.weekWagered)||0;
       var weekWon = parseFloat(p.weekWon)||0;
       var weekLost = parseFloat(p.weekLost)||0;
       var weekNet = p.weekNet != null ? parseFloat(p.weekNet) : parseFloat(p.settledNet)||0;
-      var isSettled = (owesHost < 0.005 && hostOwes < 0.005);
-      var isOwes = owesHost > 0.005;
+      var isSettled = (Math.abs(settleBal) < 0.005);
+      var isOwes = settleBal < -0.005;
       // Host view: player owes host = income (green); host owes player = outflow (red)
-      var color  = isOwes ? 'var(--positive,#22C55E)' : (hostOwes>0.005 ? 'var(--negative,#EF4444)' : '#888');
-      var amtTxt = isOwes ? 'owes host '+_money(owesHost)
-                 : (hostOwes>0.005 ? 'host owes '+_money(hostOwes) : 'Settled');
+      var color  = isOwes ? 'var(--positive,#22C55E)' : (settleBal>0.005 ? 'var(--negative,#EF4444)' : '#888');
+      var amtTxt = isOwes ? 'owes host '+_money(Math.abs(settleBal))
+                 : (settleBal>0.005 ? 'host owes '+_money(settleBal) : 'Settled');
       var settleBtn = isSettled
         ? '<span style="font-size:0.65rem;font-weight:800;padding:4px 10px;border-radius:10px;background:rgba(255,255,255,0.04);color:#888">Settled</span>'
-        : '<button onclick="openSettlePlayerModal('+JSON.stringify(String(p.playerId))+','+JSON.stringify(String(p.username||p.playerId))+','+owesHost+','+hostOwes+')"'+
+        : '<button onclick="openSettlePlayerModal('+JSON.stringify(String(p.playerId))+','+JSON.stringify(String(p.username||p.playerId))+','+owesHost+','+hostOwes+','+settleBal+')"'+
           ' style="font-size:0.7rem;font-weight:900;padding:8px 14px;border-radius:10px;border:none;background:'+color+';color:#000;cursor:pointer;white-space:nowrap">Settle</button>';
       var netColor = Math.abs(weekNet)<0.005 ? 'var(--text-muted,#64748B)' : (weekNet>0 ? 'var(--positive,#22C55E)' : 'var(--negative,#EF4444)');
+      var settleBalColor = Math.abs(settleBal)<0.005 ? '#888' : (settleBal<0 ? 'var(--positive,#22C55E)' : 'var(--negative,#EF4444)');
       html += '<div data-db-settle-card="'+_escAttr(p.playerId)+'" style="background:var(--card,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:14px;padding:14px;margin-bottom:10px">' +
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px">' +
           '<div style="min-width:0;flex:1">' +
             '<div style="font-size:0.92rem;font-weight:800">'+(p.username||p.playerId)+'</div>' +
-            '<div style="font-size:0.62rem;color:#666;margin-top:2px">Balance: <span style="color:#fff;font-weight:800">'+(bal!=null?_money(bal):'—')+'</span>' +
+            '<div style="font-size:0.62rem;color:#666;margin-top:2px">Settlement: <span style="color:'+settleBalColor+';font-weight:800">'+(settleBal>=0?'+':'−')+_money(Math.abs(settleBal))+'</span>' +
+              (bankroll!=null ? ' · bankroll <span style="color:#fff;font-weight:800">'+_money(bankroll)+'</span>' : '') +
               (p.openRisk>0 ? ' · open risk '+_money(p.openRisk) : '') +
             '</div>' +
           '</div>' +
@@ -2303,7 +2311,7 @@ async function renderSettlementPreviewFromDb() {
           '<div><div style="font-size:0.5rem;color:#666;text-transform:uppercase">Wagered</div><div style="font-size:0.72rem;font-weight:800">$'+weekWagered.toFixed(2)+'</div></div>' +
           '<div><div style="font-size:0.5rem;color:#666;text-transform:uppercase">Won</div><div style="font-size:0.72rem;font-weight:800;color:var(--green,#00ff88)">$'+weekWon.toFixed(2)+'</div></div>' +
           '<div><div style="font-size:0.5rem;color:#666;text-transform:uppercase">Lost</div><div style="font-size:0.72rem;font-weight:800;color:var(--red,#ff3d57)">$'+weekLost.toFixed(2)+'</div></div>' +
-          '<div><div style="font-size:0.5rem;color:#666;text-transform:uppercase">Net</div><div style="font-size:0.72rem;font-weight:800;color:'+netColor+'">'+(weekNet>=0?'+':'−')+'$'+Math.abs(weekNet).toFixed(2)+'</div></div>' +
+          '<div><div style="font-size:0.5rem;color:#666;text-transform:uppercase">Carry</div><div style="font-size:0.72rem;font-weight:800;color:'+netColor+'">'+(weekNet>=0?'+':'−')+'$'+Math.abs(weekNet).toFixed(2)+'</div></div>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;min-height:34px">' +
           '<label style="font-size:0.58rem;color:#666;text-transform:uppercase;letter-spacing:0.4px;white-space:nowrap">Starting bal</label>' +
@@ -2377,27 +2385,49 @@ function _buildIdempotencyKey(clubId, playerId, direction, week) {
   return 'SETTLE_'+clubId+'_'+playerId+'_'+week+'_'+direction.replace('_','')+'_'+Date.now();
 }
 
-async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes) {
+async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes, settlementBalance) {
   // Remove existing modal
   var ex = document.getElementById('_settle_modal'); if (ex) ex.remove();
 
-  var direction = owesHost > 0 ? 'player_paid_host' : 'host_paid_player';
-  var maxAmt    = owesHost > 0 ? owesHost : hostOwes;
-  var label     = owesHost > 0
-    ? playerName + ' owes host $'+owesHost.toFixed(2)
-    : 'Host owes '+playerName+' $'+hostOwes.toFixed(2);
-  var color     = owesHost > 0 ? 'var(--positive,#22C55E)' : 'var(--negative,#EF4444)';
+  var before = settlementBalance != null && !isNaN(parseFloat(settlementBalance))
+    ? Math.round(parseFloat(settlementBalance)*100)/100
+    : (owesHost > 0 ? -Math.round(parseFloat(owesHost)*100)/100
+      : Math.round(parseFloat(hostOwes||0)*100)/100);
+  var maxAmt = Math.round(Math.abs(before)*100)/100;
+  if (maxAmt < 0.005) {
+    if (typeof showToastHost === 'function') showToastHost('Already settled — nothing to apply');
+    return;
+  }
+  var direction = before < 0 ? 'player_paid_host' : 'host_paid_player';
+  var color     = before < 0 ? 'var(--positive,#22C55E)' : 'var(--negative,#EF4444)';
+  var beforeTxt = (before>=0?'+':'−')+'$'+Math.abs(before).toFixed(2);
+
+  function _previewAfter(amt) {
+    var a = parseFloat(amt);
+    if (isNaN(a) || a <= 0) return before;
+    if (a > maxAmt + 0.01) return null; // overpay
+    var sign = before < 0 ? -1 : 1;
+    return Math.round(sign * Math.max(Math.abs(before) - a, 0) * 100) / 100;
+  }
+  function _fmtCarry(v) {
+    if (v == null || isNaN(v)) return '—';
+    return (v>=0?'+':'−')+'$'+Math.abs(v).toFixed(2);
+  }
 
   var ov = document.createElement('div');
   ov.id = '_settle_modal';
   ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.65);display:flex;align-items:flex-end;justify-content:center';
   ov.innerHTML = '<div style="background:#111;width:100%;max-width:430px;border-radius:20px 20px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px))">'+
-    '<div style="font-size:1rem;font-weight:900;margin-bottom:6px">Settle: '+playerName+'</div>'+
-    '<div style="font-size:0.78rem;color:'+color+';font-weight:700;margin-bottom:16px">'+label+'</div>'+
+    '<div style="font-size:1rem;font-weight:900;margin-bottom:6px">Apply Settlement: '+playerName+'</div>'+
+    '<div style="font-size:0.78rem;color:'+color+';font-weight:700;margin-bottom:12px">Current Balance: '+beforeTxt+'</div>'+
     '<div style="margin-bottom:14px">'+
-      '<label style="font-size:0.7rem;color:#666;text-transform:uppercase;letter-spacing:0.5px">Amount ($)</label>'+
-      '<input id="_settle_amount" type="number" step="0.01" min="0.01" max="'+maxAmt+'" value="'+maxAmt.toFixed(2)+'"'+
+      '<label style="font-size:0.7rem;color:#666;text-transform:uppercase;letter-spacing:0.5px">Amount to Apply ($)</label>'+
+      '<input id="_settle_amount" type="number" step="0.01" min="0" max="'+maxAmt+'" value="" placeholder="0.00 = no op"'+
         ' style="width:100%;background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:10px 12px;color:#fff;font-size:1rem;font-weight:700;outline:none;margin-top:4px">'+
+      '<div style="font-size:0.62rem;color:#666;margin-top:4px">Max $'+maxAmt.toFixed(2)+' (cannot cross zero)</div>'+
+    '</div>'+
+    '<div id="_settle_preview" style="background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:0.82rem;font-weight:700">'+
+      'Preview: '+beforeTxt+' → enter amount'+
     '</div>'+
     '<div style="margin-bottom:16px">'+
       '<label style="font-size:0.7rem;color:#666;text-transform:uppercase;letter-spacing:0.5px">Note (optional)</label>'+
@@ -2406,19 +2436,48 @@ async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes) {
     '</div>'+
     '<div style="display:flex;gap:10px">'+
       '<button onclick="document.getElementById(\'_settle_modal\').remove()" style="flex:1;height:48px;background:#1a1a1a;border:1px solid #333;border-radius:12px;color:#888;font-weight:700;cursor:pointer">Cancel</button>'+
-      '<button id="_settle_confirm_btn" style="flex:2;height:48px;background:var(--green,#00c853);border:none;border-radius:12px;color:#000;font-size:0.95rem;font-weight:900;cursor:pointer">Confirm Settlement</button>'+
+      '<button id="_settle_confirm_btn" style="flex:2;height:48px;background:var(--green,#00c853);border:none;border-radius:12px;color:#000;font-size:0.95rem;font-weight:900;cursor:pointer">Apply Settlement</button>'+
     '</div>'+
   '</div>';
   document.body.appendChild(ov);
   ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
 
+  var amtEl = document.getElementById('_settle_amount');
+  var previewEl = document.getElementById('_settle_preview');
+  function _refreshPreview() {
+    var after = _previewAfter(amtEl.value);
+    if (amtEl.value === '' || parseFloat(amtEl.value) === 0) {
+      previewEl.textContent = 'Preview: '+beforeTxt+' → (no op)';
+      previewEl.style.color = '#888';
+      return;
+    }
+    if (after == null) {
+      previewEl.textContent = 'Cannot cross zero — max $'+maxAmt.toFixed(2);
+      previewEl.style.color = 'var(--red,#ff3d57)';
+      return;
+    }
+    previewEl.textContent = 'Preview: '+beforeTxt+' → '+_fmtCarry(after);
+    previewEl.style.color = '#fff';
+  }
+  amtEl.addEventListener('input', _refreshPreview);
+  _refreshPreview();
+
   document.getElementById('_settle_confirm_btn').addEventListener('click', async function() {
-    var amtEl  = document.getElementById('_settle_amount');
     var noteEl = document.getElementById('_settle_note');
     var amt    = parseFloat(amtEl.value);
-    if (isNaN(amt) || amt<=0 || amt>maxAmt+0.01) { amtEl.style.borderColor='red'; return; }
+    if (isNaN(amt) || amt <= 0) {
+      amtEl.style.borderColor = '#333';
+      if (typeof showToastHost === 'function') showToastHost('Blank/$0 — no settlement applied');
+      return; // blank/$0 = no op
+    }
+    if (amt > maxAmt + 0.01) {
+      amtEl.style.borderColor = 'red';
+      if (typeof showToastHost === 'function') showToastHost('Cannot cross zero. Max $'+maxAmt.toFixed(2));
+      return;
+    }
     amtEl.style.borderColor='#333';
     var btn = document.getElementById('_settle_confirm_btn');
+    if (btn.disabled) return; // double-click guard
     btn.textContent = 'Processing...'; btn.disabled = true;
 
     var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}'); } catch(_e){}
@@ -2440,16 +2499,22 @@ async function openSettlePlayerModal(playerId, playerName, owesHost, hostOwes) {
               settlementWeek:week, note:noteEl.value||null, idempotencyKey:iKey })
           }));
       var data = await resp.json();
-      if (!data.ok) throw new Error(data.error || JSON.stringify(data.errors));
+      if (!data.ok) {
+        var msg = data.message || data.error || JSON.stringify(data.errors);
+        if (data.error === 'overpay_blocked' && data.maxAmount != null)
+          msg = 'Cannot cross zero. Max $'+Number(data.maxAmount).toFixed(2);
+        throw new Error(msg);
+      }
       ov.remove();
-      // Refresh DB views — row shows settled; balance resets toward balance_start
       try { await renderSettlementPreviewFromDb(); } catch(_e){}
       try { await loadWeeklyHistory(); } catch(_e){}
       try { await loadHostDashboardFromDb('post_settlement'); } catch(_e){}
-      if (typeof showToastHost === 'function') showToastHost('Settlement recorded: $'+amt.toFixed(2));
+      var afterTxt = data.balanceAfter != null ? _fmtCarry(data.balanceAfter) : '';
+      if (typeof showToastHost === 'function')
+        showToastHost('Settlement applied: $'+Number(data.amount||amt).toFixed(2)+(afterTxt?' → '+afterTxt:''));
       
     } catch(e) {
-      btn.textContent = 'Confirm Settlement'; btn.disabled = false;
+      btn.textContent = 'Apply Settlement'; btn.disabled = false;
       if (typeof showToastHost === 'function') showToastHost('Settlement failed: '+e.message);
       console.error('[settlement execution] error:', e.message);
     }
