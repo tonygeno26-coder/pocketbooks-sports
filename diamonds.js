@@ -367,7 +367,12 @@
   function closeBuyDiamondsModal() {
     _clearCountdown();
     var el = _root();
-    if (el) el.remove();
+    if (el) {
+      if (typeof global.PbA11y !== 'undefined' && global.PbA11y.deactivate) {
+        try { global.PbA11y.deactivate(el); } catch (_e) {}
+      }
+      el.remove();
+    }
     _state.screen = 'select';
     _state.intent = null;
     _state.error = '';
@@ -731,6 +736,7 @@
     var overlay = document.createElement('div');
     overlay.id = 'pb-diamonds-overlay';
     overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
     overlay.setAttribute('aria-label', 'Buy Diamonds');
     overlay.innerHTML = '<div id="pb-diamonds-modal"></div>';
     overlay.addEventListener('click', function (e) {
@@ -738,6 +744,12 @@
     });
     document.body.appendChild(overlay);
     _render();
+    if (typeof global.PbA11y !== 'undefined' && global.PbA11y.activate) {
+      global.PbA11y.activate(overlay, {
+        onEscape: closeBuyDiamondsModal,
+        initialFocus: '[data-bd-close], button'
+      });
+    }
   }
 
   global.openBuyDiamondsModal = openBuyDiamondsModal;
