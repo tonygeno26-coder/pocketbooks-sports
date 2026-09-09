@@ -225,6 +225,33 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .mybets-chip{border:1.5px solid #ddd;background:#fff;color:#555;border-radius:16px;padding:5px 10px;font-size:0.68rem;font-weight:800;cursor:pointer}
 .mybets-chip.on{background:#0064c8;border-color:#0064c8;color:#fff}
 .mybets-chip.range.on{background:#111;border-color:#111}
+.mybets-chip.status-push.on{background:rgba(245,158,11,0.2)!important;border-color:#F59E0B!important;color:#F59E0B!important}
+.mybets-chip.status-void.on{background:rgba(136,136,136,0.2)!important;border-color:#888!important;color:#bbb!important}
+.mb-exposure{margin:0 14px 10px;padding:10px 12px;border-radius:10px;background:rgba(0,100,200,0.12);border:1px solid rgba(0,100,200,0.35);font-size:0.72rem;font-weight:700;color:#7eb8ff}
+.mb-exposure strong{color:#fff;font-weight:900}
+.mb-ticket{background:var(--card,#fff);border-radius:12px;margin:6px 0;padding:12px;border:1px solid var(--border,#e8e8e8);box-shadow:0 1px 3px rgba(0,0,0,0.05)}
+.mb-ticket--active{border-left:3px solid #0064c8;box-shadow:0 0 0 1px rgba(0,100,200,0.12),0 2px 8px rgba(0,100,200,0.08)}
+.mb-ticket--won{border-left:3px solid #22C55E}
+.mb-ticket--lost{border-left:3px solid #EF4444}
+.mb-ticket--push{border-left:3px solid #F59E0B}
+.mb-ticket--void{border-left:3px solid #888;opacity:0.92}
+.mb-ticket-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px}
+.mb-ticket-type{font-size:0.82rem;font-weight:900;color:inherit;line-height:1.25}
+.mb-ticket-meta{font-size:0.6rem;color:#aaa;margin-top:2px}
+.mb-ticket-picks{margin-bottom:8px}
+.mb-ticket-picks .mb-leg{padding:6px 0;border-bottom:1px solid var(--border,#f0f0f0)}
+.mb-ticket-picks .mb-leg:last-child{border-bottom:none}
+.mb-result-line{margin:0 0 8px;padding:7px 10px;border-radius:8px;font-size:0.68rem;font-weight:700;line-height:1.35}
+.mb-result-line--active{background:rgba(0,100,200,0.1);color:#7eb8ff;border:1px solid rgba(0,100,200,0.25)}
+.mb-result-line--won{background:rgba(34,197,94,0.12);color:#22C55E;border:1px solid rgba(34,197,94,0.28)}
+.mb-result-line--lost{background:rgba(239,68,68,0.1);color:#EF4444;border:1px solid rgba(239,68,68,0.25)}
+.mb-result-line--push{background:rgba(245,158,11,0.12);color:#F59E0B;border:1px solid rgba(245,158,11,0.28)}
+.mb-result-line--void{background:rgba(136,136,136,0.12);color:#aaa;border:1px solid rgba(136,136,136,0.28)}
+.mb-ticket-foot{display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid var(--border,#f0f0f0)}
+.mb-ticket-stat{text-align:center;flex:1}
+.mb-ticket-stat-label{font-size:0.58rem;color:#aaa;margin-bottom:2px;text-transform:uppercase;letter-spacing:0.3px}
+.mb-ticket-stat-val{font-size:0.82rem;font-weight:900}
+.mb-ticket-id{font-size:0.55rem;color:#666;margin-top:6px;opacity:0.85}
 .notif-item-actions{display:flex;gap:8px;margin-top:8px}
 .notif-act{flex:1;padding:7px 8px;border-radius:8px;font-size:0.68rem;font-weight:800;cursor:pointer;border:none}
 .notif-act.accept{background:#00c853;color:#fff}
@@ -1098,6 +1125,10 @@ body{
 }
 #mybets-section .mybets-chip.on{background:var(--accent-soft)!important;border-color:var(--accent)!important;color:#fff!important}
 #mybets-section .mybets-chip.range.on{background:#0d1420!important;border-color:var(--accent)!important;color:#fff!important}
+#mybets-section .mybets-chip.status-push.on{background:rgba(245,158,11,0.18)!important;border-color:#F59E0B!important;color:#F59E0B!important}
+#mybets-section .mybets-chip.status-void.on{background:rgba(136,136,136,0.18)!important;border-color:#888!important;color:#bbb!important}
+#mybets-section .mb-ticket{background:var(--card)!important;border-color:var(--border)!important;color:var(--white)!important}
+#mybets-section .mb-exposure{background:rgba(0,100,200,0.14)!important;border-color:rgba(0,100,200,0.35)!important;color:#9ec5ff!important}
 #mybets-section .bet-menu-btn{color:var(--light)!important}
 #mybets-section .bet-menu-btn:hover{background:var(--card2)!important;color:#fff!important}
 #mybets-section .bet-menu-dropdown{background:var(--card)!important;border-color:var(--border)!important}
@@ -1701,6 +1732,14 @@ function _validatePlayerSession() {
 
   var missing = [];
   if (!_tok) missing.push('token');
+  else {
+    var _tokParts = _tok.split('.');
+    if (_tokParts.length !== 3) missing.push('token_malformed');
+    else {
+      try { JSON.parse(atob(_tokParts[1].replace(/-/g,'+').replace(/_/g,'/'))); }
+      catch(_e) { missing.push('token_malformed'); }
+    }
+  }
   if (!pid)  missing.push('playerId');
   if (!cid)  missing.push('clubId');
 
@@ -1752,11 +1791,13 @@ function _showSessionExpiredModal(result) {
   overlay.innerHTML = [
     '<div style="background:#1a1a1a;border:1.5px solid #ef4444;border-radius:20px;padding:32px 24px;max-width:320px;width:90%;text-align:center;box-shadow:0 0 40px rgba(239,68,68,0.25)">',
       '<div style="font-size:2rem;margin-bottom:12px">&#128274;</div>',
-      '<div style="font-weight:800;font-size:1.1rem;color:#fff;margin-bottom:10px">Session Expired</div>',
+      '<div style="font-weight:800;font-size:1.1rem;color:#fff;margin-bottom:10px">' +
+        (reason === 'too_many_requests' ? 'Too Many Requests' : 'Session Expired') + '</div>',
       '<div style="color:#aaa;font-size:0.85rem;line-height:1.5;margin-bottom:24px">',
-        'Your session is no longer valid.<br>',
-        'Return to the lobby and re-enter your club to continue.',
-        (reason ? '<br><span style="font-size:0.75rem;color:#666;margin-top:6px;display:block">Reason: '+reason+'</span>' : ''),
+        (reason === 'too_many_requests'
+          ? 'Please wait a minute, then return to the lobby and sign in again.'
+          : 'Your session is no longer valid.<br>Return to the lobby and re-enter your club to continue.'),
+        (reason && reason !== 'too_many_requests' ? '<br><span style="font-size:0.75rem;color:#666;margin-top:6px;display:block">Reason: '+reason+'</span>' : ''),
       '</div>',
       '<button id="session-lobby-btn" style="width:100%;padding:14px;background:#00ff87;border:none;border-radius:12px;color:#000;font-weight:800;font-size:1rem;cursor:pointer">',
         '&#8592; Return to Lobby',
@@ -1801,6 +1842,7 @@ function _showSessionExpiredModal(result) {
         try { return window._PBS_BACKEND || 'https://pocketbooks-sports-backend-production.up.railway.app'; }
         catch(_){ return 'https://pocketbooks-sports-backend-production.up.railway.app'; }
       })();
+      window._bootTokenRecoveryInFlight = true;
       fetch(_rBase + '/api/auth/token', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ actorId: _rPid, clubId: _rCid })
@@ -1810,12 +1852,14 @@ function _showSessionExpiredModal(result) {
             ['pb-sports-token','pb-session-token','pb-token-expires','pb-actor-role','pb-test-user']
               .forEach(function(k){ localStorage.removeItem(k); });
           } catch(_e){}
+          window._bootTokenRecoveryInFlight = false;
           window.location.href = 'lobby.html?screen=signin&msg=' + encodeURIComponent('Session invalid — please sign in again');
           return;
         }
         if (res.status === 429) {
           console.warn('TOKEN_RECOVERY_RATE_LIMITED — not retrying');
-          _showSessionExpiredModal(_sgResult);
+          window._bootTokenRecoveryInFlight = false;
+          _showSessionExpiredModal(Object.assign({}, _sgResult, { reason: 'too_many_requests' }));
           return;
         }
         var data = res.data || {};
@@ -1825,7 +1869,7 @@ function _showSessionExpiredModal(result) {
           localStorage.setItem('pb-session-token', data.token);
           var _expIn = data.expiresIn || 86400;
           localStorage.setItem('pb-token-expires', String(Date.now() + (_expIn * 1000)));
-          
+          window._bootTokenRecoveryInFlight = false;
           var _recheck = _validatePlayerSession();
           if (_recheck.ok) {
             
@@ -1835,9 +1879,11 @@ function _showSessionExpiredModal(result) {
             return;
           }
         }
+        window._bootTokenRecoveryInFlight = false;
         console.warn('TOKEN_RECOVERY_FAILED reason='+(data.error||data.code||'no_token'));
         _showSessionExpiredModal(_sgResult);
       }).catch(function(e){
+        window._bootTokenRecoveryInFlight = false;
         console.warn('TOKEN_RECOVERY_FAILED reason=network err='+e.message);
         _showSessionExpiredModal(_sgResult);
       });
@@ -10667,6 +10713,7 @@ function _normalizeDbTicket(t) {
     riskAmount:      t.riskAmount != null ? Number(t.riskAmount) : Number(t.risk_amount),
     potentialProfit: t.potentialProfit != null ? Number(t.potentialProfit) : Number(t.potential_profit),
     estimatedPayout: t.estimatedPayout != null ? Number(t.estimatedPayout) : Number(t.estimated_payout),
+    actualPayout:      t.actualPayout != null ? Number(t.actualPayout) : (t.actual_payout != null ? Number(t.actual_payout) : undefined),
     placedAt:        t.placedAt || t.placed_at,
     gradedAt:        t.gradedAt || t.graded_at,
     rrGroupId:       t.rrGroupId || t.rr_group_id,
@@ -10710,6 +10757,10 @@ function _applyDashboardTickets(data, opts) {
 
 async function loadPlayerDashboardFromDb(opts) {
   opts = opts || {};
+  if (_myBetsUseFixtures()) {
+    _seedMyBetsPreviewFixtures(_myBetsFixtureMode() || 'demo');
+    return { ok:true, source:'mybets_fixture', tickets: betTickets.length };
+  }
   var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
   var pid  = _safeId(pl.id != null ? pl.id : pl.username);
@@ -11390,7 +11441,7 @@ async function _pbFetch(url, opts) {
         return resp;
       }
     }
-    if (resp.status === 429) {
+    if (resp.status === 429 && _isAuthApiPath(path)) {
       try {
         var peek429 = await resp.clone().json();
         _authHandleResponse(429, peek429);
@@ -11521,6 +11572,7 @@ window._pollEvents       = _pollEvents;
 var _SESSION_REFRESH_THRESHOLD_SEC = 5 * 60; // refresh if <5min left
 
 async function _verifyOrRefreshSession() {
+  if (window._bootTokenRecoveryInFlight) return { ok:false, reason:'boot_recovery_in_flight' };
   if (!_authCanAttempt()) return { ok:false, reason:'auth_give_up' };
   var token = null;
   try { token = localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token'); } catch(_e){}
@@ -11543,7 +11595,10 @@ async function _verifyOrRefreshSession() {
       if (hardErrors.includes(data.error)) {
         console.warn('[session] '+data.error+' — clearing stored token');
         try { localStorage.removeItem('pb-session-token'); } catch(_e){}
+        try { localStorage.removeItem('pb-sports-token'); } catch(_e){}
+        try { localStorage.removeItem('pb-token-expires'); } catch(_e){}
         try { localStorage.removeItem('pb-actor-role'); } catch(_e){}
+        TOKEN = '';
         return { ok:false, reason:data.error, cleared:true };
       }
       if (data.error === 'expired_token') {
@@ -11662,6 +11717,272 @@ function _dispatchGradePoll() {
 
 var _myBetsFilter = { q: '', status: 'all', range: 'week', sort: 'newest' };
 var _myBetsSearchFocused = false;
+function _myBetsFixtureMode() {
+  try {
+    if (!_pPreview && !_pDev) return '';
+    var v = _pp.get('myBetsFixture') || '';
+    if (v === '1' || v === 'demo') return 'demo';
+    return v;
+  } catch (_e) { return ''; }
+}
+function _myBetsUseFixtures() {
+  return !!_myBetsFixtureMode();
+}
+function _ticketRiskAmount(t) {
+  if (!t) return 0;
+  var v = t.riskAmount != null ? t.riskAmount : t.risk_amount;
+  return parseFloat(v) || 0;
+}
+function _ticketProfitAmount(t) {
+  if (!t) return 0;
+  var v = t.potentialProfit != null ? t.potentialProfit : t.potential_profit;
+  return parseFloat(v) || 0;
+}
+function _ticketAuthoritativePayout(t, displayStatus) {
+  if (!t) return 0;
+  var settled = displayStatus === 'won' || displayStatus === 'lost' ||
+                displayStatus === 'push' || displayStatus === 'pushed' ||
+                displayStatus === 'canceled' || displayStatus === 'cancelled' ||
+                displayStatus === 'voided' || displayStatus === 'deleted';
+  if (settled) {
+    var auth = (t.actualPayout != null) ? t.actualPayout :
+               (t.actual_payout != null) ? t.actual_payout :
+               (t.settledPayout != null) ? t.settledPayout :
+               (t.settled_payout != null) ? t.settled_payout :
+               (t.payout != null && displayStatus !== 'active' && displayStatus !== 'open') ? t.payout : null;
+    if (auth != null && !isNaN(Number(auth))) return Number(auth);
+  }
+  if (displayStatus === 'lost') return 0;
+  if (displayStatus === 'push' || displayStatus === 'pushed') return _ticketRiskAmount(t);
+  if (displayStatus === 'canceled' || displayStatus === 'cancelled' ||
+      displayStatus === 'voided' || displayStatus === 'deleted') return _ticketRiskAmount(t);
+  var est = t.estimatedPayout != null ? t.estimatedPayout : t.estimated_payout;
+  return parseFloat(est) || (_ticketRiskAmount(t) + _ticketProfitAmount(t));
+}
+function _ticketResultLine(t, displayStatus, rawLegs) {
+  rawLegs = rawLegs || [];
+  if (displayStatus === 'active' || displayStatus === 'open') {
+    return 'Pending — outcome depends on final scores.';
+  }
+  if (displayStatus === 'voided' || displayStatus === 'deleted') {
+    return t.voidReason || t.void_reason || 'Void — stake returned; bet does not count as a win or loss.';
+  }
+  if (displayStatus === 'canceled' || displayStatus === 'cancelled') {
+    return t.cancelReason || t.cancel_reason || 'Canceled before kickoff — stake refunded.';
+  }
+  if (displayStatus === 'push' || displayStatus === 'pushed') {
+    return t.resultNote || t.result_note || 'Push — stake refunded; no win or loss recorded.';
+  }
+  if (displayStatus === 'lost') {
+    var lostLegs = rawLegs.filter(function(s) {
+      var r = String((s && (s.result || s.legResult || s.outcome)) || '').toLowerCase();
+      return r === 'lost' || r === 'lose';
+    });
+    if (lostLegs.length > 1) {
+      return 'Lost — ' + lostLegs.length + ' legs missed; parlay pays $0.';
+    }
+    if (lostLegs.length === 1 && rawLegs.length > 1) {
+      return 'Lost — ' + (_legPickTextForResult(lostLegs[0]) || 'one leg') + ' missed.';
+    }
+    return t.resultNote || t.result_note || 'Lost — pick did not cover; stake forfeited.';
+  }
+  if (displayStatus === 'won') {
+    if (rawLegs.length > 1) {
+      return t.resultNote || t.result_note || 'Won — all required legs hit; payout credited.';
+    }
+    return t.resultNote || t.result_note || 'Won — pick covered; profit added to balance.';
+  }
+  return '';
+}
+function _legPickTextForResult(s) {
+  if (!s) return '';
+  return s.pick || s.label || s.name || s.team || s.matchup || '';
+}
+function _ticketStatusClass(displayStatus) {
+  if (displayStatus === 'won') return 'won';
+  if (displayStatus === 'lost') return 'lost';
+  if (displayStatus === 'push' || displayStatus === 'pushed') return 'push';
+  if (displayStatus === 'voided' || displayStatus === 'deleted' ||
+      displayStatus === 'canceled' || displayStatus === 'cancelled') return 'void';
+  return 'active';
+}
+function _seedMyBetsPreviewFixtures(mode) {
+  if (!_myBetsUseFixtures()) return false;
+  var now = Date.now();
+  function isoOffset(hours) { return new Date(now + hours * 3600000).toISOString(); }
+  function settledBase(id, status, risk, profit, placedHours, note) {
+    return {
+      id: id,
+      type: 'Single',
+      status: status,
+      riskAmount: risk,
+      potentialProfit: profit,
+      estimatedPayout: risk + profit,
+      actualPayout: status === 'won' ? (risk + profit) : status === 'push' ? risk : 0,
+      placedAt: isoOffset(placedHours),
+      gradedAt: isoOffset(placedHours + 2),
+      gradingSource: 'fixture',
+      lastSeenGameStatus: 'Final',
+      finalScore: { status: 'Final', source: 'fixture' },
+      resultNote: note,
+      source: 'fixture'
+    };
+  }
+  if (mode === 'empty') {
+    betTickets = [];
+    _playerTicketsFromDb = true;
+    try { localStorage.setItem('pb-tickets', '[]'); } catch (_e) {}
+    return true;
+  }
+  var fixtures = [
+    (function() {
+      var t = {
+        id: 'MB-FIX-ACTIVE',
+        type: 'Single',
+        status: 'active',
+        riskAmount: 25,
+        potentialProfit: 22.73,
+        estimatedPayout: 47.73,
+        placedAt: isoOffset(-1),
+        source: 'fixture',
+        sport: 'nba',
+        selections: [{
+          pick: 'Boston Celtics -4.5',
+          market: 'Spread',
+          odds: -110,
+          homeTeam: 'Boston Celtics',
+          awayTeam: 'New York Knicks',
+          matchup: 'New York Knicks @ Boston Celtics',
+          sport: 'nba'
+        }]
+      };
+      return t;
+    })(),
+    Object.assign(settledBase('MB-FIX-WON', 'won', 50, 45.45, -30, 'Won — Celtics covered -4.5 (112-104).'), {
+      sport: 'nba',
+      selections: [{
+        pick: 'Boston Celtics -4.5',
+        market: 'Spread',
+        odds: -110,
+        homeTeam: 'Boston Celtics',
+        awayTeam: 'Brooklyn Nets',
+        matchup: 'Brooklyn Nets @ Boston Celtics',
+        sport: 'nba',
+        result: 'won'
+      }]
+    }),
+    Object.assign(settledBase('MB-FIX-LOST', 'lost', 40, 36.36, -28, 'Lost — Yankees ML did not cover (4-5).'), {
+      sport: 'mlb',
+      selections: [{
+        pick: 'New York Yankees ML',
+        market: 'Moneyline',
+        odds: -110,
+        homeTeam: 'New York Yankees',
+        awayTeam: 'Boston Red Sox',
+        matchup: 'Boston Red Sox @ New York Yankees',
+        sport: 'mlb',
+        result: 'lost'
+      }]
+    }),
+    Object.assign(settledBase('MB-FIX-PUSH', 'push', 30, 27.27, -26, 'Push — total landed exactly 8.5.'), {
+      sport: 'mlb',
+      selections: [{
+        pick: 'Over 8.5',
+        market: 'Total',
+        odds: -110,
+        homeTeam: 'Los Angeles Dodgers',
+        awayTeam: 'San Francisco Giants',
+        matchup: 'San Francisco Giants @ Los Angeles Dodgers',
+        sport: 'mlb',
+        result: 'push'
+      }]
+    }),
+    Object.assign(settledBase('MB-FIX-VOID', 'voided', 20, 18.18, -24, 'Void — game postponed; stake returned.'), {
+      sport: 'nfl',
+      voidReason: 'Game postponed — stake returned.',
+      actualPayout: 20,
+      selections: [{
+        pick: 'Kansas City Chiefs -3',
+        market: 'Spread',
+        odds: -110,
+        homeTeam: 'Kansas City Chiefs',
+        awayTeam: 'Las Vegas Raiders',
+        matchup: 'Las Vegas Raiders @ Kansas City Chiefs',
+        sport: 'nfl'
+      }]
+    }),
+    {
+      id: 'MB-FIX-PARLAY',
+      type: 'Parlay',
+      status: 'won',
+      riskAmount: 10,
+      potentialProfit: 61.46,
+      estimatedPayout: 71.46,
+      actualPayout: 71.46,
+      placedAt: isoOffset(-20),
+      gradedAt: isoOffset(-18),
+      gradingSource: 'fixture',
+      lastSeenGameStatus: 'Final',
+      finalScore: { status: 'Final', source: 'fixture' },
+      resultNote: 'Won — all 3 legs hit.',
+      source: 'fixture',
+      selections: [
+        { pick: 'Los Angeles Lakers ML', market: 'Moneyline', odds: -130, homeTeam: 'Los Angeles Lakers', awayTeam: 'Phoenix Suns', matchup: 'Phoenix Suns @ Los Angeles Lakers', sport: 'nba', result: 'won' },
+        { pick: 'Over 224.5', market: 'Total', odds: -110, homeTeam: 'Los Angeles Lakers', awayTeam: 'Phoenix Suns', matchup: 'Phoenix Suns @ Los Angeles Lakers', sport: 'nba', result: 'won' },
+        { pick: 'Dallas Mavericks +5.5', market: 'Spread', odds: -110, homeTeam: 'Golden State Warriors', awayTeam: 'Dallas Mavericks', matchup: 'Dallas Mavericks @ Golden State Warriors', sport: 'nba', result: 'won' }
+      ]
+    },
+    {
+      id: 'MB-FIX-LONG-PARLAY',
+      type: 'Parlay',
+      status: 'active',
+      riskAmount: 5,
+      potentialProfit: 184.22,
+      estimatedPayout: 189.22,
+      placedAt: isoOffset(-3),
+      source: 'fixture',
+      selections: [
+        { pick: 'Miami Heat ML', market: 'Moneyline', odds: +120, homeTeam: 'Miami Heat', awayTeam: 'Orlando Magic', matchup: 'Orlando Magic @ Miami Heat', sport: 'nba' },
+        { pick: 'Under 212.5', market: 'Total', odds: -110, homeTeam: 'Chicago Bulls', awayTeam: 'Milwaukee Bucks', matchup: 'Milwaukee Bucks @ Chicago Bulls', sport: 'nba' },
+        { pick: 'Philadelphia 76ers -2.5', market: 'Spread', odds: -110, homeTeam: 'Philadelphia 76ers', awayTeam: 'Toronto Raptors', matchup: 'Toronto Raptors @ Philadelphia 76ers', sport: 'nba' },
+        { pick: 'Over 6.5', market: 'Total', odds: -115, homeTeam: 'New York Rangers', awayTeam: 'New Jersey Devils', matchup: 'New Jersey Devils @ New York Rangers', sport: 'nhl' },
+        { pick: 'Seattle Mariners ML', market: 'Moneyline', odds: -105, homeTeam: 'Seattle Mariners', awayTeam: 'Houston Astros', matchup: 'Houston Astros @ Seattle Mariners', sport: 'mlb' },
+        { pick: 'Tampa Bay Buccaneers +3', market: 'Spread', odds: -110, homeTeam: 'New Orleans Saints', awayTeam: 'Tampa Bay Buccaneers', matchup: 'Tampa Bay Buccaneers @ New Orleans Saints', sport: 'nfl' }
+      ]
+    },
+    {
+      id: 'MB-FIX-PROP',
+      type: 'Single',
+      status: 'won',
+      riskAmount: 15,
+      potentialProfit: 12.50,
+      estimatedPayout: 27.50,
+      actualPayout: 27.50,
+      placedAt: isoOffset(-22),
+      gradedAt: isoOffset(-20),
+      gradingSource: 'fixture',
+      lastSeenGameStatus: 'Final',
+      finalScore: { status: 'Final', source: 'fixture' },
+      resultNote: 'Won — LeBron James over 25.5 points (31).',
+      source: 'fixture',
+      sport: 'nba',
+      selections: [{
+        pick: 'LeBron James Over 25.5 Points',
+        market: 'Player Points',
+        odds: -120,
+        homeTeam: 'Los Angeles Lakers',
+        awayTeam: 'Denver Nuggets',
+        matchup: 'Denver Nuggets @ Los Angeles Lakers',
+        sport: 'nba',
+        result: 'won'
+      }]
+    }
+  ];
+  betTickets = fixtures;
+  _playerTicketsFromDb = true;
+  try { localStorage.setItem('pb-tickets', JSON.stringify(fixtures)); } catch (_e) {}
+  return true;
+}
 function _myBetsApply(key, val) {
   _myBetsFilter[key] = val;
   renderMyBets();
@@ -11671,6 +11992,9 @@ function renderMyBets() {
   try {
     var el = document.getElementById('mybets-section');
     if (!el) { console.warn('[renderMyBets] mybets-section element not found in DOM'); return; }
+    if (_myBetsUseFixtures()) {
+      _seedMyBetsPreviewFixtures(_myBetsFixtureMode() || 'demo');
+    }
     // DB hydrate is authoritative. Only fall back to pb-tickets if we have
     // not successfully loaded from /api/player/dashboard this session.
     if (!_playerTicketsFromDb) {
@@ -12115,14 +12439,15 @@ function renderMyBets() {
       : (displayStatus === 'canceled' || displayStatus === 'cancelled' || displayStatus === 'voided' || displayStatus === 'deleted') ? '#888'
       : '#0064c8';
     var payoutLabel = (displayStatus === 'won' || displayStatus === 'lost' || displayStatus === 'push' || displayStatus === 'pushed') ? 'PAYOUT' : 'EST PAYOUT';
-    var payoutValue = (displayStatus === 'lost') ? fmtDollar(0)
-      : (displayStatus === 'push' || displayStatus === 'pushed') ? fmtDollar(t.riskAmount)
-      : fmtDollar(t.estimatedPayout);
-    return '<div style="background:#fff;border-radius:14px;margin:8px 0;padding:16px;border:1px solid ' + (_isRrSlip ? '#e9d5ff' : '#e8e8e8') + ';border-left:3px solid '+leftBorder+';box-shadow:0 1px 4px rgba(0,0,0,0.06)">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
-        '<div>' +
-          '<div style="font-size:0.88rem;font-weight:900;color:#111">' + sportBadge + typeLabel+'</div>' +
-          '<div style="font-size:0.62rem;color:#aaa;margin-top:2px">'+dateStr+'</div>' +
+    var payoutValue = _ticketAuthoritativePayout(t, displayStatus);
+    var resultLine = _ticketResultLine(t, displayStatus, rawLegs);
+    var resultClass = _ticketStatusClass(displayStatus);
+    var ticketClass = 'mb-ticket mb-ticket--' + resultClass + (_isRrSlip ? ' mb-ticket--rr' : '');
+    return '<div class="'+ticketClass+'">' +
+      '<div class="mb-ticket-head">' +
+        '<div style="min-width:0">' +
+          '<div class="mb-ticket-type">' + sportBadge + typeLabel+'</div>' +
+          '<div class="mb-ticket-meta">'+dateStr+' · '+t.id+'</div>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
           ((t.insurance_enabled || t.insuranceEnabled)
@@ -12132,27 +12457,26 @@ function renderMyBets() {
           overflowMenu +
         '</div>' +
       '</div>' +
-      '<div style="margin-bottom:10px">' + picks + morePicks + '</div>' +
-      '<div style="font-size:0.6rem;color:#ccc;margin-bottom:10px">Ticket: '+t.id+'</div>' +
-      '<div style="display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid #f0f0f0">' +
-        '<div style="text-align:center">' +
-          '<div style="font-size:0.6rem;color:#aaa;margin-bottom:2px">RISK</div>' +
-          '<div style="font-size:0.88rem;font-weight:900;color:'+riskColor+'">'+fmtDollar(t.riskAmount)+'</div>' +
+      (resultLine ? '<div class="mb-result-line mb-result-line--'+resultClass+'">'+resultLine+'</div>' : '') +
+      '<div class="mb-ticket-picks">' + picks + morePicks + '</div>' +
+      '<div class="mb-ticket-foot">' +
+        '<div class="mb-ticket-stat">' +
+          '<div class="mb-ticket-stat-label">Risk</div>' +
+          '<div class="mb-ticket-stat-val" style="color:'+riskColor+'">'+fmtDollar(t.riskAmount)+'</div>' +
         '</div>' +
-        '<div style="text-align:center">' +
-          '<div style="font-size:0.6rem;color:#aaa;margin-bottom:2px">TO WIN</div>' +
-          '<div style="font-size:0.88rem;font-weight:900;color:'+toWinColor+'">'+fmtDollar(t.potentialProfit)+'</div>' +
+        '<div class="mb-ticket-stat">' +
+          '<div class="mb-ticket-stat-label">To Win</div>' +
+          '<div class="mb-ticket-stat-val" style="color:'+toWinColor+'">'+fmtDollar(t.potentialProfit)+'</div>' +
         '</div>' +
-        '<div style="text-align:center">' +
-          '<div style="font-size:0.6rem;color:#aaa;margin-bottom:2px">'+payoutLabel+'</div>' +
-          '<div style="font-size:0.88rem;font-weight:900;color:'+payoutColor+'">'+payoutValue+'</div>' +
+        '<div class="mb-ticket-stat">' +
+          '<div class="mb-ticket-stat-label">'+payoutLabel+'</div>' +
+          '<div class="mb-ticket-stat-val" style="color:'+payoutColor+'">'+fmtDollar(payoutValue)+'</div>' +
         '</div>' +
       '</div>' +
-      // ── Audit row ──────────────────────────────────────────────
-      '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;display:flex;gap:8px;flex-wrap:wrap">' +
-        '<button onclick="event.stopPropagation();toggleAuditPanel(\''+t.id+'\')" style="font-size:0.7rem;font-weight:700;color:#555;background:none;border:1px solid #ccc;border-radius:18px;padding:5px 12px;cursor:pointer">View Audit</button>' +
+      '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button onclick="event.stopPropagation();toggleAuditPanel(\''+t.id+'\')" style="font-size:0.66rem;font-weight:700;color:#888;background:none;border:1px solid #444;border-radius:14px;padding:4px 10px;cursor:pointer">Audit</button>' +
       '</div>' +
-      '<div id="audit-'+t.id+'" style="display:none;margin-top:10px;background:#fafafa;border:1px solid #eee;border-radius:10px;padding:10px 12px;font-size:0.72rem;color:#333;line-height:1.55;font-family:ui-monospace,Menlo,monospace"></div>' +
+      '<div id="audit-'+t.id+'" style="display:none;margin-top:8px;background:#fafafa;border:1px solid #eee;border-radius:10px;padding:10px 12px;font-size:0.72rem;color:#333;line-height:1.55;font-family:ui-monospace,Menlo,monospace"></div>' +
       deleteBtn +
     '</div>';
   }
@@ -12230,7 +12554,9 @@ function renderMyBets() {
     if (_f.status === 'active') return ds === 'active' || ds === 'open';
     if (_f.status === 'won') return ds === 'won';
     if (_f.status === 'lost') return ds === 'lost';
-    if (_f.status === 'canceled') return ds === 'canceled' || ds === 'cancelled' || ds === 'voided';
+    if (_f.status === 'push') return ds === 'push' || ds === 'pushed';
+    if (_f.status === 'void') return ds === 'voided' || ds === 'deleted';
+    if (_f.status === 'canceled') return ds === 'canceled' || ds === 'cancelled';
     if (_f.status === 'parlays') return _ticketIsParlay(t);
     if (_f.status === 'singles') return !_ticketIsParlay(t);
     return true;
@@ -12265,6 +12591,7 @@ function renderMyBets() {
   }
   active = _sortTickets(_filterTicketList(active));
   settled = _sortTickets(_filterTicketList(_showFullHistory ? settledAll : settled));
+  var _activeExposure = active.reduce(function(sum, t){ return sum + _ticketRiskAmount(t); }, 0);
   // One-shot debug so we can verify the cutoff is doing the right thing.
   try {
     
@@ -12294,8 +12621,9 @@ function renderMyBets() {
     '<div class="mybets-toolbar">' +
       '<input id="mybets-search" class="mybets-search" type="search" placeholder="Search team, sport, or bet type" value="'+String(_f.q||'').replace(/"/g,'&quot;')+'">' +
       '<div class="mybets-chips" id="mybets-status-chips">' +
-        [['all','All'],['active','Active'],['won','Won'],['lost','Lost'],['canceled','Canceled'],['parlays','Parlays'],['singles','Singles']].map(function(p){
-          return '<button type="button" class="mybets-chip'+(_f.status===p[0]?' on':'')+'" data-mb-status="'+p[0]+'">'+p[1]+'</button>';
+        [['all','All'],['active','Active'],['won','Won'],['lost','Lost'],['push','Push'],['void','Void'],['canceled','Canceled'],['parlays','Parlays'],['singles','Singles']].map(function(p){
+          var extra = (p[0]==='push'?' status-push':(p[0]==='void'?' status-void':''));
+          return '<button type="button" class="mybets-chip'+extra+(_f.status===p[0]?' on':'')+'" data-mb-status="'+p[0]+'">'+p[1]+'</button>';
         }).join('') +
       '</div>' +
       '<div class="mybets-chips">' +
@@ -12309,6 +12637,12 @@ function renderMyBets() {
         }).join('') +
       '</div>' +
     '</div>';
+  if (_activeExposure > 0 && (_f.status === 'all' || _f.status === 'active' || _f.status === 'parlays' || _f.status === 'singles')) {
+    html += '<div class="mb-exposure">Open exposure: <strong>'+fmtDollar(_activeExposure)+'</strong> across '+active.length+' active ticket'+(active.length===1?'':'s')+'</div>';
+  }
+  if (_myBetsUseFixtures()) {
+    html += '<div style="padding:0 14px 8px;font-size:0.62rem;color:#7c3aed;font-weight:700">Preview fixtures — no production bets</div>';
+  }
   // Last graded timestamp
   var _lg = localStorage.getItem('pb-last-graded');
   if (_lg) html += '<div style="padding:0 14px 6px;font-size:0.65rem;color:#aaa">Last graded: ' + new Date(_lg).toLocaleString() + '</div>';
