@@ -8668,7 +8668,10 @@ async function confirmBet() {
 
     
 
-    var _iKey = 'BET_'+(_pid||'?')+'_'+now.replace(/[^0-9]/g,'').slice(0,14);
+    // Sticky client key: reuse across timeout/uncertain retries so the server
+    // replays instead of creating a second ticket (see docs/BET_PLACEMENT_IDEMPOTENCY.md).
+    var _iKey = _pendingPlaceIdemKey || _generateIdemKey('BET');
+    _pendingPlaceIdemKey = _iKey;
     var _dbPayload = {
       clubId:_cid, playerId:_pid, playerUsername:_lspl.username||_pid,
       betType: snap.type==='straight'?'Single':snap.type==='parlay'?'Parlay':snap.type==='rr'?'RoundRobin':snap.type==='sgp'?'SGP':'Teaser',
@@ -8750,6 +8753,7 @@ async function confirmBet() {
       // ── Success ───────────────────────────────────────────────────────────
       if (_dbData.ok) {
         _cbStep = 'SUCCESS';
+        _pendingPlaceIdemKey = null;
         _dbPlacementAttempted = true;
         var _isRrResp = !!(snap.type === 'rr' && _dbData.groupId);
         _cbLog('CONFIRM_BET_SUCCESS',
@@ -8861,11 +8865,15 @@ async function confirmBet() {
             return (typeof _od.legIndex==='number' && i===_od.legIndex)
               ? Object.assign({},l,{odds:_od.serverOdds}) : l;
           });
+          // New odds = new intent: clear sticky key and use distinct _oa key.
+          _pendingPlaceIdemKey = null;
           var _rp=Object.assign({},_dbPayload,{legs:_updLegs,idempotencyKey:_dbPayload.idempotencyKey+'_oa'});
+          _pendingPlaceIdemKey = _rp.idempotencyKey;
           try {
             var _r2=await _pbFetch('/api/bets/place',{method:'POST',body:JSON.stringify(_rp)});
             var _rt=await _r2.text(); var _rd2; try{ _rd2=JSON.parse(_rt); }catch(_){ _rd2={}; }
             if (_rd2.ok) {
+              _pendingPlaceIdemKey = null;
               showToast('\u2705 Bet placed at new odds','success');
               try {
                 if (_rd2.balanceAfter != null && !isNaN(Number(_rd2.balanceAfter))) {
@@ -8920,6 +8928,8 @@ async function confirmBet() {
           'parlays_disabled','teasers_disabled','round_robins_disabled','too_many_parlay_legs',
           'sport_blocked','sport_not_allowed','market_blocked','live_betting_disabled',
           'player_open_risk_exceeded','club_open_risk_exceeded','event_risk_exceeded','market_risk_exceeded']);
+        // Definitive rejection: clear sticky key so a corrected stake/slip can place.
+        _pendingPlaceIdemKey = null;
         if (_RISK_CODES.has(_hardBlock)||_hardBlock.includes('host_diamond')||
             _hardBlock.includes('insufficient_balance')||_hardBlock.includes('conflict')||
             _hardBlock.includes('market_closed')||_hardBlock.includes('game_started')) {
@@ -11844,7 +11854,12 @@ var _MONEY_ENDPOINTS = new Set([
   '/api/host/settle-player', '/api/host/weekly-rollover'
 ]);
 // Per-action key store: prevents double-click generating two different keys
+// Keyed by API path (not absolute URL) so money-endpoint matching works.
 var _pendingIdemKeys = {};
+var _confirmBetInFlight = false;
+// Sticky place key: reuse across timeout/uncertain retries until success or hard reject.
+var _pendingPlaceIdemKey = null;
+
 
 function _generateIdemKey(prefix) {
   var arr = new Uint8Array(8);
@@ -11855,6 +11870,14 @@ function _generateIdemKey(prefix) {
   }
   var hex = Array.from(arr).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
   return (prefix||'IK') + '_' + Date.now() + '_' + hex;
+}
+
+function _bodyIdempotencyKey(body) {
+  if (!body || typeof body !== 'string') return null;
+  try {
+    var parsed = JSON.parse(body);
+    return (parsed && parsed.idempotencyKey) ? String(parsed.idempotencyKey) : null;
+  } catch (_e) { return null; }
 }
 
 // _pbFetch: wraps fetch() with auth headers + idempotency key for money actions
@@ -11868,15 +11891,16 @@ async function _pbFetch(url, opts) {
     try { await _ensureFreshToken(); } catch (_e) {}
   }
   var headers = Object.assign(_getActorHeaders(), opts.headers || {});
-  // Auto-inject Idempotency-Key for money POST endpoints
-  if (opts.method === 'POST' && _MONEY_ENDPOINTS.has(url.replace(/\?.*$/,''))) {
+  // Auto-inject Idempotency-Key for money POST endpoints (match path, not absolute URL).
+  // Prefer body.idempotencyKey so middleware + place_bet_tx share one canonical key.
+  if (opts.method === 'POST' && _MONEY_ENDPOINTS.has(path)) {
     if (!headers['Idempotency-Key']) {
-      // Reuse in-flight key for same endpoint (double-click protection)
-      var existingKey = _pendingIdemKeys[url];
+      var bodyKey = _bodyIdempotencyKey(opts.body);
+      var existingKey = bodyKey || _pendingIdemKeys[path];
       if (!existingKey) {
         existingKey = _generateIdemKey('PB');
-        _pendingIdemKeys[url] = existingKey;
       }
+      _pendingIdemKeys[path] = existingKey;
       headers['Idempotency-Key'] = existingKey;
     }
   }
@@ -11894,7 +11918,7 @@ async function _pbFetch(url, opts) {
       }
       if (fatal) {
         _authRedirectToLogin('Session invalid — please sign in again');
-        delete _pendingIdemKeys[url];
+        delete _pendingIdemKeys[path];
         return resp;
       }
     }
@@ -11903,7 +11927,7 @@ async function _pbFetch(url, opts) {
         var peek429 = await resp.clone().json();
         _authHandleResponse(429, peek429);
       } catch (_e) { _authHandleResponse(429, {}); }
-      delete _pendingIdemKeys[url];
+      delete _pendingIdemKeys[path];
       return resp;
     }
     var expired = resp.status === 401;
@@ -11925,7 +11949,7 @@ async function _pbFetch(url, opts) {
       _authHandleResponse(resp.status, authPeek);
     } catch (_e) { _authHandleResponse(resp.status, {}); }
   }
-  delete _pendingIdemKeys[url];
+  delete _pendingIdemKeys[path];
   return resp;
 }
 
