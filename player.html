@@ -134,6 +134,9 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .mc-prop-avatar{width:36px;height:36px;border-radius:50%;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#2a2a2a;border:1px solid #333;font-size:0.6rem;font-weight:900;color:#fff;letter-spacing:0.3px}
 .mc-prop-avatar img{width:100%;height:100%;object-fit:cover;display:block}
 .mc-prop-avatar.mc-prop-initials{border:none}
+.mc-prop-avatar.mc-prop-text-fallback{background:transparent;border:none;border-radius:0;overflow:visible;align-items:center;justify-content:center}
+.mc-prop-avatar.mc-prop-text-fallback .pb-text-fallback{font-size:0.52rem;font-weight:800;line-height:1.15;text-align:center;color:#9aa3b2;max-width:100%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.pb-text-fallback{background:transparent!important;border:none!important;border-radius:0!important;box-shadow:none!important}
 .mc-prop-info{min-width:0;flex:1}
 .mc-prop-name{font-size:0.78rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mc-prop-meta{flex-shrink:0;text-align:right;max-width:38%;padding:0 4px}
@@ -2758,7 +2761,7 @@ function teamAvatar(name, sport, opts) {
     var safeSoccerName = String(name || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     return '<div class="mc-jersey"><img src="' + safeSoccerUrl + '" alt="' + safeSoccerName +
       '" width="52" height="52" style="width:52px;height:52px;object-fit:contain;display:block;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35))" ' +
-      'referrerpolicy="no-referrer" loading="lazy" onerror="this.style.display=\'none\'"></div>';
+      'referrerpolicy="no-referrer" loading="lazy" onerror="window._pbCollapseImgToText&&window._pbCollapseImgToText(this)"></div>';
   }
   if (kind === 'soccer' && typeof getSoccerTeamLogoImg === 'function') {
     return '<div class="mc-jersey">' + getSoccerTeamLogoImg(name, 52) + '</div>';
@@ -2768,14 +2771,29 @@ function teamAvatar(name, sport, opts) {
     var safeName = String(name || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     return '<div class="mc-jersey"><img src="' + safeUrl + '" alt="' + safeName +
       '" width="52" height="52" style="width:52px;height:52px;object-fit:contain;display:block" ' +
-      'referrerpolicy="no-referrer" loading="lazy" onerror="this.style.display=\'none\'"></div>';
+      'referrerpolicy="no-referrer" loading="lazy" onerror="window._pbCollapseImgToText&&window._pbCollapseImgToText(this)"></div>';
   }
   if (typeof getTeamLogoImg === 'function') {
     return '<div class="mc-jersey">' + getTeamLogoImg(name, sport, 52) + '</div>';
   }
   var abbr = String(name || '?').split(' ').slice(-1)[0].slice(0, 3).toUpperCase();
-  return '<div class="mc-jersey">' + abbr + '</div>';
+  return '<div class="mc-jersey pb-text-fallback" title="' + String(name || '').replace(/"/g, '&quot;') + '">' +
+    String(name || abbr).replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
 }
+
+function _pbCollapseImgToText(img) {
+  if (!img) return;
+  var label = (img.getAttribute('alt') || img.getAttribute('data-team-name') ||
+    img.getAttribute('data-player-name') || '').trim() || '—';
+  var span = document.createElement('span');
+  span.className = 'pb-text-fallback';
+  span.setAttribute('aria-hidden', 'true');
+  span.title = label;
+  span.textContent = label;
+  if (img.parentNode) img.parentNode.replaceChild(span, img);
+  else img.replaceWith(span);
+}
+window._pbCollapseImgToText = _pbCollapseImgToText;
 
 function _pbHydrateLobbyAvatars(root) {
   var scope = root || document.getElementById('games-list') || document;
@@ -4015,11 +4033,17 @@ function _pbPlayerInitialsColors(playerName, team, sport) {
   return { bg: 'hsl(' + hue + ',45%,32%)', fg: '#fff' };
 }
 
-function _pbPlayerInitialsAvatarHtml(playerName, attrs, team, sport) {
-  var initials = _pbPlayerInitials(playerName);
-  var colors = _pbPlayerInitialsColors(playerName, team, sport);
+function _pbPlayerTextFallbackAvatarHtml(playerName, attrs) {
+  var label = String(playerName || '').trim() || '—';
   var extra = attrs || '';
-  return '<div class="mc-prop-avatar mc-prop-initials" style="background:' + colors.bg + ';color:' + colors.fg + '"' + extra + '>' + initials + '</div>';
+  return '<div class="mc-prop-avatar mc-prop-text-fallback"' + extra + ' title="' +
+    String(label).replace(/"/g, '&quot;') + '"><span class="pb-text-fallback">' +
+    String(label).replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span></div>';
+}
+
+// Legacy name — policy is text-only (no initials circles).
+function _pbPlayerInitialsAvatarHtml(playerName, attrs, team, sport) {
+  return _pbPlayerTextFallbackAvatarHtml(playerName, attrs);
 }
 
 function _pbEspnHeadshotUrl(espnId, sport) {
@@ -6873,10 +6897,11 @@ function _slipPlayerPropPhotoHtml(b, size) {
     }
   }
 
-  // Graceful initials fallback (never a broken image)
-  var initials = String(name || '?').trim().split(/\s+/).filter(Boolean)
-    .map(function(w){ return w.charAt(0); }).slice(0, 2).join('').toUpperCase() || '?';
-  return '<span class="dkslip-player-fallback" aria-hidden="true">' + initials + '</span>';
+  // Graceful text-only fallback (never a broken image / initials circle)
+  var label = String(name || '').trim() || '—';
+  return '<span class="dkslip-player-fallback pb-text-fallback" aria-hidden="true" title="' +
+    String(label).replace(/"/g, '&quot;') + '">' +
+    String(label).replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span>';
 }
 
 /**

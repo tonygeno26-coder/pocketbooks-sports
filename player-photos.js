@@ -2,8 +2,10 @@
  * Verified player photo system with tiered fallbacks.
  * Tier 1: pre-built VERIFIED_PLAYER_IDS map
  * Tier 2: ESPN search (+ team when available) with 7-day localStorage cache
- * Tier 3: sport-specific (tennis initials / soccer team logo / colored initials)
- * Tier 4: img onerror → next tier → initials (never broken image)
+ * Tier 3: sport-specific (soccer team logo when safe)
+ * Tier 4: img onerror → next tier → clean text-only name
+ * Never: broken images, initials circles, silhouettes, shields, emoji, blank avatars.
+ * Correct identity > fake completeness — ambiguous matches stay unresolved.
  */
 (function (global) {
   'use strict';
@@ -150,44 +152,74 @@
   },
   nfl: {
     'A.J. Brown': 4047646,
+    'Aaron Rodgers': 8439,
+    'Adonai Mitchell': 4597500,
+    'Alec Pierce': 4360078,
     'Amon-Ra St. Brown': 4374302,
     'Baker Mayfield': 3052587,
     'Bijan Robinson': 4430807,
     'Breece Hall': 4427366,
     'Brian Thomas Jr.': 4432773,
+    'Brock Bowers': 4432665,
     'Brock Purdy': 4361741,
+    'Bryce Young': 4685720,
+    'Bucky Irving': 4596448,
+    'C.J. Stroud': 4432577,
+    'CJ Stroud': 4432577,
     'Caleb Williams': 4431611,
+    'Calvin Ridley': 3925357,
+    'Cam Ward': 4688380,
     'CeeDee Lamb': 4241389,
+    'Chase Brown': 4362238,
+    'Chris Godwin': 3116165,
+    'Chris Godwin Jr.': 3116165,
+    'Chris Olave': 4361370,
     'Christian McCaffrey': 3117251,
     'Cooper Kupp': 2977187,
     'Dak Prescott': 2577417,
+    'Daniel Jones': 3917792,
     'Davante Adams': 16800,
+    'David Montgomery': 4035538,
     'Deebo Samuel': 3126486,
     'Deebo Samuel Sr.': 3126486,
+    'DeMario Douglas': 4427095,
+    'Demario Douglas': 4427095,
+    'Deshaun Watson': 3122840,
+    'DeVonta Smith': 4241478,
     'DK Metcalf': 4047650,
+    'Dontayvion Wicks': 4428850,
+    'Drake London': 4426502,
+    'Drake Maye': 4431452,
     'Garrett Wilson': 4569618,
+    'Geno Smith': 15864,
     'George Kittle': 3040151,
     'Ja\'Marr Chase': 4362628,
     'Jalen Hurts': 4040715,
+    'Jared Goff': 3046779,
     'Jayden Daniels': 4426348,
     'Joe Burrow': 3915511,
     'Josh Allen': 3918298,
     'Justin Herbert': 4038941,
     'Justin Jefferson': 4262921,
+    'Kirk Cousins': 14880,
     'Lamar Jackson': 3916387,
     'Malik Nabers': 4595348,
     'Mark Andrews': 3116365,
+    'Matthew Stafford': 12483,
     'Micah Parsons': 4361423,
     'Myles Garrett': 3122132,
     'Nico Collins': 4258173,
     'Patrick Mahomes': 3139477,
     'Puka Nacua': 4426515,
     'Rashee Rice': 4428331,
+    'Sam Darnold': 3912547,
     'Saquon Barkley': 3929630,
     'Stefon Diggs': 2976212,
     'T.J. Watt': 3045282,
     'Travis Kelce': 15847,
+    'Trevor Lawrence': 4360310,
     'Tua Tagovailoa': 4241479,
+    'Tyler Shough': 4360689,
     'Tyreek Hill': 3116406,
     'Xavier Worthy': 4683062
   },
@@ -640,11 +672,28 @@
     } catch (_e) {}
   }
 
+  function cleanPlayerLookupName(name) {
+    var n = String(name || '').trim();
+    if (!n) return '';
+    // Combo / doubles markets — ambiguous, never auto-image
+    if (/\s+&\s+/.test(n) || /\s+\/\s+/.test(n) || (n.indexOf('/') >= 0 && /\S\/\S/.test(n))) {
+      return '';
+    }
+    // Non-player market labels
+    if (/both teams|to score|outright/i.test(n)) return '';
+    // Strip trailing (TEAM) / (ABC) tags from prop feeds
+    n = n.replace(/\s*\(([^)]{1,16})\)\s*$/, '').trim();
+    return n;
+  }
+
   function lookupVerifiedId(name, sport) {
+    var cleaned = cleanPlayerLookupName(name);
+    if (!cleaned) return null;
     var map = VERIFIED_PLAYER_IDS[verifiedSportKey(sport)];
     if (!map) return null;
+    if (map[cleaned] != null) return String(map[cleaned]);
     if (map[name] != null) return String(map[name]);
-    var want = normName(name);
+    var want = normName(cleaned);
     if (!want) return null;
     var keys = Object.keys(map);
     for (var i = 0; i < keys.length; i++) {
@@ -658,7 +707,9 @@
   }
 
   function getPlayerHeadshotUrl(name, sport, espnId) {
-    var id = espnId || lookupVerifiedId(name, sport);
+    var cleaned = cleanPlayerLookupName(name);
+    if (!espnId && !cleaned) return '';
+    var id = espnId || lookupVerifiedId(cleaned || name, sport);
     if (!id) return '';
     var slug = ESPN_HEADSHOT_SPORT[normalizeSport(sport)] || normalizeSport(sport) || 'mlb';
     return 'https://a.espncdn.com/i/headshots/' + slug + '/players/full/' + id + '.png';
@@ -674,15 +725,20 @@
     return '';
   }
 
-  function initialsHtml(name, size, className, team, sport) {
+  function textFallbackHtml(name, size, className) {
     size = size || 40;
-    var colors = playerInitialColors(name, teamColorFor(team, sport));
-    var cls = className ? ' class="' + esc(className) + '"' : '';
-    return '<div' + cls +
-      ' style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:' +
-      colors.bg + ';color:' + colors.fg + ';font-size:' + Math.max(8, Math.round(size * 0.32)) +
-      'px;font-weight:900;letter-spacing:0.3px;flex-shrink:0" aria-hidden="true">' +
-      esc(playerInitials(name)) + '</div>';
+    var label = String(name || '').trim() || '—';
+    var cls = className ? ' class="' + esc(className) + ' pb-text-fallback"' : ' class="pb-text-fallback"';
+    var fontSize = Math.max(8, Math.min(13, Math.round(size * 0.28)));
+    return '<span' + cls +
+      ' style="max-width:' + Math.max(size, 72) + 'px;min-height:' + size + 'px;display:inline-flex;align-items:center;justify-content:center;text-align:center;background:transparent;border:none;border-radius:0;box-shadow:none;color:inherit;opacity:0.85;font-size:' +
+      fontSize + 'px;font-weight:800;line-height:1.15;letter-spacing:0.2px;flex-shrink:0;padding:0 2px;overflow:hidden;word-break:break-word" aria-hidden="true" title="' +
+      esc(label) + '">' + esc(label) + '</span>';
+  }
+
+  // Legacy export name — policy is text-only (no initials circles).
+  function initialsHtml(name, size, className, team, sport) {
+    return textFallbackHtml(name, size, className);
   }
 
   function leagueMatches(item, sport) {
@@ -739,12 +795,20 @@
       if (!it || !it.id) continue;
       if (!leagueMatches(it, sport)) continue;
       var dn = normName(it.displayName || it.name || '');
+      if (!dn || !want) continue;
       var score = 0;
-      // Exact-only preference for combat sports — never promote weak substring hits.
+      // Strict matching only — never promote weak / fuzzy substring guesses.
       if (dn === want) score = 100;
       else if (normalizeSport(sport) === 'mma') continue;
-      else if (dn.indexOf(want) >= 0 || want.indexOf(dn) >= 0) score = 50;
-      else score = 10;
+      else if (dn.indexOf(want) >= 0 || want.indexOf(dn) >= 0) {
+        // Require substantial overlap (avoid "Lee" matching "Lee Westwood" from "Lee").
+        var shorter = dn.length < want.length ? dn.length : want.length;
+        var longer = dn.length >= want.length ? dn.length : want.length;
+        if (shorter < 6 || (shorter / longer) < 0.7) continue;
+        score = 50;
+      } else {
+        continue; // no loose score=10 fallback
+      }
       if (teamNorm) {
         var hay = normName([it.displayName, it.description, it.subtitle, it.team, it.location].filter(Boolean).join(' '));
         if (hay.indexOf(teamNorm) >= 0) score += 40;
@@ -755,11 +819,18 @@
     if (!ranked.length) return null;
     // Ambiguous exact ties → unresolved (no dangerous guess).
     if (ranked.length > 1 && ranked[0].score === ranked[1].score && ranked[0].score >= 100) return null;
+    // Only accept exact (100+) or strong substring (50+) matches.
+    if (ranked[0].score < 50) return null;
     return ranked[0].it;
   }
 
   async function searchEspnPlayerId(playerName, sport, team) {
     sport = normalizeSport(sport);
+    var cleaned = cleanPlayerLookupName(playerName);
+    if (!cleaned) {
+      return { miss: true, ambiguous: true };
+    }
+    playerName = cleaned;
     var key = cacheKey(playerName, sport, team);
     if (_memCache[key]) return _memCache[key];
     var persisted = readPersistentCache(key);
@@ -1676,4 +1747,5 @@
   global.clearPlayerPhotoCache = clearPlayerPhotoCache;
   global.playerPhotoCacheKey = cacheKey;
   global.playerPhotoInitialsHtml = initialsHtml;
+  global.playerPhotoTextFallbackHtml = textFallbackHtml;
 })(typeof window !== 'undefined' ? window : this);

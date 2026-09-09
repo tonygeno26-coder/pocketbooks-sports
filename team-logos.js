@@ -1,6 +1,8 @@
 /**
  * Shared team logo system for PocketBooks Sports (vanilla HTML).
- * ESPN CDN with combiner URL primary + direct /500/ fallback + initials circle.
+ * ESPN CDN with combiner URL primary + direct /500/ fallback.
+ * Unresolved / broken images → clean text-only name (never initials circles,
+ * silhouettes, shields, emoji, or blank avatars). Correct identity > fake completeness.
  */
 (function (global) {
   'use strict';
@@ -265,17 +267,22 @@
     'Phoenix Mercury': 'phx', 'Seattle Storm': 'sea', 'Washington Mystics': 'wsh'
   };
 
+  // MLS — ESPN soccer numeric team IDs (soccer/500/{id}.png). Abbrevs 404 on CDN.
   var MLS_FULL = {
-    'Atlanta United FC': 'atl', 'Austin FC': 'atx', 'Charlotte FC': 'clt',
-    'Chicago Fire FC': 'chi', 'FC Cincinnati': 'cin', 'Colorado Rapids': 'col',
-    'Columbus Crew': 'clb', 'D.C. United': 'dc', 'FC Dallas': 'dal',
-    'Houston Dynamo FC': 'hou', 'Inter Miami CF': 'mia', 'LA Galaxy': 'la',
-    'Los Angeles FC': 'lafc', 'Minnesota United FC': 'min', 'CF Montréal': 'mtl',
-    'Nashville SC': 'nsh', 'New England Revolution': 'ne', 'New York City FC': 'nyc',
-    'New York Red Bulls': 'ny', 'Orlando City SC': 'orl', 'Philadelphia Union': 'phi',
-    'Portland Timbers': 'por', 'Real Salt Lake': 'rsl', 'San Jose Earthquakes': 'sj',
-    'Seattle Sounders FC': 'sea', 'Sporting Kansas City': 'kc', 'St. Louis CITY SC': 'stl',
-    'Toronto FC': 'tor', 'Vancouver Whitecaps FC': 'van'
+    'Atlanta United FC': '18418', 'Austin FC': '20906', 'Charlotte FC': '21300',
+    'Chicago Fire FC': '182', 'FC Cincinnati': '18267', 'Colorado Rapids': '184',
+    'Columbus Crew': '183', 'D.C. United': '193', 'FC Dallas': '185',
+    'Houston Dynamo FC': '6077', 'Inter Miami CF': '20232', 'LA Galaxy': '187',
+    'Los Angeles FC': '18966', 'LAFC': '18966', 'Minnesota United FC': '17362',
+    'CF Montréal': '9720', 'CF Montreal': '9720', 'Nashville SC': '18986',
+    'New England Revolution': '189', 'New York City FC': '17606',
+    'New York Red Bulls': '190', 'Red Bull New York': '190',
+    'Orlando City SC': '12011', 'Philadelphia Union': '10739',
+    'Portland Timbers': '9723', 'Real Salt Lake': '4771',
+    'San Jose Earthquakes': '191', 'San Diego FC': '22529',
+    'Seattle Sounders FC': '9726', 'Sporting Kansas City': '186',
+    'St. Louis CITY SC': '21812', 'Toronto FC': '7318',
+    'Vancouver Whitecaps FC': '9727', 'Vancouver Whitecaps': '9727'
   };
 
   // Complete FBS NCAAF programs — ESPN numeric team IDs (ncaa/500/{id}.png).
@@ -292,7 +299,7 @@
     'Florida State Seminoles': '52', 'Jacksonville State Gamecocks': '55',
     'Florida Gators': '57', 'South Florida Bulls': '58',
     'Georgia Tech Yellow Jackets': '59', 'Georgia Bulldogs': '61',
-    'Hawai\'i Rainbow Warriors': '62', 'Iowa State Cyclones': '66',
+    'Hawai\'i Rainbow Warriors': '62', 'Hawaii Rainbow Warriors': '62', 'Iowa State Cyclones': '66',
     'Boise State Broncos': '68', 'Northwestern Wildcats': '77',
     'Indiana Hoosiers': '84', 'Notre Dame Fighting Irish': '87',
     'Kentucky Wildcats': '96', 'Louisville Cardinals': '97',
@@ -322,7 +329,8 @@
     'Washington State Cougars': '265', 'Wisconsin Badgers': '275',
     'Marshall Thundering Herd': '276', 'West Virginia Mountaineers': '277',
     'Fresno State Bulldogs': '278', 'Georgia Southern Eagles': '290',
-    'Old Dominion Monarchs': '295', 'Louisiana Ragin\' Cajuns': '309',
+    'Old Dominion Monarchs': '295', 'Louisiana Ragin\' Cajuns': '309', 'Louisiana Ragin Cajuns': '309',
+    'Louisiana': '309',
     'Coastal Carolina Chanticleers': '324', 'Texas State Bobcats': '326',
     'Utah State Aggies': '328', 'Alabama Crimson Tide': '333',
     'Kennesaw State Owls': '338', 'Mississippi State Bulldogs': '344',
@@ -663,10 +671,18 @@
     'Miami Florida': 'Miami Hurricanes',
     'The U': 'Miami Hurricanes',
     'Appalachian State': 'App State Mountaineers',
+    'Appalachian State Mountaineers': 'App State Mountaineers',
+    'App State': 'App State Mountaineers',
     'Louisiana Monroe': 'UL Monroe Warhawks',
     'Louisiana-Monroe': 'UL Monroe Warhawks',
+    'Louisiana-Monroe Warhawks': 'UL Monroe Warhawks',
+    'ULM': 'UL Monroe Warhawks',
     'Southern Mississippi': 'Southern Miss Golden Eagles',
-    'Hawaii': 'Hawai\'i Rainbow Warriors',
+    'Hawaii': 'Hawaii Rainbow Warriors',
+    'Hawai\'i': 'Hawaii Rainbow Warriors',
+    'Hawai\'i Rainbow Warriors': 'Hawaii Rainbow Warriors',
+    'Louisiana Ragin Cajuns': 'Louisiana Ragin\' Cajuns',
+    'Ragin Cajuns': 'Louisiana Ragin\' Cajuns',
     'San Jose State': 'San José State Spartans',
     'Middle Tennessee State': 'Middle Tennessee Blue Raiders',
     'Texas-San Antonio Roadrunners': 'UTSA Roadrunners',
@@ -678,27 +694,31 @@
     'Sam Houston State': 'Sam Houston Bearkats',
     'North Dakota State': 'North Dakota State Bison',
     'NDSU': 'North Dakota State Bison',
+    'UMass': 'Massachusetts Minutemen',
+    'UMass Minutemen': 'Massachusetts Minutemen',
+    'Massachusetts': 'Massachusetts Minutemen',
     'Sacramento State': 'Sacramento State Hornets',
     'Sac State': 'Sacramento State Hornets'
   };
 
-  // Major NCAAB programs
+  // Major NCAAB programs — ESPN ncaa numeric IDs (same CDN as NCAAF; abbrevs 404).
   var NCAAB_FULL = {
-    'Alabama Crimson Tide': 'ala', 'Arizona Wildcats': 'ariz', 'Arkansas Razorbacks': 'ark',
-    'Auburn Tigers': 'aub', 'Baylor Bears': 'bay', 'BYU Cougars': 'byu',
-    'Cincinnati Bearcats': 'cin', 'Clemson Tigers': 'clem', 'Connecticut Huskies': 'uconn',
-    'Creighton Bluejays': 'creighton', 'Duke Blue Devils': 'duke', 'Florida Gators': 'fla',
-    'Florida State Seminoles': 'fsu', 'Gonzaga Bulldogs': 'gonzaga', 'Houston Cougars': 'hou',
-    'Illinois Fighting Illini': 'ill', 'Indiana Hoosiers': 'ind', 'Iowa Hawkeyes': 'iowa',
-    'Iowa State Cyclones': 'isu', 'Kansas Jayhawks': 'ku', 'Kansas State Wildcats': 'ksu',
-    'Kentucky Wildcats': 'uk', 'Louisville Cardinals': 'lou', 'LSU Tigers': 'lsu',
-    'Marquette Golden Eagles': 'marquette', 'Maryland Terrapins': 'md', 'Memphis Tigers': 'mem',
-    'Michigan State Spartans': 'msu', 'Michigan Wolverines': 'mich', 'North Carolina Tar Heels': 'unc',
-    'Notre Dame Fighting Irish': 'nd', 'Ohio State Buckeyes': 'ohio-st', 'Oklahoma Sooners': 'okla',
-    'Oregon Ducks': 'ore', 'Purdue Boilermakers': 'purdue', 'San Diego State Aztecs': 'sdsu',
-    'Tennessee Volunteers': 'tenn', 'Texas Longhorns': 'tex', 'Texas Tech Red Raiders': 'ttu',
-    'UCLA Bruins': 'ucla', 'USC Trojans': 'usc', 'Villanova Wildcats': 'villanova',
-    'Virginia Cavaliers': 'uva', 'Wisconsin Badgers': 'wisc', 'Xavier Musketeers': 'xavier'
+    'Alabama Crimson Tide': '333', 'Arizona Wildcats': '12', 'Arkansas Razorbacks': '8',
+    'Auburn Tigers': '2', 'Baylor Bears': '239', 'BYU Cougars': '252',
+    'Cincinnati Bearcats': '2132', 'Clemson Tigers': '228', 'Connecticut Huskies': '41',
+    'UConn Huskies': '41', 'Creighton Bluejays': '156', 'Duke Blue Devils': '150',
+    'Florida Gators': '57', 'Florida State Seminoles': '52', 'Gonzaga Bulldogs': '2250',
+    'Houston Cougars': '248', 'Illinois Fighting Illini': '356', 'Indiana Hoosiers': '84',
+    'Iowa Hawkeyes': '2294', 'Iowa State Cyclones': '66', 'Kansas Jayhawks': '2305',
+    'Kansas State Wildcats': '2306', 'Kentucky Wildcats': '96', 'Louisville Cardinals': '97',
+    'LSU Tigers': '99', 'Marquette Golden Eagles': '269', 'Maryland Terrapins': '120',
+    'Memphis Tigers': '235', 'Michigan State Spartans': '127', 'Michigan Wolverines': '130',
+    'North Carolina Tar Heels': '153', 'Notre Dame Fighting Irish': '87',
+    'Ohio State Buckeyes': '194', 'Oklahoma Sooners': '201', 'Oregon Ducks': '2483',
+    'Purdue Boilermakers': '2509', 'San Diego State Aztecs': '21',
+    'Tennessee Volunteers': '2633', 'Texas Longhorns': '251', 'Texas Tech Red Raiders': '2641',
+    'UCLA Bruins': '26', 'USC Trojans': '30', 'Villanova Wildcats': '222',
+    'Virginia Cavaliers': '258', 'Wisconsin Badgers': '275', 'Xavier Musketeers': '2752'
   };
 
   function _aliasFromFull(fullMap, extra) {
@@ -909,9 +929,8 @@
     if (!data) return '';
     var key = resolveTeamName(teamName, sport);
     var ab = data.fullToAbbrev[key];
-    if (ab) return ab;
-    var parts = String(teamName || '').trim().split(/\s+/);
-    return (parts[parts.length - 1] || '?').slice(0, 3).toLowerCase();
+    // Strict: never invent abbrevs from name fragments (causes wrong/404 logos).
+    return ab || '';
   }
 
   function getTeamInitials(teamName) {
@@ -960,11 +979,20 @@
     return _directLogoUrl(sport, getTeamAbbrev(teamName, sport));
   }
 
+  function _textFallbackHtml(name, size, className) {
+    size = size || 40;
+    var label = String(name || '').trim() || '—';
+    var cls = className ? ' class="' + esc(className) + ' pb-text-fallback"' : ' class="pb-text-fallback"';
+    var fontSize = Math.max(8, Math.min(13, Math.round(size * 0.28)));
+    return '<span' + cls +
+      ' style="max-width:' + Math.max(size, 72) + 'px;min-height:' + size + 'px;display:inline-flex;align-items:center;justify-content:center;text-align:center;background:transparent;border:none;border-radius:0;box-shadow:none;color:inherit;opacity:0.85;font-size:' +
+      fontSize + 'px;font-weight:800;line-height:1.15;letter-spacing:0.2px;flex-shrink:0;padding:0 2px;overflow:hidden;word-break:break-word" aria-hidden="true" title="' +
+      esc(label) + '">' + esc(label) + '</span>';
+  }
+
+  // Legacy name kept for call sites; policy is text-only (no initials circles).
   function _fallbackHtml(teamName, sport, size, className) {
-    var colors = getTeamColors(teamName, sport);
-    var initials = getTeamInitials(teamName);
-    var cls = className ? ' class="' + esc(className) + '"' : '';
-    return '<div' + cls + ' style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:' + colors.bg + ';color:' + colors.fg + ';font-size:' + Math.max(8, Math.round(size * 0.32)) + 'px;font-weight:900;letter-spacing:0.3px;flex-shrink:0" aria-hidden="true">' + esc(initials) + '</div>';
+    return _textFallbackHtml(teamName, size, className);
   }
 
   function getTeamLogoImg(teamName, sport, size, className) {
@@ -1064,8 +1092,9 @@
       img.style.display = 'none';
       var el = document.getElementById('pick-confirm-logo-fb');
       if (el) {
-        el.textContent = getTeamInitials(teamName);
+        el.textContent = String(teamName || '').trim() || '—';
         el.style.display = 'flex';
+        el.classList.add('pb-text-fallback');
       }
       return;
     }
@@ -1501,10 +1530,8 @@
   }
 
   function _initialsFallbackHtml(name, size, className) {
-    var colors = _playerInitialColors(name);
-    var initials = _playerInitials(name);
-    var cls = className ? ' class="' + esc(className) + '"' : '';
-    return '<div' + cls + ' style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:' + colors.bg + ';color:' + colors.fg + ';font-size:' + Math.max(8, Math.round(size * 0.32)) + 'px;font-weight:900;letter-spacing:0.3px;flex-shrink:0" aria-hidden="true">' + esc(initials) + '</div>';
+    // Text-only policy: never render colored initials circles / silhouettes.
+    return _textFallbackHtml(name, size, className);
   }
 
   function getCountryFlagCode(teamName) {
@@ -1860,6 +1887,8 @@
           var lg = String(it.league || '').toLowerCase();
           if (sp && sp !== 'tennis') continue;
           if (lg && lg !== 'atp' && lg !== 'wta' && lg !== 'tennis') continue;
+          var dn = _normKey(it.displayName || it.name || '');
+          if (!dn || dn !== k) continue; // exact normalized name only
           pick = it;
           break;
         }
@@ -2063,11 +2092,14 @@
         var data = await res.json();
         var items = (data && data.items) || [];
         var pick = null;
+        var want = _normKey(name);
         for (var i = 0; i < items.length; i++) {
           var it = items[i];
           if (!it || !it.id) continue;
           var sp = String(it.sport || '').toLowerCase();
           if (sp && sp !== 'golf') continue;
+          var dn = _normKey(it.displayName || it.name || '');
+          if (!dn || !want || dn !== want) continue; // exact normalized name only
           pick = it;
           break;
         }
@@ -2516,15 +2548,17 @@
     } catch (_eApi) {}
     await warmSoccerTeamsCache();
 
-    // Shared verified/search photo hydrate for tennis/golf (and any data-player-photo nodes)
+    // Shared verified/search photo hydrate for tennis/golf/mma (and any data-player-photo nodes)
     if (typeof global.hydratePlayerPhotos === 'function') {
       try { await global.hydratePlayerPhotos(scope, 'tennis'); } catch (_eHydra) {}
       try { await global.hydratePlayerPhotos(scope, 'golf'); } catch (_eHydraG) {}
+      try { await global.hydratePlayerPhotos(scope, 'mma'); } catch (_eHydraM) {}
     }
 
     var soccerEls = Array.prototype.slice.call(scope.querySelectorAll('[data-soccer-team]'));
     var tennisEls = Array.prototype.slice.call(scope.querySelectorAll('[data-tennis-player],[data-player-photo][data-player-sport="tennis"]'));
     var golfEls = Array.prototype.slice.call(scope.querySelectorAll('[data-golf-player],[data-player-photo][data-player-sport="golf"]'));
+    var mmaEls = Array.prototype.slice.call(scope.querySelectorAll('[data-mma-fighter],[data-player-photo][data-player-sport="mma"]'));
     var ncaafEls = Array.prototype.slice.call(scope.querySelectorAll('[data-ncaaf-team]'));
 
     var soccerNames = [];
