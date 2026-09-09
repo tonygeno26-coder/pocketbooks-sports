@@ -1017,6 +1017,7 @@
         ' src="' + esc(combiner) + '"' +
         ' alt="' + esc(teamName || initials) + '"' +
         ' width="' + size + '" height="' + size + '"' +
+        ' loading="lazy" decoding="async"' +
         ' style="width:' + size + 'px;height:' + size + 'px;object-fit:contain;display:block"' +
         ' referrerpolicy="no-referrer"' +
         ' data-logo-step="0"' +
@@ -1038,6 +1039,7 @@
       ' src="' + esc(combiner) + '"' +
       ' alt="' + esc(teamName || initials) + '"' +
       ' width="' + size + '" height="' + size + '"' +
+      ' loading="lazy" decoding="async"' +
       ' style="width:' + size + 'px;height:' + size + 'px;object-fit:contain;display:block"' +
       ' referrerpolicy="no-referrer"' +
       ' data-logo-step="0"' +
@@ -1087,6 +1089,9 @@
 
   function _finishTeamLogoFallback(img, teamName, sport, size, className) {
     if (!img) return;
+    img.onerror = null;
+    img.style.display = 'none';
+    img.style.visibility = 'hidden';
     var fb = _fallbackHtml(teamName, sport, size, className);
     if (img.id === 'pick-confirm-logo') {
       img.style.display = 'none';
@@ -1791,6 +1796,7 @@
       ' src="' + esc(src) + '"' +
       ' alt="' + esc(name) + '"' +
       ' width="' + size + '" height="' + size + '"' +
+      ' loading="lazy" decoding="async"' +
       ' style="width:' + size + 'px;height:' + size + 'px;object-fit:contain;display:block"' +
       ' referrerpolicy="no-referrer"' +
       ' data-soccer-step="' + (url ? '0' : '1') + '"' +
@@ -1944,6 +1950,7 @@
       ' src="' + esc(url) + '"' +
       ' alt="' + esc(name) + '"' +
       ' width="' + size + '" height="' + size + '"' +
+      ' loading="lazy" decoding="async"' +
       ' style="width:' + size + 'px;height:' + size + 'px;object-fit:cover;display:block;border-radius:10px"' +
       ' referrerpolicy="no-referrer"' +
       ' data-tennis-player="' + esc(name) + '"' +
@@ -2169,6 +2176,7 @@
       ' src="' + esc(url) + '"' +
       ' alt="' + esc(name) + '"' +
       ' width="' + size + '" height="' + size + '"' +
+      ' loading="lazy" decoding="async"' +
       ' style="width:' + size + 'px;height:' + size + 'px;object-fit:cover;display:block;border-radius:10px"' +
       ' referrerpolicy="no-referrer"' +
       ' data-golf-player="' + esc(name) + '"' +
@@ -2385,6 +2393,7 @@
       ' src="' + esc(url) + '"' +
       ' alt="' + esc(name) + '"' +
       ' width="' + size + '" height="' + size + '"' +
+      ' loading="lazy" decoding="async"' +
       ' style="width:' + size + 'px;height:' + size + 'px;object-fit:cover;display:block;border-radius:10px"' +
       ' referrerpolicy="no-referrer"' +
       ' data-mma-fighter="' + esc(name) + '"' +
