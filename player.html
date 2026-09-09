@@ -1450,6 +1450,83 @@ body{
   .market-card:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,0,0,0.35)}
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   GAME CARDS 2.0 — density, odds readability, live badges, mobile 390/430
+   Presentation only — preserves PocketBooks tokens + logo/text fallbacks.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.market-card .mc-cols{padding-bottom:3px;gap:5px}
+.market-card .mc-col-label{
+  font-size:0.52rem;font-weight:800;letter-spacing:0.35px;
+  color:#5d6b7e;line-height:1.1;text-transform:uppercase
+}
+.market-card .mc-team-row{margin-bottom:5px;gap:5px}
+.market-card .mc-team-row:last-of-type{margin-bottom:3px}
+.market-card .mc-divider{margin:2px 14px 3px;opacity:0.8}
+.market-card .mc-header .mc-sport{flex:1;min-width:0}
+.market-card .odds-box{
+  min-height:46px;padding:6px 3px 5px;gap:1px;
+  font-variant-numeric:tabular-nums;
+}
+.market-card .odds-line{
+  font-size:0.58rem;font-weight:700;color:#94A3B8;
+  letter-spacing:0.12px;line-height:1.1
+}
+.market-card .odds-num{
+  font-size:0.93rem;font-weight:900;letter-spacing:-0.02em;
+  line-height:1.15;font-variant-numeric:tabular-nums
+}
+.market-card .odds-num.odds-pos{color:var(--win,#22C55E)}
+.market-card .odds-num.odds-neg{color:var(--white,#F5F7FA)}
+.mc-live-badge{
+  flex-shrink:0;font-size:0.56rem;padding:3px 8px;gap:4px;
+  background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.38);
+  box-shadow:0 0 0 1px rgba(239,68,68,0.08)
+}
+.market-card.is-live{
+  border-color:rgba(239,68,68,0.32);
+  box-shadow:0 2px 14px rgba(0,0,0,0.28),inset 3px 0 0 rgba(239,68,68,0.55)
+}
+.market-card.is-live .mc-live-score{
+  padding:3px 0 4px;border-bottom:1px solid rgba(239,68,68,0.12);margin-bottom:2px
+}
+.mc-live-score .mc-live-pts{font-variant-numeric:tabular-nums}
+@media (max-width:430px){
+  .market-card{margin:0 10px 8px;max-width:calc(100vw - 20px)}
+  .market-card .mc-cols,
+  .market-card .mc-team-row{
+    grid-template-columns:minmax(0,1fr) minmax(0,72px) minmax(0,72px) minmax(0,72px);
+    gap:4px;padding-left:10px;padding-right:10px
+  }
+  .market-card .mc-cols-ml-only,
+  .market-card .mc-team-row-ml-only{grid-template-columns:minmax(0,1fr) minmax(0,80px)}
+  .market-card .odds-box{min-height:44px;min-width:0}
+  .market-card .odds-num{font-size:0.86rem}
+  .market-card .odds-line{font-size:0.56rem}
+  .mc-header{padding:8px 10px 4px}
+  .mc-footer{padding:6px 10px 8px}
+  .market-card .mc-divider{margin-left:10px;margin-right:10px}
+}
+@media (max-width:390px){
+  .market-card{margin:0 6px 8px;max-width:calc(100vw - 12px)}
+  .market-card .mc-cols,
+  .market-card .mc-team-row{
+    grid-template-columns:minmax(0,1fr) minmax(0,66px) minmax(0,66px) minmax(0,66px);
+    gap:3px;padding-left:6px;padding-right:6px
+  }
+  .market-card .mc-cols-ml-only,
+  .market-card .mc-team-row-ml-only{grid-template-columns:minmax(0,1fr) minmax(0,74px)}
+  .market-card .mc-jersey{width:40px;height:40px}
+  .market-card .mc-name{font-size:0.82rem}
+  .market-card .mc-city{font-size:0.52rem}
+  .market-card .odds-num{font-size:0.84rem}
+  .market-card .odds-line{font-size:0.54rem}
+  .mc-live-badge{font-size:0.52rem;padding:2px 6px}
+  .mc-live-score .mc-live-pts{font-size:0.95rem}
+  .mc-header{padding:7px 8px 3px}
+  .mc-footer{padding:5px 8px 7px}
+  .market-card .mc-divider{margin-left:8px;margin-right:8px}
+}
+
 
 </style>
 
@@ -3680,10 +3757,11 @@ function _pbUpdateGameCardInPlace(card, g) {
       pick: side + ' ' + t.line, liveMarket: isLive
     });
   });
+  card.classList.toggle('is-live', isLive);
   var hdr = card.querySelector('.mc-header');
   if (hdr) {
     var badge = hdr.querySelector('.mc-live-badge');
-    if (isLive && !badge) hdr.insertAdjacentHTML('beforeend', _pbLiveBadgeHtml());
+    if (isLive && !badge) hdr.insertAdjacentHTML('afterbegin', _pbLiveBadgeHtml());
     else if (!isLive && badge) badge.remove();
   }
   var scoreEl = card.querySelector('.mc-live-score');
@@ -3847,9 +3925,9 @@ function _pbRenderGameCardHtml(g) {
 
     // Golf matchups: Player A vs Player B + moneyline only (no fake spread/total columns).
     if (isGolfCard) {
-      return '<div class="market-card market-card-golf" data-game-id="' + safeGameId + '" data-home="' + safeHome + '" data-away="' + safeAway + '" data-sport="golf" style="margin-bottom:14px">' +
-        '<div class="mc-header"><span style="font-size:0.9rem">' + icon + '</span><span class="mc-sport">' + headerSport + '</span>' +
-        (isLiveMarket ? _pbLiveBadgeHtml() : '') +
+      return '<div class="market-card market-card-golf' + (isLiveMarket ? ' is-live' : '') + '" data-game-id="' + safeGameId + '" data-home="' + safeHome + '" data-away="' + safeAway + '" data-sport="golf">' +
+        '<div class="mc-header">' + (isLiveMarket ? _pbLiveBadgeHtml() : '') +
+        '<span style="font-size:0.9rem">' + icon + '</span><span class="mc-sport">' + headerSport + '</span>' +
         '</div>' +
         liveScoreHtml +
         splitHtml +
@@ -3869,9 +3947,9 @@ function _pbRenderGameCardHtml(g) {
         '</div>';
     }
 
-    return '<div class="market-card" data-game-id="' + safeGameId + '" data-home="' + safeHome + '" data-away="' + safeAway + '" style="margin-bottom:14px">' +
-      '<div class="mc-header"><span style="font-size:0.9rem">' + icon + '</span><span class="mc-sport">' + headerSport + '</span>' +
-      (isLiveMarket ? _pbLiveBadgeHtml() : '') +
+    return '<div class="market-card' + (isLiveMarket ? ' is-live' : '') + '" data-game-id="' + safeGameId + '" data-home="' + safeHome + '" data-away="' + safeAway + '">' +
+      '<div class="mc-header">' + (isLiveMarket ? _pbLiveBadgeHtml() : '') +
+      '<span style="font-size:0.9rem">' + icon + '</span><span class="mc-sport">' + headerSport + '</span>' +
       '</div>' +
       liveScoreHtml +
       splitHtml +
