@@ -4433,6 +4433,50 @@ function renderHostBets(){
 }
 
 const SECTIONS=['home-content','bets-section','players-section','settlements-section','crypto-section'];
+
+// Host tab persistence (UI only — never balance/tickets/ledger)
+var _PB_HOST_NAV_SS = 'pb-nav-host-tab';
+var _PB_HOST_TABS = { home:1, bets:1, players:1, settlements:1, crypto:1 };
+var _hostNavApplying = false;
+var _hostActiveTab = 'home';
+function _hostNavSync(tab, opts) {
+  opts = opts || {};
+  if (_hostNavApplying) return;
+  tab = _PB_HOST_TABS[tab] ? tab : 'home';
+  _hostActiveTab = tab;
+  try { sessionStorage.setItem(_PB_HOST_NAV_SS, tab); } catch (_e) {}
+  try {
+    var params = new URLSearchParams(window.location.search);
+    if (tab === 'home') params.delete('tab');
+    else params.set('tab', tab);
+    var qs = params.toString();
+    var url = window.location.pathname + (qs ? ('?' + qs) : '') + (window.location.hash || '');
+    var state = { hostTab: tab };
+    if (opts.push) history.pushState(state, '', url);
+    else history.replaceState(state, '', url);
+  } catch (_e) {}
+}
+function _hostNavResolveBoot() {
+  try {
+    var qs = new URLSearchParams(window.location.search);
+    var fromUrl = qs.get('tab');
+    if (fromUrl && _PB_HOST_TABS[fromUrl]) return fromUrl;
+    if (qs.get('applicants') === '1') return 'players';
+    var fromSs = sessionStorage.getItem(_PB_HOST_NAV_SS);
+    if (fromSs && _PB_HOST_TABS[fromSs]) return fromSs;
+  } catch (_e) {}
+  return 'home';
+}
+window.addEventListener('popstate', function(ev) {
+  var tab = (ev.state && ev.state.hostTab) || _hostNavResolveBoot();
+  _hostNavApplying = true;
+  try {
+    if (typeof switchHostTab === 'function') switchHostTab(tab);
+  } finally {
+    _hostNavApplying = false;
+  }
+});
+
 function returnToLobby() {
   
   
@@ -4450,6 +4494,8 @@ function setBN(el,tab){
   var sportRow   = document.querySelector('.sport-filter');
   if (clubBar)  clubBar.style.display  = 'none';
   if (sportRow) sportRow.style.display = 'none';
+  var _navTab = (tab === 'games') ? _hostActiveTab : (tab || 'home');
+  if (tab !== 'games') _hostNavSync(_navTab, { push: !_hostNavApplying });
   if(tab==='bets'){
     var s=document.getElementById('bets-section');
     if(s)s.style.display='block';
@@ -7797,20 +7843,26 @@ document.addEventListener('DOMContentLoaded', function() {
   // Phase U: admin panel — show collapsed label if full_admin+
   if (_adminRank() >= 4) _adminRender();
 
-  // Deep-link from lobby Requests → open Players / approve modal
+  // Deep-link / restore host tab (URL wins, then sessionStorage)
   try {
     var _qs = new URLSearchParams(window.location.search);
-    if (_qs.get('tab') === 'players' || _qs.get('applicants') === '1') {
-      _playersActiveTab = _qs.get('applicants') === '1' ? 'applicants' : (_playersActiveTab || 'all');
-      var _playersBn = document.querySelector('.bn[onclick*="players"]') || Array.prototype.find.call(document.querySelectorAll('.bn'), function(n){
-        return (n.textContent||'').indexOf('Players') >= 0;
-      });
-      if (_playersBn && typeof setBN === 'function') setBN(_playersBn, 'players');
-      else {
-        var _ps = document.getElementById('players-section');
-        if (_ps) _ps.style.display = 'block';
-        loadRequests().then(function(){ renderPlayersTab(); }).catch(function(){ renderPlayersTab(); });
-      }
+    var _bootHostTab = _hostNavResolveBoot();
+    if (_qs.get('applicants') === '1') {
+      _playersActiveTab = 'applicants';
+      _bootHostTab = 'players';
+    }
+    if (_bootHostTab && _bootHostTab !== 'home') {
+      _hostNavApplying = true;
+      try {
+        if (typeof switchHostTab === 'function') switchHostTab(_bootHostTab);
+        else {
+          var _bn = document.querySelector('.bn[onclick*="' + _bootHostTab + '"]');
+          if (_bn && typeof setBN === 'function') setBN(_bn, _bootHostTab);
+        }
+      } finally { _hostNavApplying = false; }
+      _hostNavSync(_bootHostTab, { push: false });
+    } else {
+      _hostNavSync('home', { push: false });
     }
     var _openAppr = localStorage.getItem('pb-open-approve');
     if (_openAppr) {
