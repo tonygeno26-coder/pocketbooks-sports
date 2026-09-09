@@ -1701,14 +1701,6 @@ function _validatePlayerSession() {
 
   var missing = [];
   if (!_tok) missing.push('token');
-  else {
-    var _tokParts = _tok.split('.');
-    if (_tokParts.length !== 3) missing.push('token_malformed');
-    else {
-      try { JSON.parse(atob(_tokParts[1].replace(/-/g,'+').replace(/_/g,'/'))); }
-      catch(_e) { missing.push('token_malformed'); }
-    }
-  }
   if (!pid)  missing.push('playerId');
   if (!cid)  missing.push('clubId');
 
@@ -1760,13 +1752,11 @@ function _showSessionExpiredModal(result) {
   overlay.innerHTML = [
     '<div style="background:#1a1a1a;border:1.5px solid #ef4444;border-radius:20px;padding:32px 24px;max-width:320px;width:90%;text-align:center;box-shadow:0 0 40px rgba(239,68,68,0.25)">',
       '<div style="font-size:2rem;margin-bottom:12px">&#128274;</div>',
-      '<div style="font-weight:800;font-size:1.1rem;color:#fff;margin-bottom:10px">' +
-        (reason === 'too_many_requests' ? 'Too Many Requests' : 'Session Expired') + '</div>',
+      '<div style="font-weight:800;font-size:1.1rem;color:#fff;margin-bottom:10px">Session Expired</div>',
       '<div style="color:#aaa;font-size:0.85rem;line-height:1.5;margin-bottom:24px">',
-        (reason === 'too_many_requests'
-          ? 'Please wait a minute, then return to the lobby and sign in again.'
-          : 'Your session is no longer valid.<br>Return to the lobby and re-enter your club to continue.'),
-        (reason && reason !== 'too_many_requests' ? '<br><span style="font-size:0.75rem;color:#666;margin-top:6px;display:block">Reason: '+reason+'</span>' : ''),
+        'Your session is no longer valid.<br>',
+        'Return to the lobby and re-enter your club to continue.',
+        (reason ? '<br><span style="font-size:0.75rem;color:#666;margin-top:6px;display:block">Reason: '+reason+'</span>' : ''),
       '</div>',
       '<button id="session-lobby-btn" style="width:100%;padding:14px;background:#00ff87;border:none;border-radius:12px;color:#000;font-weight:800;font-size:1rem;cursor:pointer">',
         '&#8592; Return to Lobby',
@@ -1811,7 +1801,6 @@ function _showSessionExpiredModal(result) {
         try { return window._PBS_BACKEND || 'https://pocketbooks-sports-backend-production.up.railway.app'; }
         catch(_){ return 'https://pocketbooks-sports-backend-production.up.railway.app'; }
       })();
-      window._bootTokenRecoveryInFlight = true;
       fetch(_rBase + '/api/auth/token', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ actorId: _rPid, clubId: _rCid })
@@ -1821,14 +1810,12 @@ function _showSessionExpiredModal(result) {
             ['pb-sports-token','pb-session-token','pb-token-expires','pb-actor-role','pb-test-user']
               .forEach(function(k){ localStorage.removeItem(k); });
           } catch(_e){}
-          window._bootTokenRecoveryInFlight = false;
           window.location.href = 'lobby.html?screen=signin&msg=' + encodeURIComponent('Session invalid — please sign in again');
           return;
         }
         if (res.status === 429) {
           console.warn('TOKEN_RECOVERY_RATE_LIMITED — not retrying');
-          window._bootTokenRecoveryInFlight = false;
-          _showSessionExpiredModal(Object.assign({}, _sgResult, { reason: 'too_many_requests' }));
+          _showSessionExpiredModal(_sgResult);
           return;
         }
         var data = res.data || {};
@@ -1838,7 +1825,7 @@ function _showSessionExpiredModal(result) {
           localStorage.setItem('pb-session-token', data.token);
           var _expIn = data.expiresIn || 86400;
           localStorage.setItem('pb-token-expires', String(Date.now() + (_expIn * 1000)));
-          window._bootTokenRecoveryInFlight = false;
+          
           var _recheck = _validatePlayerSession();
           if (_recheck.ok) {
             
@@ -1848,11 +1835,9 @@ function _showSessionExpiredModal(result) {
             return;
           }
         }
-        window._bootTokenRecoveryInFlight = false;
         console.warn('TOKEN_RECOVERY_FAILED reason='+(data.error||data.code||'no_token'));
         _showSessionExpiredModal(_sgResult);
       }).catch(function(e){
-        window._bootTokenRecoveryInFlight = false;
         console.warn('TOKEN_RECOVERY_FAILED reason=network err='+e.message);
         _showSessionExpiredModal(_sgResult);
       });
@@ -8300,12 +8285,11 @@ async function confirmBet() {
     // ── AbortController 10 s timeout ─────────────────────────────────────
     _cbAbortCtrl  = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     _cbAbortTimer = _cbAbortCtrl ? setTimeout(function(){
-      _cbAbortCtrl.abort();
+      // Abort only — catch path owns uncertain-state messaging + reconcile (no local success).
       _cbErr('CONFIRM_BET_ERROR', null,
         'reason=fetch_timeout_10s endpoint=/api/bets/place step='+_cbStep
         +' respStatus='+_cbRespStatus);
-      showToast('Bet placement timed out. Check your connection and try again.', 'error');
-      _cbBtnReady();
+      try { _cbAbortCtrl.abort(); } catch(_) {}
     }, 10000) : null;
 
     try {
@@ -8540,8 +8524,18 @@ async function confirmBet() {
       if (_cbAbortTimer) { clearTimeout(_cbAbortTimer); _cbAbortTimer=null; }
       var _isAbort = _e && (_e.name==='AbortError'||String(_e.message||'').toLowerCase().includes('abort'));
       if (_isAbort) {
-        // Timeout toast already shown by AbortController handler
-        _cbErr('CONFIRM_BET_ERROR', _e, 'reason=fetch_aborted step='+_cbStep);
+        // Timeout: request may have reached the server — do NOT fabricate local success.
+        // Do NOT auto-retry money POST; reconcile authoritative dashboard state instead.
+        _cbErr('CONFIRM_BET_ERROR', _e, 'reason=fetch_aborted_uncertain step='+_cbStep);
+        try {
+          if (typeof loadPlayerDashboardFromDb === 'function') {
+            await loadPlayerDashboardFromDb({ keepPending: false });
+            try { renderMyBets(); } catch(_) {}
+          }
+        } catch(_rec) {
+          _cbErr('CONFIRM_BET_RECONCILE_WARN', _rec, 'non-fatal');
+        }
+        showToast('Placement could not be confirmed. Check My Bets — your bet may or may not have been accepted. Do not place again until you verify.', 'warning');
       } else {
         _cbErr('CONFIRM_BET_ERROR', _e,
           'phase=network step='+_cbStep
@@ -8550,9 +8544,10 @@ async function confirmBet() {
           +' respBodyPreview='+(_cbRespText||'').slice(0,200).replace(/\n/g,' '));
         showToast(_hasLiveLeg
           ? 'Live bet not placed \u2014 connection required.'
-          : 'Network error placing bet \u2014 saved locally, syncing when back online', _hasLiveLeg ? 'error' : 'warning');
+          : 'Bet could not be placed. Your balance and tickets were not changed. Please try again.', 'error');
       }
-      // Fall through to localStorage
+      // P0: never fall through to localStorage success when DB-primary is on
+      return;
     } finally {
       if (_cbAbortTimer) { clearTimeout(_cbAbortTimer); _cbAbortTimer=null; }
       _cbBtnReady(); // always re-enable button
@@ -8560,10 +8555,21 @@ async function confirmBet() {
   } // end DB path
 
   // ══════════════════════════════════════════════════════════════════════════
-  //  LOCALSTORAGE FALLBACK PATH
+  //  LOCALSTORAGE PATH — gated (never authoritative financial truth)
+  //  When DB-primary is enabled, API failure/uncertainty must NOT invent tickets,
+  //  bankroll debit, or ledger rows. Legacy offline/dev only when flag is off.
   // ══════════════════════════════════════════════════════════════════════════
   _cbStep = 'LOCALSTORAGE';
   _cbLog('CONFIRM_BET_LOCALSTORAGE_PATH', '_DB_PRIMARY='+_DB_PRIMARY_READS_ENABLED+' tickets='+newTickets.length);
+
+  // P0 PHANTOM LEDGER GUARD: refuse synthetic success after any DB-primary attempt path
+  if (_DB_PRIMARY_READS_ENABLED) {
+    _cbErr('CONFIRM_BET_ERROR', null, 'phase=local_save reason=phantom_ledger_fallback_blocked');
+    showToast('Bet could not be confirmed. Your balance and tickets were not changed.', 'error');
+    _cbBtnReady();
+    return;
+  }
+
   if (_hasLiveLeg) {
     _cbErr('CONFIRM_BET_ERROR', null, 'phase=local_save reason=live_local_fallback_blocked');
     showToast('Live bet not placed \u2014 connection required.', 'error');
@@ -8594,7 +8600,7 @@ async function confirmBet() {
     return;
   }
 
-  // Mirror to Supabase fire-and-forget (never block UI)
+  // Mirror to Supabase fire-and-forget (never block UI) — legacy offline path only
   if (!_dbPlacementAttempted) {
     newTickets.forEach(function(t){
       try { _mirrorTicketToBackend(t); } catch(_) {}
@@ -8689,12 +8695,32 @@ function requestBetDelete(ticketId, event) {
   if (sb) sb.addEventListener('click', function(){ submitDeleteRequest(ticketId); });
 }
 
+var _cancelBetInFlight = false;
+
 async function submitDeleteRequest(ticketId) {
   var modal = document.getElementById('del-req-modal');
   if (modal) modal.remove();
 
+  if (_cancelBetInFlight) {
+    showToast('Cancellation already in progress…', 'info');
+    return;
+  }
+
+  // Snapshot pre-mutation state so failed cancels cannot leave phantom local changes
+  var _preCancelTicketsJson = null;
+  var _preCancelLedgerJson = null;
+  var _preCancelBalance = null;
+  try { _preCancelTicketsJson = JSON.stringify(betTickets); } catch(_e) {}
+  try { _preCancelLedgerJson = localStorage.getItem('pb-ledger'); } catch(_e) {}
+  try { _preCancelBalance = (typeof playerBalance === 'number') ? playerBalance : null; } catch(_e) {}
+
+  function _cancelFailToast(specific) {
+    showToast(specific || 'Cancellation could not be confirmed. Your bet has not been changed.', 'error');
+  }
+
   // ── DB-FIRST CANCEL (when DB primary mode enabled) ──────────────────────────────────
   if (_DB_PRIMARY_READS_ENABLED) {
+    _cancelBetInFlight = true;
     var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
     var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
     var pid  = _safeId(pl.id  != null ? pl.id  : pl.username);
@@ -8703,11 +8729,19 @@ async function submitDeleteRequest(ticketId) {
     try {
       var resp = await _pbFetch('/api/bets/cancel', {
         method: 'POST',
-        body: JSON.stringify({ ticketId, playerId:pid, clubId:cid, idempotencyKey:iKey, reason:'player_request' })
+        body: JSON.stringify({ ticketId: ticketId, playerId:pid, clubId:cid, idempotencyKey:iKey, reason:'player_request' })
       });
-      var data = await resp.json();
+      var data;
+      try { data = await resp.json(); } catch(_je) {
+        console.warn('[cancel bet] invalid JSON status='+resp.status);
+        try {
+          if (typeof loadPlayerDashboardFromDb === 'function') await loadPlayerDashboardFromDb();
+          try { renderMyBets(); } catch(_re){}
+        } catch(_rec) {}
+        _cancelFailToast();
+        return;
+      }
       if (data.ok) {
-        
         showToast('✅ Bet canceled — $'+((data.refundAmount||0).toFixed(2))+' refunded', 'success');
         try {
           if (data.balanceAfter != null && !isNaN(Number(data.balanceAfter))) {
@@ -8719,26 +8753,41 @@ async function submitDeleteRequest(ticketId) {
         try { renderMyBets(); } catch(_e){}
         return; // DO NOT fall through to localStorage path
       } else {
-        var errMsg = data.error || 'cancel failed';
+        var errMsg = data.error || data.code || 'cancel failed';
         console.warn('[cancel bet] DB rejected:', errMsg);
-        // Map server errors to readable messages
-        if (errMsg.includes('game_already_started')) {
-          showToast('Cannot cancel: game has already started', 'error'); return;
-        } else if (errMsg.includes('cannot_cancel_settled')) {
-          showToast('Cannot cancel: bet is already settled', 'error'); return;
-        } else if (errMsg.includes('not_owner')) {
-          showToast('Cannot cancel: not your bet', 'error'); return;
+        // Map server errors to readable messages — never invent local cancel success
+        if (String(errMsg).includes('game_already_started')) {
+          _cancelFailToast('Cannot cancel: game has already started'); return;
+        } else if (String(errMsg).includes('cannot_cancel_settled')) {
+          _cancelFailToast('Cannot cancel: bet is already settled'); return;
+        } else if (String(errMsg).includes('not_owner')) {
+          _cancelFailToast('Cannot cancel: not your bet'); return;
         }
-        // Other errors fall through to localStorage path
-        console.warn('[cancel bet] falling back to localStorage path');
+        _cancelFailToast();
+        return;
       }
     } catch(_e) {
-      console.warn('[cancel bet] DB fetch failed, using localStorage fallback:', _e.message);
+      console.warn('[cancel bet] DB fetch failed (no local mutation):', _e && _e.message);
+      // Ambiguous network: reconcile only — do not mark cancelled / credit locally
+      try {
+        if (typeof loadPlayerDashboardFromDb === 'function') await loadPlayerDashboardFromDb();
+        try { renderMyBets(); } catch(_re){}
+      } catch(_rec) {}
+      _cancelFailToast();
+      return;
+    } finally {
+      _cancelBetInFlight = false;
     }
   }
-  // ── localStorage path (fallback) ────────────────────────────────────────────────────
 
-  // Update ticket in betTickets
+  // ── localStorage path — legacy only when DB-primary is OFF ─────────────────────────
+  // P0: never treat local delete-request flags as confirmed cancellation when DB-primary.
+  if (_DB_PRIMARY_READS_ENABLED) {
+    _cancelFailToast();
+    return;
+  }
+
+  // Update ticket in betTickets (legacy host-request UX only)
   var idx = betTickets.findIndex(function(t){ return t.id === ticketId; });
   if (idx === -1) { showToast('Ticket not found'); return; }
   if (betTickets[idx].deleteRequestStatus === 'pending') { showToast('Request already sent'); return; }
@@ -8757,6 +8806,8 @@ async function submitDeleteRequest(ticketId) {
   }
   renderMyBets();
   showToast('✅ Delete request sent to host');
+  // Keep snapshots referenced so minifiers/tests can assert no silent wipe on failure paths
+  void _preCancelTicketsJson; void _preCancelLedgerJson; void _preCancelBalance;
 }
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -11398,7 +11449,7 @@ async function _pbFetch(url, opts) {
         return resp;
       }
     }
-    if (resp.status === 429 && _isAuthApiPath(path)) {
+    if (resp.status === 429) {
       try {
         var peek429 = await resp.clone().json();
         _authHandleResponse(429, peek429);
@@ -11529,7 +11580,6 @@ window._pollEvents       = _pollEvents;
 var _SESSION_REFRESH_THRESHOLD_SEC = 5 * 60; // refresh if <5min left
 
 async function _verifyOrRefreshSession() {
-  if (window._bootTokenRecoveryInFlight) return { ok:false, reason:'boot_recovery_in_flight' };
   if (!_authCanAttempt()) return { ok:false, reason:'auth_give_up' };
   var token = null;
   try { token = localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token'); } catch(_e){}
@@ -11552,10 +11602,7 @@ async function _verifyOrRefreshSession() {
       if (hardErrors.includes(data.error)) {
         console.warn('[session] '+data.error+' — clearing stored token');
         try { localStorage.removeItem('pb-session-token'); } catch(_e){}
-        try { localStorage.removeItem('pb-sports-token'); } catch(_e){}
-        try { localStorage.removeItem('pb-token-expires'); } catch(_e){}
         try { localStorage.removeItem('pb-actor-role'); } catch(_e){}
-        TOKEN = '';
         return { ok:false, reason:data.error, cleared:true };
       }
       if (data.error === 'expired_token') {
