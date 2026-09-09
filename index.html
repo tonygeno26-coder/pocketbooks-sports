@@ -11,8 +11,24 @@
 <script>
 (function(){
   try {
-    if (!localStorage.getItem('pb-sports-token')) {
+    // Visual QA / design-system parity: ?preview=1 must not bounce to lobby
+    // (host already has preview helpers later; top-of-file redirect was the escape gap).
+    var _hPrev = false;
+    try { _hPrev = new URLSearchParams(location.search).get('preview') === '1'; } catch(_e){}
+    if (_hPrev) return;
+    var _bootTok = localStorage.getItem('pb-sports-token') || localStorage.getItem('pb-session-token') || '';
+    if (!_bootTok) {
       location.replace('lobby.html' + (location.search || ''));
+      return;
+    }
+    var _bootParts = _bootTok.split('.');
+    if (_bootParts.length !== 3) {
+      location.replace('lobby.html?screen=signin&msg=' + encodeURIComponent('Session invalid — please sign in again'));
+      return;
+    }
+    try { JSON.parse(atob(_bootParts[1].replace(/-/g,'+').replace(/_/g,'/'))); }
+    catch(_e) {
+      location.replace('lobby.html?screen=signin&msg=' + encodeURIComponent('Session invalid — please sign in again'));
       return;
     }
     function _nr(r){ return String(r||'').toLowerCase().trim(); }
@@ -28,7 +44,7 @@
     try { var ar = localStorage.getItem('pb-actor-role'); if (ar && _isHost(ar)) role = ar; } catch(_e){}
     try {
       if (!_isHost(role)) {
-        var tok = localStorage.getItem('pb-sports-token')||'';
+        var tok = localStorage.getItem('pb-sports-token')||localStorage.getItem('pb-session-token')||'';
         var parts = tok.split('.');
         if (parts.length === 3) {
           var payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
@@ -1706,7 +1722,187 @@ function renderAdminCrypto() {
 <script src="team-logos.js"></script>
 <script>
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
-let TOKEN=localStorage.getItem('pb-sports-token')||'';
+let TOKEN=localStorage.getItem('pb-sports-token')||localStorage.getItem('pb-session-token')||'';
+
+var _TOKEN_SKEW_MS = 5 * 60 * 1000;
+var _tokenRefreshInFlight = null;
+// ── Auth retry guard — max 3 retries, backoff, no spiral on 401/403/429 ──
+var _AUTH_MAX_RETRIES = 3;
+var _authFailCount = 0;
+var _authBlockedUntil = 0;
+var _authGiveUp = false;
+var _AUTH_STORAGE_KEYS = [
+  'pb-sports-token','pb-token-expires','pb-session-token','pb-test-user',
+  'pb-dev-email','pb-dev-pass','pb-player','pb-host','pb-actor-role',
+  'pb-active-club','pb-clubs','pb-club','pb-user-clubs','pb-player-email'
+];
+function _authSleep(ms) { return new Promise(function(r){ setTimeout(r, ms); }); }
+function _authBackoffMs(n) { return Math.min(1000 * Math.pow(2, n), 4000); }
+function _clearAuthLocalStorage() {
+  try { _AUTH_STORAGE_KEYS.forEach(function(k){ localStorage.removeItem(k); }); } catch(_e) {}
+  TOKEN = '';
+}
+function _authRedirectToLogin(msg) {
+  // Visual QA: ?preview=1 must stay on host shell (no lobby bounce / token wipe).
+  try {
+    if (new URLSearchParams(location.search).get('preview') === '1') return;
+  } catch (_e) {}
+  if (_authGiveUp) return;
+  _authGiveUp = true;
+  _clearAuthLocalStorage();
+  window.location.href = 'lobby.html?screen=signin&msg=' + encodeURIComponent(msg || 'Your session expired — please sign in again');
+}
+function _authCanAttempt() {
+  if (_authGiveUp) return false;
+  if (_authFailCount >= _AUTH_MAX_RETRIES) {
+    _authRedirectToLogin('Authentication failed after multiple attempts — please sign in again');
+    return false;
+  }
+  if (Date.now() < _authBlockedUntil) return false;
+  return true;
+}
+// Classify-only — never redirect here (redirects during refresh break recovery).
+function _authHandleResponse(status, data) {
+  if (status === 401 || status === 403) {
+    return 'fatal';
+  }
+  if (status === 429) {
+    var sec = Math.max(60, (data && data.retryAfterSec) || 60);
+    _authBlockedUntil = Date.now() + sec * 1000;
+    _authFailCount++;
+    return 'rate_limited';
+  }
+  return 'ok';
+}
+async function _authFetchOnce(url, opts) {
+  var r = await fetch(url, opts);
+  var data = {};
+  try { data = await r.json(); } catch(_e) { data = {}; }
+  return { status: r.status, data: data, ok: r.ok };
+}
+function _decodeJwtPayload(token) {
+  try {
+    var parts = String(token || '').split('.');
+    if (parts.length !== 3) return null;
+    return JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+  } catch (_e) { return null; }
+}
+function _tokenExpMs(token) {
+  var p = _decodeJwtPayload(token);
+  return (p && p.exp) ? (p.exp * 1000) : 0;
+}
+function _isClubSessionToken(token) {
+  var p = _decodeJwtPayload(token);
+  return !!(p && (p.jti || p.actorId || p.sub));
+}
+function _storeAuthToken(token, expiresInSec) {
+  if (!token) return;
+  TOKEN = token;
+  try {
+    localStorage.setItem('pb-sports-token', token);
+    localStorage.setItem('pb-session-token', token);
+    var expMs = expiresInSec ? (Date.now() + Number(expiresInSec) * 1000) : _tokenExpMs(token);
+    if (!expMs) expMs = Date.now() + 86400 * 1000;
+    localStorage.setItem('pb-token-expires', String(expMs));
+  } catch (_e) {}
+}
+function _storedActorClub() {
+  var host = null, pl = null, club = null;
+  try { host = JSON.parse(localStorage.getItem('pb-host') || 'null'); } catch (_e) {}
+  try { pl = JSON.parse(localStorage.getItem('pb-player') || 'null'); } catch (_e) {}
+  try { club = JSON.parse(localStorage.getItem('pb-club') || 'null') || JSON.parse(localStorage.getItem('pb-active-club') || 'null'); } catch (_e) {}
+  var actorId = (host && (host.id || host.hostId)) || (pl && (pl.id != null ? String(pl.id) : (pl.username || '')));
+  var clubId = club && (club.id != null ? String(club.id) : (club.clubId || ''));
+  if (actorId && clubId) return { actorId: String(actorId), clubId: String(clubId) };
+  return null;
+}
+function _pathFromUrl(url) {
+  try {
+    if (String(url).indexOf('http') === 0) return new URL(url).pathname;
+  } catch (_e) {}
+  return String(url || '').split('?')[0];
+}
+function _isAuthApiPath(path) {
+  return /^\/api\/auth\/(token|refresh|login|signup|logout|verify)\b/.test(path || '');
+}
+function _isSoftAuthPath(path) {
+  // Soft-fail notifications — never session-nuke / never wipe on poll 401.
+  return /\/api\/notifications(\/|$)/.test(path || '');
+}
+function _isExpiredAuth(status, data) {
+  if (status === 401) return true;
+  var err = String((data && (data.error || data.message)) || '');
+  return status === 403 && (err === 'expired_token' || /expired token/i.test(err));
+}
+async function _doRefreshAuthToken() {
+  if (!_authCanAttempt()) return false;
+  var ids = _storedActorClub();
+  if (ids) {
+    try {
+      var tok = await _authFetchOnce(API + '/api/auth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actorId: ids.actorId, clubId: ids.clubId })
+      });
+      var tokVerdict = _authHandleResponse(tok.status, tok.data);
+      if (tokVerdict === 'fatal' || tokVerdict === 'rate_limited') return false;
+      if (tok.data && tok.data.token) {
+        _authFailCount = 0;
+        _storeAuthToken(tok.data.token, tok.data.expiresIn);
+        return true;
+      }
+      _authFailCount++;
+      if (_authFailCount >= _AUTH_MAX_RETRIES) { _authRedirectToLogin('Could not refresh session — please sign in again'); return false; }
+      await _authSleep(_authBackoffMs(_authFailCount - 1));
+    } catch (_e) {
+      _authFailCount++;
+      if (_authFailCount >= _AUTH_MAX_RETRIES) { _authRedirectToLogin('Authentication network error — please sign in again'); return false; }
+      await _authSleep(_authBackoffMs(_authFailCount - 1));
+    }
+  }
+  if (!_authCanAttempt()) return false;
+  var current = TOKEN || localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token') || '';
+  if (current && _isClubSessionToken(current) && _tokenExpMs(current) > Date.now()) {
+    try {
+      var ref = await _authFetchOnce(API + '/api/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + current }
+      });
+      var refVerdict = _authHandleResponse(ref.status, ref.data);
+      if (refVerdict === 'fatal' || refVerdict === 'rate_limited') return false;
+      if (ref.data && ref.data.token) {
+        _authFailCount = 0;
+        _storeAuthToken(ref.data.token, ref.data.expiresIn);
+        return true;
+      }
+      _authFailCount++;
+      if (_authFailCount >= _AUTH_MAX_RETRIES) { _authRedirectToLogin('Could not refresh session — please sign in again'); return false; }
+    } catch (_e) {
+      _authFailCount++;
+      if (_authFailCount >= _AUTH_MAX_RETRIES) { _authRedirectToLogin('Authentication network error — please sign in again'); return false; }
+    }
+  }
+  return false;
+}
+function _refreshAuthToken() {
+  if (_tokenRefreshInFlight) return _tokenRefreshInFlight;
+  var p = _doRefreshAuthToken();
+  _tokenRefreshInFlight = p;
+  p.then(function () {}, function () {}).then(function () {
+    if (_tokenRefreshInFlight === p) _tokenRefreshInFlight = null;
+  });
+  return p;
+}
+async function _ensureFreshToken() {
+  if (!_authCanAttempt()) return;
+  var token = TOKEN || localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token') || '';
+  if (!token) return;
+  var exp = parseInt(localStorage.getItem('pb-token-expires') || '0', 10) || _tokenExpMs(token);
+  if (exp) { try { localStorage.setItem('pb-token-expires', String(exp)); } catch (_e) {} }
+  if (!exp || Date.now() < (exp - _TOKEN_SKEW_MS)) return;
+  if (!_isClubSessionToken(token) && !_storedActorClub()) return;
+  await _refreshAuthToken();
+}
 
 function _getActorHeaders() {
   var host = {}; try { host = JSON.parse(localStorage.getItem('pb-host')||'{}'); } catch(_e){}
@@ -1730,14 +1926,100 @@ function _getActorHeaders() {
 }
 async function _pbFetch(url, opts) {
   opts = opts || {};
-  var headers = Object.assign(_getActorHeaders(), opts.headers || {});
   // Always hit Railway for /api/* — same as lobby/player. Relative /api rewrite
   // works on Vercel, but absolute avoids silent auth/rewrite misses that leave
   // the Players tab on stale localStorage balance:0.
   if (typeof url === 'string' && url.indexOf('/api/') === 0 && typeof API === 'string' && API) {
     url = API + url;
   }
-  return fetch(url, Object.assign({}, opts, { headers: headers }));
+  var path = _pathFromUrl(url);
+  var retried = !!opts._retried;
+  if (_authGiveUp) return new Response(JSON.stringify({ error: 'auth_give_up' }), { status: 401 });
+  if (!retried && !_isAuthApiPath(path)) {
+    try { await _ensureFreshToken(); } catch (_e) {}
+  }
+  var headers = Object.assign(_getActorHeaders(), opts.headers || {});
+  var fetchOpts = Object.assign({}, opts, { headers: headers });
+  delete fetchOpts._retried;
+  var resp = await fetch(url, fetchOpts);
+  if (!retried && !_isAuthApiPath(path)) {
+    // Soft-fail notifications — never session-nuke / never wipe on poll 401.
+    if (_isSoftAuthPath(path) && (resp.status === 401 || resp.status === 403)) {
+      return resp;
+    }
+    if (resp.status === 429 && _isAuthApiPath(path)) {
+      try { _authHandleResponse(429, await resp.clone().json()); } catch (_e) { _authHandleResponse(429, {}); }
+      return resp;
+    }
+    var expired = resp.status === 401;
+    if (!expired && resp.status === 403) {
+      try {
+        var peek = await resp.clone().json();
+        expired = peek && (peek.error === 'expired_token' || /expired token/i.test(String(peek.error || peek.message || '')));
+      } catch (_e) {}
+    }
+    // Refresh-before-redirect: never treat first 401 as immediately fatal.
+    if (expired && _authCanAttempt()) {
+      var refreshed = await _refreshAuthToken();
+      if (refreshed && !_authGiveUp) return _pbFetch(url, Object.assign({}, opts, { _retried: true }));
+      if (!_authGiveUp) _authRedirectToLogin('Your session expired — please sign in again');
+      return resp;
+    }
+    if (resp.status === 403) {
+      var hard403 = true;
+      try {
+        var peek403 = await resp.clone().json();
+        hard403 = !(peek403 && (peek403.error === 'expired_token' || /expired token/i.test(String(peek403.error || peek403.message || ''))));
+      } catch (_e) { hard403 = true; }
+      if (hard403 && !_authGiveUp) _authRedirectToLogin('Session invalid — please sign in again');
+    } else if (resp.status === 401 && !_authCanAttempt() && !_authGiveUp) {
+      _authRedirectToLogin('Session invalid — please sign in again');
+    }
+  }
+  if (_isAuthApiPath(path) && (resp.status === 401 || resp.status === 403)) {
+    try { _authHandleResponse(resp.status, await resp.clone().json()); } catch (_e) { _authHandleResponse(resp.status, {}); }
+  }
+  return resp;
+}
+
+async function apiCall(method, path, body, _retried) {
+  if (_authGiveUp) return { error: 'auth_give_up' };
+  if (!_retried && !_isAuthApiPath(path)) {
+    try { await _ensureFreshToken(); } catch (_e) {}
+  }
+  var token = TOKEN || localStorage.getItem('pb-sports-token') || localStorage.getItem('pb-session-token') || '';
+  var r = await fetch(API + path, {
+    method: method,
+    headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { 'Authorization': 'Bearer ' + token } : {}),
+    body: body ? JSON.stringify(body) : undefined
+  });
+  var data = {};
+  try { data = await r.json(); } catch (_e) { data = {}; }
+  if (_isSoftAuthPath(path) && (r.status === 401 || r.status === 403)) {
+    return data;
+  }
+  if (r.status === 429 && _isAuthApiPath(path)) {
+    _authHandleResponse(429, data);
+    return data;
+  }
+  var expired = r.status === 401 || (data && (data.error === 'expired_token' || /expired token/i.test(String(data.error || ''))));
+  if (expired && !_retried && !_isAuthApiPath(path) && _authCanAttempt()) {
+    var ok = await _refreshAuthToken();
+    if (ok && !_authGiveUp) return apiCall(method, path, body, true);
+    if (!_authGiveUp) _authRedirectToLogin('Your session expired — please sign in again');
+    return data;
+  }
+  if (r.status === 401 || r.status === 403) {
+    if (_isAuthApiPath(path)) {
+      _authRedirectToLogin('Session invalid — please sign in again');
+      return data;
+    }
+    var hard403b = r.status === 403 && data && data.error !== 'expired_token' && !/expired token/i.test(String(data.error || ''));
+    if (hard403b && !_authGiveUp) {
+      _authRedirectToLogin('Session invalid — please sign in again');
+    }
+  }
+  return data;
 }
 
 function showToastHost(msg){
@@ -3900,7 +4182,7 @@ function setBN(el,tab){
 // ── MOCK PLAYER FOR TESTING ───────────────────────────────────────────────────
 (function(){
   var hasToken = false;
-  try { hasToken = !!localStorage.getItem('pb-sports-token'); } catch(_e){}
+  try { hasToken = !!(localStorage.getItem('pb-sports-token') || localStorage.getItem('pb-session-token')); } catch(_e){}
   var existing = [];
   try { existing = JSON.parse(localStorage.getItem('pb-club-players')||'[]'); } catch(_e){}
   // Real host sessions must not keep the demo P1001 row — it looks like

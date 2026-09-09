@@ -1386,8 +1386,8 @@ function _authCanAttempt() {
   return true;
 }
 function _authHandleResponse(status, data) {
+  // Classify-only — never redirect here (redirects during refresh break recovery).
   if (status === 401 || status === 403) {
-    _authRedirectToLogin('Session invalid — please sign in again');
     return 'fatal';
   }
   if (status === 429) {
@@ -1424,6 +1424,7 @@ function _storeAuthToken(token, expiresInSec) {
   TOKEN = token;
   try {
     localStorage.setItem('pb-sports-token', token);
+    localStorage.setItem('pb-session-token', token);
     var expMs = expiresInSec ? (Date.now() + Number(expiresInSec) * 1000) : _tokenExpMs(token);
     if (!expMs) expMs = Date.now() + 86400 * 1000;
     localStorage.setItem('pb-token-expires', String(expMs));
@@ -1941,15 +1942,22 @@ function selectClub(id, action) {
 // Called before navigating to player.html or index.html.
 // Issues a club-scoped JWT via /api/auth/token so player.html always has one.
 async function _acquireClubToken(playerId, clubId) {
-  
+  if (!_authCanAttempt()) {
+    return { ok:false, error:'auth_give_up' };
+  }
   try {
-    var resp = await fetch(API + '/api/auth/token', {
+    var tok = await _authFetchOnce(API + '/api/auth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json',
                  'Authorization': TOKEN ? ('Bearer ' + TOKEN) : '' },
       body: JSON.stringify({ actorId: playerId, clubId: clubId })
     });
-    var data = await resp.json();
+    var verdict = _authHandleResponse(tok.status, tok.data);
+    if (verdict === 'fatal') return { ok:false, error:'session_invalid' };
+    if (verdict === 'rate_limited') {
+      return { ok:false, error:'too_many_requests', message:'Too many requests — wait a minute and try again' };
+    }
+    var data = tok.data || {};
     if (data.ok && data.token) {
       _storeAuthToken(data.token, data.expiresIn);
       // Decode token and sync pb-player.id to token's actorId so backend self-check passes
@@ -2027,7 +2035,11 @@ function enterActiveClub(action) {
       if (!result || !result.ok) {
         console.warn('TOKEN_WRITE_FAILED — navigation blocked reason='+(result&&result.error||'unknown'));
         if (result && (result.error === 'membership_not_found' || result.error === 'membership_inactive')) clearSelectedClubStorage();
-        showToast('Club access could not be verified: '+((result&&result.error)||'session error').replace(/_/g,' '));
+        if (result && result.error === 'too_many_requests') {
+          showToast(result.message || 'Too many requests — wait a minute and try again');
+        } else {
+          showToast('Club access could not be verified: '+((result&&result.error)||'session error').replace(/_/g,' '));
+        }
         return;
       }
       var canonicalRole = result.role || 'player';
@@ -2502,21 +2514,10 @@ async function apiCall(method, path, body, _retried) {
   if (!_retried && !_isAuthApiPath(path)) {
     try { await _ensureFreshToken(); } catch (_e) {}
   }
-  var token = TOKEN || localStorage.getItem('pb-sports-token') || '';
+  var token = TOKEN || localStorage.getItem('pb-sports-token') || localStorage.getItem('pb-session-token') || '';
   const r = await fetch(API+path, {method, headers:{'Content-Type':'application/json',...(token?{'Authorization':'Bearer '+token}:{})}, body:body?JSON.stringify(body):undefined});
   var data = {};
   try { data = await r.json(); } catch (_e) { data = {}; }
-  if (r.status === 401 || r.status === 403) {
-    if (_isAuthApiPath(path)) {
-      _authRedirectToLogin('Session invalid — please sign in again');
-      return data;
-    }
-    var hard403 = r.status === 403 && data && data.error !== 'expired_token' && !/expired token/i.test(String(data.error || ''));
-    if (r.status === 401 || hard403) {
-      _authRedirectToLogin('Session invalid — please sign in again');
-      return data;
-    }
-  }
   if (r.status === 429 && _isAuthApiPath(path)) {
     _authHandleResponse(429, data);
     return data;
@@ -2526,6 +2527,18 @@ async function apiCall(method, path, body, _retried) {
     var ok = await _refreshAuthToken();
     if (ok && !_authGiveUp) return apiCall(method, path, body, true);
     if (!_authGiveUp) _authRedirectToLogin('Your session expired — please sign in again');
+    return data;
+  }
+  if (r.status === 401 || r.status === 403) {
+    if (_isAuthApiPath(path)) {
+      _authRedirectToLogin('Session invalid — please sign in again');
+      return data;
+    }
+    var hard403 = r.status === 403 && data && data.error !== 'expired_token' && !/expired token/i.test(String(data.error || ''));
+    if (hard403 && !_authGiveUp) {
+      _authRedirectToLogin('Session invalid — please sign in again');
+      return data;
+    }
   }
   return data;
 }

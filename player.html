@@ -1701,6 +1701,14 @@ function _validatePlayerSession() {
 
   var missing = [];
   if (!_tok) missing.push('token');
+  else {
+    var _tokParts = _tok.split('.');
+    if (_tokParts.length !== 3) missing.push('token_malformed');
+    else {
+      try { JSON.parse(atob(_tokParts[1].replace(/-/g,'+').replace(/_/g,'/'))); }
+      catch(_e) { missing.push('token_malformed'); }
+    }
+  }
   if (!pid)  missing.push('playerId');
   if (!cid)  missing.push('clubId');
 
@@ -1810,11 +1818,13 @@ function _showSessionExpiredModal(result) {
             ['pb-sports-token','pb-session-token','pb-token-expires','pb-actor-role','pb-test-user']
               .forEach(function(k){ localStorage.removeItem(k); });
           } catch(_e){}
+          window._bootTokenRecoveryInFlight = false;
           window.location.href = 'lobby.html?screen=signin&msg=' + encodeURIComponent('Session invalid — please sign in again');
           return;
         }
         if (res.status === 429) {
           console.warn('TOKEN_RECOVERY_RATE_LIMITED — not retrying');
+          window._bootTokenRecoveryInFlight = false;
           _showSessionExpiredModal(_sgResult);
           return;
         }
@@ -1825,6 +1835,7 @@ function _showSessionExpiredModal(result) {
           localStorage.setItem('pb-session-token', data.token);
           var _expIn = data.expiresIn || 86400;
           localStorage.setItem('pb-token-expires', String(Date.now() + (_expIn * 1000)));
+          window._bootTokenRecoveryInFlight = false;
           
           var _recheck = _validatePlayerSession();
           if (_recheck.ok) {
@@ -1835,12 +1846,15 @@ function _showSessionExpiredModal(result) {
             return;
           }
         }
+        window._bootTokenRecoveryInFlight = false;
         console.warn('TOKEN_RECOVERY_FAILED reason='+(data.error||data.code||'no_token'));
         _showSessionExpiredModal(_sgResult);
       }).catch(function(e){
+        window._bootTokenRecoveryInFlight = false;
         console.warn('TOKEN_RECOVERY_FAILED reason=network err='+e.message);
         _showSessionExpiredModal(_sgResult);
       });
+      window._bootTokenRecoveryInFlight = true;
       // Show modal now; recovery will remove it if it succeeds
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function(){ _showSessionExpiredModal(_sgResult); });
@@ -1924,8 +1938,8 @@ function _authCanAttempt() {
   return true;
 }
 function _authHandleResponse(status, data) {
+  // Classify-only — never redirect here (redirects during refresh break recovery).
   if (status === 401 || status === 403) {
-    if (!_isTestUserPreview()) _authRedirectToLogin('Session invalid — please sign in again');
     return 'fatal';
   }
   if (status === 429) {
@@ -2125,6 +2139,10 @@ function _pathFromUrl(url) {
 }
 function _isAuthApiPath(path) {
   return /^\/api\/auth\/(token|refresh|login|signup|logout|verify)\b/.test(path || '');
+}
+function _isSoftAuthPath(path) {
+  // Soft-fail notifications — never session-nuke / never wipe on poll 401.
+  return /\/api\/notifications(\/|$)/.test(path || '');
 }
 function _isExpiredAuth(status, data) {
   if (status === 401) return true;
@@ -2685,17 +2703,6 @@ async function api(method,path,body,_retried){
   const r=await fetch(API+path,{method,headers:{'Content-Type':'application/json',...(token?{'Authorization':'Bearer '+token}:{})},body:body?JSON.stringify(body):undefined});
   var data = {};
   try { data = await r.json(); } catch (_e) { data = {}; }
-  if (r.status === 401 || r.status === 403) {
-    if (_isAuthApiPath(path)) {
-      _authRedirectToLogin('Session invalid — please sign in again');
-      return data;
-    }
-    var hard403 = r.status === 403 && !_isExpiredAuth(r.status, data);
-    if (r.status === 401 || hard403) {
-      _authRedirectToLogin('Session invalid — please sign in again');
-      return data;
-    }
-  }
   if (r.status === 429 && _isAuthApiPath(path)) {
     _authHandleResponse(429, data);
     return data;
@@ -2705,6 +2712,18 @@ async function api(method,path,body,_retried){
     if (ok && !_authGiveUp) return api(method, path, body, true);
     if (!_authGiveUp) _redirectToSignIn();
     data.error = data.error || 'expired_token';
+    return data;
+  }
+  if (r.status === 401 || r.status === 403) {
+    if (_isAuthApiPath(path)) {
+      _authRedirectToLogin('Session invalid — please sign in again');
+      return data;
+    }
+    var hard403 = r.status === 403 && !_isExpiredAuth(r.status, data);
+    if (hard403 && !_authGiveUp && !_isTestUserPreview()) {
+      _authRedirectToLogin('Session invalid — please sign in again');
+      return data;
+    }
   }
   return data;
 }
@@ -11369,21 +11388,12 @@ async function _pbFetch(url, opts) {
   delete fetchOpts._retried;
   var resp = await fetch(url, fetchOpts);
   if (!retried && !_isAuthApiPath(path)) {
-    if (resp.status === 401 || resp.status === 403) {
-      var fatal = resp.status === 401;
-      if (!fatal && resp.status === 403) {
-        try {
-          var peek403 = await resp.clone().json();
-          fatal = !(peek403 && (peek403.error === 'expired_token' || /expired token/i.test(String(peek403.error || peek403.message || ''))));
-        } catch (_e) { fatal = true; }
-      }
-      if (fatal) {
-        _authRedirectToLogin('Session invalid — please sign in again');
-        delete _pendingIdemKeys[url];
-        return resp;
-      }
+    // Soft-fail notifications — never session-nuke / never wipe on poll 401.
+    if (_isSoftAuthPath(path) && (resp.status === 401 || resp.status === 403)) {
+      delete _pendingIdemKeys[url];
+      return resp;
     }
-    if (resp.status === 429) {
+    if (resp.status === 429 && _isAuthApiPath(path)) {
       try {
         var peek429 = await resp.clone().json();
         _authHandleResponse(429, peek429);
@@ -11398,10 +11408,25 @@ async function _pbFetch(url, opts) {
         expired = peek && (peek.error === 'expired_token' || /expired token/i.test(String(peek.error || peek.message || '')));
       } catch (_e) {}
     }
+    // Refresh-before-redirect: never treat first 401 as immediately fatal.
     if (expired && _authCanAttempt()) {
       var refreshed = await _refreshAuthToken();
       if (refreshed && !_authGiveUp) return _pbFetch(url, Object.assign({}, opts, { _retried: true }));
       if (!_authGiveUp) _redirectToSignIn();
+      delete _pendingIdemKeys[url];
+      return resp;
+    }
+    if (resp.status === 403) {
+      var hard403 = true;
+      try {
+        var peek403 = await resp.clone().json();
+        hard403 = !(peek403 && (peek403.error === 'expired_token' || /expired token/i.test(String(peek403.error || peek403.message || ''))));
+      } catch (_e) { hard403 = true; }
+      if (hard403 && !_authGiveUp && !_isTestUserPreview()) {
+        _authRedirectToLogin('Session invalid — please sign in again');
+        delete _pendingIdemKeys[url];
+        return resp;
+      }
     }
   }
   if (_isAuthApiPath(path) && (resp.status === 401 || resp.status === 403)) {
@@ -11514,6 +11539,7 @@ window._pollEvents       = _pollEvents;
 var _SESSION_REFRESH_THRESHOLD_SEC = 5 * 60; // refresh if <5min left
 
 async function _verifyOrRefreshSession() {
+  if (window._bootTokenRecoveryInFlight) return { ok:false, reason:'boot_recovery_in_flight' };
   if (!_authCanAttempt()) return { ok:false, reason:'auth_give_up' };
   var token = null;
   try { token = localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token'); } catch(_e){}
