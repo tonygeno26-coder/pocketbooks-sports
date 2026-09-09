@@ -200,6 +200,29 @@ body{
 .hrc-chip-exposure{color:var(--negative);background:var(--red-dim);border:1px solid rgba(239,68,68,0.25)}
 .hrc-chip-active{color:var(--gold);background:var(--gold-dim);border:1px solid rgba(232,197,71,0.25)}
 .hrc-empty{font-size:0.75rem;color:var(--text-muted);text-align:center;padding:16px 12px;background:var(--bg-recessed);border:1px dashed var(--border);border-radius:var(--radius-sm)}
+
+/* Compact host empty / loading / error — no giant illustrations */
+.host-state{
+  margin:12px 16px;padding:16px 14px;text-align:center;
+  background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);
+}
+.host-state-title{font-size:0.84rem;font-weight:800;color:var(--text-primary);margin-bottom:4px}
+.host-state-body{font-size:0.7rem;color:var(--text-muted);line-height:1.4}
+.host-state-loading{color:var(--text-muted);font-size:0.76rem;font-weight:700}
+.host-state-loading::before{
+  content:'';display:block;width:16px;height:16px;margin:0 auto 8px;border-radius:50%;
+  border:2px solid var(--border);border-top-color:var(--accent-blue);
+  animation:hostStateSpin .8s linear infinite;
+}
+@keyframes hostStateSpin{to{transform:rotate(360deg)}}
+.host-state-error{
+  background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.28);color:#fecaca;
+}
+.host-state-error .host-state-title{color:#fecaca}
+.host-state-error .host-state-body{color:#fca5a5}
+@media (prefers-reduced-motion:reduce){
+  .host-state-loading::before{animation:none!important;border-top-color:var(--text-muted)}
+}
 .hrc-link-btn{background:transparent;border:1px solid var(--border);color:var(--accent-blue-bright);padding:6px 10px;border-radius:10px;font-size:0.62rem;font-weight:800;cursor:pointer;white-space:nowrap;min-height:32px}
 .hrc-link-btn:hover{border-color:var(--accent-blue);background:var(--accent-dim)}
 .hrc-player-risk .player-list{padding:0;gap:6px}
@@ -412,10 +435,13 @@ body.theme-light [style*="color:#00ff88"],body.theme-light [style*="color:#00ff8
   .hdr{padding-left:28px;padding-right:28px}
 }
 
-/* ═══ MOBILE (≤480px) — layout only ═══ */
+/* ═══ MOBILE (≤480px) — layout only; pin shell so Settle is not right-cropped ═══ */
 @media (max-width:480px){
-  html,body{overflow-x:hidden;max-width:100%}
-  .hdr{padding:10px 12px;gap:6px}
+  /* Prefer 100% over 100vw — vw includes scrollbar and re-introduces right crop */
+  html,body{overflow-x:hidden!important;max-width:100%!important;width:100%!important}
+  body{margin:0 auto;padding-left:0;padding-right:0}
+  .bnav{max-width:100%!important;left:0!important;right:0!important;transform:none!important;width:100%!important}
+  .hdr{padding:10px 12px;gap:6px;max-width:100%}
   .hdr-left,.hdr-right{min-width:0;gap:6px}
   .hdr-right{flex-shrink:1}
   .hdr-title{font-size:0.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -441,6 +467,7 @@ body.theme-light [style*="color:#00ff88"],body.theme-light [style*="color:#00ff8
   #host-bets-tabs{flex-direction:column}
   #host-bets-tabs .host-bets-tab{width:100%}
   #host-bets-list .host-bet-metrics{grid-template-columns:1fr 1fr!important}
+  .host-section-note,.sec-hdr + p, #home-content p,.hrc-empty,.hrc-kpi-sub{overflow-wrap:anywhere;word-break:break-word;max-width:100%}
   #modal-create-club > div,
   #modal-limits > div,
   #modal-add > div,
@@ -450,28 +477,37 @@ body.theme-light [style*="color:#00ff88"],body.theme-light [style*="color:#00ff8
     padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom,0px));
     box-sizing:border-box
   }
-  #_invoice-modal,#_invoice-modal-inner,#_settle_modal,#_rollover_modal,#_phase-p-pay-modal{
-    max-height:100dvh;overflow:auto;-webkit-overflow-scrolling:touch
+  #_invoice-modal,#_invoice-modal-inner,#_settle_modal,#_rollover_modal,#_phase-p-pay-modal,#settle-detail{
+    max-height:100dvh;overflow:auto;-webkit-overflow-scrolling:touch;max-width:100%
   }
   #_invoice-modal-inner{max-width:100%;overflow-x:auto}
-  #crypto-section,#settlements-section,#bets-section,#players-section{
-    overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%
+  #crypto-section,#settlements-section,#bets-section,#players-section,#home-content{
+    overflow-x:hidden;max-width:100%;min-width:0
+  }
+  #_settle_modal > div,#settle-detail > div,#_rollover_modal > div,#_phase-p-pay-modal > div,
+  #modal-create-club > div,#modal-limits > div,#modal-add > div,#modal-approve-player > div{
+    width:100%!important;max-width:min(430px,100%)!important;box-sizing:border-box!important;
+    overflow-x:hidden;overflow-wrap:anywhere
   }
   table{max-width:100%}
 }
 
-/* ═══ 390px phones ═══ */
-@media (max-width:375px){
-  body{max-width:100vw;overflow-x:hidden}
+/* ═══ Narrow phones incl. 390 / 430 CSS px (was 375-only; missed iPhone 390) ═══ */
+@media (max-width:430px){
+  body{max-width:100%;overflow-x:hidden}
   .btn,.pill,.ntab,.inp{min-height:44px}
   .hdr{gap:8px}
   .player-row{gap:8px}
   #host-bets-tabs{flex-wrap:wrap}
+  .hrc-owe-grid{padding:0}
+  .settlement{padding-left:12px;padding-right:12px;gap:8px}
+  .settle-card{padding:12px;min-width:0}
 }
 @media (max-width:400px){
-  .hdr{flex-wrap:wrap}
-  .hdr-right{width:100%;justify-content:flex-end;flex-wrap:wrap}
-  .buy-diamonds-nav-btn,.diamond-pill{font-size:0.6rem;padding:8px}
+  .hdr{flex-wrap:wrap;gap:8px}
+  .hdr-left{flex:1;min-width:0}
+  .hdr-right{width:100%;justify-content:flex-end;flex-wrap:wrap;gap:6px}
+  .buy-diamonds-nav-btn,.diamond-pill{font-size:0.6rem;padding:8px;max-width:100%}
   #host-bets-tabs .host-bets-tab,#host-bets-filters select{
     min-height:44px;width:100%
   }
@@ -482,7 +518,7 @@ body.theme-light [style*="color:#00ff88"],body.theme-light [style*="color:#00ff8
   .host-bet-metrics,[style*="grid-template-columns:1fr 1fr 1fr"]{
     grid-template-columns:1fr 1fr!important
   }
-  .modal,#_invoice-modal-inner{max-width:100vw;width:100%;box-sizing:border-box}
+  .modal,#_invoice-modal-inner{max-width:100%;width:100%;box-sizing:border-box}
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -919,7 +955,7 @@ body.theme-light [style*="color:#00ff88"],body.theme-light [style*="color:#00ff8
   }
   #_settle_modal > div,
   #settle-detail > div{
-    max-width:100vw!important;
+    max-width:100%!important;
     width:100%!important;
   }
 }
@@ -1142,6 +1178,41 @@ button[style*="background:#00ff87"],
 #crypto-section [style*="linear-gradient(180deg,#1e1e1e"],
 #settlements-section [style*="linear-gradient(180deg,#1e1e1e"]{
   background:var(--bg-card)!important;
+}
+
+/* Host preview containment — modals/sheets stay inside viewport; settle clears sticky nav */
+#_settle_modal > div,
+#settle-detail > div,
+#_rollover_modal > div,
+#_phase-p-pay-modal > div{
+  width:100%;
+  max-width:min(430px,100%);
+  box-sizing:border-box;
+  overflow-x:hidden;
+}
+#settlements-section{
+  padding-bottom:calc(100px + env(safe-area-inset-bottom,0px));
+  overflow-x:hidden;
+  max-width:100%;
+}
+/* Sticky nav shell width tracks body MQ; do not transform .hdr (breaks position:sticky) */
+.bnav{box-sizing:border-box}
+@media (min-width:768px){
+  .bnav{max-width:720px}
+  .settlement{gap:12px}
+}
+@media (min-width:1100px){
+  .bnav{max-width:1080px}
+  #host-bets-list .host-bet-metrics{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+}
+@media (min-width:1280px){
+  .bnav{max-width:1200px}
+}
+@media (min-width:1440px){
+  .bnav{max-width:1320px}
+}
+@media (prefers-reduced-motion:reduce){
+  .pb-loading::before{animation:none!important;border-top-color:var(--text-secondary)}
 }
 
 </style>
@@ -1761,6 +1832,10 @@ function _clearAuthLocalStorage() {
   TOKEN = '';
 }
 function _authRedirectToLogin(msg) {
+  // Visual QA: ?preview=1 must stay on host shell (no lobby bounce / token wipe).
+  try {
+    if (new URLSearchParams(location.search).get('preview') === '1') return;
+  } catch (_e) {}
   if (_authGiveUp) return;
   _authGiveUp = true;
   _clearAuthLocalStorage();
@@ -2549,7 +2624,7 @@ async function renderSettlementPreviewFromDb() {
       '<div style="font-size:0.85rem;font-weight:900;margin-bottom:10px">Player Settlements</div>';
 
     if (!players.length) {
-      html += '<div style="padding:24px;text-align:center;color:#666;font-size:0.78rem;background:var(--card,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:14px;margin-bottom:12px">No players yet</div>';
+      html += _hostStateHtml({ title: 'No settlements due', body: 'Player ledger balances will show here when activity posts.' });
     }
 
     players.forEach(function(p) {
@@ -2644,6 +2719,13 @@ async function renderSettlementPreviewFromDb() {
     return data;
   } catch(e) {
     console.warn('[settlement preview] DB failed, keeping existing local UI:', e.message);
+    if (container && /Loading settlements/i.test(container.textContent || '')) {
+      container.innerHTML = _hostStateHtml({
+        kind: 'error',
+        title: 'Settlements unavailable',
+        body: 'Could not reach the ledger preview. Local cache may still load.'
+      });
+    }
     return { ok:false, fallbackReason:e.message };
   }
 }
@@ -3338,7 +3420,7 @@ function renderHostRiskConsole() {
     if (actCnt) actCnt.textContent = activePlayers.length ? (activePlayers.length + ' with action') : '';
     actEl.innerHTML = activePlayers.length ? activePlayers.map(function(r) {
       return '<div class="hrc-card"><div class="hrc-card-row"><div class="hrc-card-main"><div class="hrc-card-title">' + _hrcEsc(r.name) + '</div><div class="hrc-card-sub"><span class="hrc-chip hrc-chip-active">' + r.activeBets + ' active</span></div></div><div class="hrc-card-amt" style="color:var(--accent-blue-bright)">' + _hrcFmtUsd(r.openRisk) + ' exp</div></div></div>';
-    }).join('') : '<div class="hrc-empty">No players with active bets</div>';
+    }).join('') : '<div class="hrc-empty">No players with open action</div>';
   }
   var highExp = playerRows.filter(function(r) { return r.openRisk > 0; }).sort(function(a, b) { return b.openRisk - a.openRisk; }).slice(0, 5);
   var expEl = document.getElementById('hrc-exposure-list');
@@ -4251,7 +4333,10 @@ function renderHostBets(){
     var emptyMsg = _hostBetsTab==='settled' ? 'No settled bets in the last 7 days'
       : (_hostBetsTab==='canceled' ? 'No canceled bets'
       : (_hostBetsTab==='all' ? 'No bets found' : 'No active bets'));
-    el.innerHTML = delSection + '<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">'+emptyMsg+'</div>';
+    var emptyBody = _hostBetsTab==='active'
+      ? 'Open tickets will appear as players place wagers.'
+      : 'Try another tab or filter.';
+    el.innerHTML = delSection + _hostStateHtml({ title: emptyMsg, body: emptyBody });
     return;
   }
 
@@ -5074,6 +5159,28 @@ var _playersActiveTab = 'all';
 var _playersSearch = '';
 var _playersExpanded = {};
 
+function _hostEscState(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** Compact host empty / loading / error panel. kind: empty | loading | error */
+function _hostStateHtml(opts) {
+  opts = opts || {};
+  var kind = opts.kind || 'empty';
+  var title = _hostEscState(opts.title || '');
+  var body = opts.body != null ? _hostEscState(opts.body) : '';
+  if (kind === 'loading') {
+    return '<div class="host-state host-state-loading" role="status">' + (title || 'Loading…') +
+      (body ? '<div class="host-state-body" style="margin-top:6px">' + body + '</div>' : '') + '</div>';
+  }
+  var err = kind === 'error' ? ' host-state-error' : '';
+  return '<div class="host-state' + err + '" role="' + (kind === 'error' ? 'alert' : 'status') + '">' +
+    (title ? '<div class="host-state-title">' + title + '</div>' : '') +
+    (body ? '<div class="host-state-body">' + body + '</div>' : '') +
+    '</div>';
+}
+
 function togglePlayerExpand(pid) {
   pid = String(pid || '');
   if (!pid) return;
@@ -5172,16 +5279,9 @@ function renderPlayersTab(){
   }
   function emptyOrLoadingHtml() {
     if (!dbReady) {
-      return '<div style="margin:16px;background:var(--bg-card);border:1px solid var(--border);border-radius:18px;padding:32px 20px;text-align:center">'
-        +'<div style="font-size:0.9rem;font-weight:800;margin-bottom:6px">Loading players…</div>'
-        +'<div style="font-size:0.8rem;color:var(--gray)">Fetching club roster</div>'
-      +'</div>';
+      return _hostStateHtml({ kind: 'loading', title: 'Loading players…', body: 'Fetching club roster' });
     }
-    return '<div style="margin:16px;background:var(--bg-card);border:1px solid var(--border);border-radius:18px;padding:32px 20px;text-align:center">'
-      +'<div style="font-size:2.5rem;margin-bottom:12px">👥</div>'
-      +'<div style="font-size:1rem;font-weight:800;margin-bottom:6px">No players yet</div>'
-      +'<div style="font-size:0.8rem;color:var(--gray)">Share your club code to get join requests</div>'
-    +'</div>';
+    return _hostStateHtml({ title: 'No players yet', body: 'Share your club code to get join requests.' });
   }
 
   // Filter by search + tab
@@ -5231,7 +5331,7 @@ function renderPlayersTab(){
   var listInner = '';
   if (_playersActiveTab==='applicants') {
     if (!filteredReqs.length) {
-      listInner='<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">No pending applicants</div>';
+      listInner=_hostStateHtml({ title: 'No pending requests', body: 'New join requests will show here.' });
     } else {
       listInner=filteredReqs.map(requestRow).join('');
     }
@@ -5259,11 +5359,13 @@ function renderPlayersTab(){
   var listEl = document.getElementById('player-list');
   if (listEl) {
     if (_playersActiveTab==='applicants') {
-      listEl.innerHTML = filteredReqs.length ? filteredReqs.map(requestRow).join('') : '';
+      listEl.innerHTML = filteredReqs.length
+        ? filteredReqs.map(requestRow).join('')
+        : _hostStateHtml({ title: 'No pending requests', body: 'New join requests will show here.' });
     } else if (!dbReady) {
-      listEl.innerHTML = '<div style="text-align:center;padding:24px 12px;color:#555;font-size:0.82rem">Loading players…</div>';
+      listEl.innerHTML = _hostStateHtml({ kind: 'loading', title: 'Loading players…' });
     } else if (!filtered.length) {
-      listEl.innerHTML = '<div style="text-align:center;padding:24px 12px;color:#555;font-size:0.82rem">No players yet</div>';
+      listEl.innerHTML = _hostStateHtml({ title: 'No players yet', body: 'Share your club code to invite members.' });
     } else {
       listEl.innerHTML = filtered.map(playerRow).join('');
     }
@@ -6775,7 +6877,7 @@ function renderSettlements() {
   // Shell: DB preview + history + Phase P periods; local fallback fills if DB fails
   el.innerHTML =
     (diamondHtml || '<div id="host-diamond-card" style="padding:10px 8px 0"></div>') +
-    '<div id="settlement-db-preview"><div style="padding:24px;text-align:center;color:#555;font-size:0.78rem">Loading settlements from DB…</div></div>' +
+    '<div id="settlement-db-preview">' + _hostStateHtml({ kind: 'loading', title: 'Loading settlements…', body: 'Pulling weekly ledger preview' }) + '</div>' +
     '<div id="phase-p-settlements" style="margin:0 8px 8px"></div>' +
     '<div id="_settlement_records_section" style="padding:0 16px 8px"></div>' +
     '<div id="_weekly_history_section" style="padding:0 16px 24px"></div>' +
@@ -6808,7 +6910,11 @@ function _renderSettlementsFromLocalStorage() {
   if (!el) return;
   var fallback = document.getElementById('settlements-local-fallback');
   var previewEl = document.getElementById('settlement-db-preview');
-  if (previewEl) previewEl.innerHTML = '<div style="padding:8px 16px;font-size:0.65rem;color:#888">DB unavailable — showing local cache</div>';
+  if (previewEl) previewEl.innerHTML = _hostStateHtml({
+    kind: 'error',
+    title: 'Settlements unavailable',
+    body: 'Showing local cache. Refresh to retry the live ledger.'
+  });
   // Build into a temp host then move into fallback or replace section body below diamond
   var host = fallback || el;
   if (fallback) fallback.style.display = 'block';
@@ -6911,7 +7017,7 @@ function _paintLocalSettlementsUI(el) {
       '<div style="display:flex;gap:6px">' + _filterChip('all','All') + _filterChip('owed','Owed') + _filterChip('owes','Owes') + '</div>' +
     '</div>';
   if (!preview.rows.length) {
-    liveRowsHtml += '<div style="padding:24px;text-align:center;color:var(--gray);font-size:0.78rem;background:var(--card);border:1px solid var(--border);border-radius:14px">No players yet</div>';
+    liveRowsHtml += _hostStateHtml({ title: 'No settlements due', body: 'Balances appear when the week has player activity.' });
   } else {
     var visibleRows = preview.rows.filter(function(r) {
       if (_settleFilter === 'owed') return r.endingBalance > 0;
@@ -6919,7 +7025,7 @@ function _paintLocalSettlementsUI(el) {
       return true; // 'all' — includes settled
     });
     if (!visibleRows.length) {
-      liveRowsHtml += '<div style="padding:24px;text-align:center;color:var(--gray);font-size:0.78rem;background:var(--card);border:1px solid var(--border);border-radius:14px">No players match this filter</div>';
+      liveRowsHtml += _hostStateHtml({ title: 'No matching settlements', body: 'Try All, Owed, or Owes.' });
     }
     visibleRows.forEach(function(r) {
       var paid       = r.paymentsThisWeek;
