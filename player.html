@@ -813,6 +813,7 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
   --radius-sm:12px;
   --touch:44px;
 }
+html{background:var(--bg);color-scheme:dark;overflow-x:hidden;min-height:100%}
 body{
   font-family:'SF Pro Display',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   background:radial-gradient(1200px 600px at 50% -120px,rgba(22,119,255,0.07),transparent 60%),var(--bg);
@@ -954,6 +955,11 @@ body{
   border:1px solid rgba(61,139,253,0.22);border-radius:14px;
 }
 .value-bets-title{color:var(--accent)}
+.split-label{color:var(--gray)}
+.split-action{color:var(--light)}
+.value-bets-count{color:var(--gray)}
+.split-bar{background:var(--border)}
+.mc-col-label{color:var(--gray)}
 
 /* BOTTOM NAV */
 .bnav{
@@ -1464,20 +1470,8 @@ img.pb-broken{display:none!important}
   .bnav{padding-left:max(4px,env(safe-area-inset-left));padding-right:max(4px,env(safe-area-inset-right))}
   .dkslip.open{max-height:min(85vh,calc(100dvh - 12px))}
 }
-@media (min-width:768px){
-  body{max-width:720px}
-  .bnav,.header,.dkslip{max-width:720px}
-  .sport-grid{grid-template-columns:repeat(6,minmax(0,1fr))}
-}
-@media (min-width:1280px){
-  body{max-width:980px}
-  .bnav,.header{max-width:980px}
-  .dkslip{max-width:420px}
-}
-@media (min-width:1440px){
-  body{max-width:1100px}
-  .bnav,.header{max-width:1100px}
-}
+/* Tablet/desktop widths: use RESPONSIVE LAYOUT FIX block above (768/1100/1280/1440).
+   Do not re-declare body max-width here — it was shrinking 1280→980px and 1440→1100px. */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LIVE BETTING VISUAL — LIVE → GAME STATE → SCORE → MARKETS
@@ -2143,8 +2137,8 @@ function _isTestUserPreview() {
 }
 function _authRedirectToLogin(msg) {
   if (_authGiveUp) return;
-  // testUser preview: dev.html owns sign-in; never wipe shared localStorage from iframe
-  if (_isTestUserPreview()) return;
+  // preview/dev: never wipe shared localStorage or bounce to lobby during visual QA
+  if (_isTestUserPreview() || _pPreview) return;
   _authGiveUp = true;
   _clearAuthLocalStorage();
   window.location.href = 'lobby.html?screen=signin&msg=' + encodeURIComponent(msg || 'Your session expired — please sign in again');
@@ -2160,7 +2154,7 @@ function _authCanAttempt() {
 }
 function _authHandleResponse(status, data) {
   if (status === 401 || status === 403) {
-    if (!_isTestUserPreview()) _authRedirectToLogin('Session invalid — please sign in again');
+    if (!_isTestUserPreview() && !_pPreview) _authRedirectToLogin('Session invalid — please sign in again');
     return 'fatal';
   }
   if (status === 429) {
