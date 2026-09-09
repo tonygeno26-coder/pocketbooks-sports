@@ -1,10 +1,10 @@
 # Sport Feed Health Matrix
 
-**Date:** 2026-09-09  
-**Frontend branch:** `cursor/sport-feed-health`  
+**Date:** 2026-09-09 (Agent A refresh)  
+**Frontend branch:** `cursor/away-sports-live`  
 **Backend (read-only):** `/Users/mycomp/.openclaw/workspace/pocketbooks-sports-backend`  
 **Live spot-check base:** `https://pocketbooks-sports-backend-production.up.railway.app`  
-**Method:** Code-path + fixture/flag wiring audit; cheap live GETs to `/api/odds/:sport`, `/api/props/:sport`, `/api/scores/:sport`, `/api/sports`. No grading/accounting changes.
+**Method:** Code-path + fixture/flag wiring audit; cheap live GETs to `/api/odds/:sport`, `/api/props/:sport`, `/api/scores/:sport`, `/api/sports`. No grading/accounting changes. Settlement recording OFF.
 
 ## Legend
 
@@ -15,6 +15,7 @@
 | **BROKEN** | Wiring contradicts itself or UI claims support the API rejects |
 | **NO DATA** | Route exists / polled, but cache currently empty |
 | **NOT SUPPORTED** | Explicitly excluded from provider path, props allow-list, or ESPN/Owls scoreboard map |
+| **RISKY** | Odds may exist but auto-grade / result identity is unsafe — prefer empty slate over wagering |
 
 ## Matrix
 
@@ -26,29 +27,43 @@
 | NHL | GOOD | GOOD | PARTIAL | PARTIAL | PARTIAL | GOOD |
 | NCAAF | GOOD | GOOD | PARTIAL | GOOD | GOOD | GOOD |
 | NCAAB | NO DATA | NO DATA | NO DATA | NO DATA | PARTIAL | GOOD |
-| Soccer | GOOD | GOOD | GOOD | PARTIAL | NOT SUPPORTED | GOOD |
-| Tennis | GOOD | GOOD | GOOD | PARTIAL | NOT SUPPORTED | PARTIAL |
+| Soccer | GOOD | GOOD | GOOD | PARTIAL→improving | NOT SUPPORTED | GOOD |
+| Tennis | GOOD | GOOD | GOOD | PARTIAL→improving | NOT SUPPORTED | PARTIAL |
 | Golf | GOOD | GOOD | PARTIAL | NOT SUPPORTED | NOT SUPPORTED | PARTIAL |
 | Boxing | NO DATA | NO DATA | NO DATA | NOT SUPPORTED | NOT SUPPORTED | PARTIAL |
 | MMA | GOOD | GOOD | PARTIAL | NOT SUPPORTED | NOT SUPPORTED | GOOD |
 | Rugby | NO DATA | NO DATA | NO DATA | NOT SUPPORTED | NOT SUPPORTED | PARTIAL |
-| NASCAR | PARTIAL | PARTIAL | NO DATA | NOT SUPPORTED | NOT SUPPORTED | PARTIAL |
+| NASCAR | PARTIAL→empty FE | PARTIAL (futures only) | NO DATA | NOT SUPPORTED | NOT SUPPORTED | PARTIAL |
+
+## TASK 3 — Independent 7-point audit (BOXING / NASCAR / NCAAB / RUGBY)
+
+Policy: **do not enable betting for sports that cannot safely grade.** Prefer **“No events available”** over incomplete wagering.
+
+| # | Checkpoint | BOXING | NASCAR | NCAAB | RUGBY |
+|---|---|---|---|---|---|
+| 1 | Provider events? | Mapped `boxing_boxing`; **0** live events | Bookmaker v2 `motorsport`→nascar-*; **5 futures/outrights** (no 2-way matchups) | Owls `basketball_ncaab`; **0** (offseason) | Bookmaker v2 `rugby`; **0** |
+| 2 | Backend polls? | Map exists; **not always-advertised** like MMA; absent from `/api/sports` | Always polled via Bookmaker v2; catalog `enabled=false` | In `OWLS_SAFE_SPORTS_DEFAULT` / enabled list | Always advertised when Owls; poll wired |
+| 3 | Normalization? | Unified v1 odds path | Bookmaker adapter stamps `sport_key=nascar` | Standard basketball normalize | Bookmaker adapter → ML only |
+| 4 | API exposes? | `/api/odds/boxing` → `[]` | `/api/odds/nascar` → 5 outright boards | `/api/odds/ncaab` → `[]` | `/api/odds/rugby` → `[]` |
+| 5 | FE catalog? | Hardcoded tab; catalog miss → badge 0 | Tab present; FE zeros badge when `enabled=false` | Tab + catalog `empty` | Tab + catalog `empty` |
+| 6 | Cards render? | Empty → **No events available** | Outrights **filtered**; empty slate | Empty → **No events available** | Empty → **No events available** |
+| 7 | Grading support? | **RISKY** — no scores/results path | **RISKY** — futures only; no matchup grade path | **OK when slate returns** — ESPN + Owls live-score sports + basketball ML/spread/total | **RISKY** — odds only; not in `OWLS_LIVE_SCORE_SPORTS` / no ESPN path |
+
+### Grading gap notes (do not enable until fixed)
+
+- **Boxing** — Needs fight-result / winner feed + always-advertise/poll parity with MMA before any real money path.
+- **NASCAR** — Current cache is championship / race-winner / manufacturer boards (`home=Outright`). FE filters these; do not treat futures as gradeable matchups.
+- **NCAAB** — Wiring complete; seasonal empty is healthy. Safe to show cards when provider returns games.
+- **Rugby** — Bookmaker ML can populate later, but settlement identity lacks scoreboard poll → keep empty-over-wager until scores/results exist.
 
 ## Compact per-sport notes
 
-- **NFL** — `/api/odds/nfl` healthy (~50 games). Props populated. ESPN `football/nfl` + Owls live-score poll. Live betting wired; no live games at audit time.
-- **MLB** — Odds + heavy props (~7k). Scores via ESPN + Owls `/scores/live`. Live flag path OK; quiet live slate at audit.
-- **NBA** — Odds + props OK (preseason slate). ESPN path exists; `/api/scores/nba` empty at audit → PARTIAL scores.
-- **NHL** — Odds OK. Props allow-listed but `count=0` (`owls_cache_fallback`) → PARTIAL. Scores path empty at audit.
-- **NCAAF** — Odds + props + ESPN college-football scores healthy. Logos via `team-logos.js` + backend `ncaaf-team-logos`.
-- **NCAAB** — Route + ESPN path + props allow-list present; catalog `sourceStatus=empty`, 0 games/props (offseason) → NO DATA / PARTIAL props.
-- **Soccer** — Unified Owls `soccer` feed (FE now hits `/api/odds/soccer` only). Live games present. Score endpoint returns rows; live cards often lack `homeScore` overlay → PARTIAL scores. Props 400 `props_not_supported`.
-- **Tennis** — Unified Owls `tennis` feed; many live matches. Scores endpoint has rows; card overlay often null. Props not supported. Headshots via `player-photos.js` (coverage PARTIAL).
-- **Golf** — Bookmaker v2 rollup `/api/odds/golf` healthy; lobby filters outrights to matchups. Not in `OWLS_LIVE_SCORE_SPORTS`; no ESPN scoreboard path. Headshots PARTIAL.
-- **Boxing** — Map + `/api/odds/boxing` exist, but **not** always-polled / **missing** from `/api/sports` catalog; 0 games → NO DATA. No scores/props. Tab icon OK; fighter photos share MMA CDN.
-- **MMA** — Odds healthy (~80). Always advertised when Owls provider. No live-score poll / ESPN path. Fighter photos GOOD. Props not supported.
-- **Rugby** — Bookmaker v2 poll + catalog row; `sourceStatus=empty` (0 games). No scores/props. Tab icon only.
-- **NASCAR** — Bookmaker v2 motorsport filter; 1 event in cache; catalog `enabled=false` but still served → PARTIAL. No scores/props. Tab logo only.
+- **NCAAB** — Route + ESPN path + props allow-list present; catalog `sourceStatus=empty`, 0 games (offseason) → NO DATA / PARTIAL props. Grading path exists for when slate returns.
+- **Soccer** — Unified Owls feed. Live score overlay now uses deterministic matching + `/api/scores/soccer` hydration; HT / FT / postponed / suspended labels when provider supplies. Still suppress score if identity uncertain.
+- **Tennis** — Same matcher; sets / games / current set; retirement / walkover labels when provider supplies. Props not supported (FE allow-list aligned).
+- **Boxing** — Missing from `/api/sports`; 0 odds. FE tab remains for discovery; empty slate. Photos share MMA CDN.
+- **Rugby** — Catalog row + Bookmaker poll; 0 games. No scores/props.
+- **NASCAR** — 5 futures in cache, `enabled=false`. FE filters outrights → **No events available** (safe).
 
 ## Wiring sources (authoritative)
 
@@ -57,35 +72,36 @@
 | FE sport tabs | `player.html` sport tab strip (`nfl`…`rugby`) |
 | FE odds routes | `player.html` `_ODDS_ROUTE_KEY`, `_SPORT_CATALOG_ALIASES`, `loadGames` |
 | FE props allow-list | `player.html` `_PB_PROPS_SUPPORTED_SPORTS` |
-| FE live tab | `player.html` `loadAllLiveGames` ← `/api/sports` + `/api/odds/:sport` |
-| FE logos | `team-logos.js`, `player-photos.js` |
+| FE live scores | `scripts/owls-live-scores.js` + `player.html` hydrate (`/api/markets/live`, `/api/odds/live`, `/api/scores/:sport`) |
+| FE outright filter | `player.html` `_pbIsOutrightBoard` (golf + nascar) |
 | BE Owls map / poll list | backend `OWLS_SPORT_MAP`, `CACHE_SPORTS`, `OWLS_*_TAB_KEYS` |
 | BE props allow-list | backend `PROPS_SUPPORTED_SPORTS` + `GET /api/props/:sport` |
 | BE ESPN scores | backend `_espnScoreboardPath` (MLB/NBA/WNBA/NFL/NCAAF/NCAAB/NHL only) |
 | BE Owls live scores | backend `OWLS_LIVE_SCORE_SPORTS` = soccer, tennis, mlb, nfl, nba, nhl, ncaaf, ncaab |
 | BE golf/rugby/nascar | backend Bookmaker v2 (`owls-bookmaker-adapter.js`) — unified v1 odds 404 |
 
-## Live spot-check snapshot (2026-09-09)
+## Live spot-check snapshot (2026-09-09, Agent A)
 
 | Endpoint | Result |
 |---|---|
-| `/api/sports` | provider `owls_insight`, healthy; boxing **absent**; nascar `enabled=false` w/ 1 game; ncaab/rugby empty |
-| `/api/odds/{sport}` | mlb 15, nba 41, nfl 50, nhl 32, ncaaf 50, ncaab 0, soccer 50, tennis 50, golf 50, boxing 0, mma 80, rugby 0, nascar 1 |
-| `/api/props/{sport}` | mlb/nba/nfl/ncaaf data; nhl/ncaab empty-but-ok; soccer/tennis/golf/boxing/mma/rugby/nascar → `props_not_supported` |
-| `/api/scores/{sport}` | mlb/nfl/ncaaf/soccer/tennis rows; nba/nhl/ncaab/golf/boxing/mma/rugby/nascar `[]` |
-| `/api/markets/health` | healthy, ~1600+ cached games |
+| `/api/sports` | boxing **absent**; nascar `enabled=false` w/ 5 games; ncaab/rugby `empty`; soccer 514; tennis 436 |
+| `/api/odds/{sport}` | boxing 0, nascar 5 (all Outright), ncaab 0, rugby 0, soccer 50, tennis 50 |
+| `/api/scores/{sport}` | soccer ~16 live rows; tennis ~10; boxing/nascar/ncaab/rugby `[]` |
+| `/api/props/{sport}` | boxing/nascar/rugby → `props_not_supported`; ncaab empty-but-ok |
 
-## Frontend fixes shipped on this branch
+## Frontend fixes on this branch
 
-1. **Props labeling** — removed `tennis` from `_PB_PROPS_SUPPORTED_SPORTS` so UI matches backend `PROPS_SUPPORTED_SPORTS` (stops false Props CTA → 400).
-2. **Boxing avatars** — `_pbAvatarSportKey` maps boxing → MMA headshot path (same as `player-photos.js`).
-3. **Soccer/tennis/rugby odds routes** — `_ODDS_ROUTE_KEY` + `_SPORT_CATALOG_ALIASES` now match backend unified rollups (`/api/odds/soccer`, `/tennis`, `/rugby`) instead of stale per-league FE segments.
+1. **Props labeling** — removed `tennis` from `_PB_PROPS_SUPPORTED_SPORTS` (matches backend).
+2. **Boxing avatars** — `_pbAvatarSportKey` maps boxing → MMA headshot path.
+3. **Soccer/tennis/rugby odds routes** — unified rollups (`/api/odds/soccer|tennis|rugby`).
+4. **Live overlay 2** — deterministic Owls matching; `/api/scores` hydration; HT/FT/postponed/suspended; tennis sets/games/retirement/walkover; suppress when identity uncertain.
+5. **NASCAR/golf outrights** — `_pbIsOutrightBoard` filters futures → empty slate (“No events available”).
+6. **Catalog badges** — nascar `enabled=false` and missing boxing catalog entry → count 0.
 
 ## Explicit non-goals / blockers
 
 - **No grading, settlement, ledger, or prod financial mutations.**
-- **Boxing catalog/poll gap** is backend config (`OWLS_ENABLED_SPORTS` / missing always-advertise like MMA). FE tab remains; feed empty until backend polls boxing.
-- **NASCAR `enabled=false`** while cache has games — backend enablement flag vs always-poll inconsistency.
-- **Live score overlays** for soccer/tennis often null on odds cards despite `/api/scores/*` rows — presentation attach gap, not settlement.
-- **Golf / combat / rugby / nascar scores** — no ESPN path and not in `OWLS_LIVE_SCORE_SPORTS` → NOT SUPPORTED for scoreboard.
+- **Boxing** always-advertise/poll is a **backend** change (not applied here; BE read-only).
+- **NASCAR enablement** vs futures-only slate — FE fails closed to empty; BE should not mark enabled until matchups + grade path exist.
+- **Rugby / combat scores** — not in `OWLS_LIVE_SCORE_SPORTS` → NOT SUPPORTED for scoreboard/auto-grade.
 - Spot-check only; seasonal emptiness (NCAAB, Rugby, Boxing) may change without code changes.

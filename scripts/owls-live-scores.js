@@ -121,43 +121,103 @@ function _tennisGameScore(td) {
   return a + '-' + h;
 }
 
+/**
+ * Classify provider status text into a stable display/status code.
+ * Presentation only — never invents outcomes for grading.
+ */
+function classifyScoreStatus(statusObj, sportKey, ev) {
+  var status = statusObj || {};
+  if (typeof status === 'string') status = { state: status };
+  var state = String(status.state || status.type || '').toLowerCase();
+  var blob = [
+    status.name, status.detail, status.description, status.shortDetail,
+    ev && ev.statusDetail, ev && ev.gameStateText
+  ].filter(Boolean).join(' ');
+  var upper = blob.toUpperCase();
+  var sport = String(sportKey || (ev && ev.sport) || '').toLowerCase();
+
+  if (/WALK\s*-?\s*OVER|\bW\/O\b|\bWO\b|STATUS_WALKOVER/i.test(blob) || state === 'walkover') {
+    return { status: 'walkover', completed: true, canceled: false, live: false, label: 'WALKOVER' };
+  }
+  if (/RETIR|STATUS_RETIRED/i.test(blob) || state === 'retired') {
+    return { status: 'retired', completed: true, canceled: false, live: false, label: 'RETIRED' };
+  }
+  if (/POSTPON/i.test(blob) || state === 'postponed' || upper.indexOf('STATUS_POSTPONED') >= 0) {
+    return { status: 'postponed', completed: false, canceled: true, live: false, label: 'POSTPONED' };
+  }
+  if (/SUSPEND/i.test(blob) || state === 'suspended' || upper.indexOf('STATUS_SUSPENDED') >= 0) {
+    return { status: 'suspended', completed: false, canceled: true, live: false, label: 'SUSPENDED' };
+  }
+  if (/CANCEL|ABANDON/i.test(blob) || state === 'canceled' || state === 'cancelled') {
+    return { status: 'canceled', completed: false, canceled: true, live: false, label: 'CANCELED' };
+  }
+  var completed = (ev && ev.completed === true) || state === 'post' || state === 'final' ||
+    state === 'completed' || state === 'closed' ||
+    upper.indexOf('STATUS_FINAL') >= 0 || upper.indexOf('STATUS_FULL_TIME') >= 0 ||
+    /\bFT\b|FULL\s*-?\s*TIME|FINAL/i.test(blob);
+  if (completed) {
+    return { status: 'final', completed: true, canceled: false, live: false, label: 'FT' };
+  }
+  if (sport.indexOf('soccer') >= 0 &&
+      (state === 'halftime' || state === 'ht' || /HALF\s*-?\s*TIME|\bHT\b|STATUS_HALFTIME/i.test(blob))) {
+    return { status: 'halftime', completed: false, canceled: false, live: true, label: 'HT' };
+  }
+  var live = state === 'in' || state === 'live' ||
+    (ev && (ev.in_play === true || ev.is_live === true || ev.live === true));
+  if (live) {
+    return { status: 'live', completed: false, canceled: false, live: true, label: null };
+  }
+  return { status: 'upcoming', completed: false, canceled: false, live: false, label: null };
+}
+
+function formatScoreStatusLabel(scoreOrGame, sportKey) {
+  if (!scoreOrGame) return '';
+  var sport = String(sportKey || scoreOrGame.sport_key || scoreOrGame.sport || '').toLowerCase();
+  if (scoreOrGame.statusLabel) return String(scoreOrGame.statusLabel);
+  var st = String(scoreOrGame.status || '').toLowerCase();
+  if (st === 'halftime' || st === 'ht') return 'HT';
+  if (st === 'final' || st === 'ft' || st === 'post' || st === 'completed') {
+    return sport.indexOf('soccer') >= 0 ? 'FT' : 'FINAL';
+  }
+  if (st === 'postponed') return 'POSTPONED';
+  if (st === 'suspended') return 'SUSPENDED';
+  if (st === 'retired') return 'RETIRED';
+  if (st === 'walkover') return 'WALKOVER';
+  if (st === 'canceled' || st === 'cancelled') return 'CANCELED';
+  return '';
+}
+
 function parseOwlsLiveScoreEvent(ev, sportKey) {
   if (!ev || typeof ev !== 'object') return null;
   var homeSide = ev.home || {};
   var awaySide = ev.away || {};
   var homeTeam = (homeSide.team && (homeSide.team.displayName || homeSide.team.name)) ||
-    homeSide.displayName || ev.home_team || '';
+    homeSide.displayName || ev.home_team || ev.homeTeam || '';
   var awayTeam = (awaySide.team && (awaySide.team.displayName || awaySide.team.name)) ||
-    awaySide.displayName || ev.away_team || '';
+    awaySide.displayName || ev.away_team || ev.awayTeam || '';
   if (!homeTeam || !awayTeam) return null;
 
   var status = ev.status || {};
   if (typeof status === 'string') status = { state: status };
-  var state = String(status.state || status.type || '').toLowerCase();
-  var statusName = String(status.name || status.detail || '').toUpperCase();
-  var completed = ev.completed === true || state === 'post' || state === 'final' ||
-    state === 'completed' || state === 'closed' ||
-    statusName === 'STATUS_FINAL' || statusName === 'STATUS_FULL_TIME';
-  var canceled = /cancel|abandon|postpone/i.test(String(status.detail || status.name || ''));
-  var live = !completed && !canceled && (
-    state === 'in' || state === 'live' || ev.in_play === true || ev.is_live === true || ev.live === true
-  );
-  var gameStatus = completed ? 'final' : canceled ? 'canceled' : live ? 'live' : 'upcoming';
+  var classified = classifyScoreStatus(status, sportKey, ev);
+  var gameStatus = classified.status;
 
-  var homeScore = homeSide.score != null ? Number(homeSide.score) : null;
-  var awayScore = awaySide.score != null ? Number(awaySide.score) : null;
+  var homeScore = homeSide.score != null ? Number(homeSide.score) :
+    (ev.homeScore != null ? Number(ev.homeScore) : (ev.home_score != null ? Number(ev.home_score) : null));
+  var awayScore = awaySide.score != null ? Number(awaySide.score) :
+    (ev.awayScore != null ? Number(ev.awayScore) : (ev.away_score != null ? Number(ev.away_score) : null));
   if (homeScore != null && !Number.isFinite(homeScore)) homeScore = null;
   if (awayScore != null && !Number.isFinite(awayScore)) awayScore = null;
 
   var sport = String(sportKey || ev.sport || '').toLowerCase();
   var bd = ev.baseballDetail || {};
   var td = ev.tennisDetail || {};
-  var period = status.period != null ? status.period : null;
-  var clock = status.displayClock != null ? status.displayClock : null;
+  var period = status.period != null ? status.period : (ev.period != null ? ev.period : null);
+  var clock = status.displayClock != null ? status.displayClock : (ev.clock != null ? ev.clock : null);
   var inning = null;
   var inningHalf = null;
-  var setScore = null;
-  var gameScore = null;
+  var setScore = ev.setScore != null ? ev.setScore : null;
+  var gameScore = ev.gameScore != null ? ev.gameScore : null;
 
   if (sport.indexOf('mlb') >= 0 || sport.indexOf('baseball') >= 0 || bd.inning != null) {
     inning = bd.inning != null ? bd.inning : period;
@@ -166,14 +226,15 @@ function parseOwlsLiveScoreEvent(ev, sportKey) {
   }
   if (sport.indexOf('tennis') >= 0 || td.currentSet != null || td.sets) {
     if (period == null && td.currentSet != null) period = td.currentSet;
-    setScore = _tennisSetScore(td, homeScore, awayScore);
-    gameScore = _tennisGameScore(td);
+    if (setScore == null) setScore = _tennisSetScore(td, homeScore, awayScore);
+    if (gameScore == null) gameScore = _tennisGameScore(td);
   }
   if (sport.indexOf('soccer') >= 0) {
     clock = _soccerMinuteFromEvent(ev, status) || clock;
   }
 
-  var detail = status.detail != null ? String(status.detail) : '';
+  var detail = status.detail != null ? String(status.detail) :
+    (ev.statusDetail != null ? String(ev.statusDetail) : '');
 
   return {
     id: String(ev.id || ''),
@@ -182,10 +243,11 @@ function parseOwlsLiveScoreEvent(ev, sportKey) {
     home_team: homeTeam,
     away_team: awayTeam,
     commence_time: ev.startTime || ev.commence_time || ev.date || null,
-    completed: completed,
-    canceled: canceled,
+    completed: classified.completed,
+    canceled: classified.canceled,
     status: gameStatus,
-    isLive: gameStatus === 'live',
+    statusLabel: classified.label,
+    isLive: !!classified.live,
     homeScore: homeScore,
     awayScore: awayScore,
     period: period,
@@ -365,6 +427,7 @@ function applyScoreFieldsToGame(game, score) {
   game.setScore = score.setScore;
   game.gameScore = score.gameScore;
   game.statusDetail = score.statusDetail;
+  game.statusLabel = score.statusLabel || formatScoreStatusLabel(score, score.sport_key || game.sport);
   game.scoreEventId = score.id || null;
   game.scoreSourceMatchId = score.sourceMatchId || null;
   game.scoreSource = 'owls_scores_live';
@@ -374,6 +437,22 @@ function applyScoreFieldsToGame(game, score) {
     game.isLive = false;
     game.isFinal = true;
     game.completed = true;
+  } else if (score.status === 'halftime') {
+    game.status = 'halftime';
+    game.isLive = true;
+    game.isFinal = false;
+  } else if (score.status === 'postponed' || score.status === 'suspended' || score.status === 'canceled') {
+    game.status = score.status;
+    game.isLive = false;
+    game.isCanceled = true;
+  } else if (score.status === 'retired' || score.status === 'walkover') {
+    game.status = score.status;
+    game.isLive = false;
+    game.isFinal = true;
+    game.completed = true;
+  } else if (score.status === 'live') {
+    game.status = 'live';
+    game.isLive = true;
   }
   return game;
 }
@@ -408,6 +487,7 @@ function hydrateGamesWithOwlsScores(games, scoreIndexesBySport, formatGameStateT
     if (typeof formatGameStateText === 'function') {
       g.gameStateText = formatGameStateText(short, {
         status: g.status || score.status,
+        statusLabel: g.statusLabel || score.statusLabel,
         period: g.period,
         clock: g.clock,
         inning: g.inning,
@@ -416,6 +496,9 @@ function hydrateGamesWithOwlsScores(games, scoreIndexesBySport, formatGameStateT
         gameScore: g.gameScore,
         statusDetail: g.statusDetail
       });
+    } else {
+      var lbl = formatScoreStatusLabel(g, short);
+      if (lbl && !g.gameStateText) g.gameStateText = lbl;
     }
     matched++;
   });
@@ -424,25 +507,40 @@ function hydrateGamesWithOwlsScores(games, scoreIndexesBySport, formatGameStateT
 
 function scoreEventFromFlatGame(g) {
   if (!g) return null;
-  var hasNum = g.homeScore != null || g.awayScore != null;
+  var homeScore = g.homeScore != null ? g.homeScore : g.home_score;
+  var awayScore = g.awayScore != null ? g.awayScore : g.away_score;
+  var hasNum = homeScore != null || awayScore != null;
   var hasTennis = g.setScore != null || g.gameScore != null;
-  if (!hasNum && !hasTennis && !g.clock && !g.statusDetail) return null;
+  if (!hasNum && !hasTennis && !g.clock && !g.statusDetail && !g.status) return null;
+  var st = String(g.status || '').toLowerCase();
+  var state = (g.isLive || st === 'live' || st === 'halftime' || st === 'ht') ? 'in' : (g.status || 'in');
+  if (st === 'final' || st === 'ft' || st === 'post' || g.completed) state = 'post';
+  if (st === 'postponed' || st === 'suspended' || st === 'retired' || st === 'walkover') state = st;
   return {
     id: g.eventId || g.owlsEventId || g.id || g.providerGameId || '',
     sourceMatchId: g.sourceMatchId || g.providerGameId || null,
     startTime: g.scheduledStart || g.time || g.commence_time || null,
+    completed: !!g.completed || st === 'final' || st === 'ft',
+    sport: g.sport || g.sport_key || null,
     status: {
-      state: (g.isLive || g.status === 'live') ? 'in' : (g.status || 'in'),
-      detail: g.statusDetail || g.gameStateText || null,
+      state: state,
+      detail: g.statusDetail || g.gameStateText || g.status || null,
+      name: g.statusLabel || g.status || null,
       displayClock: g.clock || null,
       period: g.period || null
     },
-    home: { team: { displayName: g.home || g.home_team }, score: g.homeScore },
-    away: { team: { displayName: g.away || g.away_team }, score: g.awayScore },
+    home: {
+      team: { displayName: g.home || g.home_team || g.homeTeam },
+      score: homeScore
+    },
+    away: {
+      team: { displayName: g.away || g.away_team || g.awayTeam },
+      score: awayScore
+    },
     tennisDetail: (g.setScore != null || g.gameScore != null) ? {
       currentSet: g.period,
       currentGameScore: g.gameScore,
-      sets: g.setScore ? [{ home: g.homeScore, away: g.awayScore }] : []
+      sets: g.setScore ? [{ home: homeScore, away: awayScore }] : []
     } : null,
     league: g.league || null
   };
@@ -450,6 +548,8 @@ function scoreEventFromFlatGame(g) {
 
 return {
   parseOwlsLiveScoreEvent: parseOwlsLiveScoreEvent,
+  classifyScoreStatus: classifyScoreStatus,
+  formatScoreStatusLabel: formatScoreStatusLabel,
   indexOwlsLiveScores: indexOwlsLiveScores,
   matchScoreToGame: matchScoreToGame,
   applyScoreFieldsToGame: applyScoreFieldsToGame,

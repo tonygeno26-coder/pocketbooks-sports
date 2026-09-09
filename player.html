@@ -3259,6 +3259,29 @@ function _pbFormatLiveStateText(g) {
   if (!g) return '';
   if (g.gameStateText) return String(g.gameStateText);
   var sport = _pbSportKeyOf(g);
+  if (window.OwlsLiveScores && typeof OwlsLiveScores.formatScoreStatusLabel === 'function') {
+    var terminal = OwlsLiveScores.formatScoreStatusLabel(g, sport);
+    if (terminal && terminal !== 'HT') {
+      // FT / POSTPONED / SUSPENDED / RETIRED / WALKOVER stand alone.
+      if (terminal !== 'FINAL' || sport.indexOf('soccer') < 0) {
+        if (terminal === 'FINAL' && sport.indexOf('soccer') >= 0) return 'FT';
+        if (terminal === 'FT' || terminal === 'POSTPONED' || terminal === 'SUSPENDED' ||
+            terminal === 'RETIRED' || terminal === 'WALKOVER' || terminal === 'CANCELED') {
+          return terminal;
+        }
+      }
+    }
+    if (terminal === 'HT') return 'HT';
+  }
+  var st = String(g.status || '').toLowerCase();
+  if (st === 'halftime' || st === 'ht') return 'HT';
+  if (st === 'postponed') return 'POSTPONED';
+  if (st === 'suspended') return 'SUSPENDED';
+  if (st === 'retired') return 'RETIRED';
+  if (st === 'walkover') return 'WALKOVER';
+  if (st === 'final' || st === 'ft' || st === 'post') {
+    return sport.indexOf('soccer') >= 0 ? 'FT' : 'FINAL';
+  }
   var bits = [];
   if (sport === 'mlb' || sport.indexOf('baseball') >= 0) {
     if (g.statusDetail) return String(g.statusDetail);
@@ -3288,9 +3311,9 @@ function _pbFormatLiveStateText(g) {
       bits.push(String(g.statusDetail));
     }
   } else if (sport.indexOf('tennis') >= 0) {
-    if (g.setScore != null) bits.push(String(g.setScore));
+    if (g.period != null) bits.push('Set ' + g.period);
+    if (g.setScore != null) bits.push('Sets ' + String(g.setScore));
     else if (g.sets != null) bits.push(String(g.sets));
-    else if (g.period != null) bits.push('Set ' + g.period);
     if (g.gameScore != null) bits.push(String(g.gameScore));
     else if (g.statusDetail) bits.push(String(g.statusDetail));
   } else {
@@ -3328,8 +3351,19 @@ function _pbLiveScoreContextOnly(g) {
     g.down != null || g.setScore != null || g.gameScore != null || g.statusDetail);
 }
 
+function _pbShouldShowScoreboard(g) {
+  if (!g) return false;
+  if (_pbMarketIsLive(g)) return true;
+  var st = String(g.status || '').toLowerCase();
+  if (st === 'halftime' || st === 'ht') return true;
+  // Terminal / interrupted states only when identity-safe matched.
+  if (!_pbHasSafeNumericScore(g) && !(g._scoreMatchSafe && (g.statusLabel || g.statusDetail))) return false;
+  return st === 'final' || st === 'ft' || st === 'post' || st === 'postponed' ||
+    st === 'suspended' || st === 'retired' || st === 'walkover' || st === 'canceled' || st === 'cancelled';
+}
+
 function _pbLiveScoreboardHtml(g) {
-  if (!_pbMarketIsLive(g)) return '';
+  if (!_pbShouldShowScoreboard(g)) return '';
   var safeNumeric = _pbHasSafeNumericScore(g);
   var stateTxt = _pbFormatLiveStateText(g);
   if (!safeNumeric && !_pbLiveScoreContextOnly(g)) {
@@ -3444,6 +3478,20 @@ async function _pbFetchLiveScoreIndex(sport) {
     }
   } catch (_e2) {}
 
+  // Flat /api/scores/:sport rows (presentation attach). Never fuzzy — matcher suppresses uncertain.
+  try {
+    var r3 = await fetch(API + '/api/scores/' + encodeURIComponent(short), { cache: 'no-store' });
+    if (r3.ok) {
+      var d3 = await r3.json();
+      var rows = Array.isArray(d3) ? d3 : (d3 && Array.isArray(d3.scores) ? d3.scores : (d3 && d3.games) || []);
+      rows.forEach(function(g) {
+        if (!g) return;
+        var ev = OwlsLiveScores.scoreEventFromFlatGame(g);
+        if (ev) addEvent(ev);
+      });
+    }
+  } catch (_e3) {}
+
   var index = OwlsLiveScores.indexOwlsLiveScores(events, short);
   _pbLiveScoreIndexCache[short] = { fetchedAt: now, index: index };
   _pbDevLogLiveScore('index-built', { sport: short, events: events.length, liveRows: (index.list || []).length });
@@ -3545,7 +3593,7 @@ function _pbStateHtml(opts) {
 }
 
 function _pbNoEventsHtml() {
-  return _pbStateHtml({ title: 'No events scheduled', body: 'Check back soon or try another sport.' });
+  return _pbStateHtml({ title: 'No events available', body: 'Check back soon or try another sport.' });
 }
 
 function _pbNoMarketsHtml() {
@@ -4092,7 +4140,7 @@ function _pbUpdateGameCardInPlace(card, g) {
     else if (!isLive && badge) badge.remove();
   }
   var scoreEl = card.querySelector('.mc-live-score');
-  var scoreHtml = isLive ? _pbLiveScoreboardHtml(g) : '';
+  var scoreHtml = _pbShouldShowScoreboard(g) ? _pbLiveScoreboardHtml(g) : '';
   if (scoreHtml) {
     if (scoreEl) scoreEl.outerHTML = scoreHtml;
     else if (hdr) hdr.insertAdjacentHTML('afterend', scoreHtml);
@@ -4186,17 +4234,28 @@ function _pbIsGolfSport(sport) {
   return _pbAvatarSportKey(sport || '') === 'golf';
 }
 
-/** Outrights / tournament winners — not 2-player matchups; skip in lobby cards. */
-function _pbIsGolfOutright(g) {
+function _pbIsNascarSport(sport) {
+  var s = String(sport || '').toLowerCase();
+  return s === 'nascar' || s.indexOf('nascar') === 0 || s === 'motorsport';
+}
+
+/** Outrights / tournament boards — not 2-way matchups; skip (prefer empty slate over unsafe wagering). */
+function _pbIsOutrightBoard(g) {
   if (!g) return false;
   var aw = String((g.away || g.away_team) || '');
   var hw = String((g.home || g.home_team) || '');
   if (/^outright$/i.test(hw.trim())) return true;
-  if (/winner/i.test(aw) || /winner/i.test(hw)) return true;
+  if (/winner|championship|manufacturer|winning team|winning manufacturer/i.test(aw) ||
+      /winner|championship|manufacturer/i.test(hw)) return true;
   var ml = Array.isArray(g.moneyline) ? g.moneyline : [];
-  // Matchups are 2-way; fields with many ML selections are tournament boards.
+  // Matchups are 2-way; fields with many ML selections are tournament/futures boards.
   if (ml.length > 2) return true;
   return false;
+}
+
+/** @deprecated use _pbIsOutrightBoard — kept for call-site compatibility */
+function _pbIsGolfOutright(g) {
+  return _pbIsOutrightBoard(g);
 }
 
 function _pbRenderGameCardHtml(g) {
@@ -4211,7 +4270,10 @@ function _pbRenderGameCardHtml(g) {
     }
     var sportRouteEarly = _ODDS_ROUTE_KEY[String((g.sport || '')).toLowerCase()] || String((g.sport || '')).toLowerCase();
     var isGolfCard = sportRouteEarly === 'golf' || _pbIsGolfSport(g.sport || '');
-    if (isGolfCard && _pbIsGolfOutright(g)) {
+    if (isGolfCard && _pbIsOutrightBoard(g)) {
+      return '';
+    }
+    if (_pbIsNascarSport(g.sport || sportRouteEarly) && _pbIsOutrightBoard(g)) {
       return '';
     }
     var awN = aw.split(' ').slice(-1)[0] || aw, hwN = hw.split(' ').slice(-1)[0] || hw;
@@ -4236,7 +4298,7 @@ function _pbRenderGameCardHtml(g) {
     var isLiveMarket = _pbMarketIsLive(g);
     var split = _findSplitForGame(g);
     var splitHtml = split ? _renderSplitBar(split, isGolfCard ? aw : awN, isGolfCard ? hw : hwN) : '';
-    var liveScoreHtml = isLiveMarket ? _pbLiveScoreboardHtml(g) : '';
+    var liveScoreHtml = _pbShouldShowScoreboard(g) ? _pbLiveScoreboardHtml(g) : '';
     var safeGameId = String(g.id || g.providerGameId || '').replace(/"/g, '');
     var sportRoute = _ODDS_ROUTE_KEY[sp.toLowerCase()] || sp.toLowerCase();
     var showPropsBtn = _pbSportSupportsProps(sportRoute);
@@ -5941,9 +6003,9 @@ async function loadGames(sport, opts){
       if (g && g.scoreSource === 'owls_scores_live') g._scoreMatchSafe = true;
     });
     try { await _pbHydrateLiveScoresForGames(games, _sportLc); } catch (_hs) {}
-    // Golf: drop tournament outrights so matchup cards populate the lobby.
-    if (_pbIsGolfSport(_sportLc) || _sport === 'golf') {
-      games = games.filter(function(g){ return !_pbIsGolfOutright(g); });
+    // Golf / NASCAR: drop tournament outrights & futures — prefer empty slate over unsafe wagering.
+    if (_pbIsGolfSport(_sportLc) || _sport === 'golf' || _pbIsNascarSport(_sportLc) || _sport === 'nascar') {
+      games = games.filter(function(g){ return !_pbIsOutrightBoard(g); });
     }
 
     if (!games.length) {
@@ -6430,12 +6492,16 @@ function _updateSportTabs() {
     if (!sportsByKey) return null;
     if (sportsByKey[sport]) return sportsByKey[sport];
     var als = catalogAliases[sport] || [];
-    var games = 0, found = false;
+    var games = 0, found = false, enabled = true;
     for (var a = 0; a < als.length; a++) {
       var e = sportsByKey[als[a]];
-      if (e) { found = true; games += (e.games || 0); }
+      if (e) {
+        found = true;
+        games += (e.games || 0);
+        if (e.enabled === false) enabled = false;
+      }
     }
-    return found ? { games: games } : null;
+    return found ? { games: games, enabled: enabled } : null;
   }
   // Counters for the post-apply diagnostic line.
   var _vis = 0, _hidden = 0, _dim = 0;
@@ -6444,7 +6510,11 @@ function _updateSportTabs() {
     if (!tab) return;
     var blocked = isSportBlocked(sport);
     var entry    = catalogEntry(sport);
+    // Boxing absent from /api/sports → treat as empty (hardcoded tab stays for discovery).
+    // NASCAR enabled=false or futures-only feed → do not advertise bettable count.
     var gameCount = entry ? (entry.games || 0) : (sportsByKey ? 0 : null);
+    if (entry && entry.enabled === false) gameCount = 0;
+    if (sport === 'boxing' && sportsByKey && !sportsByKey.boxing) gameCount = 0;
     var hasGames = gameCount === null || gameCount > 0;
     tab.style.display = '';
     tab.style.opacity = blocked ? '0.35' : '';
@@ -6454,7 +6524,7 @@ function _updateSportTabs() {
     tab.classList.toggle('zero-games', !blocked && gameCount === 0);
     tab.title = blocked
       ? ('Your host has disabled ' + sport.toUpperCase() + ' betting')
-      : (hasGames ? '' : 'No games available right now');
+      : (hasGames ? '' : 'No events available');
     var badge = tab.querySelector('.sport-tab-count');
     if (!badge) {
       badge = document.createElement('span');

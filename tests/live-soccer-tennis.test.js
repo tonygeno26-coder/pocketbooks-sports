@@ -214,6 +214,151 @@ test('player.html wires live score hydration helpers', function() {
   assert(html.indexOf('function _pbHydrateLiveScoresForGames') !== -1, 'missing hydration helper');
   assert(html.indexOf('function _pbHasSafeNumericScore') !== -1, 'missing safe score guard');
   assert(html.indexOf('function _pbDevLogLiveScore') !== -1, 'missing dev log helper');
+  assert(html.indexOf('/api/scores/') !== -1, 'missing /api/scores hydration path');
+  assert(html.indexOf('_pbIsOutrightBoard') !== -1, 'missing outright board filter');
+  assert(html.indexOf('No events available') !== -1, 'missing preferred empty copy');
+});
+
+test('soccer HT status classified and labeled', function() {
+  var row = owls.parseOwlsLiveScoreEvent({
+    id: 'soccer:A@B-ht',
+    startTime: '2026-09-09T15:00:00.000Z',
+    status: { state: 'in', detail: 'Half Time', name: 'STATUS_HALFTIME' },
+    home: { team: { displayName: 'B' }, score: 1 },
+    away: { team: { displayName: 'A' }, score: 1 }
+  }, 'soccer');
+  assert(row, 'parsed');
+  assertEq(row.status, 'halftime');
+  assertEq(row.statusLabel, 'HT');
+  assert(row.isLive === true, 'HT still live');
+});
+
+test('soccer final / postponed / suspended statuses', function() {
+  var ft = owls.parseOwlsLiveScoreEvent({
+    id: 'soccer:A@B-ft',
+    startTime: '2026-09-09T15:00:00.000Z',
+    status: { state: 'post', detail: 'Full Time' },
+    home: { team: { displayName: 'B' }, score: 2 },
+    away: { team: { displayName: 'A' }, score: 0 }
+  }, 'soccer');
+  assertEq(ft.status, 'final');
+  assertEq(ft.statusLabel, 'FT');
+
+  var pp = owls.parseOwlsLiveScoreEvent({
+    id: 'soccer:A@B-pp',
+    startTime: '2026-09-09T18:00:00.000Z',
+    status: { state: 'postponed', detail: 'Postponed' },
+    home: { team: { displayName: 'B' }, score: null },
+    away: { team: { displayName: 'A' }, score: null }
+  }, 'soccer');
+  assertEq(pp.status, 'postponed');
+  assertEq(pp.statusLabel, 'POSTPONED');
+
+  var sus = owls.parseOwlsLiveScoreEvent({
+    id: 'soccer:A@B-sus',
+    startTime: '2026-09-09T19:00:00.000Z',
+    status: { state: 'in', detail: 'Suspended - weather' },
+    home: { team: { displayName: 'B' }, score: 0 },
+    away: { team: { displayName: 'A' }, score: 0 }
+  }, 'soccer');
+  assertEq(sus.status, 'suspended');
+  assertEq(sus.statusLabel, 'SUSPENDED');
+});
+
+test('tennis retirement and walkover when provider supplies', function() {
+  var ret = owls.parseOwlsLiveScoreEvent({
+    id: 'tennis:A@B-ret',
+    startTime: '2026-09-09T12:00:00.000Z',
+    status: { state: 'post', detail: 'Retired' },
+    home: { team: { displayName: 'B Player' }, score: 1 },
+    away: { team: { displayName: 'A Player' }, score: 0 },
+    tennisDetail: { currentSet: 2, currentGameScore: { home: '0', away: '0' }, sets: [{ home: 6, away: 3 }, { home: 2, away: 1 }] }
+  }, 'tennis');
+  assertEq(ret.status, 'retired');
+  assertEq(ret.statusLabel, 'RETIRED');
+  assertEq(ret.setScore, '0-1');
+
+  var wo = owls.parseOwlsLiveScoreEvent({
+    id: 'tennis:C@D-wo',
+    startTime: '2026-09-09T13:00:00.000Z',
+    status: { state: 'walkover', detail: 'Walkover' },
+    home: { team: { displayName: 'D' }, score: 0 },
+    away: { team: { displayName: 'C' }, score: 0 }
+  }, 'tennis');
+  assertEq(wo.status, 'walkover');
+  assertEq(wo.statusLabel, 'WALKOVER');
+});
+
+test('tennis current set + games stamped on hydrate', function() {
+  var games = [{
+    id: 't1',
+    sport: 'tennis',
+    home: 'Benjamin Bonzi',
+    away: 'Karen Khachanov',
+    home_team: 'Benjamin Bonzi',
+    away_team: 'Karen Khachanov',
+    scheduledStart: '2026-09-09T19:05:00Z',
+    isLive: true
+  }];
+  var idx = owls.indexOwlsLiveScores([{
+    id: 'tennis:Khachanov K.@Bonzi B.-20260909',
+    startTime: '2026-09-09T19:05:00.000Z',
+    status: { state: 'in', detail: 'Set 3' },
+    home: { team: { displayName: 'Bonzi B.' }, score: 1 },
+    away: { team: { displayName: 'Khachanov K.' }, score: 1 },
+    tennisDetail: {
+      currentSet: 3,
+      currentGameScore: { home: '40', away: '30' },
+      sets: [{ home: 6, away: 4 }, { home: 3, away: 6 }, { home: 2, away: 2 }]
+    }
+  }], 'tennis');
+  owls.hydrateGamesWithOwlsScores(games, { tennis: idx });
+  assert(games[0]._scoreMatchSafe);
+  assertEq(games[0].period, 3);
+  assertEq(games[0].gameScore, '30-40');
+  assertEq(games[0].setScore, '1-1');
+});
+
+test('flat /api/scores row converts and matches by event id', function() {
+  var flat = owls.scoreEventFromFlatGame({
+    id: 'soccer:Le Mans@Nice-20260909',
+    home: 'Nice',
+    away: 'Le Mans',
+    homeScore: 2,
+    awayScore: 1,
+    status: 'live',
+    clock: "58'",
+    commence_time: '2026-09-09T18:00:00.000Z'
+  });
+  var idx = owls.indexOwlsLiveScores([flat], 'soccer');
+  var m = owls.matchScoreToGame({
+    eventId: 'soccer:Le Mans@Nice-20260909',
+    home_team: 'Nice',
+    away_team: 'Le Mans',
+    commence_time: '2026-09-09T18:00:00Z',
+    sport: 'soccer'
+  }, idx);
+  assert(m, 'flat eventId match');
+  assertEq(m.homeScore, 2);
+  assertEq(m.clock, "58'");
+});
+
+test('uncertain identity still suppresses score (no fuzzy)', function() {
+  var idx = owls.indexOwlsLiveScores([{
+    id: 'soccer:X@Y-1',
+    startTime: '2026-09-09T18:00:00.000Z',
+    status: { state: 'in' },
+    home: { team: { displayName: 'Athletic Bilbao' }, score: 1 },
+    away: { team: { displayName: 'Real Sociedad' }, score: 0 }
+  }], 'soccer');
+  // Club-key stripping removes athletic/real tokens — remaining keys must still diverge.
+  assert(!owls.matchScoreToGame({
+    home_team: 'Atletico Madrid',
+    away_team: 'Real Madrid',
+    commence_time: '2026-09-09T18:00:00Z',
+    sport: 'soccer'
+  }, idx), 'must suppress when club keys diverge');
+  assertEq(owls._soccerClubKey('Athletic Bilbao') === owls._soccerClubKey('Atletico Madrid'), false);
 });
 
 console.log('\nLive soccer/tennis tests: ' + pass + ' passed, ' + fail + ' failed');
