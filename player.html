@@ -8063,8 +8063,13 @@ async function confirmBet() {
         || document.querySelector('[data-action="confirm"]')
         || document.querySelector('[data-action="confirm-bet"]')
         || document.querySelector('.bs-confirm-btn');
+  if (_confirmBetInFlight || (_cbBtn && _cbBtn.dataset.cbBusy === '1')) {
+    _cbLog('CONFIRM_BET_DEDUPED', 'in_flight');
+    return;
+  }
   function _cbBtnBusy(label) {
     if (!_cbBtn) return;
+    _confirmBetInFlight = true;
     _cbBtn.disabled = true;
     _cbBtn.dataset.cbBusy = '1';
     _cbBtn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px">'
@@ -8074,6 +8079,7 @@ async function confirmBet() {
       + (label||'Placing\u2026') + '</span>';
   }
   function _cbBtnReady() {
+    _confirmBetInFlight = false;
     if (!_cbBtn) return;
     _cbBtn.disabled = false;
     _cbBtn.dataset.cbBusy = '';
@@ -11330,6 +11336,7 @@ var _MONEY_ENDPOINTS = new Set([
 ]);
 // Per-action key store: prevents double-click generating two different keys
 var _pendingIdemKeys = {};
+var _confirmBetInFlight = false;
 
 function _generateIdemKey(prefix) {
   var arr = new Uint8Array(8);
@@ -13077,7 +13084,8 @@ document.addEventListener('click', function(e) {
   if (existingIdx >= 0) {
     // DESELECT: remove from slip
     betSlip.splice(existingIdx, 1);
-    cell.classList.remove('selected');
+    cell.classList.remove('selected', 'sel');
+    cell.removeAttribute('aria-selected');
   } else {
     // Only remove picks that are TRUE contradictions (same game, same market, opposite side)
     var replaced = false;
@@ -13188,8 +13196,8 @@ document.addEventListener('click', function(e) {
       playerName: (_presentation && _presentation.playerName) || undefined
     });
     
-    cell.classList.add('selected');
-    
+    cell.classList.add('selected', 'sel');
+    cell.setAttribute('aria-selected', 'true');
 
     // Same-game parlay: allowed if different markets
   }
