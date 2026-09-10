@@ -1,44 +1,22 @@
-# Superdesign — Sportsbook Board Enhancement
+# Superdesign — Sportsbook board
 
 **Branch:** `cursor/superdesign-sportsbook-board`  
-**Base:** `main` @ `6ae492f` (Player Dashboard `--pb-*` tokens)  
-**Scope:** Sportsbook market cards, market rows, odds buttons, mobile sport rail. No betting logic / auth / settlement / grading changes.
+**Base:** `43689c5` (Recent Bets merged to main first)  
+**Scope:** Sportsbook board, game cards, sport rail, odds controls. No betting, grading, slip, or Recent Bets logic changes.
 
-## Critic findings → resolution
+## Visual QA (browser, not a production fixture)
 
-| # | Finding | Status |
-|---|---------|--------|
-| 1 | Market cards charcoal `#1e1e1e` | Fixed → `var(--pb-card)` / `var(--pb-border)` at source + cascade lock |
-| 2 | Odds default charcoal | Fixed → `var(--pb-odds-recess)` |
-| 3 | Odds selected neon `#00ff88` | Fixed → `var(--pb-accent)` + soft blue glow |
-| 4 | Positive odds neon text-shadow | Fixed → `var(--pb-win)`, `text-shadow:none` |
-| 5 | Mobile sport rail too tall | Fixed → horizontal compact rail ≤767px |
+In-browser review of the real renderer at 390 / 430 / 768 / 1440:
 
-## Hierarchy
+- First card sits under a compact sport rail and underline market tabs.
+- Header is league + time; LIVE is a badge plus a left accent, not a tinted card.
+- Odds stay recessed; selected is accent fill with no glow.
+- Over/Under color is the line only. Missing markets stay `—`.
+- 1440 uses a two-column grid (cards ~620px, not stretched).
+- No horizontal overflow at 390.
 
-- **Line** (`.odds-line`): larger / heavier / white — primary
-- **Price** (`.odds-num`): smaller / secondary; ML-only cells keep larger price via `:not(:has(.odds-line))`
-- Logos: transparent, unboxed, drop-shadow only
+Screenshot files were not written in this environment. A local stale-build banner appeared because the working stamp (`eb0ddc9`) does not match production; it is not part of this visual pass.
 
-## Before / after metrics (fixture card + live rail)
+## Safe merge
 
-| Width | Sport rail H before | Sport rail H after | Notes |
-|------:|--------------------:|-------------------:|-------|
-| 390 | ~461px | ~69px | Game Lines much higher |
-| 768 | ~331px | ~331px | 6-col grid retained |
-| 1440 | ~359px | ~359px | Dense desktop grid retained |
-
-Screenshots: `before-{390,768,1440}.png`, `after-{390,768,1440}.png`
-
-## SAFE MERGE
-
-**NO** — hold for visual QA on device / preview before merging to `main`.
-
-## Untouched (intentional)
-
-- `--pb-*` token values
-- Bottom-nav IA
-- Recent 12h / My Bets
-- Win/loss polarity semantics
-- Bet-slip sheet greens (`--pb-slip-*`)
-- Betting / odds / financial / grading / auth logic
+**NO** — hold for owner review. Do not merge this branch to main.
