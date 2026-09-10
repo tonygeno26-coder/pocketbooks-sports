@@ -249,99 +249,122 @@ body{font-family:'SF Pro Display',-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .odds-cmp-even{color:#9ca3af}
 .odds-best-tag{display:block;font-size:0.48rem;font-weight:800;color:#16a34a;letter-spacing:0.2px;margin-top:1px}
 .mybets-toolbar{display:none!important}
-.rb-head{padding:10px 12px 6px}
+/* Premium digital ticket — shared Recent Bets + Results */
+@keyframes rbTicketIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes rbDetailsIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.rb-head{padding:8px 12px 4px}
 .rb-head-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 .rb-title{font-size:1.05rem;font-weight:900;color:var(--pb-white,#f4f7fb);letter-spacing:-0.2px;line-height:1.15}
 .rb-sub{font-size:0.72rem;color:var(--pb-gray,#8b93a7);margin-top:4px;font-weight:600}
-.rb-view-results{font-size:0.72rem;font-weight:800;color:var(--pb-accent);background:none;border:none;cursor:pointer;padding:4px 0;white-space:nowrap;flex-shrink:0}
+.rb-view-results{font-size:0.72rem;font-weight:800;color:var(--pb-accent);background:none;border:none;cursor:pointer;padding:4px 0;white-space:nowrap;flex-shrink:0;transition:color 160ms ease,opacity 160ms ease}
 .rb-view-results:hover{text-decoration:underline;text-underline-offset:2px}
 .rb-card{
   --rb-accent:var(--pb-accent);
   background:var(--pb-card,var(--card,#121a27));
   border-radius:var(--pb-radius-sm,12px);
-  margin:8px 0;padding:14px 14px 12px;
+  margin:7px 0;padding:12px 13px 10px 15px;
   border:1px solid var(--pb-border,var(--border,#1e2a3c));
   box-shadow:var(--pb-shadow,0 8px 28px rgba(0,0,0,0.35));
   position:relative;overflow:hidden;
+  animation:rbTicketIn 180ms ease-out both;
 }
 .rb-card::before{
   content:'';position:absolute;left:0;top:0;bottom:0;width:3px;
   background:var(--rb-accent);border-radius:3px 0 0 3px;
 }
-.rb-card--active{--rb-accent:var(--pb-accent);border-color:rgba(61,139,253,0.22)}
-.rb-card--won{--rb-accent:var(--pb-win);border-color:rgba(61,214,140,0.22)}
-.rb-card--lost{--rb-accent:var(--pb-loss);border-color:rgba(255,77,106,0.22)}
-.rb-card--push,.rb-card--void{--rb-accent:var(--pb-gray,#7a8799);border-color:var(--pb-border-soft,rgba(255,255,255,0.06));opacity:0.96}
-.rb-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px}
-.rb-status{font-size:0.64rem;font-weight:800;padding:3px 9px;border-radius:20px;border:1px solid;letter-spacing:0.25px;line-height:1.2}
+/* Status = left accent only — no full-card tint */
+.rb-card--active{--rb-accent:var(--pb-accent)}
+.rb-card--won{--rb-accent:var(--pb-win)}
+.rb-card--lost{--rb-accent:var(--pb-loss)}
+.rb-card--push,.rb-card--void{--rb-accent:var(--pb-gray,#7a8799)}
+.rb-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.rb-card-head-main{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0;flex:1}
+.rb-status{font-size:0.62rem;font-weight:800;padding:2px 8px;border-radius:999px;border:1px solid;letter-spacing:0.3px;line-height:1.25;flex-shrink:0}
 .rb-status--active{color:var(--pb-accent);background:var(--pb-accent-soft);border-color:rgba(61,139,253,0.35)}
 .rb-status--won{color:var(--pb-win);background:var(--pb-win-dim);border-color:rgba(61,214,140,0.35)}
 .rb-status--lost{color:var(--pb-loss);background:var(--pb-red-dim,rgba(255,77,106,0.12));border-color:rgba(255,77,106,0.35)}
 .rb-status--push,.rb-status--void,.rb-status--muted{color:var(--pb-gray);background:rgba(122,135,153,0.12);border-color:rgba(122,135,153,0.28)}
 .rb-status--warn{color:var(--pb-gold,#e8c547);background:var(--pb-gold-dim,rgba(232,197,71,0.12));border-color:rgba(232,197,71,0.35)}
 .rb-status--cyan{color:var(--pb-cyan);background:var(--pb-cyan-dim);border-color:rgba(94,177,255,0.45)}
-.rb-ewc{text-align:right;flex-shrink:0}
-.rb-ewc-label{font-size:0.55rem;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;color:var(--pb-gray,#8b93a7)}
-.rb-ewc-val{font-size:0.95rem;font-weight:900;color:var(--pb-white,#f4f7fb);margin-top:2px}
-.rb-type{font-size:0.88rem;font-weight:900;color:var(--pb-white,#f4f7fb);line-height:1.25}
-.rb-sport{font-size:0.58rem;font-weight:800;letter-spacing:0.4px;color:var(--pb-accent);background:var(--pb-accent-soft);border:1px solid rgba(61,139,253,0.28);border-radius:6px;padding:1px 6px;margin-right:6px;text-transform:uppercase;vertical-align:middle}
-.rb-placed{font-size:0.62rem;color:var(--pb-gray,#8b93a7);margin-top:2px;margin-bottom:8px}
-.rb-legs{display:flex;flex-direction:column;margin:2px 0 4px}
-.rb-leg{display:flex;gap:8px;padding:8px 0;border-bottom:1px solid var(--pb-border-soft,rgba(255,255,255,0.06));align-items:flex-start}
+.rb-type{font-size:0.9rem;font-weight:900;color:var(--pb-white,#f4f7fb);line-height:1.2;letter-spacing:-0.15px}
+.rb-sport{font-size:0.55rem;font-weight:800;letter-spacing:0.4px;color:var(--pb-accent);background:var(--pb-accent-soft);border:1px solid rgba(61,139,253,0.28);border-radius:6px;padding:1px 6px;margin-right:6px;text-transform:uppercase;vertical-align:middle;flex-shrink:0}
+.rb-legs{display:flex;flex-direction:column;margin:0 0 2px}
+.rb-leg{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--pb-border-soft,rgba(255,255,255,0.06));align-items:flex-start}
 .rb-leg:last-child{border-bottom:none;padding-bottom:0}
-.rb-leg-idx{font-size:0.58rem;font-weight:800;color:var(--pb-gray);letter-spacing:0.3px;min-width:22px;padding-top:2px;flex-shrink:0}
+.rb-leg--compact{padding:5px 0;align-items:center}
+.rb-leg-idx{font-size:0.55rem;font-weight:800;color:var(--pb-gray);letter-spacing:0.3px;min-width:18px;padding-top:1px;flex-shrink:0;opacity:0.85}
 .rb-leg-body{flex:1;min-width:0}
-.rb-leg-pick{font-size:0.82rem;font-weight:800;color:var(--pb-white,#f4f7fb);line-height:1.25;word-break:break-word}
+.rb-leg-pick{font-size:0.8rem;font-weight:800;color:var(--pb-white,#f4f7fb);line-height:1.25;word-break:break-word}
 .rb-leg-pick--won{color:var(--pb-win)}
 .rb-leg-pick--lost{color:var(--pb-loss)}
 .rb-leg-pick--push{color:var(--pb-gray)}
-.rb-leg-meta{font-size:0.68rem;color:var(--pb-gray,#8b93a7);margin-top:3px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;line-height:1.35}
+.rb-leg-meta{font-size:0.64rem;color:var(--pb-gray,#8b93a7);margin-top:2px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;line-height:1.3}
 .rb-leg-odds{color:var(--pb-accent);font-weight:800}
-.rb-leg-matchup{font-size:0.64rem;color:var(--pb-gray);margin-top:2px;line-height:1.3}
-.rb-legs-toggle{margin-top:6px;background:none;border:none;color:var(--pb-accent);font-size:0.66rem;font-weight:800;cursor:pointer;padding:0}
-.rb-odds-line{font-size:0.76rem;font-weight:800;color:var(--pb-accent);margin:6px 0 8px;letter-spacing:0.1px}
-.rb-foot{display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid var(--pb-border-soft,rgba(255,255,255,0.06));gap:8px}
+.rb-leg-odds-trail{font-size:0.78rem;font-weight:900;color:var(--pb-accent);flex-shrink:0;margin-left:auto;padding-left:8px;letter-spacing:-0.2px}
+.rb-leg-matchup{font-size:0.6rem;color:var(--pb-gray);margin-top:1px;line-height:1.3;opacity:0.9}
+.rb-legs-toggle{margin-top:4px;background:none;border:none;color:var(--pb-accent);font-size:0.64rem;font-weight:800;cursor:pointer;padding:2px 0;transition:opacity 140ms ease}
+.rb-legs-toggle:hover{opacity:0.85}
+.rb-odds-line{font-size:0.74rem;font-weight:800;color:var(--pb-accent);margin:6px 0 8px;letter-spacing:0.1px}
+.rb-foot{display:flex;justify-content:space-between;padding-top:9px;border-top:1px solid var(--pb-border-soft,rgba(255,255,255,0.06));gap:8px}
 .rb-stat{text-align:center;flex:1;min-width:0}
-.rb-stat-label{font-size:0.58rem;color:var(--pb-gray,#8b93a7);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.3px}
-.rb-stat-val{font-size:0.88rem;font-weight:900}
+.rb-stat-label{font-size:0.55rem;color:var(--pb-gray,#8b93a7);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.35px}
+.rb-stat-val{font-size:0.86rem;font-weight:900}
 .rb-stat-val--win{color:var(--pb-win)}
 .rb-stat-val--loss{color:var(--pb-loss)}
 .rb-stat-val--accent{color:var(--pb-accent)}
 .rb-stat-val--muted{color:var(--pb-gray)}
 .rb-stat-val--white{color:var(--pb-white,#f4f7fb)}
+.rb-ewc{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--pb-border-soft,rgba(255,255,255,0.06))}
+.rb-ewc-label{font-size:0.55rem;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;color:var(--pb-gray,#8b93a7)}
+.rb-ewc-val{font-size:0.88rem;font-weight:900;color:var(--pb-white,#f4f7fb);letter-spacing:-0.2px}
+.rb-placed{font-size:0.6rem;color:var(--pb-gray,#8b93a7);margin-top:7px;font-weight:600;letter-spacing:0.1px}
 .rb-details-btn{
-  display:block;width:100%;margin-top:10px;background:transparent;border:none;
-  color:var(--pb-gray,#8b93a7);font-size:0.66rem;font-weight:700;cursor:pointer;
-  padding:6px 0;text-align:center;letter-spacing:0.2px;
+  display:block;width:100%;margin-top:6px;background:transparent;border:none;
+  color:var(--pb-gray,#8b93a7);font-size:0.64rem;font-weight:700;cursor:pointer;
+  padding:5px 0;text-align:center;letter-spacing:0.2px;
+  transition:color 150ms ease;
 }
 .rb-details-btn:hover,.rb-details-btn:focus-visible{color:var(--pb-light,#a8b3c4)}
 .rb-details{display:none;margin-top:4px;background:var(--pb-bg-elev,rgba(255,255,255,0.03));border:1px solid var(--pb-border-soft,rgba(255,255,255,0.06));border-radius:10px;padding:10px 12px;font-size:0.72rem;color:var(--pb-light,#c8d0dc);line-height:1.55}
-.rb-empty{text-align:center;padding:36px 18px 20px}
+.rb-details.is-open{display:block;animation:rbDetailsIn 160ms ease-out both}
+.rb-empty{text-align:center;padding:28px 18px 16px}
 .rb-empty-title{font-size:0.95rem;font-weight:900;color:var(--pb-white,#f4f7fb);margin-bottom:8px}
 .rb-empty-sub{font-size:0.78rem;color:var(--pb-gray,#8b93a7);margin-bottom:14px;line-height:1.4}
 .rb-list{padding:0 10px 12px}
+.rb-list .rb-card:nth-child(1){animation-delay:0ms}
+.rb-list .rb-card:nth-child(2){animation-delay:40ms}
+.rb-list .rb-card:nth-child(3){animation-delay:80ms}
+.rb-list .rb-card:nth-child(4){animation-delay:120ms}
+.rb-list .rb-card:nth-child(n+5){animation-delay:160ms}
 [data-rb-dev-slot]{opacity:0.72;margin-top:6px}
 [data-rb-dev-slot] button{font-size:0.58rem!important;padding:3px 8px!important;font-weight:700!important}
+#results-section .rb-card{margin-bottom:8px}
 @media (max-width:430px){
-  .rb-head{padding:6px 8px 4px}
+  .rb-head{padding:4px 8px 2px}
   .rb-list{padding:0 6px 8px}
-  .rb-card{margin:6px 0;padding:12px}
+  .rb-card{margin:5px 0;padding:11px 12px 9px 14px}
   #mybets-section{padding-top:0!important}
 }
 @media (max-width:390px){
-  .rb-head{padding:6px 6px 2px}
+  .rb-head{padding:2px 6px 0}
   .rb-list{padding:0 4px 8px}
-  .rb-card{margin:5px 0;padding:11px 11px 10px;border-radius:11px}
-  .rb-card-top{flex-wrap:wrap;gap:6px}
-  .rb-ewc{text-align:left;width:100%;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
-  .rb-ewc-val{font-size:0.88rem}
+  .rb-card{margin:4px 0;padding:10px 11px 8px 13px;border-radius:11px}
+  .rb-card-head{margin-bottom:6px;gap:6px}
   .rb-type{font-size:0.82rem}
-  .rb-leg{gap:6px;padding:7px 0}
-  .rb-leg-pick{font-size:0.78rem}
-  .rb-foot{gap:4px;padding-top:8px}
-  .rb-stat-val{font-size:0.8rem}
-  .rb-stat-label{font-size:0.54rem}
-  .rb-odds-line{font-size:0.72rem;margin:4px 0 6px}
+  .rb-leg{gap:6px;padding:5px 0}
+  .rb-leg--compact{padding:4px 0}
+  .rb-leg-pick{font-size:0.76rem}
+  .rb-foot{gap:4px;padding-top:7px}
+  .rb-stat-val{font-size:0.78rem}
+  .rb-stat-label{font-size:0.52rem}
+  .rb-odds-line{font-size:0.7rem;margin:4px 0 6px}
+  .rb-ewc{margin-top:6px;padding-top:6px}
+  .rb-ewc-val{font-size:0.82rem}
+  .rb-placed{margin-top:5px;font-size:0.56rem}
+}
+@media (prefers-reduced-motion: reduce){
+  .rb-card,.rb-details.is-open{animation:none!important}
+  .rb-view-results,.rb-details-btn,.rb-legs-toggle{transition:none!important}
 }
 .notif-item-actions{display:flex;gap:8px;margin-top:8px}
 .notif-act{flex:1;padding:7px 8px;border-radius:8px;font-size:0.68rem;font-weight:800;cursor:pointer;border:none}
@@ -2259,8 +2282,8 @@ function _showSessionExpiredModal(result) {
 })();
 // ══════════════════════════════════════════════════════════════════════════════
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'eb0ddc9';
-window.PBS_BUILD_DATE = '2026-09-08T22:11:45.112Z';
+window.PBS_BUILD_SHA = '2361bfa';
+window.PBS_BUILD_DATE = '2026-09-10T23:29:52.363Z';
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 try { window.API = API; } catch (_eApi) {}
 // ESPN league logos for sport grid (verified working CDN paths; ncaa/soccer/atp/pga/boxing/rugby preferred slugs 404)
@@ -13232,12 +13255,25 @@ function renderMyBets() {
       else if (displayStatus === 'push' || displayStatus === 'pushed') pickClass += ' rb-leg-pick--push';
       else if (displayStatus === 'canceled' || displayStatus === 'cancelled' || displayStatus === 'voided' || displayStatus === 'deleted') pickClass += ' rb-leg-pick--push';
       var metaHtml = '<div class="rb-leg-meta">' +
-        (oddsText ? '<span class="rb-leg-odds">'+oddsText+'</span>' : '') +
-        (marketText ? (oddsText ? '<span>·</span>' : '') + '<span>'+marketText+'</span>' : '') +
+        (marketText ? '<span>'+marketText+'</span>' : '') +
       '</div>';
       var idxHtml = _isMultiLeg ? '<div class="rb-leg-idx">L'+(legIdx+1)+'</div>' : '';
+      var trailOdds = oddsText
+        ? '<div class="rb-leg-odds-trail">'+oddsText+'</div>'
+        : '';
+      // Parlay: compact scannable rows (no jersey block). Single: optional jersey.
+      if (_isMultiLeg) {
+        return '<div class="rb-leg rb-leg--compact">' + idxHtml +
+          '<div class="rb-leg-body">' +
+            '<div class="'+pickClass+'">'+pickText+'</div>' +
+            metaHtml +
+            matchupBlock +
+          '</div>' +
+          trailOdds +
+        '</div>';
+      }
       if (jerseyHtml) {
-        return '<div class="rb-leg">' + idxHtml +
+        return '<div class="rb-leg">' +
           '<div class="rb-leg-body">' +
             '<div class="mc-team" style="gap:10px">' +
               jerseyHtml +
@@ -13247,16 +13283,18 @@ function renderMyBets() {
                 metaHtml +
                 matchupBlock +
               '</div>' +
+              trailOdds +
             '</div>' +
           '</div>' +
         '</div>';
       }
-      return '<div class="rb-leg">' + idxHtml +
+      return '<div class="rb-leg">' +
         '<div class="rb-leg-body">' +
           '<div class="'+pickClass+'">'+pickText+'</div>' +
           metaHtml +
           matchupBlock +
         '</div>' +
+        trailOdds +
       '</div>';
     });
     var picks = pickRows.slice(0, 3).join('');
@@ -13422,13 +13460,15 @@ function renderMyBets() {
       '</div>';
     }).join('');
 
+    // Hierarchy: STATUS+TYPE → selections → odds → Risk/To Win → Est. Win Chance → time
     return '<div class="rb-card rb-card--'+leftClass+'">' +
-      '<div class="rb-card-top">' +
-        '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' + statusBadge + overflowMenu + '</div>' +
-        ewcHtml +
+      '<div class="rb-card-head">' +
+        '<div class="rb-card-head-main">' +
+          statusBadge +
+          '<div class="rb-type">' + sportBadge + typeLabel + '</div>' +
+        '</div>' +
+        overflowMenu +
       '</div>' +
-      '<div class="rb-type">' + sportBadge + typeLabel + '</div>' +
-      '<div class="rb-placed">'+dateStr+'</div>' +
       '<div class="rb-legs">' + picks + morePicks + '</div>' +
       (oddsDisplay ? '<div class="rb-odds-line">Odds '+oddsDisplay+'</div>' : '') +
       '<div class="rb-foot">' +
@@ -13445,6 +13485,8 @@ function renderMyBets() {
           '<div class="rb-stat-val '+payoutClass+'">'+payoutValue+'</div>' +
         '</div>' +
       '</div>' +
+      ewcHtml +
+      '<div class="rb-placed">'+dateStr+'</div>' +
       '<button type="button" class="rb-details-btn" data-rb-details="'+t.id+'">View Details</button>' +
       '<div class="rb-details" id="rb-details-'+t.id+'">'+detailsInner+'</div>' +
       deleteBtn +
@@ -13478,12 +13520,6 @@ function renderMyBets() {
         '</div>' +
         '<button type="button" class="rb-view-results" data-rb-goto-results="1">View Results</button>' +
       '</div>' +
-      (showDev
-        ? '<div data-rb-dev-slot="1" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">' +
-            '<button type="button" onclick="openGradedAudit && openGradedAudit()" style="font-size:0.65rem;font-weight:700;color:var(--pb-accent);background:var(--pb-accent-soft);border:1.5px solid var(--pb-accent);border-radius:20px;padding:4px 10px;cursor:pointer">🧪 Graded</button>' +
-            '<button type="button" id="check-results-btn" onclick="checkOpenTickets && checkOpenTickets()" style="font-size:0.65rem;font-weight:700;color:var(--pb-accent);background:none;border:1.5px solid var(--pb-accent);border-radius:20px;padding:4px 10px;cursor:pointer">Check Results</button>' +
-          '</div>'
-        : '') +
     '</div>';
 
   if (!recent.length) {
@@ -13494,6 +13530,13 @@ function renderMyBets() {
     '</div>';
   } else {
     html += '<div class="rb-list">' + recent.map(ticketCard).join('') + '</div>';
+  }
+  // Preview/dev tools sit below tickets so the first bet stays near the top on mobile.
+  if (showDev) {
+    html += '<div data-rb-dev-slot="1" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 10px 4px">' +
+      '<button type="button" onclick="openGradedAudit && openGradedAudit()" style="font-size:0.65rem;font-weight:700;color:var(--pb-accent);background:var(--pb-accent-soft);border:1.5px solid var(--pb-accent);border-radius:20px;padding:4px 10px;cursor:pointer">🧪 Graded</button>' +
+      '<button type="button" id="check-results-btn" onclick="checkOpenTickets && checkOpenTickets()" style="font-size:0.65rem;font-weight:700;color:var(--pb-accent);background:none;border:1.5px solid var(--pb-accent);border-radius:20px;padding:4px 10px;cursor:pointer">Check Results</button>' +
+    '</div>';
   }
   html += '<div style="height:80px"></div>';
   el.innerHTML = html;
@@ -13519,8 +13562,9 @@ function renderMyBets() {
       var id = btn.getAttribute('data-rb-details');
       var panel = document.getElementById('rb-details-'+id);
       if (!panel) return;
-      var open = panel.style.display === 'block';
-      panel.style.display = open ? 'none' : 'block';
+      var open = panel.classList.contains('is-open');
+      if (open) panel.classList.remove('is-open');
+      else panel.classList.add('is-open');
       btn.textContent = open ? 'View Details' : 'Hide Details';
     });
   });
@@ -14773,91 +14817,132 @@ function _resTicketsForDay(dayStart, dayEnd){
 }
 
 // Self-contained ticket card used by the Results day-expansion. Visually
-// mirrors the approved My Bets card (same CSS tokens — --green, --red,
-// --gray, --card, --border — and the same .mc-jersey logo treatment
-// via teamAvatar()) but does NOT share code with the My Bets card
-// renderer to avoid any risk of changing the My Bets layout.
-//
-// Fields shown (per Batch 2 spec D):
-//   logos, matchup, pick, odds, wager, payout, ticket ID, status.
+// mirrors Recent Bets premium tickets (.rb-card hierarchy) but does NOT
+// share the My Bets renderer function — only shared CSS tokens/classes.
+// Fields: status+type → legs → odds → Risk/To Win → Est. Win Chance → time.
 function _renderResultsTicketCard(t){
   if (!t) return '';
-  var legs = Array.isArray(t.selections) ? t.selections : [];
-  var first = legs[0] || {};
-  var s = String(t.status||'').toLowerCase();
-  var statusLabel = (s || 'active').toUpperCase();
-  var statusColor = (s === 'won')  ? 'var(--green)' :
-                    (s === 'lost') ? 'var(--red)'   :
-                    (s === 'push' || s === 'pushed') ? 'var(--cyan)' :
-                    (s === 'canceled' || s === 'voided' || s === 'deleted') ? 'var(--gray)' :
-                    '#f5c842'; // pending/active
+  var legs = Array.isArray(t.selections) ? t.selections : (Array.isArray(t.legs) ? t.legs : []);
+  var displayStatus = (typeof _displayStatus === 'function') ? _displayStatus(t) : String(t.status||'').toLowerCase();
+  var s = String(displayStatus || '').toLowerCase();
+  if (s === 'pushed') s = 'push';
+  var leftClass =
+    (s === 'won') ? 'won' :
+    (s === 'lost') ? 'lost' :
+    (s === 'active' || s === 'open') ? 'active' :
+    (s === 'push') ? 'push' :
+    (s === 'canceled' || s === 'cancelled' || s === 'voided' || s === 'deleted') ? 'void' :
+    'active';
+  var statusBadge = (s === 'won')
+    ? '<span class="rb-status rb-status--won">WON</span>'
+    : (s === 'lost')
+      ? '<span class="rb-status rb-status--lost">LOST</span>'
+      : (s === 'push')
+        ? '<span class="rb-status rb-status--muted">PUSH</span>'
+        : (s === 'canceled' || s === 'cancelled' || s === 'voided' || s === 'deleted')
+          ? '<span class="rb-status rb-status--muted">VOID</span>'
+          : '<span class="rb-status rb-status--active">'+(s || 'active').toUpperCase()+'</span>';
 
-  var matchup = String(first.matchup || first.game || '').trim();
-  var teams   = matchup ? matchup.split(' vs ') : ['',''];
-  var away    = (teams[0] || '').trim();
-  var home    = (teams[1] || '').trim();
-  var awayLogo = (typeof teamAvatar === 'function' && away) ? teamAvatar(away, t.sport || first.sport) : '';
-  var homeLogo = (typeof teamAvatar === 'function' && home) ? teamAvatar(home, t.sport || first.sport) : '';
+  var typeLabel = t.type || t.betType || t.bet_type ||
+                  (legs.length > 1 ? 'Parlay' : legs.length === 1 ? 'Single' : 'Bet');
+  var _tl = String(typeLabel).toLowerCase();
+  if (_tl === 'straight' || _tl === 'single') typeLabel = 'Single';
 
-  var pick    = String(first.pick || first.name || first.label || '').trim() || '—';
-  var market  = String(first.market || '').trim();
-  var oddsRaw = (first.odds != null ? first.odds : t.odds);
-  var oddsTxt = '';
-  if (oddsRaw != null && oddsRaw !== '') {
-    if (typeof oddsRaw === 'number') oddsTxt = (oddsRaw > 0 ? '+' : '') + oddsRaw;
-    else oddsTxt = String(oddsRaw);
+  var isMulti = legs.length > 1;
+  function _legPick(leg){
+    return String((leg && (leg.pick || leg.name || leg.label || leg.team)) || '').trim() || '—';
   }
+  function _legMarket(leg){
+    return String((leg && (leg.market || leg.marketType || leg.betType)) || '').trim();
+  }
+  function _legMatchup(leg){
+    return String((leg && (leg.matchup || leg.game)) || '').trim();
+  }
+  function _legOdds(leg){
+    var oddsRaw = leg && (leg.odds != null ? leg.odds : leg.line);
+    if (oddsRaw == null || oddsRaw === '') return '';
+    if (typeof oddsRaw === 'number') return (oddsRaw > 0 ? '+' : '') + oddsRaw;
+    return String(oddsRaw);
+  }
+  var pickRows = (legs.length ? legs : [{}]).map(function(leg, legIdx){
+    var pick = _legPick(leg);
+    var market = _legMarket(leg);
+    var matchup = _legMatchup(leg);
+    var oddsTxt = _legOdds(leg);
+    var legRes = String((leg && (leg.result || leg.legResult || leg.outcome)) || '').toLowerCase();
+    if (legRes === 'pushed') legRes = 'push';
+    var pickClass = 'rb-leg-pick';
+    if (legRes === 'won' || (!legRes && s === 'won')) pickClass += ' rb-leg-pick--won';
+    else if (legRes === 'lost' || (!legRes && s === 'lost')) pickClass += ' rb-leg-pick--lost';
+    else if (legRes === 'push' || (!legRes && s === 'push')) pickClass += ' rb-leg-pick--push';
+    var idxHtml = isMulti ? '<div class="rb-leg-idx">L'+(legIdx+1)+'</div>' : '';
+    var trail = oddsTxt ? '<div class="rb-leg-odds-trail">'+oddsTxt+'</div>' : '';
+    return '<div class="rb-leg'+(isMulti ? ' rb-leg--compact' : '')+'">' + idxHtml +
+      '<div class="rb-leg-body">' +
+        '<div class="'+pickClass+'">'+pick+'</div>' +
+        (market ? '<div class="rb-leg-meta"><span>'+market+'</span></div>' : '') +
+        (matchup && matchup.toLowerCase() !== pick.toLowerCase()
+          ? '<div class="rb-leg-matchup">'+matchup+'</div>' : '') +
+      '</div>' + trail +
+    '</div>';
+  });
+  var visible = pickRows.slice(0, 3).join('');
+  var extra = pickRows.slice(3).join('');
+  var moreHtml = extra
+    ? '<div class="rb-leg-meta" style="margin-top:4px">+'+(pickRows.length-3)+' more leg'+(pickRows.length-3===1?'':'s')+'</div>'
+    : '';
+
+  var combinedOdds = (typeof _ticketCombinedAmericanOdds === 'function')
+    ? _ticketCombinedAmericanOdds(t) : null;
+  var oddsDisplay = '';
+  if (combinedOdds != null) oddsDisplay = (combinedOdds > 0 ? '+' : '') + combinedOdds;
+  else if (legs.length === 1) oddsDisplay = _legOdds(legs[0]);
+  else if (legs.length > 1) oddsDisplay = legs.map(_legOdds).filter(Boolean).join(' · ');
 
   var risk    = _resTicketRisk(t);
   var profit  = _resTicketProfit(t);
   var payout  = (t.estimatedPayout != null && t.estimatedPayout !== '')
                   ? (parseFloat(t.estimatedPayout) || 0)
-                  : Math.round((risk + profit) * 100) / 100;
+                  : (t.estimated_payout != null && t.estimated_payout !== '')
+                    ? (parseFloat(t.estimated_payout) || 0)
+                    : Math.round((risk + profit) * 100) / 100;
+  var isVoided = s === 'voided' || s === 'deleted' || s === 'canceled' || s === 'cancelled';
+  var riskClass = (s === 'lost') ? 'rb-stat-val--loss' : (isVoided ? 'rb-stat-val--muted' : 'rb-stat-val--white');
+  var toWinClass = (s === 'won') ? 'rb-stat-val--win'
+    : (s === 'lost' || s === 'push') ? 'rb-stat-val--muted' : 'rb-stat-val--win';
+  var payoutClass = (s === 'won') ? 'rb-stat-val--win'
+    : (s === 'lost') ? 'rb-stat-val--loss'
+    : (s === 'push' || isVoided) ? 'rb-stat-val--muted' : 'rb-stat-val--accent';
+  var payoutLabel = (s === 'won' || s === 'lost' || s === 'push') ? 'PAYOUT' : 'EST. PAYOUT';
+  var payoutValue = (s === 'lost') ? ('$'+Number(0).toFixed(2))
+    : (s === 'push' || isVoided) ? ('$'+risk.toFixed(2))
+    : ('$'+payout.toFixed(2));
 
-  var morePicks = legs.length > 1
-    ? '<div style="font-size:0.62rem;color:var(--gray);margin-top:4px">+'+(legs.length-1)+' more leg'+(legs.length-1===1?'':'s')+'</div>'
-    : '';
+  var ewcPct = (typeof _ticketEstWinChancePct === 'function') ? _ticketEstWinChancePct(t) : null;
+  var ewcTxt = (typeof _formatEstWinChance === 'function') ? _formatEstWinChance(ewcPct)
+    : (ewcPct != null ? Math.round(ewcPct)+'%' : '—');
 
-  var typeLabel = t.type || t.betType || t.bet_type ||
-                  (legs.length > 1 ? 'Parlay' : legs.length === 1 ? 'Straight' : 'Bet');
+  var createdIso = t.created_at || t.createdAt || t.placedAt || t.placed_at || null;
+  var d = createdIso ? new Date(createdIso) : null;
+  var dateStr = (d && !isNaN(d)) ? d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : (createdIso || '');
 
-  // Card. Visually consistent with My Bets cards (same CSS vars, same
-  // .mc-jersey logos) but lives entirely in this function.
-  return ''+
-    '<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px">'+
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:8px">'+
-        '<div style="min-width:0">'+
-          '<div style="font-size:0.6rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">'+typeLabel+'</div>'+
-          '<div style="font-size:0.62rem;color:var(--gray);font-family:monospace">'+(t.id ? String(t.id) : '—')+'</div>'+
-        '</div>'+
-        '<span style="font-size:0.6rem;font-weight:900;color:'+statusColor+';background:rgba(255,255,255,0.04);border:1px solid '+statusColor+';padding:3px 10px;border-radius:20px;letter-spacing:0.4px;flex-shrink:0">'+statusLabel+'</span>'+
-      '</div>'+
-      (matchup
-        ? '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'+
-            (awayLogo || '')+
-            '<div style="font-size:0.78rem;color:#fff;font-weight:700;letter-spacing:0.2px">'+(away||'')+(away&&home?' @ ':'')+(home||'')+'</div>'+
-            (homeLogo || '')+
-          '</div>'
-        : '')+
-      '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;padding-top:10px;border-top:1px solid var(--border)">'+
-        '<div style="min-width:0;flex:1">'+
-          '<div style="font-size:0.85rem;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+pick+'</div>'+
-          (market ? '<div style="font-size:0.62rem;color:var(--gray);margin-top:2px">'+market+'</div>' : '')+
-          morePicks+
-        '</div>'+
-        (oddsTxt ? '<div style="font-size:0.95rem;font-weight:900;color:var(--cyan);flex-shrink:0">'+oddsTxt+'</div>' : '')+
-      '</div>'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">'+
-        '<div>'+
-          '<div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Wager</div>'+
-          '<div style="font-size:0.85rem;font-weight:900;color:#fff">$'+risk.toFixed(2)+'</div>'+
-        '</div>'+
-        '<div style="text-align:right">'+
-          '<div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Payout</div>'+
-          '<div style="font-size:0.85rem;font-weight:900;color:'+(s==='won'?'var(--green)':'#fff')+'">$'+payout.toFixed(2)+'</div>'+
-        '</div>'+
-      '</div>'+
-    '</div>';
+  return '<div class="rb-card rb-card--'+leftClass+'">' +
+    '<div class="rb-card-head">' +
+      '<div class="rb-card-head-main">' +
+        statusBadge +
+        '<div class="rb-type">'+typeLabel+'</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="rb-legs">' + visible + moreHtml + '</div>' +
+    (oddsDisplay ? '<div class="rb-odds-line">Odds '+oddsDisplay+'</div>' : '') +
+    '<div class="rb-foot">' +
+      '<div class="rb-stat"><div class="rb-stat-label">Risk</div><div class="rb-stat-val '+riskClass+'">$'+risk.toFixed(2)+'</div></div>' +
+      '<div class="rb-stat"><div class="rb-stat-label">To Win</div><div class="rb-stat-val '+toWinClass+'">$'+profit.toFixed(2)+'</div></div>' +
+      '<div class="rb-stat"><div class="rb-stat-label">'+payoutLabel+'</div><div class="rb-stat-val '+payoutClass+'">'+payoutValue+'</div></div>' +
+    '</div>' +
+    '<div class="rb-ewc"><div class="rb-ewc-label">Est. Win Chance</div><div class="rb-ewc-val">'+ewcTxt+'</div></div>' +
+    '<div class="rb-placed">'+dateStr+(t.id ? ' · '+String(t.id) : '')+'</div>' +
+  '</div>';
 }
 // Seed mock tickets for current week if no tickets exist (acceptance criterion).
 // REMOVED: _resSeedMockIfEmpty used to write 10 MOCK-* tickets directly
@@ -16591,7 +16676,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO (debug panel only with ?debug=1 / pb-debug=1) -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;padding:2px 10px;display:none;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span id="build-info-label" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px">🔍 main · eb0ddc9 · Sep 8, 03:11 PM</span>
+  <span id="build-info-label" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px">🔍 main · 2361bfa · Sep 10, 04:29 PM</span>
 </div>
 <script>
 (function(){

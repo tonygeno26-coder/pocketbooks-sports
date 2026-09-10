@@ -199,7 +199,13 @@ test('developer controls gated; Balance History not for ordinary players', funct
 
 test('mobile compact header rules', function() {
   assertIncludes(src, '@media (max-width:430px)', '430 media');
-  assertIncludes(src, '.rb-head{padding:6px 8px 4px}', 'tight head');
+  assertIncludes(src, '@media (max-width:390px)', '390 media');
+  assertIncludes(src, '.rb-head{padding:4px 8px 2px}', 'tight head 430');
+  assertIncludes(src, '.rb-head{padding:2px 6px 0}', 'tight head 390');
+  assertIncludes(src, 'STATUS+TYPE', 'hierarchy comment');
+  assertIncludes(src, 'rb-card-head', 'status+type head row');
+  assertIncludes(src, 'rb-leg--compact', 'compact parlay legs');
+  assertIncludes(src, 'prefers-reduced-motion', 'reduced motion');
 });
 
 test('timezone grouping by calendar date placed', function() {
