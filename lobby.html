@@ -4,30 +4,37 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Pocketbooks Sports</title>
+<link rel="stylesheet" href="pb-theme.css">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{
-  --bg-main:#080D18;--bg-secondary:#0C1424;--bg-card:#101A2E;--bg-recessed:#0A1120;
-  --border:#1D2B42;--accent-blue:#1677FF;--accent-blue-bright:#2F8CFF;--accent-glow:rgba(22,119,255,0.25);
-  --text-primary:#F5F7FA;--text-secondary:#94A3B8;--text-muted:#64748B;
-  --positive:#22C55E;--negative:#EF4444;--pending-yellow:#EAB308;
-  --green:#00ff88;--cyan:#1677FF;--gold:#f5c842;--red:#EF4444;--white:#F5F7FA;--gray:#94A3B8
+  --pb-bg:#070b12;--pb-bg-elev:#0c121c;--pb-card:#121a27;--pb-card2:#162032;
+  --pb-border:#1e2a3c;--pb-accent:#3d8bfd;--pb-accent-soft:rgba(61,139,253,0.16);
+  --pb-win:#3dd68c;--pb-loss:#ff4d6a;--pb-cyan:#5eb1ff;--pb-white:#f4f7fb;--pb-gray:#7a8799;--pb-light:#a8b3c4;
+  --bg-main:var(--pb-bg);--bg-secondary:var(--pb-bg-elev);--bg-card:var(--pb-card);--bg-recessed:#0a101a;
+  --border:var(--pb-border);--accent-blue:var(--pb-accent);--accent-blue-bright:#5eb1ff;
+  --accent-glow:rgba(61,139,253,0.45);--accent:var(--pb-accent);--accent-soft:var(--pb-accent-soft);
+  --text-primary:var(--pb-white);--text-secondary:var(--pb-light);--text-muted:var(--pb-gray);
+  --positive:var(--pb-win);--negative:var(--pb-loss);--pending-yellow:#EAB308;
+  --green:var(--pb-accent);--cyan:var(--pb-cyan);--gold:#e8c547;--red:var(--pb-loss);
+  --white:var(--pb-white);--gray:var(--pb-gray);--light:var(--pb-light);--win:var(--pb-win);
+  --card:var(--pb-card);--card2:var(--pb-card2);--bg:var(--pb-bg)
 }
 body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(--bg-main);color:var(--text-primary);max-width:430px;margin:0 auto;min-height:100vh;overflow-x:hidden;padding-bottom:80px;position:relative}
 
 /* AUTH SCREEN */
 .auth-screen{position:fixed;inset:0;z-index:500;display:flex;flex-direction:column;background:linear-gradient(180deg,#05081a 0%,#0a0f0a 100%);max-width:430px;margin:0 auto;overflow-y:auto}
-.auth-bg-glow{position:absolute;top:20%;left:50%;transform:translateX(-50%);width:300px;height:300px;background:radial-gradient(circle,rgba(0,255,136,0.08),transparent 70%);pointer-events:none}
+.auth-bg-glow{position:absolute;top:20%;left:50%;transform:translateX(-50%);width:300px;height:300px;background:radial-gradient(circle,rgba(61,139,253,0.08),transparent 70%);pointer-events:none}
 .auth-content{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;padding:60px 24px 40px;min-height:100vh}
 .auth-logo-wrap{margin-bottom:20px;text-align:center}
-.auth-logo{width:72px;height:72px;border-radius:50%;border:2px solid rgba(0,255,136,0.4);overflow:hidden;margin:0 auto 12px;box-shadow:0 0 30px rgba(0,255,136,0.2)}
+.auth-logo{width:72px;height:72px;border-radius:50%;border:2px solid rgba(61,139,253,0.4);overflow:hidden;margin:0 auto 12px;box-shadow:0 0 30px rgba(61,139,253,0.2)}
 .auth-logo img{width:100%;height:100%;object-fit:cover}
 .auth-app-name{font-size:1.5rem;font-weight:900;letter-spacing:-0.5px}
 .auth-app-name span{color:var(--green)}
 .auth-tagline{font-size:0.78rem;color:#555;margin-top:4px}
 .auth-tabs{display:flex;background:rgba(255,255,255,0.05);border-radius:12px;padding:4px;margin-bottom:24px;width:100%}
 .auth-tab{flex:1;padding:10px;text-align:center;border-radius:10px;font-size:0.85rem;font-weight:700;cursor:pointer;color:#555;transition:all 0.2s;pointer-events:auto;user-select:none}
-.auth-tab.active{background:rgba(0,255,136,0.15);color:var(--green);border:1px solid rgba(0,255,136,0.25)}
+.auth-tab.active{background:rgba(61,139,253,0.15);color:var(--green);border:1px solid rgba(61,139,253,0.25)}
 .auth-card{background:#141414;border:1px solid #222;border-radius:20px;padding:24px;width:100%;max-width:380px}
 .auth-inp{width:100%;padding:14px 16px;background:#1c1c1c;border:1.5px solid #252525;border-radius:12px;color:#fff;font-size:0.95rem;outline:none;margin-bottom:10px;transition:border-color 0.2s;pointer-events:auto;position:relative;z-index:2}
 .auth-inp:focus{border-color:var(--green)}
@@ -36,7 +43,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .auth-check input{width:18px;height:18px;margin-top:1px;accent-color:var(--green);flex-shrink:0;cursor:pointer}
 .auth-check-label{font-size:0.75rem;color:#666;line-height:1.5}
 .auth-check-label a{color:var(--cyan);text-decoration:none}
-.auth-submit{width:100%;padding:16px;background:linear-gradient(135deg,var(--green),#00cc66);color:#000;border:none;border-radius:14px;font-size:1rem;font-weight:900;cursor:pointer;margin-top:4px;box-shadow:0 4px 20px rgba(0,255,136,0.25);letter-spacing:0.3px}
+.auth-submit{width:100%;padding:16px;background:var(--pb-accent);color:#041018;border:none;border-radius:14px;font-size:1rem;font-weight:900;cursor:pointer;margin-top:4px;box-shadow:0 4px 20px rgba(61,139,253,0.28);letter-spacing:0.3px}
 .auth-submit:disabled{opacity:0.5;cursor:not-allowed}
 .auth-error{color:var(--red);font-size:0.78rem;margin-top:10px;margin-bottom:0;padding:10px 14px;background:rgba(255,61,87,0.08);border:1px solid rgba(255,61,87,0.2);border-radius:10px;display:none}
 .auth-footer{margin-top:16px;text-align:center;font-size:0.72rem;color:#444}
@@ -52,14 +59,14 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .star{position:absolute;background:#fff;border-radius:50%;animation:twinkle 3s infinite}
 @keyframes twinkle{0%,100%{opacity:0.2;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}
 @keyframes floatUp{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
-@keyframes pulseGlow{0%,100%{box-shadow:0 0 8px rgba(0,255,136,0.2)}50%{box-shadow:0 0 20px rgba(0,255,136,0.5),0 0 40px rgba(0,255,136,0.15)}}
+@keyframes pulseGlow{0%,100%{box-shadow:0 0 8px rgba(61,139,253,0.2)}50%{box-shadow:0 0 20px rgba(61,139,253,0.5),0 0 40px rgba(61,139,253,0.15)}}
 @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 @keyframes tapBounce{0%{transform:scale(1)}40%{transform:scale(0.93)}70%{transform:scale(1.04)}100%{transform:scale(1)}}
 .active-club-wrap:active{animation:tapBounce 0.3s ease !important}
 .wallet-item{transition:all 0.2s}
 .wallet-item:active{transform:scale(0.95)}
 .particles{position:absolute;inset:0;pointer-events:none}
-.particle{position:absolute;width:2px;height:2px;background:rgba(0,255,136,0.4);border-radius:50%;animation:drift linear infinite}
+.particle{position:absolute;width:2px;height:2px;background:rgba(61,139,253,0.4);border-radius:50%;animation:drift linear infinite}
 @keyframes drift{0%{transform:translateY(100vh) translateX(0);opacity:0}10%{opacity:1}90%{opacity:0.5}100%{transform:translateY(-10vh) translateX(20px);opacity:0}}
 .trees{position:absolute;bottom:28%;left:0;right:0;height:90px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 430 90'%3E%3Cpolygon points='0,90 30,20 60,90' fill='%23030a03'/%3E%3Cpolygon points='40,90 70,12 100,90' fill='%23040c04'/%3E%3Cpolygon points='90,90 115,22 140,90' fill='%23030a03'/%3E%3Cpolygon points='130,90 160,8 190,90' fill='%23040c04'/%3E%3Cpolygon points='180,90 210,18 240,90' fill='%23030a03'/%3E%3Cpolygon points='230,90 255,28 280,90' fill='%23040c04'/%3E%3Cpolygon points='270,90 300,14 330,90' fill='%23030a03'/%3E%3Cpolygon points='320,90 350,20 380,90' fill='%23040c04'/%3E%3Cpolygon points='370,90 400,16 430,90' fill='%23030a03'/%3E%3C/svg%3E") repeat-x bottom;filter:blur(0.5px);animation:treeSway 12s ease-in-out infinite alternate;pointer-events:none}
 @keyframes treeSway{0%{transform:scaleX(1)}100%{transform:scaleX(1.02)}}
@@ -101,8 +108,8 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 /* ACTIVE CLUB CARD */
 .active-club-wrap{margin:0 16px 16px;cursor:pointer;animation:cardFloat 6s ease-in-out infinite}
 @keyframes cardFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
-.active-club-card{background:rgba(255,255,255,0.97);border-radius:18px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,0.6),0 0 0 1px rgba(0,255,136,0.15),0 0 30px rgba(0,255,136,0.08);position:relative}
-.active-club-card::before{content:'ACTIVE CLUB';position:absolute;top:10px;right:12px;z-index:5;background:linear-gradient(135deg,#00ff88,#00cc66);color:#000;font-size:0.52rem;font-weight:900;padding:3px 8px;border-radius:6px;letter-spacing:1px;text-transform:uppercase}
+.active-club-card{background:rgba(255,255,255,0.97);border-radius:18px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,0.6),0 0 0 1px rgba(61,139,253,0.15),0 0 30px rgba(61,139,253,0.08);position:relative}
+.active-club-card::before{content:'ACTIVE CLUB';position:absolute;top:10px;right:12px;z-index:5;background:var(--pb-accent);color:#041018;font-size:0.52rem;font-weight:900;padding:3px 8px;border-radius:6px;letter-spacing:1px;text-transform:uppercase}
 .ac-top{padding:8px 14px;background:#fff;display:flex;justify-content:space-between;align-items:center}
 .ac-id{font-size:0.72rem;font-weight:700;color:#333;letter-spacing:0.5px}
 .ac-body{padding:20px;text-align:center;background:#fff;min-height:120px;display:flex;align-items:center;justify-content:center}
@@ -124,7 +131,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .ac-bg-join{background:linear-gradient(160deg,#041a0d,#0a3a1a,#062010)}
 .ac-bg-create{background:linear-gradient(160deg,#1a1400,#2e2400,#1c1800);border:1px solid rgba(245,200,66,0.25);box-shadow:0 0 30px rgba(245,200,66,0.08) inset}
 .ac-bg-clubs{background:linear-gradient(160deg,#04081a,#0a1432,#060e20)}
-.ac-bg-survivor{background:linear-gradient(160deg,#1a0a14,#3a1028,#12080c);border:1px solid rgba(0,255,136,0.22);box-shadow:0 0 30px rgba(0,255,136,0.08) inset}
+.ac-bg-survivor{background:linear-gradient(160deg,#1a0a14,#3a1028,#12080c);border:1px solid rgba(61,139,253,0.22);box-shadow:0 0 30px rgba(61,139,253,0.08) inset}
 .action-card.locked{opacity:0.38}
 .action-card.locked .ac-icon{filter:grayscale(1);animation:none}
 .ac-icon{font-size:3rem;filter:drop-shadow(0 0 16px currentColor);animation:iconPulse 3s ease-in-out infinite}
@@ -144,7 +151,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 /* MY CLUBS LIST */
 .clubs-list{padding:0 16px}
 .club-row{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:13px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:all 0.15s}
-.club-row:active{background:rgba(22,119,255,0.1);border-color:var(--accent-blue)}
+.club-row:active{background:rgba(61,139,253,0.1);border-color:var(--accent-blue)}
 .cr-left{display:flex;align-items:center;gap:10px}
 .cr-avatar{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:900;background:var(--bg-recessed);border:1px solid var(--border);color:var(--accent-blue-bright)}
 .cr-name{font-size:0.9rem;font-weight:800;color:var(--text-primary)}
@@ -152,7 +159,7 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .cr-id{font-size:0.65rem;color:var(--text-muted)}
 .role-badge{font-size:0.6rem;font-weight:800;padding:2px 8px;border-radius:999px;text-transform:uppercase}
 .role-host{background:rgba(245,200,66,0.15);color:var(--gold);border:1px solid rgba(245,200,66,0.3)}
-.role-player{background:rgba(22,119,255,0.12);color:var(--accent-blue-bright);border:1px solid rgba(22,119,255,0.3)}
+.role-player{background:rgba(61,139,253,0.12);color:var(--accent-blue-bright);border:1px solid rgba(61,139,253,0.3)}
 .role-pending{background:rgba(234,179,8,0.14);color:var(--pending-yellow);border:1px solid rgba(234,179,8,0.35)}
 .cr-right{text-align:right}
 .cr-balance{font-size:0.95rem;font-weight:900}
@@ -190,13 +197,13 @@ body.pb-player-only .bottom-nav{display:none!important}
 .lobby-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:14px;color:var(--text-primary)}
 .lobby-hdr{padding:14px 16px;background:var(--bg-secondary);border-bottom:1px solid var(--border);font-size:1rem;font-weight:900;color:var(--text-primary);position:sticky;top:0;z-index:10}
 .lobby-pill{display:inline-flex;align-items:center;font-size:0.56rem;font-weight:800;padding:2px 8px;border-radius:999px;text-transform:uppercase;letter-spacing:0.3px}
-.lobby-pill-blue{background:rgba(22,119,255,0.15);color:var(--accent-blue-bright);border:1px solid rgba(22,119,255,0.35)}
+.lobby-pill-blue{background:rgba(61,139,253,0.15);color:var(--accent-blue-bright);border:1px solid rgba(61,139,253,0.35)}
 .lobby-pill-host{background:rgba(245,200,66,0.12);color:#f5c842;border:1px solid rgba(245,200,66,0.28)}
 .lobby-pill-player{background:rgba(34,197,94,0.12);color:var(--positive);border:1px solid rgba(34,197,94,0.28)}
 .lobby-pill-pending{background:rgba(234,179,8,0.14);color:var(--pending-yellow);border:1px solid rgba(234,179,8,0.35)}
 .chat-bubble{max-width:82%;padding:10px 12px;border-radius:14px;font-size:0.78rem;line-height:1.45;margin-bottom:8px}
 .chat-bubble-in{background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);border-bottom-left-radius:4px;align-self:flex-start}
-.chat-bubble-out{background:rgba(22,119,255,0.18);border:1px solid rgba(22,119,255,0.35);color:var(--text-primary);border-bottom-right-radius:4px;align-self:flex-end;margin-left:auto}
+.chat-bubble-out{background:rgba(61,139,253,0.18);border:1px solid rgba(61,139,253,0.35);color:var(--text-primary);border-bottom-right-radius:4px;align-self:flex-end;margin-left:auto}
 .pending-screen{text-align:center;padding:30px 20px}
 .pending-icon{font-size:3.5rem;margin-bottom:14px}
 .pending-title{font-size:1.2rem;font-weight:900;margin-bottom:8px;color:var(--text-primary)}
@@ -280,7 +287,7 @@ body.theme-light [style*="color:#fff"],body.theme-light [style*="color:#FFF"]{co
 body.theme-light [style*="color:#888"],body.theme-light [style*="color:#777"],body.theme-light [style*="color:#666"],body.theme-light [style*="color:#555"]{color:#666!important}
 body.theme-light [style*="color:#00c2ff"]{color:#0064c8!important}
 body.theme-light [style*="color:#ff3d57"],body.theme-light [style*="color:#ff6b6b"],body.theme-light [style*="color:#ff4444"]{color:#cc0000!important}
-body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
+body.theme-light [style*="color:var(--pb-accent)"]{color:#00875a!important}
 
 /* ═══ MOBILE (≤480px / iPhone 375) — layout only, no redesign ═══ */
 @media (max-width:480px){
@@ -413,7 +420,22 @@ body.theme-light [style*="color:#00ff88"]{color:#00875a!important}
     
   }
   if (location.search.includes('preview=1')) {
-    document.write('<style>#auth-screen{display:none!important;visibility:hidden!important;pointer-events:none!important;position:absolute!important;z-index:-9999!important}</style>');
+    document.write('<style>#auth-screen{display:none!important;visibility:hidden!important;pointer-events:none!important;position:absolute!important;z-index:-9999!important}
+/* Auth — Player Dashboard language */
+.auth-screen{background:radial-gradient(1200px 600px at 50% -80px,rgba(61,139,253,0.10),transparent 55%),var(--pb-bg)!important}
+.auth-bg-glow{background:radial-gradient(circle,rgba(61,139,253,0.12),transparent 70%)!important}
+.auth-logo{border-color:rgba(61,139,253,0.45)!important;box-shadow:0 0 28px rgba(61,139,253,0.18)!important;border-radius:14px!important}
+.auth-app-name span{color:var(--pb-accent)!important}
+.auth-tab.active{background:var(--pb-accent-soft)!important;color:var(--pb-accent)!important;border:1px solid rgba(61,139,253,0.35)!important}
+.auth-card{background:var(--pb-card)!important;border:1px solid var(--pb-border)!important}
+.auth-inp{background:var(--pb-card2)!important;border-color:var(--pb-border)!important;color:var(--pb-white)!important}
+.auth-inp:focus{border-color:var(--pb-accent)!important;box-shadow:0 0 0 2px var(--pb-accent-soft)!important}
+.auth-check input{accent-color:var(--pb-accent)!important}
+.auth-submit{background:var(--pb-accent)!important;color:#041018!important;box-shadow:0 4px 20px rgba(61,139,253,0.28)!important}
+.auth-tagline,.auth-check-label{color:var(--pb-gray)!important}
+.auth-tab{color:var(--pb-gray)!important}
+
+</style>');
   }
 })();
 </script>
@@ -647,28 +669,28 @@ try {
 </div>
 
 <!-- PREVIEW FULL SCREENS -->
-<div id="preview-screen" style="display:none;position:fixed;inset:0;z-index:1000;overflow-y:auto;background:#080D18;max-width:430px;margin:0 auto"></div>
+<div id="preview-screen" style="display:none;position:fixed;inset:0;z-index:1000;overflow-y:auto;background:var(--pb-bg);max-width:430px;margin:0 auto"></div>
 
-<template id="tpl-join"><div style="background:#080D18;min-height:100%;color:#F5F7FA"><div class="lobby-hdr">Join a Club</div><div style="padding:20px"><div style="font-size:0.78rem;color:#94A3B8;margin-bottom:14px">Enter the club ID to find and request access</div><div style="display:flex;gap:8px;margin-bottom:10px"><input value="PB-7K92Q" style="flex:1;padding:13px 14px;background:#0A1120;border:1.5px solid #1D2B42;border-radius:12px;color:#F5F7FA;font-size:0.9rem;font-weight:800;letter-spacing:2px;outline:none"><button style="padding:13px 16px;background:#1677FF;color:#fff;border:none;border-radius:12px;font-size:0.8rem;font-weight:900;box-shadow:0 4px 14px rgba(22,119,255,0.25)">Search</button></div><div class="lobby-card"><div style="font-size:0.95rem;font-weight:800;margin-bottom:3px;color:#F5F7FA">Vegas Crew</div><div style="font-size:0.7rem;color:#94A3B8;margin-bottom:12px">Private betting club · Las Vegas, NV</div><button style="width:100%;padding:12px;background:#1677FF;color:#fff;border:none;border-radius:12px;font-size:0.88rem;font-weight:900">Request to Join →</button></div></div></div></template>
+<template id="tpl-join"><div style="background:var(--pb-bg);min-height:100%;color:var(--pb-white)"><div class="lobby-hdr">Join a Club</div><div style="padding:20px"><div style="font-size:0.78rem;color:var(--pb-light);margin-bottom:14px">Enter the club ID to find and request access</div><div style="display:flex;gap:8px;margin-bottom:10px"><input value="PB-7K92Q" style="flex:1;padding:13px 14px;background:var(--bg-recessed,#0a101a);border:1.5px solid var(--pb-border);border-radius:12px;color:var(--pb-white);font-size:0.9rem;font-weight:800;letter-spacing:2px;outline:none"><button style="padding:13px 16px;background:var(--pb-accent);color:#fff;border:none;border-radius:12px;font-size:0.8rem;font-weight:900;box-shadow:0 4px 14px rgba(61,139,253,0.25)">Search</button></div><div class="lobby-card"><div style="font-size:0.95rem;font-weight:800;margin-bottom:3px;color:var(--pb-white)">Vegas Crew</div><div style="font-size:0.7rem;color:var(--pb-light);margin-bottom:12px">Private betting club · Las Vegas, NV</div><button style="width:100%;padding:12px;background:var(--pb-accent);color:#fff;border:none;border-radius:12px;font-size:0.88rem;font-weight:900">Request to Join →</button></div></div></div></template>
 
-<template id="tpl-create"><div style="background:#080D18;min-height:100%;color:#F5F7FA"><div class="lobby-hdr">Create a Club</div><div style="padding:20px"><div style="font-size:0.78rem;color:#94A3B8;line-height:1.6;padding:10px 13px;background:rgba(22,119,255,0.08);border:1px solid rgba(22,119,255,0.22);border-radius:12px;margin-bottom:16px">Create your private betting club. Invite players, approve requests, then set individual player limits.</div><div style="width:70px;height:70px;border-radius:50%;background:#0A1120;border:2px dashed rgba(22,119,255,0.4);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;flex-direction:column"><span style="font-size:1.5rem">🏆</span><span style="font-size:0.5rem;color:#64748B;margin-top:2px">Add Logo</span></div><div style="text-align:center;font-size:0.6rem;color:#64748B;margin-bottom:13px">Tap to upload club logo</div><div style="font-size:0.62rem;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Club Name *</div><input placeholder="e.g. Vegas Crew" style="width:100%;padding:12px 14px;background:#0A1120;border:1.5px solid #1D2B42;border-radius:12px;color:#F5F7FA;font-size:0.88rem;margin-bottom:18px;outline:none"><button style="width:100%;padding:14px;background:#1677FF;color:#fff;border:none;border-radius:12px;font-size:0.92rem;font-weight:900;box-shadow:0 4px 16px rgba(22,119,255,0.25)">Create My Club →</button><div style="text-align:center;font-size:0.6rem;color:#64748B;margin-top:8px">You can adjust betting limits after approving each player.</div></div></div></template>
+<template id="tpl-create"><div style="background:var(--pb-bg);min-height:100%;color:var(--pb-white)"><div class="lobby-hdr">Create a Club</div><div style="padding:20px"><div style="font-size:0.78rem;color:var(--pb-light);line-height:1.6;padding:10px 13px;background:rgba(61,139,253,0.08);border:1px solid rgba(61,139,253,0.22);border-radius:12px;margin-bottom:16px">Create your private betting club. Invite players, approve requests, then set individual player limits.</div><div style="width:70px;height:70px;border-radius:50%;background:var(--bg-recessed,#0a101a);border:2px dashed rgba(61,139,253,0.4);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;flex-direction:column"><span style="font-size:1.5rem">🏆</span><span style="font-size:0.5rem;color:var(--pb-gray);margin-top:2px">Add Logo</span></div><div style="text-align:center;font-size:0.6rem;color:var(--pb-gray);margin-bottom:13px">Tap to upload club logo</div><div style="font-size:0.62rem;font-weight:700;color:var(--pb-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Club Name *</div><input placeholder="e.g. Vegas Crew" style="width:100%;padding:12px 14px;background:var(--bg-recessed,#0a101a);border:1.5px solid var(--pb-border);border-radius:12px;color:var(--pb-white);font-size:0.88rem;margin-bottom:18px;outline:none"><button style="width:100%;padding:14px;background:var(--pb-accent);color:#fff;border:none;border-radius:12px;font-size:0.92rem;font-weight:900;box-shadow:0 4px 16px rgba(61,139,253,0.25)">Create My Club →</button><div style="text-align:center;font-size:0.6rem;color:var(--pb-gray);margin-top:8px">You can adjust betting limits after approving each player.</div></div></div></template>
 
-<template id="tpl-myclubs"><div style="background:#080D18;min-height:100%;color:#F5F7FA"><div class="lobby-hdr">My Clubs</div><div style="padding:14px"><div class="lobby-card" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between"><div style="display:flex;align-items:center;gap:9px"><div style="width:34px;height:34px;border-radius:8px;background:rgba(245,200,66,0.12);color:#f5c842;display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:900">VC</div><div><div style="font-size:0.84rem;font-weight:800;margin-bottom:2px">Vegas Crew</div><div style="display:flex;gap:5px;align-items:center"><span style="font-size:0.6rem;color:#64748B">PB-7K92Q</span><span class="lobby-pill lobby-pill-host">Host</span></div></div></div><div style="text-align:right"><div style="font-size:0.88rem;font-weight:900;color:#2F8CFF">$0</div><div style="font-size:0.6rem;color:#64748B">managing</div></div></div><div class="lobby-card" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between"><div style="display:flex;align-items:center;gap:9px"><div style="width:34px;height:34px;border-radius:8px;background:rgba(22,119,255,0.12);color:#2F8CFF;display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:900">NL</div><div><div style="font-size:0.84rem;font-weight:800;margin-bottom:2px">Night Life</div><div style="display:flex;gap:5px;align-items:center"><span style="font-size:0.6rem;color:#64748B">PB-3M8KQ</span><span class="lobby-pill lobby-pill-player">Player</span></div></div></div><div style="text-align:right"><div style="font-size:0.88rem;font-weight:900;color:#22C55E">+$340</div><div style="font-size:0.6rem;color:#64748B">you owe</div></div></div><div class="lobby-card" style="display:flex;align-items:center;justify-content:space-between"><div style="display:flex;align-items:center;gap:9px"><div style="width:34px;height:34px;border-radius:8px;background:rgba(234,179,8,0.12);color:#EAB308;display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:900">HC</div><div><div style="font-size:0.84rem;font-weight:800;margin-bottom:2px">High Rollers</div><div style="display:flex;gap:5px;align-items:center"><span style="font-size:0.6rem;color:#64748B">PB-9Z4WR</span><span class="lobby-pill lobby-pill-pending">Pending</span></div></div></div><div style="text-align:right"><div style="font-size:0.88rem;font-weight:900;color:#64748B">$0</div><div style="font-size:0.6rem;color:#64748B">awaiting approval</div></div></div></div></div></template>
+<template id="tpl-myclubs"><div style="background:var(--pb-bg);min-height:100%;color:var(--pb-white)"><div class="lobby-hdr">My Clubs</div><div style="padding:14px"><div class="lobby-card" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between"><div style="display:flex;align-items:center;gap:9px"><div style="width:34px;height:34px;border-radius:8px;background:rgba(245,200,66,0.12);color:#f5c842;display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:900">VC</div><div><div style="font-size:0.84rem;font-weight:800;margin-bottom:2px">Vegas Crew</div><div style="display:flex;gap:5px;align-items:center"><span style="font-size:0.6rem;color:var(--pb-gray)">PB-7K92Q</span><span class="lobby-pill lobby-pill-host">Host</span></div></div></div><div style="text-align:right"><div style="font-size:0.88rem;font-weight:900;color:var(--accent-blue-bright,#5eb1ff)">$0</div><div style="font-size:0.6rem;color:var(--pb-gray)">managing</div></div></div><div class="lobby-card" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between"><div style="display:flex;align-items:center;gap:9px"><div style="width:34px;height:34px;border-radius:8px;background:rgba(61,139,253,0.12);color:var(--accent-blue-bright,#5eb1ff);display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:900">NL</div><div><div style="font-size:0.84rem;font-weight:800;margin-bottom:2px">Night Life</div><div style="display:flex;gap:5px;align-items:center"><span style="font-size:0.6rem;color:var(--pb-gray)">PB-3M8KQ</span><span class="lobby-pill lobby-pill-player">Player</span></div></div></div><div style="text-align:right"><div style="font-size:0.88rem;font-weight:900;color:var(--pb-win)">+$340</div><div style="font-size:0.6rem;color:var(--pb-gray)">you owe</div></div></div><div class="lobby-card" style="display:flex;align-items:center;justify-content:space-between"><div style="display:flex;align-items:center;gap:9px"><div style="width:34px;height:34px;border-radius:8px;background:rgba(234,179,8,0.12);color:#EAB308;display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:900">HC</div><div><div style="font-size:0.84rem;font-weight:800;margin-bottom:2px">High Rollers</div><div style="display:flex;gap:5px;align-items:center"><span style="font-size:0.6rem;color:var(--pb-gray)">PB-9Z4WR</span><span class="lobby-pill lobby-pill-pending">Pending</span></div></div></div><div style="text-align:right"><div style="font-size:0.88rem;font-weight:900;color:var(--pb-gray)">$0</div><div style="font-size:0.6rem;color:var(--pb-gray)">awaiting approval</div></div></div></div></div></template>
 
-<template id="tpl-requests"><div style="background:#080D18;min-height:100%;color:#F5F7FA"><div class="lobby-hdr">Requests</div><div style="padding:14px"><div style="font-size:0.7rem;color:#94A3B8;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-weight:800">Pending join requests</div><div class="lobby-card" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:8px"><div style="display:flex;align-items:center;gap:9px"><div style="width:34px;height:34px;border-radius:50%;background:rgba(22,119,255,0.15);color:#2F8CFF;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:900">JD</div><div><div style="font-size:0.84rem;font-weight:800">JackDaniels</div><div style="font-size:0.6rem;color:#64748B">Vegas Crew · 2h ago</div></div></div><div style="display:flex;gap:6px"><button class="btn-approve">Approve</button><button class="btn-deny">Deny</button></div></div><div class="lobby-card" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><div style="display:flex;align-items:center;gap:9px"><div style="width:34px;height:34px;border-radius:50%;background:rgba(245,200,66,0.12);color:#f5c842;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:900">MR</div><div><div style="font-size:0.84rem;font-weight:800">MikeRivera</div><div style="font-size:0.6rem;color:#64748B">Vegas Crew · 5h ago</div></div></div><div style="display:flex;gap:6px"><button class="btn-approve">Approve</button><button class="btn-deny">Deny</button></div></div></div></div></template>
+<template id="tpl-requests"><div style="background:var(--pb-bg);min-height:100%;color:var(--pb-white)"><div class="lobby-hdr">Requests</div><div style="padding:14px"><div style="font-size:0.7rem;color:var(--pb-light);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-weight:800">Pending join requests</div><div class="lobby-card" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:8px"><div style="display:flex;align-items:center;gap:9px"><div style="width:34px;height:34px;border-radius:50%;background:rgba(61,139,253,0.15);color:var(--accent-blue-bright,#5eb1ff);display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:900">JD</div><div><div style="font-size:0.84rem;font-weight:800">JackDaniels</div><div style="font-size:0.6rem;color:var(--pb-gray)">Vegas Crew · 2h ago</div></div></div><div style="display:flex;gap:6px"><button class="btn-approve">Approve</button><button class="btn-deny">Deny</button></div></div><div class="lobby-card" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><div style="display:flex;align-items:center;gap:9px"><div style="width:34px;height:34px;border-radius:50%;background:rgba(245,200,66,0.12);color:#f5c842;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:900">MR</div><div><div style="font-size:0.84rem;font-weight:800">MikeRivera</div><div style="font-size:0.6rem;color:var(--pb-gray)">Vegas Crew · 5h ago</div></div></div><div style="display:flex;gap:6px"><button class="btn-approve">Approve</button><button class="btn-deny">Deny</button></div></div></div></div></template>
 
-<template id="tpl-messages"><div style="background:#080D18;min-height:100%;color:#F5F7FA;display:flex;flex-direction:column"><div class="lobby-hdr">Messages</div><div style="padding:14px"><div class="lobby-card" style="margin-bottom:8px;display:flex;gap:10px;align-items:center"><div style="width:38px;height:38px;border-radius:50%;background:rgba(245,200,66,0.12);color:#f5c842;display:flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:900">VC</div><div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><div style="font-size:0.84rem;font-weight:800">Vegas Crew</div><div style="font-size:0.6rem;color:#64748B">2m</div></div><div style="font-size:0.7rem;color:#94A3B8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Host: Lines posted for tonight 🏈</div></div><div style="width:18px;height:18px;border-radius:50%;background:#1677FF;color:#fff;font-size:0.6rem;font-weight:900;display:flex;align-items:center;justify-content:center">3</div></div><div class="lobby-card" style="margin-bottom:12px;display:flex;gap:10px;align-items:center"><div style="width:38px;height:38px;border-radius:50%;background:rgba(22,119,255,0.12);color:#2F8CFF;display:flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:900">NL</div><div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><div style="font-size:0.84rem;font-weight:800">Night Life</div><div style="font-size:0.6rem;color:#64748B">1h</div></div><div style="font-size:0.7rem;color:#94A3B8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">You: settled up, gg</div></div></div><div style="font-size:0.62rem;color:#64748B;text-transform:uppercase;letter-spacing:0.8px;font-weight:800;margin:4px 0 10px">Vegas Crew · chat</div><div style="display:flex;flex-direction:column;gap:2px;background:#0C1424;border:1px solid #1D2B42;border-radius:12px;padding:12px"><div class="chat-bubble chat-bubble-in">Host: Lines posted for tonight 🏈<br><span style="font-size:0.58rem;color:#64748B">2m ago</span></div><div class="chat-bubble chat-bubble-out">Got it — locking in early<br><span style="font-size:0.58rem;color:#94A3B8">Just now</span></div><div class="chat-bubble chat-bubble-in">Reminder: settle before Sunday kickoff<br><span style="font-size:0.58rem;color:#64748B">1m ago</span></div></div></div></div></template>
+<template id="tpl-messages"><div style="background:var(--pb-bg);min-height:100%;color:var(--pb-white);display:flex;flex-direction:column"><div class="lobby-hdr">Messages</div><div style="padding:14px"><div class="lobby-card" style="margin-bottom:8px;display:flex;gap:10px;align-items:center"><div style="width:38px;height:38px;border-radius:50%;background:rgba(245,200,66,0.12);color:#f5c842;display:flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:900">VC</div><div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><div style="font-size:0.84rem;font-weight:800">Vegas Crew</div><div style="font-size:0.6rem;color:var(--pb-gray)">2m</div></div><div style="font-size:0.7rem;color:var(--pb-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Host: Lines posted for tonight 🏈</div></div><div style="width:18px;height:18px;border-radius:50%;background:var(--pb-accent);color:#fff;font-size:0.6rem;font-weight:900;display:flex;align-items:center;justify-content:center">3</div></div><div class="lobby-card" style="margin-bottom:12px;display:flex;gap:10px;align-items:center"><div style="width:38px;height:38px;border-radius:50%;background:rgba(61,139,253,0.12);color:var(--accent-blue-bright,#5eb1ff);display:flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:900">NL</div><div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><div style="font-size:0.84rem;font-weight:800">Night Life</div><div style="font-size:0.6rem;color:var(--pb-gray)">1h</div></div><div style="font-size:0.7rem;color:var(--pb-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">You: settled up, gg</div></div></div><div style="font-size:0.62rem;color:var(--pb-gray);text-transform:uppercase;letter-spacing:0.8px;font-weight:800;margin:4px 0 10px">Vegas Crew · chat</div><div style="display:flex;flex-direction:column;gap:2px;background:var(--pb-bg-elev);border:1px solid var(--pb-border);border-radius:12px;padding:12px"><div class="chat-bubble chat-bubble-in">Host: Lines posted for tonight 🏈<br><span style="font-size:0.58rem;color:var(--pb-gray)">2m ago</span></div><div class="chat-bubble chat-bubble-out">Got it — locking in early<br><span style="font-size:0.58rem;color:var(--pb-light)">Just now</span></div><div class="chat-bubble chat-bubble-in">Reminder: settle before Sunday kickoff<br><span style="font-size:0.58rem;color:var(--pb-gray)">1m ago</span></div></div></div></div></template>
 
-<template id="tpl-settings"><div style="background:#080D18;min-height:100%;color:#F5F7FA"><div class="lobby-hdr">Settings</div><div style="padding:14px"><div class="lobby-card" style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#1677FF,#2F8CFF);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1rem">TG</div><div style="flex:1"><div style="font-size:0.9rem;font-weight:900;color:#F5F7FA">TonyG26</div><div style="font-size:0.65rem;color:#94A3B8">ID: 1042 · Verified</div></div><button style="padding:7px 11px;background:transparent;color:#2F8CFF;border:1px solid #1677FF;border-radius:8px;font-size:0.7rem;font-weight:800">Edit</button></div><div style="font-size:0.6rem;color:#64748B;text-transform:uppercase;letter-spacing:1px;margin:14px 0 6px;font-weight:800">Account</div><div class="lobby-card" style="padding:0;overflow:hidden"><div style="padding:13px 14px;border-bottom:1px solid #1D2B42;display:flex;justify-content:space-between;align-items:center"><div style="font-size:0.82rem;font-weight:700">Notifications</div><div style="width:34px;height:20px;background:#1677FF;border-radius:10px;position:relative"><div style="position:absolute;right:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#F5F7FA"></div></div></div><div style="padding:13px 14px;border-bottom:1px solid #1D2B42;display:flex;justify-content:space-between;align-items:center"><div style="font-size:0.82rem;font-weight:700">Theme</div><div style="font-size:0.78rem;color:#94A3B8">Dark ›</div></div><div style="padding:13px 14px;display:flex;justify-content:space-between;align-items:center"><div style="font-size:0.82rem;font-weight:700">Telegram</div><div style="font-size:0.78rem;color:#2F8CFF">Link ›</div></div></div><div style="font-size:0.6rem;color:#64748B;text-transform:uppercase;letter-spacing:1px;margin:14px 0 6px;font-weight:800">Support</div><div class="lobby-card" style="padding:0;overflow:hidden"><div style="padding:13px 14px;border-bottom:1px solid #1D2B42;font-size:0.82rem;font-weight:700">Help Center ›</div><div style="padding:13px 14px;border-bottom:1px solid #1D2B42;font-size:0.82rem;font-weight:700">Terms ›</div><div style="padding:13px 14px;font-size:0.82rem;font-weight:700">Privacy ›</div></div><button style="width:100%;margin-top:18px;padding:13px;background:transparent;color:#EF4444;border:1.5px solid #EF4444;border-radius:12px;font-size:0.85rem;font-weight:900">Sign Out</button></div></div></template>
+<template id="tpl-settings"><div style="background:var(--pb-bg);min-height:100%;color:var(--pb-white)"><div class="lobby-hdr">Settings</div><div style="padding:14px"><div class="lobby-card" style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--pb-accent),var(--accent-blue-bright,#5eb1ff));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1rem">TG</div><div style="flex:1"><div style="font-size:0.9rem;font-weight:900;color:var(--pb-white)">TonyG26</div><div style="font-size:0.65rem;color:var(--pb-light)">ID: 1042 · Verified</div></div><button style="padding:7px 11px;background:transparent;color:var(--accent-blue-bright,#5eb1ff);border:1px solid var(--pb-accent);border-radius:8px;font-size:0.7rem;font-weight:800">Edit</button></div><div style="font-size:0.6rem;color:var(--pb-gray);text-transform:uppercase;letter-spacing:1px;margin:14px 0 6px;font-weight:800">Account</div><div class="lobby-card" style="padding:0;overflow:hidden"><div style="padding:13px 14px;border-bottom:1px solid var(--pb-border);display:flex;justify-content:space-between;align-items:center"><div style="font-size:0.82rem;font-weight:700">Notifications</div><div style="width:34px;height:20px;background:var(--pb-accent);border-radius:10px;position:relative"><div style="position:absolute;right:2px;top:2px;width:16px;height:16px;border-radius:50%;background:var(--pb-white)"></div></div></div><div style="padding:13px 14px;border-bottom:1px solid var(--pb-border);display:flex;justify-content:space-between;align-items:center"><div style="font-size:0.82rem;font-weight:700">Theme</div><div style="font-size:0.78rem;color:var(--pb-light)">Dark ›</div></div><div style="padding:13px 14px;display:flex;justify-content:space-between;align-items:center"><div style="font-size:0.82rem;font-weight:700">Telegram</div><div style="font-size:0.78rem;color:var(--accent-blue-bright,#5eb1ff)">Link ›</div></div></div><div style="font-size:0.6rem;color:var(--pb-gray);text-transform:uppercase;letter-spacing:1px;margin:14px 0 6px;font-weight:800">Support</div><div class="lobby-card" style="padding:0;overflow:hidden"><div style="padding:13px 14px;border-bottom:1px solid var(--pb-border);font-size:0.82rem;font-weight:700">Help Center ›</div><div style="padding:13px 14px;border-bottom:1px solid var(--pb-border);font-size:0.82rem;font-weight:700">Terms ›</div><div style="padding:13px 14px;font-size:0.82rem;font-weight:700">Privacy ›</div></div><button style="width:100%;margin-top:18px;padding:13px;background:transparent;color:var(--pb-loss);border:1.5px solid var(--pb-loss);border-radius:12px;font-size:0.85rem;font-weight:900">Sign Out</button></div></div></template>
 
-<template id="tpl-pending"><div style="background:#080D18;min-height:100%;padding:40px 22px;text-align:center;color:#F5F7FA"><div class="pending-badge">Pending Approval</div><div style="font-size:3rem;margin-bottom:14px">⏳</div><div style="font-size:1.1rem;font-weight:900;margin-bottom:8px;color:#F5F7FA">Request Sent!</div><div style="font-size:0.78rem;color:#94A3B8;line-height:1.6;margin-bottom:18px">Your request to join <strong style="color:#F5F7FA">Vegas Crew</strong> has been sent.<br>You will be notified once the host approves you.</div><div style="display:inline-block;font-size:1.6rem;font-weight:900;letter-spacing:5px;color:#EAB308;background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.35);padding:10px 20px;border-radius:12px;margin-bottom:12px">PB-7K92Q</div><div style="font-size:0.64rem;color:#64748B">You cannot place bets until approved</div><button style="margin-top:20px;width:100%;padding:13px;background:transparent;color:#94A3B8;border:1px solid #1D2B42;border-radius:12px;font-size:0.82rem;font-weight:700">Back to Lobby</button></div></template>
+<template id="tpl-pending"><div style="background:var(--pb-bg);min-height:100%;padding:40px 22px;text-align:center;color:var(--pb-white)"><div class="pending-badge">Pending Approval</div><div style="font-size:3rem;margin-bottom:14px">⏳</div><div style="font-size:1.1rem;font-weight:900;margin-bottom:8px;color:var(--pb-white)">Request Sent!</div><div style="font-size:0.78rem;color:var(--pb-light);line-height:1.6;margin-bottom:18px">Your request to join <strong style="color:var(--pb-white)">Vegas Crew</strong> has been sent.<br>You will be notified once the host approves you.</div><div style="display:inline-block;font-size:1.6rem;font-weight:900;letter-spacing:5px;color:#EAB308;background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.35);padding:10px 20px;border-radius:12px;margin-bottom:12px">PB-7K92Q</div><div style="font-size:0.64rem;color:var(--pb-gray)">You cannot place bets until approved</div><button style="margin-top:20px;width:100%;padding:13px;background:transparent;color:var(--pb-light);border:1px solid var(--pb-border);border-radius:12px;font-size:0.82rem;font-weight:700">Back to Lobby</button></div></template>
 
 <!-- JOIN CLUB MODAL -->
 <div class="modal-bg" id="modal-join">
   <div class="modal">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
       <div class="modal-title">Join a Club</div>
-      <button onclick="closeModal('modal-join')" style="background:none;border:none;color:#94A3B8;font-size:1.3rem;cursor:pointer">✕</button>
+      <button onclick="closeModal('modal-join')" style="background:none;border:none;color:var(--pb-light);font-size:1.3rem;cursor:pointer">✕</button>
     </div>
     <div class="modal-sub">Enter the club ID to find and request access</div>
     <div style="display:flex;gap:8px;margin-bottom:4px">
@@ -681,37 +703,37 @@ try {
 
 <!-- CREATE CLUB MODAL -->
 <div class="modal-bg" id="modal-create">
-  <div class="modal" style="background:linear-gradient(180deg,#0C1424,#080D18);border-top:1px solid rgba(22,119,255,0.22)">
+  <div class="modal" style="background:linear-gradient(180deg,var(--pb-bg-elev),var(--pb-bg));border-top:1px solid rgba(61,139,253,0.22)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <div style="font-size:1.3rem;font-weight:900;letter-spacing:-0.3px;color:#F5F7FA">Create a Club</div>
-      <button onclick="closeModal('modal-create')" style="background:rgba(255,255,255,0.06);border:1px solid #1D2B42;color:#94A3B8;font-size:1rem;cursor:pointer;width:30px;height:30px;border-radius:50%">✕</button>
+      <div style="font-size:1.3rem;font-weight:900;letter-spacing:-0.3px;color:var(--pb-white)">Create a Club</div>
+      <button onclick="closeModal('modal-create')" style="background:rgba(255,255,255,0.06);border:1px solid var(--pb-border);color:var(--pb-light);font-size:1rem;cursor:pointer;width:30px;height:30px;border-radius:50%">✕</button>
     </div>
 
-    <div style="font-size:0.78rem;color:#94A3B8;line-height:1.6;margin-bottom:20px;padding:12px 14px;background:rgba(22,119,255,0.08);border:1px solid rgba(22,119,255,0.22);border-radius:12px">
+    <div style="font-size:0.78rem;color:var(--pb-light);line-height:1.6;margin-bottom:20px;padding:12px 14px;background:rgba(61,139,253,0.08);border:1px solid rgba(61,139,253,0.22);border-radius:12px">
       Create your private betting club. Invite players, approve requests, then set individual player limits.
     </div>
 
     <!-- Logo upload -->
     <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:20px">
-      <div id="cc-logo-preview" onclick="document.getElementById('cc-logo-input').click()" style="width:80px;height:80px;border-radius:50%;background:#0A1120;border:2px dashed rgba(22,119,255,0.4);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:border-color 0.2s;overflow:hidden;position:relative">
+      <div id="cc-logo-preview" onclick="document.getElementById('cc-logo-input').click()" style="width:80px;height:80px;border-radius:50%;background:var(--bg-recessed,#0a101a);border:2px dashed rgba(61,139,253,0.4);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:border-color 0.2s;overflow:hidden;position:relative">
         <div id="cc-logo-placeholder" style="text-align:center">
           <div style="font-size:1.5rem" id="cc-logo-initials">🏆</div>
-          <div style="font-size:0.55rem;color:#64748B;margin-top:4px">Add Logo</div>
+          <div style="font-size:0.55rem;color:var(--pb-gray);margin-top:4px">Add Logo</div>
         </div>
         <img id="cc-logo-img" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;position:absolute;inset:0">
       </div>
       <input id="cc-logo-input" type="file" accept="image/*" style="display:none" onchange="previewLogo(this)">
-      <div style="font-size:0.65rem;color:#64748B;margin-top:8px">Tap to upload club logo</div>
+      <div style="font-size:0.65rem;color:var(--pb-gray);margin-top:8px">Tap to upload club logo</div>
     </div>
 
     <!-- Club name -->
     <div style="margin-bottom:20px">
-      <div style="font-size:0.65rem;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Club Name *</div>
+      <div style="font-size:0.65rem;font-weight:700;color:var(--pb-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Club Name *</div>
       <input id="cc-name" class="inp" placeholder="e.g. Vegas Crew" style="margin:0;font-size:1rem;font-weight:700" oninput="updateLogoInitials(this.value)">
     </div>
 
-    <button onclick="createClub()" style="width:100%;padding:16px;background:#1677FF;color:#fff;border:none;border-radius:14px;font-size:1rem;font-weight:900;cursor:pointer;letter-spacing:0.3px;box-shadow:0 4px 20px rgba(22,119,255,0.25)">Create My Club →</button>
-    <div style="text-align:center;font-size:0.68rem;color:#64748B;margin-top:10px;line-height:1.5">You can adjust betting limits after approving each player.</div>
+    <button onclick="createClub()" style="width:100%;padding:16px;background:var(--pb-accent);color:#fff;border:none;border-radius:14px;font-size:1rem;font-weight:900;cursor:pointer;letter-spacing:0.3px;box-shadow:0 4px 20px rgba(61,139,253,0.25)">Create My Club →</button>
+    <div style="text-align:center;font-size:0.68rem;color:var(--pb-gray);margin-top:10px;line-height:1.5">You can adjust betting limits after approving each player.</div>
   </div>
 </div>
 
@@ -1856,7 +1878,7 @@ function renderClubsList() {
   const el = document.getElementById('clubs-list-el');
   if (!el) return;
   if (!userClubs.length) {
-    el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#64748B;font-size:0.85rem"><div style="font-size:2rem;margin-bottom:10px">🃏</div>No clubs yet — join or create one</div>';
+    el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--pb-gray);font-size:0.85rem"><div style="font-size:2rem;margin-bottom:10px">🃏</div>No clubs yet — join or create one</div>';
     return;
   }
   el.innerHTML = userClubs.map(c => {
@@ -1864,25 +1886,25 @@ function renderClubsList() {
     const ownerRole = isOwnerRole(c.role);
     const isPending = c.status === 'pending' || c.status === 'demo';
     const bal = parseFloat(c.balance)||0;
-    const balCol = bal>0?'#22C55E':bal<0?'#EF4444':'#94A3B8';
+    const balCol = bal>0?'var(--pb-win)':bal<0?'var(--pb-loss)':'var(--pb-light)';
     const roleLabel = roleDisplay(c);
-    const roleColor = ownerRole ? '#f5c842' : hostRole ? '#2F8CFF' : isPending ? '#EAB308' : '#2F8CFF';
+    const roleColor = ownerRole ? '#f5c842' : hostRole ? 'var(--accent-blue-bright,#5eb1ff)' : isPending ? '#EAB308' : 'var(--accent-blue-bright,#5eb1ff)';
     const members = c.members||0;
     // Owners/hosts enter host tools only. They cannot bet in their own hosted club.
     const actionBtn = isPending&&c.status==='demo'
-      ? `<button onclick="event.stopPropagation();openModal('modal-join')" style="padding:8px 16px;background:rgba(22,119,255,0.15);color:#2F8CFF;border:1px solid rgba(22,119,255,0.35);border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Join Club</button>`
+      ? `<button onclick="event.stopPropagation();openModal('modal-join')" style="padding:8px 16px;background:rgba(61,139,253,0.15);color:var(--accent-blue-bright,#5eb1ff);border:1px solid rgba(61,139,253,0.35);border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Join Club</button>`
       : hostRole
-        ? `<button onclick="event.stopPropagation();selectClub('${c.id}','host')" style="padding:8px 16px;background:${ownerRole?'#f5c842':'#1677FF'};color:${ownerRole?'#000':'#fff'};border:none;border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Host</button>`
-        : `<button onclick="event.stopPropagation();selectClub('${c.id}','player')" style="padding:8px 16px;background:#1677FF;color:#fff;border:none;border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Sportsbook</button>`;
-    return `<div onclick="selectClub(${c.id})" style="background:#101A2E;border:1px solid #1D2B42;border-radius:12px;padding:16px;margin-bottom:10px;cursor:pointer;transition:border-color 0.15s" onmouseenter="this.style.borderColor='#1677FF'" onmouseleave="this.style.borderColor='#1D2B42'">
+        ? `<button onclick="event.stopPropagation();selectClub('${c.id}','host')" style="padding:8px 16px;background:${ownerRole?'#f5c842':'var(--pb-accent)'};color:${ownerRole?'#000':'#fff'};border:none;border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Host</button>`
+        : `<button onclick="event.stopPropagation();selectClub('${c.id}','player')" style="padding:8px 16px;background:var(--pb-accent);color:#fff;border:none;border-radius:20px;font-size:0.72rem;font-weight:900;cursor:pointer;white-space:nowrap">Sportsbook</button>`;
+    return `<div onclick="selectClub(${c.id})" style="background:var(--pb-card);border:1px solid var(--pb-border);border-radius:12px;padding:16px;margin-bottom:10px;cursor:pointer;transition:border-color 0.15s" onmouseenter="this.style.borderColor='var(--pb-accent)'" onmouseleave="this.style.borderColor='var(--pb-border)'">
       <div style="display:flex;align-items:center;gap:12px">
-        <div style="width:48px;height:48px;border-radius:12px;background:#0A1120;border:1px solid #1D2B42;display:flex;align-items:center;justify-content:center;font-size:1rem;font-weight:900;color:#2F8CFF;flex-shrink:0">${(c.name||'').slice(0,2).toUpperCase()}</div>
+        <div style="width:48px;height:48px;border-radius:12px;background:var(--bg-recessed,#0a101a);border:1px solid var(--pb-border);display:flex;align-items:center;justify-content:center;font-size:1rem;font-weight:900;color:var(--accent-blue-bright,#5eb1ff);flex-shrink:0">${(c.name||'').slice(0,2).toUpperCase()}</div>
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
-            <span style="font-size:0.92rem;font-weight:900;color:#F5F7FA;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.name}</span>
+            <span style="font-size:0.92rem;font-weight:900;color:var(--pb-white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.name}</span>
             <span style="font-size:0.6rem;font-weight:800;color:${roleColor};background:rgba(10,17,32,0.8);padding:2px 8px;border-radius:999px;border:1px solid ${roleColor};flex-shrink:0">${roleLabel}</span>
           </div>
-          <div style="font-size:0.65rem;color:#64748B">ID: ${c.code||c.id} · ${members} member${members!==1?'s':''}</div>
+          <div style="font-size:0.65rem;color:var(--pb-gray)">ID: ${c.code||c.id} · ${members} member${members!==1?'s':''}</div>
           ${c.pendingRequests?`<div style="font-size:0.65rem;color:#EAB308;margin-top:2px">⏳ ${c.pendingRequests} pending request${c.pendingRequests>1?'s':''}</div>`:''}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0">
@@ -2068,19 +2090,19 @@ async function searchClub() {
   const code = document.getElementById('join-code').value.trim();
   if (!code) return;
   const el = document.getElementById('join-result');
-  el.innerHTML = '<div style="color:#94A3B8;font-size:0.85rem;padding:10px 0">Searching...</div>';
+  el.innerHTML = '<div style="color:var(--pb-light);font-size:0.85rem;padding:10px 0">Searching...</div>';
   try {
     const club = await fetch(API + '/api/clubs/search/' + code.toUpperCase()).then(r=>r.json());
     if (club.error) { el.innerHTML = '<div style="color:var(--negative);font-size:0.85rem;padding:8px 0">Club not found</div>'; return; }
     var _initials = (club.name||'??').replace(/[^A-Za-z0-9 ]/g,'').split(/\s+/).filter(Boolean).slice(0,2).map(function(w){return w[0].toUpperCase();}).join('') || '🏆';
     var _logoHTML = club.logo
-      ? '<img src="'+club.logo+'" alt="" style="width:54px;height:54px;border-radius:50%;object-fit:cover;border:2px solid rgba(22,119,255,0.35)">'
-      : '<div style="width:54px;height:54px;border-radius:50%;background:#0A1120;border:2px solid rgba(22,119,255,0.35);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1rem;color:#2F8CFF;letter-spacing:0.5px">'+_initials+'</div>';
+      ? '<img src="'+club.logo+'" alt="" style="width:54px;height:54px;border-radius:50%;object-fit:cover;border:2px solid rgba(61,139,253,0.35)">'
+      : '<div style="width:54px;height:54px;border-radius:50%;background:var(--bg-recessed,#0a101a);border:2px solid rgba(61,139,253,0.35);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1rem;color:var(--accent-blue-bright,#5eb1ff);letter-spacing:0.5px">'+_initials+'</div>';
     var _locked = !!club.is_locked;
     var _actions = _locked
-      ? '<div style="padding:14px 12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);border-radius:12px;color:#EF4444;font-size:0.85rem;font-weight:700;text-align:center">🔒 This club is not accepting new members right now</div>'
+      ? '<div style="padding:14px 12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);border-radius:12px;color:var(--pb-loss);font-size:0.85rem;font-weight:700;text-align:center">🔒 This club is not accepting new members right now</div>'
       : '<div style="display:flex;gap:8px">' +
-          '<button onclick="closeModal(\'modal-join\')" style="flex:1;padding:13px;background:transparent;color:#94A3B8;border:1px solid #1D2B42;border-radius:12px;font-size:0.85rem;font-weight:800;cursor:pointer">Cancel</button>' +
+          '<button onclick="closeModal(\'modal-join\')" style="flex:1;padding:13px;background:transparent;color:var(--pb-light);border:1px solid var(--pb-border);border-radius:12px;font-size:0.85rem;font-weight:800;cursor:pointer">Cancel</button>' +
           '<button onclick="requestJoin(\''+String(club.id)+'\',\''+String(club.code||'').replace(/'/g,"\\'")+'\',\''+String(club.name||'').replace(/'/g,"\\'")+'\')" class="btn-primary" style="flex:2;margin:0">Request to Join →</button>' +
         '</div>';
     el.innerHTML = '<div class="club-found-card">' +
@@ -2144,7 +2166,7 @@ function previewLogo(input) {
     document.getElementById('cc-logo-img').style.display = 'block';
     document.getElementById('cc-logo-placeholder').style.display = 'none';
     document.getElementById('cc-logo-preview').style.borderStyle = 'solid';
-    document.getElementById('cc-logo-preview').style.borderColor = 'rgba(22,119,255,0.55)';
+    document.getElementById('cc-logo-preview').style.borderColor = 'rgba(61,139,253,0.55)';
   };
   reader.readAsDataURL(file);
 }
@@ -2213,37 +2235,37 @@ function renderLobbyHostRequests(){
   var reqs = _lobbyLoadJoinRequests();
   // Prefer live API for first hosted club when signed in
   var finish = function(list){
-    var html = '<div style="background:#080D18;min-height:100%;color:#F5F7FA">'
-      + '<div style="padding:14px 16px;background:#0C1424;border-bottom:1px solid #1D2B42;font-size:1rem;font-weight:900;position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center">'
+    var html = '<div style="background:var(--pb-bg);min-height:100%;color:var(--pb-white)">'
+      + '<div style="padding:14px 16px;background:var(--pb-bg-elev);border-bottom:1px solid var(--pb-border);font-size:1rem;font-weight:900;position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center">'
       + '<span>Join Requests</span>'
-      + '<button onclick="document.getElementById(\'preview-screen\').style.display=\'none\'" style="background:none;border:none;color:#94A3B8;font-size:1.1rem;cursor:pointer">✕</button>'
+      + '<button onclick="document.getElementById(\'preview-screen\').style.display=\'none\'" style="background:none;border:none;color:var(--pb-light);font-size:1.1rem;cursor:pointer">✕</button>'
       + '</div><div style="padding:14px">';
     if (!list.length) {
-      html += '<div style="text-align:center;padding:40px 16px;color:#64748B;font-size:0.85rem">No pending join requests'
+      html += '<div style="text-align:center;padding:40px 16px;color:var(--pb-gray);font-size:0.85rem">No pending join requests'
         + (hosted.length?'':' — create or open a club as host to receive requests')+'</div>';
     } else {
-      html += '<div style="font-size:0.7rem;color:#94A3B8;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-weight:800">Pending join requests</div>';
+      html += '<div style="font-size:0.7rem;color:var(--pb-light);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-weight:800">Pending join requests</div>';
       html += list.map(function(r){
         var initials = String(r.playerName||'??').replace(/[^A-Za-z0-9 ]/g,'').split(/\s+/).filter(Boolean).slice(0,2).map(function(w){return (w[0]||'').toUpperCase();}).join('') || '?';
         var when = r.requestedAt ? new Date(r.requestedAt).toLocaleString() : '';
         var payload = encodeURIComponent(JSON.stringify(r));
-        return '<div style="background:#101A2E;border:1px solid #1D2B42;border-radius:12px;padding:11px 13px;margin-bottom:7px;display:flex;align-items:center;justify-content:space-between;gap:8px">'
+        return '<div style="background:var(--pb-card);border:1px solid var(--pb-border);border-radius:12px;padding:11px 13px;margin-bottom:7px;display:flex;align-items:center;justify-content:space-between;gap:8px">'
           + '<div style="display:flex;align-items:center;gap:9px;min-width:0">'
-          + '<div style="width:34px;height:34px;border-radius:50%;background:rgba(22,119,255,0.15);color:#2F8CFF;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:900;flex-shrink:0">'+initials+'</div>'
-          + '<div style="min-width:0"><div style="font-size:0.84rem;font-weight:800;color:#F5F7FA">'+(r.playerName||'Player')+'</div>'
-          + '<div style="font-size:0.6rem;color:#64748B">'+(r.clubName||'Club')+(when?' · '+when:'')+'</div></div></div>'
+          + '<div style="width:34px;height:34px;border-radius:50%;background:rgba(61,139,253,0.15);color:var(--accent-blue-bright,#5eb1ff);display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:900;flex-shrink:0">'+initials+'</div>'
+          + '<div style="min-width:0"><div style="font-size:0.84rem;font-weight:800;color:var(--pb-white)">'+(r.playerName||'Player')+'</div>'
+          + '<div style="font-size:0.6rem;color:var(--pb-gray)">'+(r.clubName||'Club')+(when?' · '+when:'')+'</div></div></div>'
           + '<div style="display:flex;gap:6px;flex-shrink:0">'
-          + '<button data-req="'+payload+'" onclick="lobbyOpenApprove(this.dataset.req)" style="padding:7px 12px;background:#22C55E;color:#04120a;border:none;border-radius:8px;font-size:0.7rem;font-weight:900;cursor:pointer">Approve</button>'
-          + '<button data-pid="'+String(r.playerId||'').replace(/"/g,'')+'" onclick="lobbyDenyRequest(this.dataset.pid)" style="padding:7px 12px;background:transparent;color:#EF4444;border:1px solid #EF4444;border-radius:8px;font-size:0.7rem;font-weight:900;cursor:pointer">Deny</button>'
+          + '<button data-req="'+payload+'" onclick="lobbyOpenApprove(this.dataset.req)" style="padding:7px 12px;background:var(--pb-win);color:#04120a;border:none;border-radius:8px;font-size:0.7rem;font-weight:900;cursor:pointer">Approve</button>'
+          + '<button data-pid="'+String(r.playerId||'').replace(/"/g,'')+'" onclick="lobbyDenyRequest(this.dataset.pid)" style="padding:7px 12px;background:transparent;color:var(--pb-loss);border:1px solid var(--pb-loss);border-radius:8px;font-size:0.7rem;font-weight:900;cursor:pointer">Deny</button>'
           + '</div></div>';
       }).join('');
     }
-    html += '<div style="font-size:0.68rem;color:#64748B;margin-top:14px;line-height:1.5">Approve opens the host dashboard so you can set starting balance and player limits.</div></div></div>';
+    html += '<div style="font-size:0.68rem;color:var(--pb-gray);margin-top:14px;line-height:1.5">Approve opens the host dashboard so you can set starting balance and player limits.</div></div></div>';
     var ps = document.getElementById('preview-screen');
     if (!ps) {
       ps = document.createElement('div');
       ps.id = 'preview-screen';
-      ps.style.cssText = 'position:fixed;inset:0;z-index:80;background:#080D18;overflow:auto';
+      ps.style.cssText = 'position:fixed;inset:0;z-index:80;background:var(--pb-bg);overflow:auto';
       document.body.appendChild(ps);
     }
     ps.innerHTML = html;
@@ -2378,50 +2400,50 @@ function showPlayerSettings() {
   ov.style.cssText = 'position:fixed!important;top:0!important;left:0!important;right:0!important;bottom:0!important;width:100vw!important;height:100vh!important;z-index:2147483647!important;background:rgba(8,13,24,0.88)!important;display:flex!important;align-items:flex-end!important;justify-content:center!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important';
   function chip(group, val, label, current) {
     var on = current === val;
-    return '<button data-pset-'+group+'="'+val+'" style="flex:1;padding:10px;background:'+(on?'#1677FF':'#0A1120')+';border:1px solid '+(on?'#1677FF':'#1D2B42')+';color:'+(on?'#fff':'#94A3B8')+';border-radius:10px;font-size:0.78rem;font-weight:800;cursor:pointer">'+label+'</button>';
+    return '<button data-pset-'+group+'="'+val+'" style="flex:1;padding:10px;background:'+(on?'var(--pb-accent)':'var(--bg-recessed,#0a101a)')+';border:1px solid '+(on?'var(--pb-accent)':'var(--pb-border)')+';color:'+(on?'#fff':'var(--pb-light)')+';border-radius:10px;font-size:0.78rem;font-weight:800;cursor:pointer">'+label+'</button>';
   }
-  ov.innerHTML = '<div style="background:#0C1424;color:#F5F7FA;width:100%;max-width:430px;max-height:90vh;border-radius:20px 20px 0 0;display:flex;flex-direction:column;border:1px solid #1D2B42">' +
-    '<div style="padding:14px 16px;border-bottom:1px solid #1D2B42;display:flex;justify-content:space-between;align-items:center">' +
-      '<div><div style="font-size:0.62rem;color:#94A3B8;text-transform:uppercase;letter-spacing:0.5px">Profile</div><div style="font-size:1rem;font-weight:900;color:#F5F7FA">Settings</div></div>' +
-      '<button id="ps-close" style="background:#0A1120;border:1px solid #1D2B42;color:#F5F7FA;width:34px;height:34px;border-radius:50%;font-size:1rem;cursor:pointer">✕</button>' +
+  ov.innerHTML = '<div style="background:var(--pb-bg-elev);color:var(--pb-white);width:100%;max-width:430px;max-height:90vh;border-radius:20px 20px 0 0;display:flex;flex-direction:column;border:1px solid var(--pb-border)">' +
+    '<div style="padding:14px 16px;border-bottom:1px solid var(--pb-border);display:flex;justify-content:space-between;align-items:center">' +
+      '<div><div style="font-size:0.62rem;color:var(--pb-light);text-transform:uppercase;letter-spacing:0.5px">Profile</div><div style="font-size:1rem;font-weight:900;color:var(--pb-white)">Settings</div></div>' +
+      '<button id="ps-close" style="background:var(--bg-recessed,#0a101a);border:1px solid var(--pb-border);color:var(--pb-white);width:34px;height:34px;border-radius:50%;font-size:1rem;cursor:pointer">✕</button>' +
     '</div>' +
     '<div style="flex:1;overflow-y:auto;padding:16px">' +
-      '<div style="background:#101A2E;border:1px solid #1D2B42;border-radius:12px;padding:14px;margin-bottom:12px;display:flex;align-items:center;gap:12px">' +
-        '<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#1677FF,#2F8CFF);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1rem;flex-shrink:0">'+initials+'</div>' +
-        '<div style="flex:1;min-width:0"><div style="font-size:0.9rem;font-weight:900;color:#F5F7FA">'+String(displayName).replace(/</g,'&lt;')+'</div>' +
-        '<div style="font-size:0.65rem;color:#94A3B8">ID: '+(playerId || '—')+'</div></div>' +
+      '<div style="background:var(--pb-card);border:1px solid var(--pb-border);border-radius:12px;padding:14px;margin-bottom:12px;display:flex;align-items:center;gap:12px">' +
+        '<div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--pb-accent),var(--accent-blue-bright,#5eb1ff));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1rem;flex-shrink:0">'+initials+'</div>' +
+        '<div style="flex:1;min-width:0"><div style="font-size:0.9rem;font-weight:900;color:var(--pb-white)">'+String(displayName).replace(/</g,'&lt;')+'</div>' +
+        '<div style="font-size:0.65rem;color:var(--pb-light)">ID: '+(playerId || '—')+'</div></div>' +
       '</div>' +
-      '<div style="background:#101A2E;border:1px solid #1D2B42;border-radius:12px;padding:14px;margin-bottom:12px">' +
-        '<div style="font-size:0.62rem;color:#94A3B8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Signal Contact</div>' +
-        '<input id="ps-signal" placeholder="Signal username / phone" value="'+(s.signalContact||'').replace(/"/g,'&quot;')+'" style="width:100%;background:#0A1120;border:1px solid #1D2B42;border-radius:10px;padding:10px 12px;color:#F5F7FA;font-size:0.85rem;outline:none">' +
-        '<div style="font-size:0.62rem;color:#64748B;margin-top:6px">Used to deliver settlement receipts.</div>' +
+      '<div style="background:var(--pb-card);border:1px solid var(--pb-border);border-radius:12px;padding:14px;margin-bottom:12px">' +
+        '<div style="font-size:0.62rem;color:var(--pb-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Signal Contact</div>' +
+        '<input id="ps-signal" placeholder="Signal username / phone" value="'+(s.signalContact||'').replace(/"/g,'&quot;')+'" style="width:100%;background:var(--bg-recessed,#0a101a);border:1px solid var(--pb-border);border-radius:10px;padding:10px 12px;color:var(--pb-white);font-size:0.85rem;outline:none">' +
+        '<div style="font-size:0.62rem;color:var(--pb-gray);margin-top:6px">Used to deliver settlement receipts.</div>' +
       '</div>' +
-      '<div style="background:#101A2E;border:1px solid #1D2B42;border-radius:12px;padding:14px;margin-bottom:12px">' +
-        '<div style="font-size:0.62rem;color:#94A3B8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Email</div>' +
-        '<input id="ps-email" placeholder="you@example.com" value="'+String(pl.email||localStorage.getItem("pb-dev-email")||"").replace(/"/g,"&quot;")+'" style="width:100%;background:#0A1120;border:1px solid #1D2B42;border-radius:10px;padding:10px 12px;color:#F5F7FA;font-size:0.85rem;outline:none">' +
-        '<div style="font-size:0.62rem;color:#64748B;margin-top:6px">Backup contact — either Signal or email is enough.</div>' +
+      '<div style="background:var(--pb-card);border:1px solid var(--pb-border);border-radius:12px;padding:14px;margin-bottom:12px">' +
+        '<div style="font-size:0.62rem;color:var(--pb-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Email</div>' +
+        '<input id="ps-email" placeholder="you@example.com" value="'+String(pl.email||localStorage.getItem("pb-dev-email")||"").replace(/"/g,"&quot;")+'" style="width:100%;background:var(--bg-recessed,#0a101a);border:1px solid var(--pb-border);border-radius:10px;padding:10px 12px;color:var(--pb-white);font-size:0.85rem;outline:none">' +
+        '<div style="font-size:0.62rem;color:var(--pb-gray);margin-top:6px">Backup contact — either Signal or email is enough.</div>' +
       '</div>' +
-      '<div style="background:#101A2E;border:1px solid #1D2B42;border-radius:12px;padding:14px;margin-bottom:12px">' +
-        '<div style="font-size:0.62rem;color:#94A3B8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Appearance</div>' +
+      '<div style="background:var(--pb-card);border:1px solid var(--pb-border);border-radius:12px;padding:14px;margin-bottom:12px">' +
+        '<div style="font-size:0.62rem;color:var(--pb-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Appearance</div>' +
         '<div style="display:flex;gap:8px">' + chip('theme','dark','🌑 Dark', s.theme) + chip('theme','light','☀️ Light', s.theme) + '</div>' +
       '</div>' +
-      '<div style="background:#101A2E;border:1px solid #1D2B42;border-radius:12px;padding:14px;margin-bottom:12px">' +
-        '<div style="font-size:0.62rem;color:#94A3B8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Display Currency</div>' +
+      '<div style="background:var(--pb-card);border:1px solid var(--pb-border);border-radius:12px;padding:14px;margin-bottom:12px">' +
+        '<div style="font-size:0.62rem;color:var(--pb-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Display Currency</div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">' +
           ['USD','EUR','GBP','CAD','AUD','MXN'].map(function(c){ return chip('currency', c, c, s.currency); }).join('') +
         '</div>' +
-        '<div style="font-size:0.62rem;color:#64748B;margin-top:8px">Bets/balances stored in USD. Display only.</div>' +
+        '<div style="font-size:0.62rem;color:var(--pb-gray);margin-top:8px">Bets/balances stored in USD. Display only.</div>' +
       '</div>' +
-      '<div style="background:#101A2E;border:1px solid #1D2B42;border-radius:12px;padding:14px;margin-bottom:12px" id="ps-telegram-box">' +
-        '<div style="font-size:0.62rem;color:#94A3B8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Telegram</div>' +
-        '<div id="ps-telegram-status" style="font-size:0.82rem;color:#94A3B8;margin-bottom:10px">Checking link status…</div>' +
-        '<button type="button" id="ps-telegram-link" style="width:100%;padding:12px;background:#0A1120;border:1px solid #1677FF;color:#2F8CFF;border-radius:10px;font-size:0.85rem;font-weight:800;cursor:pointer">Link Telegram</button>' +
-        '<div id="ps-telegram-help" style="font-size:0.62rem;color:#64748B;margin-top:8px;line-height:1.45">Message <b style="color:#94A3B8">@pocketbookssports_bot</b> on Telegram, then send <b style="color:#94A3B8">/start YourUsername</b> for reminders.</div>' +
+      '<div style="background:var(--pb-card);border:1px solid var(--pb-border);border-radius:12px;padding:14px;margin-bottom:12px" id="ps-telegram-box">' +
+        '<div style="font-size:0.62rem;color:var(--pb-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Telegram</div>' +
+        '<div id="ps-telegram-status" style="font-size:0.82rem;color:var(--pb-light);margin-bottom:10px">Checking link status…</div>' +
+        '<button type="button" id="ps-telegram-link" style="width:100%;padding:12px;background:var(--bg-recessed,#0a101a);border:1px solid var(--pb-accent);color:var(--accent-blue-bright,#5eb1ff);border-radius:10px;font-size:0.85rem;font-weight:800;cursor:pointer">Link Telegram</button>' +
+        '<div id="ps-telegram-help" style="font-size:0.62rem;color:var(--pb-gray);margin-top:8px;line-height:1.45">Message <b style="color:var(--pb-light)">@pocketbookssports_bot</b> on Telegram, then send <b style="color:var(--pb-light)">/start YourUsername</b> for reminders.</div>' +
       '</div>' +
-      '<button id="ps-signout" style="width:100%;padding:13px;background:transparent;color:#EF4444;border:1.5px solid #EF4444;border-radius:12px;font-size:0.85rem;font-weight:900;cursor:pointer;margin-top:4px">Sign Out</button>' +
+      '<button id="ps-signout" style="width:100%;padding:13px;background:transparent;color:var(--pb-loss);border:1.5px solid var(--pb-loss);border-radius:12px;font-size:0.85rem;font-weight:900;cursor:pointer;margin-top:4px">Sign Out</button>' +
     '</div>' +
-    '<div style="padding:12px 16px 18px;border-top:1px solid #1D2B42">' +
-      '<button id="ps-save" style="width:100%;padding:14px;background:#1677FF;border:none;color:#fff;border-radius:12px;font-size:0.92rem;font-weight:900;cursor:pointer;box-shadow:0 4px 16px rgba(22,119,255,0.25)">Save</button>' +
+    '<div style="padding:12px 16px 18px;border-top:1px solid var(--pb-border)">' +
+      '<button id="ps-save" style="width:100%;padding:14px;background:var(--pb-accent);border:none;color:#fff;border-radius:12px;font-size:0.92rem;font-weight:900;cursor:pointer;box-shadow:0 4px 16px rgba(61,139,253,0.25)">Save</button>' +
     '</div>' +
   '</div>';
   // Mount to documentElement (above body) so any body-level overflow:hidden
@@ -2441,16 +2463,16 @@ function showPlayerSettings() {
     var btn = ov.querySelector('#ps-telegram-link');
     var helpEl = ov.querySelector('#ps-telegram-help');
     function setLinked() {
-      if (statusEl) { statusEl.textContent = 'Telegram linked ✅'; statusEl.style.color = '#22C55E'; statusEl.style.fontWeight = '800'; }
-      if (btn) { btn.textContent = 'Telegram linked ✅'; btn.disabled = true; btn.style.opacity = '0.85'; btn.style.borderColor = '#22C55E'; btn.style.color = '#22C55E'; btn.style.cursor = 'default'; }
+      if (statusEl) { statusEl.textContent = 'Telegram linked ✅'; statusEl.style.color = 'var(--pb-win)'; statusEl.style.fontWeight = '800'; }
+      if (btn) { btn.textContent = 'Telegram linked ✅'; btn.disabled = true; btn.style.opacity = '0.85'; btn.style.borderColor = 'var(--pb-win)'; btn.style.color = 'var(--pb-win)'; btn.style.cursor = 'default'; }
       if (helpEl) helpEl.textContent = 'You will receive survivor pick reminders and results in Telegram.';
     }
     function setUnlinked(info) {
       var code = (info && info.startCommand) || '/start YourUsername';
-      if (statusEl) { statusEl.textContent = 'Not linked yet'; statusEl.style.color = '#94A3B8'; statusEl.style.fontWeight = '400'; }
-      if (btn) { btn.disabled = false; btn.textContent = 'Link Telegram'; btn.style.opacity = '1'; btn.style.borderColor = '#1677FF'; btn.style.color = '#2F8CFF'; btn.style.cursor = 'pointer'; }
+      if (statusEl) { statusEl.textContent = 'Not linked yet'; statusEl.style.color = 'var(--pb-light)'; statusEl.style.fontWeight = '400'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Link Telegram'; btn.style.opacity = '1'; btn.style.borderColor = 'var(--pb-accent)'; btn.style.color = 'var(--accent-blue-bright,#5eb1ff)'; btn.style.cursor = 'pointer'; }
       if (helpEl) {
-        helpEl.innerHTML = '1. Open Telegram and message <b style="color:#94A3B8">@pocketbookssports_bot</b><br>2. Send <b style="color:#94A3B8">' +
+        helpEl.innerHTML = '1. Open Telegram and message <b style="color:var(--pb-light)">@pocketbookssports_bot</b><br>2. Send <b style="color:var(--pb-light)">' +
           String(code).replace(/</g,'&lt;') + '</b> (or /start YourUsername)<br>3. Return here — status updates to Telegram linked ✅';
       }
     }
@@ -2547,7 +2569,7 @@ async function apiCall(method, path, body, _retried) {
 
 function showToast(msg){
   const t=document.createElement('div');
-  t.style.cssText='position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#101A2E;border:1px solid #1D2B42;color:#F5F7FA;padding:12px 20px;border-radius:12px;font-size:0.85rem;font-weight:600;z-index:999;white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,0.5)';
+  t.style.cssText='position:fixed;top:80px;left:50%;transform:translateX(-50%);background:var(--pb-card);border:1px solid var(--pb-border);color:var(--pb-white);padding:12px 20px;border-radius:12px;font-size:0.85rem;font-weight:600;z-index:999;white-space:nowrap;box-shadow:0 8px 32px rgba(0,0,0,0.5)';
   t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2500);
 }
 

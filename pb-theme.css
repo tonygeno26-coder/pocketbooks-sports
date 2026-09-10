@@ -1,0 +1,127 @@
+/**
+ * PocketBooks — global design tokens
+ * Source of truth: LIVE Player Dashboard (player.html :root after premium pass).
+ * Docs / older host palettes must yield to these values.
+ *
+ * Semantics:
+ *   --pb-accent / --green  → interactive only (tabs, selected odds, nav)
+ *   --pb-win / --pb-loss   → financial + result polarity
+ *   --pb-slip-*            → bet-slip sheet contrast (intentional light/green CTA)
+ */
+:root{
+  /* ── canonical ── */
+  --pb-bg:#070b12;
+  --pb-bg-elev:#0c121c;
+  --pb-card:#121a27;
+  --pb-card2:#162032;
+  --pb-border:#1e2a3c;
+  --pb-border-soft:rgba(255,255,255,0.06);
+  --pb-accent:#3d8bfd;
+  --pb-accent-soft:rgba(61,139,253,0.16);
+  --pb-accent-glow:rgba(61,139,253,0.45);
+  --pb-accent-dim:rgba(61,139,253,0.14);
+  --pb-white:#f4f7fb;
+  --pb-gray:#7a8799;
+  --pb-light:#a8b3c4;
+  --pb-red:#ff4d6a;
+  --pb-red-dim:rgba(255,77,106,0.12);
+  --pb-cyan:#5eb1ff;
+  --pb-cyan-dim:rgba(94,177,255,0.12);
+  --pb-win:#3dd68c;
+  --pb-win-dim:rgba(61,214,140,0.14);
+  --pb-loss:#ff4d6a;
+  --pb-gold:#e8c547;
+  --pb-gold-dim:rgba(232,197,71,0.12);
+  --pb-shadow:0 8px 28px rgba(0,0,0,0.35);
+  --pb-odds-recess:#0d1420;
+  --pb-radius:16px;
+  --pb-radius-sm:12px;
+  --pb-radius-ctrl:10px;
+
+  /* Slip sheet (presentation-only contrast vs dark board) */
+  --pb-slip-cta:#00c853;
+  --pb-slip-bar:#00ff87;
+  --pb-slip-sheet:#f2f2f2;
+  --pb-slip-card:#ffffff;
+  --pb-slip-text:#111111;
+  --pb-slip-muted:#555555;
+  --pb-slip-link:#0064c8;
+
+  /* ── aliases used across pages (one system) ── */
+  --bg:var(--pb-bg);
+  --bg-main:var(--pb-bg);
+  --bg-elev:var(--pb-bg-elev);
+  --bg-secondary:var(--pb-bg-elev);
+  --bg-card:var(--pb-card);
+  --bg-recessed:#0a101a;
+  --card:var(--pb-card);
+  --card2:var(--pb-card2);
+  --border:var(--pb-border);
+  --border-soft:var(--pb-border-soft);
+  --accent:var(--pb-accent);
+  --accent-blue:var(--pb-accent);
+  --accent-blue-bright:#5eb1ff;
+  --accent-soft:var(--pb-accent-soft);
+  --accent-glow:var(--pb-accent-glow);
+  --accent-dim:var(--pb-accent-dim);
+  --white:var(--pb-white);
+  --text-primary:var(--pb-white);
+  --gray:var(--pb-gray);
+  --text-muted:var(--pb-gray);
+  --light:var(--pb-light);
+  --text-secondary:var(--pb-light);
+  --green:var(--pb-accent); /* interactive primary — NOT neon money green */
+  --green-dim:var(--pb-accent-dim);
+  --cyan:var(--pb-cyan);
+  --cyan-dim:var(--pb-cyan-dim);
+  --red:var(--pb-red);
+  --red-dim:var(--pb-red-dim);
+  --negative:var(--pb-loss);
+  --positive:var(--pb-win);
+  --win:var(--pb-win);
+  --win-dim:var(--pb-win-dim);
+  --gold:var(--pb-gold);
+  --gold-dim:var(--pb-gold-dim);
+  --shadow:var(--pb-shadow);
+  --radius:var(--pb-radius);
+  --radius-sm:var(--pb-radius-sm);
+}
+
+html{background:var(--pb-bg);color-scheme:dark}
+body{
+  font-family:'SF Pro Display',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* Shared interactive / form primitives (pages may override density) */
+.pb-btn-primary,
+button.pb-btn-primary{
+  background:var(--pb-accent);color:#041018;border:1px solid var(--pb-accent);
+  border-radius:var(--pb-radius-sm);font-weight:900;cursor:pointer;
+}
+.pb-btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.pb-btn-ghost{
+  background:var(--pb-card);color:var(--pb-light);border:1px solid var(--pb-border);
+  border-radius:var(--pb-radius-sm);font-weight:700;cursor:pointer;
+}
+.pb-input,
+input.pb-input,select.pb-input,textarea.pb-input{
+  background:var(--pb-card2);border:1.5px solid var(--pb-border);border-radius:var(--pb-radius-ctrl);
+  color:var(--pb-white);outline:none;
+}
+.pb-input:focus,
+input.pb-input:focus,select.pb-input:focus,textarea.pb-input:focus{
+  border-color:var(--pb-accent);box-shadow:0 0 0 2px var(--pb-accent-soft);
+}
+.pb-empty,.pb-error,.pb-loading{
+  text-align:center;padding:28px 18px;color:var(--pb-gray);font-size:.85rem;font-weight:600;
+}
+.pb-error{color:var(--pb-red)}
+.pb-loading{color:var(--pb-light)}
+
+/* Image policy helpers: never leave white tiles / silhouette boxes */
+.pb-img-fallback,
+.mc-jersey:empty,
+.logo-slot:empty{
+  background:transparent!important;border:none!important;box-shadow:none!important;
+}
