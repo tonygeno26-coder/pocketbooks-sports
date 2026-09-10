@@ -322,6 +322,42 @@ body.theme-light .stake-input{background:#fff;border:1px solid #d8dee8;color:#11
 .place-btn:disabled{opacity:0.4}
 .empty{text-align:center;padding:30px;color:var(--gray);font-size:0.85rem}
 
+/* STATES — empty / loading / error (compact sportsbook chrome) */
+.pb-empty{
+  margin:16px;padding:18px 14px;text-align:center;
+  background:var(--card,#101A2E);border:1px solid var(--border,#1D2B42);border-radius:12px;
+}
+.pb-empty-title{font-size:0.88rem;font-weight:800;color:var(--white,#fff);margin-bottom:4px}
+.pb-empty-body{font-size:0.72rem;color:var(--light,#94a3b8);line-height:1.4}
+.pb-empty-action{margin-top:12px}
+.pb-empty-action button,.pb-retry-btn{
+  padding:8px 14px;border-radius:10px;border:1px solid var(--border,#1D2B42);
+  background:var(--accent-soft,rgba(22,119,255,0.12));color:var(--accent,#1677FF);
+  font-size:0.72rem;font-weight:800;cursor:pointer;
+}
+.pb-loading{
+  margin:20px 16px;padding:18px 14px;text-align:center;color:var(--light,#94a3b8);
+  font-size:0.78rem;font-weight:700;
+}
+.pb-loading::before{
+  content:'';display:block;width:18px;height:18px;margin:0 auto 8px;border-radius:50%;
+  border:2px solid var(--border,#1D2B42);border-top-color:var(--accent,#1677FF);
+  animation:pbSpin 0.8s linear infinite;
+}
+@keyframes pbSpin{to{transform:rotate(360deg)}}
+.pb-error{
+  margin:16px;padding:12px 14px;border-radius:12px;text-align:center;
+  background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.28);
+  color:#fecaca;font-size:0.78rem;font-weight:700;line-height:1.4;
+}
+.pb-error .pb-empty-title{color:#fecaca;margin-bottom:4px}
+.pb-error .pb-empty-body{color:#fca5a5}
+.mc-props-loading,.mc-props-empty{padding:12px 0;text-align:center;font-size:0.72rem;color:#64748B}
+.notif-empty{padding:16px 12px;text-align:center;color:#64748B;font-size:0.72rem;line-height:1.4}
+@media (prefers-reduced-motion: reduce){
+  .pb-loading::before{animation:none!important;border-top-color:var(--light,#94a3b8)}
+}
+
 /* BET SLIP */
 .bs-bar{display:none;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);width:calc(100% - 24px);max-width:406px;background:#00ff88;border-radius:14px;padding:13px 18px;justify-content:space-between;align-items:center;z-index:9000;cursor:pointer;box-shadow:0 8px 28px rgba(0,255,136,0.35)}
 .bs-bar.show{display:flex}
@@ -838,6 +874,8 @@ body{
 }
 .hdr-chip-lbl{font-size:0.5rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.55px}
 .hdr-chip-val{font-size:0.88rem;font-weight:800;color:var(--white);letter-spacing:-0.2px}
+.hdr-bal-refresh{margin-left:4px;background:transparent;border:1px solid #334155;color:#94a3b8;border-radius:6px;width:22px;height:22px;font-size:0.75rem;line-height:1;cursor:pointer;padding:0}
+.hdr-bal-refresh:hover{color:#fff;border-color:#64748b}
 .buy-diamonds-nav-btn{
   background:var(--card)!important;border:1px solid var(--border)!important;color:var(--cyan)!important;
   width:auto!important;min-width:36px;height:36px;border-radius:12px!important;
@@ -1523,9 +1561,12 @@ function _debugClearTickets() {
     </div>
   </div>
   <div class="h-right">
-    <div class="hdr-chip" title="Cash balance">
+    <div class="hdr-chip" id="player-balance-chip" title="Cash balance">
       <div class="hdr-chip-lbl">Cash</div>
       <div class="hdr-chip-val" id="player-balance-display">...</div>
+      <button type="button" id="player-balance-refresh" class="hdr-bal-refresh" hidden
+        onclick="try{loadPlayerDashboardFromDb();}catch(_e){}"
+        aria-label="Refresh balance" title="Refresh balance">↻</button>
     </div>
     <button type="button" class="buy-diamonds-nav-btn" id="buy-diamonds-btn" onclick="openBuyDiamondsModal()" aria-label="Buy Diamonds" title="Buy Diamonds"><span aria-hidden="true">💎</span><span class="hdr-diamond-lbl">Buy</span></button>
     <div class="notif-wrap" id="notif-wrap">
@@ -1533,7 +1574,7 @@ function _debugClearTickets() {
       <span class="notif-badge" id="notif-badge"></span>
       <div class="notif-dd" id="notif-dd">
         <div class="notif-dd-hd">Notifications</div>
-        <div id="notif-list"><div class="notif-empty">Loading…</div></div>
+        <div id="notif-list"><div class="pb-loading" style="margin:8px">Loading notifications…</div></div>
       </div>
     </div>
     <span class="icon-btn" id="open-profile-btn" style="cursor:pointer" onclick="showPlayerSettings()" role="button" aria-label="Account">👤</span>
@@ -1575,7 +1616,7 @@ function _debugClearTickets() {
 
 <!-- GAMES -->
 <div style="height:20px"></div>
-<div id="games-list"><div class="empty">Loading games...</div></div>
+<div id="games-list"><div class="pb-loading">Loading events…</div></div>
 </div><!-- /sportsbook-section -->
 <div id="mybets-section" style="display:none;background:#070b12;min-height:100vh;padding-bottom:100px"></div>
 <div id="live-section" style="display:none;background:#0a0a0a;min-height:100vh;padding:14px 0 100px">
@@ -1584,7 +1625,7 @@ function _debugClearTickets() {
     <span style="font-size:1rem;font-weight:900;letter-spacing:0.3px;color:#fff">Live & In-Game</span>
     <span id="live-count" style="margin-left:auto;font-size:0.62rem;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:0.5px"></span>
   </div>
-  <div id="live-games-list"><div class="empty">Loading...</div></div>
+  <div id="live-games-list"><div class="pb-loading">Loading live events…</div></div>
 </div>
 <!-- RESULTS -->
 <div id="results-section" style="display:none;background:#0a0a0a;min-height:100vh;padding-bottom:100px"></div>
@@ -1701,6 +1742,14 @@ function _validatePlayerSession() {
 
   var missing = [];
   if (!_tok) missing.push('token');
+  else {
+    var _tokParts = _tok.split('.');
+    if (_tokParts.length !== 3) missing.push('token_malformed');
+    else {
+      try { JSON.parse(atob(_tokParts[1].replace(/-/g,'+').replace(/_/g,'/'))); }
+      catch(_e) { missing.push('token_malformed'); }
+    }
+  }
   if (!pid)  missing.push('playerId');
   if (!cid)  missing.push('clubId');
 
@@ -1801,6 +1850,7 @@ function _showSessionExpiredModal(result) {
         try { return window._PBS_BACKEND || 'https://pocketbooks-sports-backend-production.up.railway.app'; }
         catch(_){ return 'https://pocketbooks-sports-backend-production.up.railway.app'; }
       })();
+      window._bootTokenRecoveryInFlight = true;
       fetch(_rBase + '/api/auth/token', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ actorId: _rPid, clubId: _rCid })
@@ -1810,12 +1860,14 @@ function _showSessionExpiredModal(result) {
             ['pb-sports-token','pb-session-token','pb-token-expires','pb-actor-role','pb-test-user']
               .forEach(function(k){ localStorage.removeItem(k); });
           } catch(_e){}
+          window._bootTokenRecoveryInFlight = false;
           window.location.href = 'lobby.html?screen=signin&msg=' + encodeURIComponent('Session invalid — please sign in again');
           return;
         }
         if (res.status === 429) {
           console.warn('TOKEN_RECOVERY_RATE_LIMITED — not retrying');
-          _showSessionExpiredModal(_sgResult);
+          window._bootTokenRecoveryInFlight = false;
+          _showSessionExpiredModal(Object.assign({}, _sgResult, { reason: 'too_many_requests' }));
           return;
         }
         var data = res.data || {};
@@ -1825,7 +1877,7 @@ function _showSessionExpiredModal(result) {
           localStorage.setItem('pb-session-token', data.token);
           var _expIn = data.expiresIn || 86400;
           localStorage.setItem('pb-token-expires', String(Date.now() + (_expIn * 1000)));
-          
+          window._bootTokenRecoveryInFlight = false;
           var _recheck = _validatePlayerSession();
           if (_recheck.ok) {
             
@@ -1835,9 +1887,11 @@ function _showSessionExpiredModal(result) {
             return;
           }
         }
+        window._bootTokenRecoveryInFlight = false;
         console.warn('TOKEN_RECOVERY_FAILED reason='+(data.error||data.code||'no_token'));
         _showSessionExpiredModal(_sgResult);
       }).catch(function(e){
+        window._bootTokenRecoveryInFlight = false;
         console.warn('TOKEN_RECOVERY_FAILED reason=network err='+e.message);
         _showSessionExpiredModal(_sgResult);
       });
@@ -2316,7 +2370,7 @@ try {
 // ═══ CENTRALIZED BALANCE ENGINE ══════════════════════════════════════════════
 // availableBalance = startingBalance - openRisk + settledWinnings + refunds
 // Display authority: /api/player/dashboard (availableBalance / balanceAfter).
-// localStorage['pb-balance-start'] + ['pb-tickets'] is fallback only.
+// DB-primary: NO localStorage / $1000 / derived fallback for displayed bankroll.
 var _BASE_BALANCE = 1000; // default starting balance
 // Migrate: if old pb-balance exists and no pb-balance-start, use it as starting balance
 (function(){
@@ -2416,9 +2470,41 @@ function calcAvailableBalance() {
   };
 }
 var _balanceFromServer = false;
+var _balanceLoadState = 'idle'; // idle | loading | ok | unavailable
+var _balanceFailReason = null;
+function _hasAuthoritativeBalance() {
+  return !!( _balanceFromServer && typeof playerBalance === 'number' && !isNaN(playerBalance) );
+}
+function _setBalanceRefreshVisible(show) {
+  var btn = document.getElementById('player-balance-refresh');
+  if (btn) btn.hidden = !show;
+  var chip = document.getElementById('player-balance-chip');
+  if (chip) {
+    if (show) chip.setAttribute('title', 'Unable to refresh balance');
+    else chip.setAttribute('title', 'Cash balance');
+  }
+}
+function _paintBalanceText(text) {
+  ['player-balance-display','header-balance','pb-balance-header'].forEach(function(id){
+    var el = document.getElementById(id); if (el) el.textContent = text;
+  });
+}
+function applyBalanceUnavailable(reason) {
+  // P0.5 fail-closed: never paint localStorage / $1000 / derived bankroll as current.
+  _balanceFromServer = false;
+  _balanceLoadState = 'unavailable';
+  _balanceFailReason = reason || 'balance_unavailable';
+  playerBalance = null;
+  window.playerBalance = null;
+  _paintBalanceText('\u2014');
+  _setBalanceRefreshVisible(true);
+  return { available: null, unavailable: true, reason: _balanceFailReason };
+}
 function _liveAvailableBalance() {
-  if (_balanceFromServer && typeof playerBalance === 'number' && !isNaN(playerBalance)) {
-    return playerBalance;
+  if (_hasAuthoritativeBalance()) return playerBalance;
+  // DB-primary: no local financial authority for placement / display math
+  if (typeof _DB_PRIMARY_READS_ENABLED !== 'undefined' && _DB_PRIMARY_READS_ENABLED) {
+    return NaN;
   }
   return calcAvailableBalance().available;
 }
@@ -2427,30 +2513,41 @@ function applyDisplayedBalance(amount) {
   if (isNaN(n)) return false;
   playerBalance = n;
   window.playerBalance = n;
+  _balanceFromServer = true;
+  _balanceLoadState = 'ok';
+  _balanceFailReason = null;
   var bal = '$' + n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-  ['player-balance-display','header-balance','pb-balance-header'].forEach(function(id){
-    var el = document.getElementById(id); if (el) el.textContent = bal;
-  });
+  _paintBalanceText(bal);
+  _setBalanceRefreshVisible(false);
   return true;
 }
 function syncBalanceDisplays() {
-  // Server value wins. localStorage (pb-balance-start) is fallback only.
-  if (_balanceFromServer && typeof playerBalance === 'number' && !isNaN(playerBalance)) {
+  // Server value wins. Under DB-primary, never fall back to localStorage bankroll.
+  if (_hasAuthoritativeBalance()) {
     applyDisplayedBalance(playerBalance);
     return { available: playerBalance, starting: playerBalance, openRisk: 0, settledGains: 0, settledLosses: 0, refunds: 0 };
   }
+  if (typeof _DB_PRIMARY_READS_ENABLED !== 'undefined' && _DB_PRIMARY_READS_ENABLED) {
+    return applyBalanceUnavailable(_balanceFailReason || 'awaiting_server_balance');
+  }
   var s = calcAvailableBalance();
-  applyDisplayedBalance(s.available);
-  // Balance recalc complete — dbgBanner removed (production)
-  
+  // Legacy offline only — do not mark as server-authoritative
+  var n = Number(s.available);
+  if (!isNaN(n)) {
+    playerBalance = n;
+    window.playerBalance = n;
+    _paintBalanceText('$' + n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
+    _setBalanceRefreshVisible(false);
+  }
   return s;
 }
-var playerBalance = calcAvailableBalance().available;
+var playerBalance = null;
 // Signed-in sessions wait for /api/player/dashboard. Do not flash localStorage.
 document.addEventListener('DOMContentLoaded', function(){
   if (_balanceFromServer) return;
   var tok = '';
   try { tok = localStorage.getItem('pb-sports-token') || localStorage.getItem('pb-session-token') || ''; } catch(_e){}
+  // Signed-in: wait for /api/player/dashboard — never flash localStorage bankroll.
   if (tok) return;
   syncBalanceDisplays();
 });
@@ -2488,7 +2585,12 @@ try {
 } catch(_e) {}
 // ═══════════════════════════════════════════════════════════════════════════════
 function fmtBalance(){
-  return _fmtCurrency(_liveAvailableBalance());
+  if (!_hasAuthoritativeBalance()) {
+    if (typeof _DB_PRIMARY_READS_ENABLED !== 'undefined' && _DB_PRIMARY_READS_ENABLED) return '\u2014';
+  }
+  var v = _liveAvailableBalance();
+  if (typeof v !== 'number' || isNaN(v)) return '\u2014';
+  return _fmtCurrency(v);
 }
 
 function showPlayerSettings() {
@@ -2649,9 +2751,13 @@ function showPlayerSettings() {
 }
 function saveBalance(){ /* no-op: balance is derived, not stored directly */ }
 function loadBalance(){
-  if (_balanceFromServer && typeof playerBalance === 'number' && !isNaN(playerBalance)) {
+  if (_hasAuthoritativeBalance()) {
     applyDisplayedBalance(playerBalance);
     return playerBalance;
+  }
+  if (typeof _DB_PRIMARY_READS_ENABLED !== 'undefined' && _DB_PRIMARY_READS_ENABLED) {
+    applyBalanceUnavailable(_balanceFailReason || 'no_server_balance');
+    return null;
   }
   var s = syncBalanceDisplays(); playerBalance = s.available; return playerBalance;
 }
@@ -2814,7 +2920,205 @@ function _pbHydrateLobbyAvatars(root) {
 // liveOnly:true filters to games flagged isLive by Owls cache. Empty state
 // shows next upcoming start when available.
 var _pbActiveTab = 'sportsbook';
+var _myBetsFilter = { q: '', status: 'all', range: 'week', sort: 'newest' };
 var _pbSportsbookRefreshTimer = null;
+
+// ══ NAV PERSISTENCE (UI / navigation prefs only) ═════════════════════════════
+// Survives Back + hard refresh via URL query + sessionStorage `pb-nav-ui`.
+// SAFE: sport, view, market, event, props filters, My Bets filters.
+// NOT SAFE / never written here: balance, tickets, ledger, diamonds, settlements,
+// bankroll, or any financial authoritative state (see cursor/p0-phantom-ledger).
+var _PB_NAV_SS_KEY = 'pb-nav-ui';
+var _PB_NAV_SPORTS = {
+  nfl:1, mlb:1, nba:1, nhl:1, ncaaf:1, ncaab:1, soccer:1, tennis:1,
+  golf:1, boxing:1, mma:1, nascar:1, rugby:1, wnba:1
+};
+var _PB_NAV_VIEWS = { sportsbook:1, home:1, sports:1, live:1, mybets:1, results:1, predictions:1 };
+var _PB_NAV_MARKETS = { lines:1, spread:1, totals:1, moneyline:1 };
+var _PB_NAV_MB_STATUS = { all:1, active:1, won:1, lost:1, canceled:1, parlays:1, singles:1 };
+var _PB_NAV_MB_RANGE = { week:1, lastweek:1, month:1, all:1 };
+var _PB_NAV_MB_SORT = { newest:1, oldest:1, win:1, loss:1 };
+var _pbNavApplying = false;
+var _pbNavPendingEvent = null;
+
+function _pbNavReadSs() {
+  try {
+    var raw = sessionStorage.getItem(_PB_NAV_SS_KEY);
+    if (!raw) return {};
+    var o = JSON.parse(raw);
+    return (o && typeof o === 'object' && !Array.isArray(o)) ? o : {};
+  } catch (_e) { return {}; }
+}
+function _pbNavWriteSs(patch) {
+  try {
+    var cur = _pbNavReadSs();
+    Object.keys(patch || {}).forEach(function(k) {
+      if (patch[k] == null || patch[k] === '') delete cur[k];
+      else cur[k] = patch[k];
+    });
+    // Hard deny financial / ledger keys if ever smuggled into a patch.
+    ['balance','tickets','ledger','diamonds','bankroll','settlements',
+     'pb-tickets','pb-ledger','pb-balance-start','pb-diamond-ledger'].forEach(function(k){
+      delete cur[k];
+    });
+    sessionStorage.setItem(_PB_NAV_SS_KEY, JSON.stringify(cur));
+  } catch (_e) {}
+}
+function _pbNavNormalizeView(v) {
+  v = String(v || '').toLowerCase();
+  if (v === 'home' || v === 'sports') return 'sportsbook';
+  if (v === 'trades') return 'mybets';
+  return _PB_NAV_VIEWS[v] ? (v === 'home' || v === 'sports' ? 'sportsbook' : v) : 'sportsbook';
+}
+function _pbNavCollect() {
+  var propsTab = null, propsTeam = null;
+  var eid = _pbExpandedPropsGameId ? String(_pbExpandedPropsGameId) : null;
+  if (eid && _pbPropsUiState[eid]) {
+    propsTab = _pbPropsUiState[eid].tab || null;
+    propsTeam = _pbPropsUiState[eid].team || null;
+  }
+  return {
+    sport: String((typeof _currentSport !== 'undefined' ? _currentSport : 'mlb') || 'mlb').toLowerCase(),
+    view: _pbNavNormalizeView(_pbActiveTab),
+    market: _PB_NAV_MARKETS[activeMarketFilter] ? activeMarketFilter : 'lines',
+    event: eid,
+    propsTab: propsTab,
+    propsTeam: propsTeam,
+    mbStatus: (_myBetsFilter && _myBetsFilter.status) || 'all',
+    mbRange: (_myBetsFilter && _myBetsFilter.range) || 'week',
+    mbSort: (_myBetsFilter && _myBetsFilter.sort) || 'newest'
+  };
+}
+function _pbNavSyncUrl(opts) {
+  opts = opts || {};
+  if (_pbNavApplying) return;
+  try {
+    var nav = _pbNavCollect();
+    _pbNavWriteSs(nav);
+    var params = new URLSearchParams(window.location.search);
+    function setOrDel(k, v, defVal) {
+      if (v == null || v === '' || (defVal != null && String(v) === String(defVal))) params.delete(k);
+      else params.set(k, String(v));
+    }
+    setOrDel('sport', nav.sport, 'mlb');
+    setOrDel('view', nav.view, 'sportsbook');
+    setOrDel('market', nav.market, 'lines');
+    setOrDel('event', nav.event, null);
+    setOrDel('propsTab', nav.propsTab, 'popular');
+    setOrDel('propsTeam', nav.propsTeam, 'all');
+    setOrDel('mbStatus', nav.mbStatus, 'all');
+    setOrDel('mbRange', nav.mbRange, 'week');
+    setOrDel('mbSort', nav.mbSort, 'newest');
+    var qs = params.toString();
+    var url = window.location.pathname + (qs ? ('?' + qs) : '') + (window.location.hash || '');
+    var state = { pbNav: nav };
+    if (opts.push) history.pushState(state, '', url);
+    else history.replaceState(state, '', url);
+  } catch (_e) {}
+}
+function _pbNavResolveBoot() {
+  var ss = _pbNavReadSs();
+  var qs = new URLSearchParams(window.location.search);
+  function pick(key, allow) {
+    var fromUrl = qs.get(key);
+    if (fromUrl != null && fromUrl !== '') {
+      var u = String(fromUrl).toLowerCase();
+      if (!allow || allow[u]) return u;
+    }
+    if (ss[key] != null && ss[key] !== '') {
+      var s = String(ss[key]).toLowerCase();
+      if (!allow || allow[s]) return s;
+    }
+    return null;
+  }
+  var sport = pick('sport', _PB_NAV_SPORTS) || 'mlb';
+  var view = _pbNavNormalizeView(pick('view', _PB_NAV_VIEWS) || 'sportsbook');
+  var market = pick('market', _PB_NAV_MARKETS) || 'lines';
+  var event = qs.get('event') || ss.event || null;
+  var propsTab = qs.get('propsTab') || ss.propsTab || 'popular';
+  var propsTeam = qs.get('propsTeam') || ss.propsTeam || 'all';
+  return {
+    sport: sport,
+    view: view,
+    market: market,
+    event: event ? String(event) : null,
+    propsTab: String(propsTab || 'popular'),
+    propsTeam: String(propsTeam || 'all'),
+    mbStatus: pick('mbStatus', _PB_NAV_MB_STATUS) || 'all',
+    mbRange: pick('mbRange', _PB_NAV_MB_RANGE) || 'week',
+    mbSort: pick('mbSort', _PB_NAV_MB_SORT) || 'newest'
+  };
+}
+function _pbNavActivateSportTab(sport) {
+  document.querySelectorAll('.sport-tab').forEach(function(t){
+    t.classList.remove('active');
+    t.setAttribute('aria-selected', 'false');
+  });
+  var tab = document.getElementById('st-' + sport);
+  if (tab) {
+    tab.classList.add('active');
+    tab.setAttribute('aria-selected', 'true');
+  }
+}
+function _pbNavActivateMarketPill(market) {
+  if (typeof activeMarketFilter !== 'undefined') activeMarketFilter = market;
+  document.querySelectorAll('.filter-row .pill').forEach(function(p){ p.classList.remove('active'); });
+  var idMap = { lines:'mf-lines', spread:'mf-spread', totals:'mf-totals', moneyline:'mf-ml' };
+  var el = document.getElementById(idMap[market] || 'mf-lines');
+  if (el) el.classList.add('active');
+}
+function _pbNavBottomEl(view) {
+  view = _pbNavNormalizeView(view);
+  if (view === 'sportsbook') return document.getElementById('bn-home') || document.getElementById('bn-sportsbook');
+  if (view === 'live') return document.getElementById('bn-live');
+  if (view === 'mybets') return document.getElementById('bn-mybets');
+  if (view === 'results') return document.getElementById('bn-results');
+  return document.getElementById('bn-home');
+}
+function _pbNavRestoreExpandedEvent() {
+  var gid = _pbNavPendingEvent || (_pbExpandedPropsGameId ? String(_pbExpandedPropsGameId) : null);
+  if (!gid) return;
+  var card = document.querySelector('.market-card[data-game-id="' + String(gid).replace(/"/g, '\\"') + '"]');
+  if (!card) return;
+  var btn = card.querySelector('.mc-props-btn:not(.mc-alt-btn)');
+  if (!btn) return;
+  if (!card.classList.contains('props-expanded')) {
+    try { _pbToggleGameProps(btn, gid, (typeof _currentSport !== 'undefined' ? _currentSport : 'mlb')); } catch (_e) {}
+  }
+}
+function _pbNavAfterGamesPaint() {
+  try { _pbNavRestoreExpandedEvent(); } catch (_e) {}
+}
+window.addEventListener('popstate', function(ev) {
+  var nav = (ev.state && ev.state.pbNav) ? ev.state.pbNav : _pbNavResolveBoot();
+  _pbNavApplying = true;
+  try {
+    if (nav.sport && _PB_NAV_SPORTS[nav.sport]) {
+      _currentSport = nav.sport;
+      _pbNavActivateSportTab(nav.sport);
+    }
+    if (nav.market && _PB_NAV_MARKETS[nav.market]) _pbNavActivateMarketPill(nav.market);
+    if (_myBetsFilter) {
+      if (_PB_NAV_MB_STATUS[nav.mbStatus]) _myBetsFilter.status = nav.mbStatus;
+      if (_PB_NAV_MB_RANGE[nav.mbRange]) _myBetsFilter.range = nav.mbRange;
+      if (_PB_NAV_MB_SORT[nav.mbSort]) _myBetsFilter.sort = nav.mbSort;
+    }
+    _pbNavPendingEvent = nav.event || null;
+    if (nav.event) {
+      var ek = String(nav.event);
+      if (!_pbPropsUiState[ek]) _pbPropsUiState[ek] = { tab:'popular', team:'all', showAll:{}, collapsed:{} };
+      if (nav.propsTab) _pbPropsUiState[ek].tab = nav.propsTab;
+      if (nav.propsTeam) _pbPropsUiState[ek].team = nav.propsTeam;
+    }
+    var view = _pbNavNormalizeView(nav.view);
+    var bnEl = _pbNavBottomEl(view);
+    if (bnEl && typeof setBNav === 'function') setBNav(bnEl, view);
+    else _pbActiveTab = view;
+  } finally {
+    _pbNavApplying = false;
+  }
+  _pbNavWriteSs(nav);
+});
 var _pbLiveOddsStatus = {
   refreshing:false,
   stale:false,
@@ -3065,14 +3369,66 @@ function _pbFormatNextStartLabel(iso) {
   return d.toLocaleString('en-US', opts);
 }
 
+function _pbEscState(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** Compact empty / loading / error card. kind: empty | loading | error */
+function _pbStateHtml(opts) {
+  opts = opts || {};
+  var kind = opts.kind || 'empty';
+  var title = _pbEscState(opts.title || '');
+  var body = opts.body != null ? _pbEscState(opts.body) : '';
+  var action = opts.actionHtml || '';
+  if (kind === 'loading') {
+    return '<div class="pb-loading" role="status">' + (title || 'Loading…') +
+      (body ? '<div class="pb-empty-body" style="margin-top:6px">' + body + '</div>' : '') + '</div>';
+  }
+  if (kind === 'error') {
+    return '<div class="pb-error" role="alert">' +
+      (title ? '<div class="pb-empty-title">' + title + '</div>' : '') +
+      (body ? '<div class="pb-empty-body">' + body + '</div>' : '') +
+      (action ? '<div class="pb-empty-action">' + action + '</div>' : '') +
+      '</div>';
+  }
+  return '<div class="pb-empty" role="status">' +
+    (title ? '<div class="pb-empty-title">' + title + '</div>' : '') +
+    (body ? '<div class="pb-empty-body">' + body + '</div>' : '') +
+    (action ? '<div class="pb-empty-action">' + action + '</div>' : '') +
+    '</div>';
+}
+
+function _pbNoEventsHtml() {
+  return _pbStateHtml({ title: 'No events scheduled', body: 'Check back soon or try another sport.' });
+}
+
+function _pbNoMarketsHtml() {
+  return _pbStateHtml({ title: 'No markets posted', body: 'Lines will appear when this slate opens.' });
+}
+
+function _pbGamesHaveMarkets(games) {
+  if (!games || !games.length) return false;
+  for (var i = 0; i < games.length; i++) {
+    var g = games[i];
+    if (!g) continue;
+    if ((Array.isArray(g.spreads) && g.spreads.length) ||
+        (Array.isArray(g.totals) && g.totals.length) ||
+        (Array.isArray(g.moneyline) && g.moneyline.length) ||
+        (Array.isArray(g.alt_spreads) && g.alt_spreads.length) ||
+        (Array.isArray(g.alt_totals) && g.alt_totals.length)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function _pbLiveEmptyStateHtml(nextStartIso) {
   var next = _pbFormatNextStartLabel(nextStartIso);
-  return '<div class="empty" style="padding:60px 20px;text-align:center;color:#888">' +
-    '<div style="font-size:0.95rem;font-weight:800;color:#bbb;margin-bottom:8px">No live games right now</div>' +
-    (next
-      ? '<div style="font-size:0.72rem;color:#666">Next game starts <span style="color:#aaa;font-weight:700">' + next + '</span></div>'
-      : '<div style="font-size:0.72rem;color:#555">Check back when games tip off</div>') +
-  '</div>';
+  return _pbStateHtml({
+    title: 'No live events',
+    body: next ? ('Next tip-off ' + next) : 'Check back when games tip off.'
+  });
 }
 
 function _pbTeamNameMatch(a, b) {
@@ -4905,7 +5261,7 @@ function _pbRenderPropSectionHtml(section, gameId, gameLabel, sport, away, home,
     '<span class="mc-prop-sec-chev">▾</span></div>';
   html += '<div class="mc-prop-sec-body">';
   if (!visibleRows.length) {
-    html += '<div class="mc-props-empty" style="padding:8px 0">No props for this filter.</div>';
+    html += '<div class="mc-props-empty">No props match this filter</div>';
   } else {
     html += visibleRows.map(function(r) { return _pbRenderPlayerPropRowHtml(r, gameId, gameLabel, sport, away, home, teamMap); }).join('');
   }
@@ -4941,7 +5297,7 @@ function _pbRenderInlinePropsHtml(props, gameId, sport, meta) {
   var away = resolved.away;
   var home = resolved.home;
   var gameLabel = (away && home) ? (away + ' vs ' + home) : '';
-  if (!props || !props.length) return '<div class="mc-props-empty">No player props for this game.</div>';
+  if (!props || !props.length) return '<div class="mc-props-empty">No props for this game</div>';
 
   var rosterGameId = (meta && meta.gameId) || (props[0] && props[0].gameId) || gameId;
   var inferred = _pbInferPlayerTeamMap(props, away, home);
@@ -4980,7 +5336,7 @@ function _pbRenderInlinePropsHtml(props, gameId, sport, meta) {
       '</div>';
   }
   if (!sections.length) {
-    html += '<div class="mc-props-empty">No props in this category.</div>';
+    html += '<div class="mc-props-empty">No props in this category</div>';
   } else {
     sections.forEach(function(sec) {
       var secKey = ui.tab + '::' + sec.title;
@@ -5014,6 +5370,7 @@ function _pbSetPropTab(btn, tabId) {
   ui.tab = tabId;
   ui.team = 'all';
   _pbRerenderPropsPanel(gameId);
+  if (!_pbNavApplying) _pbNavSyncUrl({ push: false });
 }
 
 function _pbSetPropTeamFilter(btn, team) {
@@ -5023,6 +5380,7 @@ function _pbSetPropTeamFilter(btn, team) {
   var ui = _pbGetPropsUiState(gameId);
   ui.team = team || 'all';
   _pbRerenderPropsPanel(gameId);
+  if (!_pbNavApplying) _pbNavSyncUrl({ push: false });
 }
 
 function _pbTogglePropSection(hdr) {
@@ -5100,7 +5458,7 @@ async function _pbLoadGameProps(gameId, sport, panel, card) {
     var data = await res.json();
     if (_pbExpandedPropsGameId !== String(gameId)) return;
     if (!res.ok || !data.props || !data.props.length) {
-      panel.innerHTML = '<div class="mc-props-empty">No player props for this game.</div>';
+      panel.innerHTML = '<div class="mc-props-empty">No props for this game</div>';
       return;
     }
     var meta = data.props[0] || {};
@@ -5123,7 +5481,7 @@ async function _pbLoadGameProps(gameId, sport, panel, card) {
     await _pbHydratePropHeadshots(panel, data.props, s);
   } catch (_e) {
     if (_pbExpandedPropsGameId === String(gameId)) {
-      panel.innerHTML = '<div class="mc-props-empty">Could not load props.</div>';
+      panel.innerHTML = '<div class="mc-props-empty">Props unavailable — retry</div>';
     }
   }
 }
@@ -5142,7 +5500,7 @@ async function _pbRefreshExpandedGameProps(opts) {
     if (_pbExpandedPropsGameId !== String(gameId)) return;
     if (!res.ok || !data.props) return;
     if (!data.props.length) {
-      panel.innerHTML = '<div class="mc-props-empty">No player props for this game.</div>';
+      panel.innerHTML = '<div class="mc-props-empty">No props for this game</div>';
       return;
     }
     var meta = data.props[0] || {};
@@ -5188,6 +5546,8 @@ async function _pbToggleGameProps(btn, gameId, sport) {
     btn.textContent = 'Props ▾';
     panel.innerHTML = '';
     _pbExpandedPropsGameId = null;
+    _pbNavPendingEvent = null;
+    if (!_pbNavApplying) _pbNavSyncUrl({ push: true });
     return;
   }
   _pbCollapseAllGameAlts();
@@ -5195,6 +5555,8 @@ async function _pbToggleGameProps(btn, gameId, sport) {
   card.classList.add('props-expanded');
   btn.textContent = 'Props ▴';
   _pbExpandedPropsGameId = gid;
+  _pbNavPendingEvent = gid;
+  if (!_pbNavApplying) _pbNavSyncUrl({ push: true });
   panel.innerHTML = '<div class="mc-props-loading">Loading props...</div>';
   await _pbLoadGameProps(gid, sport, panel, card);
 }
@@ -5332,7 +5694,7 @@ async function loadGames(sport, opts){
   const _liveOnly = !!opts.liveOnly;
   const el=document.getElementById(_targetId);
   if (!el) return;
-  if (!opts.silent) el.innerHTML='<div class="empty">Loading...</div>';
+  if (!opts.silent) el.innerHTML = _pbStateHtml({ kind: 'loading', title: 'Loading events…' });
   try{
     // Normalize sport key. Odds now come from the backend Owls-only pipeline;
     // live refresh paths intentionally avoid local proxy fallback.
@@ -5419,7 +5781,7 @@ async function loadGames(sport, opts){
       if (_liveOnly) {
         el.innerHTML = _pbLiveEmptyStateHtml(null);
       } else {
-        el.innerHTML='<div class="empty" style="padding:60px 20px;text-align:center;color:#888">No games available right now.</div>';
+        el.innerHTML = _pbNoEventsHtml();
       }
       return;
     }
@@ -5440,7 +5802,7 @@ async function loadGames(sport, opts){
       if (_liveOnly) {
         el.innerHTML = _pbLiveEmptyStateHtml(null);
       } else {
-        el.innerHTML='<div class="empty" style="padding:60px 20px;text-align:center;color:#888">No games available right now.</div>';
+        el.innerHTML = _pbNoEventsHtml();
       }
       return;
     }
@@ -5470,6 +5832,12 @@ async function loadGames(sport, opts){
       _pbUpdateSportTabLiveBadge(_sportLc, liveN);
     }
     try { await _loadOddsComparison(_sport); } catch(_ce) {}
+    if (!_pbGamesHaveMarkets(games) && !_liveOnly) {
+      if (!(opts.silent && el.querySelector('.market-card[data-game-id]'))) {
+        el.innerHTML = _pbNoMarketsHtml();
+      }
+      return;
+    }
     if (opts.silent && el.querySelector('.market-card[data-game-id]')) {
       _pbSyncGamesListInPlace(el, games);
       _pbHydrateLobbyAvatars(el);
@@ -5482,7 +5850,17 @@ async function loadGames(sport, opts){
     _pbApplyLiveFreshnessState();
     _pbResyncBetSlipSelections();
     _pbHydrateLobbyAvatars(el);
-  }catch(e){console.error('[sportsbook fetch failed]',e.message);el.innerHTML='<div class="empty" style="color:#ff4444">'+e.message+'</div>';}
+    _pbNavAfterGamesPaint();
+  }catch(e){
+    console.error('[sportsbook fetch failed]',e.message);
+    var retrySport = (_currentSport || 'mlb').replace(/'/g, '');
+    el.innerHTML = _pbStateHtml({
+      kind: 'error',
+      title: 'Couldn’t load events',
+      body: 'Check your connection, then retry.',
+      actionHtml: '<button type="button" class="pb-retry-btn" onclick="loadGames(\'' + retrySport + '\')">Retry</button>'
+    });
+  }
 }
 
 // Live tab: fetch isLive=true games across Owls sports (via /api/sports + /api/odds/:sport).
@@ -5525,7 +5903,7 @@ async function loadAllLiveGames(opts) {
   opts = opts || {};
   var el = document.getElementById('live-games-list');
   if (!el) return;
-  if (!opts.silent) el.innerHTML = '<div class="empty">Loading...</div>';
+  if (!opts.silent) el.innerHTML = _pbStateHtml({ kind: 'loading', title: 'Loading live events…' });
   try {
     var fetchKeys = await _pbResolveLiveSportKeys();
     var packs = await Promise.all(fetchKeys.map(function(k) {
@@ -5821,6 +6199,7 @@ function setMarketFilter(el, filter) {
   document.querySelectorAll('.filter-row .pill').forEach(function(p){ p.classList.remove('active'); });
   el.classList.add('active');
   _pbApplyMarketFilterToCards();
+  if (!_pbNavApplying) _pbNavSyncUrl({ push: false });
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -5976,13 +6355,19 @@ async function setSport(el,sport){
   _updateTeaserTab();
   _pbCollapseAllGameProps();
   _pbCollapseAllGameAlts();
-  loadGames(sport);
+  _pbNavPendingEvent = null;
+  if (!_pbNavApplying) _pbNavSyncUrl({ push: true });
+  var _sportLoad = loadGames(sport);
+  if (_sportLoad && typeof _sportLoad.then === 'function') {
+    _sportLoad.then(function(){ _pbNavAfterGamesPaint(); }).catch(function(){});
+  }
   _pbScheduleSportsbookLiveRefresh();
 }
 // setFilter removed — replaced by setMarketFilter
 function setBNav(el,tab){
   
   _pbActiveTab = (tab==='home'||tab==='sportsbook'||tab==='sports') ? 'sportsbook' : tab;
+  if (!_pbNavApplying) _pbNavSyncUrl({ push: true });
   document.querySelectorAll('.bn').forEach(function(n){ n.classList.remove('active'); });
   el.classList.add('active');
   ['sportsbook-section','mybets-section','predictions-section','live-section','results-section'].forEach(id=>{
@@ -6224,13 +6609,43 @@ function _handleScopeFailure(scope, source) {
 // ── If session is invalid: show modal + skip game loading ─────────────────
 if (!_sessionValid) {
   var _glEl = document.getElementById('games-list');
-  if (_glEl) _glEl.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#666;font-size:0.85rem">Sign in to view games.</div>';
+  if (_glEl) _glEl.innerHTML = _pbStateHtml({ title: 'Sign in required', body: 'Sign in to view events and markets.' });
 } else {
-  
-  try { _currentSport = 'mlb'; } catch(e) { console.error('[PBS init] set _currentSport failed:', e && e.message || e); }
+  var _bootNav = { sport:'mlb', view:'sportsbook', market:'lines', event:null, propsTab:'popular', propsTeam:'all', mbStatus:'all', mbRange:'week', mbSort:'newest' };
+  try { _bootNav = _pbNavResolveBoot(); } catch(_bn) {}
+  try {
+    _currentSport = _bootNav.sport || 'mlb';
+    _pbNavActivateSportTab(_currentSport);
+    if (_bootNav.market) _pbNavActivateMarketPill(_bootNav.market);
+    if (_myBetsFilter) {
+      if (_PB_NAV_MB_STATUS[_bootNav.mbStatus]) _myBetsFilter.status = _bootNav.mbStatus;
+      if (_PB_NAV_MB_RANGE[_bootNav.mbRange]) _myBetsFilter.range = _bootNav.mbRange;
+      if (_PB_NAV_MB_SORT[_bootNav.mbSort]) _myBetsFilter.sort = _bootNav.mbSort;
+    }
+    _pbNavPendingEvent = _bootNav.event || null;
+    if (_bootNav.event) {
+      var _bek = String(_bootNav.event);
+      if (!_pbPropsUiState[_bek]) _pbPropsUiState[_bek] = { tab:'popular', team:'all', showAll:{}, collapsed:{} };
+      if (_bootNav.propsTab) _pbPropsUiState[_bek].tab = _bootNav.propsTab;
+      if (_bootNav.propsTeam) _pbPropsUiState[_bek].team = _bootNav.propsTeam;
+    }
+  } catch(e) { console.error('[PBS init] nav restore failed:', e && e.message || e); try { _currentSport = 'mlb'; } catch(_e2){} }
   try { _updateTeaserTab(); }  catch(e) { console.error('[PBS init] _updateTeaserTab failed (continuing):', e && e.message || e); }
   try { _updateSportTabs(); }  catch(e) { console.error('[PBS init] _updateSportTabs failed (continuing):', e && e.message || e); }
-  try { loadGames('mlb'); }    catch(e) { console.error('[PBS fetch failed]', e); }
+  try {
+    var _bootView = _pbNavNormalizeView(_bootNav.view);
+    if (_bootView && _bootView !== 'sportsbook') {
+      _pbNavApplying = true;
+      try {
+        var _bnEl = _pbNavBottomEl(_bootView);
+        if (_bnEl && typeof setBNav === 'function') setBNav(_bnEl, _bootView);
+        else loadGames(_currentSport || 'mlb');
+      } finally { _pbNavApplying = false; }
+    } else {
+      loadGames(_currentSport || 'mlb');
+    }
+    _pbNavSyncUrl({ push: false });
+  } catch(e) { console.error('[PBS fetch failed]', e); }
   
 }
 
@@ -6257,11 +6672,12 @@ setTimeout(function(){
   if (txt.indexOf('Loading') !== -1) {
     if (_sessionValid) {
       // Session is fine — odds endpoint stalled
-      gl.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#888">'
-        +'<div style="font-size:1rem;font-weight:700;margin-bottom:8px">⚠️ Odds failed to load</div>'
-        +'<div style="font-size:0.8rem;margin-bottom:14px">Check your connection or try again</div>'
-        +'<button onclick="loadGames(\'mlb\')" style="padding:10px 20px;background:#00ff88;color:#000;border:none;border-radius:10px;font-weight:800;cursor:pointer">🔄 Retry</button>'
-        +'</div>';
+      gl.innerHTML = _pbStateHtml({
+        kind: 'error',
+        title: 'Odds failed to load',
+        body: 'Check your connection, then retry.',
+        actionHtml: '<button type="button" class="pb-retry-btn" onclick="loadGames(\'mlb\')">Retry</button>'
+      });
     } else {
       _showSessionExpiredModal({ missing:[], reason:'startup_stall' });
     }
@@ -6597,7 +7013,7 @@ function selectRRSize(sz) {
 
 // ===== TEASER =====
 var teaserPts = 6;
-var _currentSport = 'mlb';
+var _currentSport = _currentSport || 'mlb';
 var TEASER_ENABLED_SPORTS = ['nfl','ncaaf','nba','ncaab'];
 function _canTeaser() {
   // Defensive: this runs during page bootstrap and can fire BEFORE the
@@ -7548,7 +7964,8 @@ function openBetConfirm() {
   }).join('');
 
   var _avBal = _liveAvailableBalance();
-  var insufficient = _avBal < bsStake;
+  var _balUnknown = !(typeof _avBal === 'number') || isNaN(_avBal);
+  var insufficient = _balUnknown || _avBal < bsStake;
   var confirmLabel = insufficient ? 'Insufficient Balance'
     : (bsType==='straight' && betSlip.length > 1 ? 'Confirm '+betSlip.length+' Bets' : 'Confirm Bet');
 
@@ -8063,8 +8480,13 @@ async function confirmBet() {
         || document.querySelector('[data-action="confirm"]')
         || document.querySelector('[data-action="confirm-bet"]')
         || document.querySelector('.bs-confirm-btn');
+  if (_confirmBetInFlight || (_cbBtn && _cbBtn.dataset.cbBusy === '1')) {
+    _cbLog('CONFIRM_BET_DEDUPED', 'in_flight');
+    return;
+  }
   function _cbBtnBusy(label) {
     if (!_cbBtn) return;
+    _confirmBetInFlight = true;
     _cbBtn.disabled = true;
     _cbBtn.dataset.cbBusy = '1';
     _cbBtn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px">'
@@ -8075,6 +8497,7 @@ async function confirmBet() {
   }
   function _cbBtnReady() {
     if (!_cbBtn) return;
+    _confirmBetInFlight = false;
     _cbBtn.disabled = false;
     _cbBtn.dataset.cbBusy = '';
     _cbBtn.textContent = 'Confirm Bet';
@@ -8141,7 +8564,14 @@ async function confirmBet() {
   var _avail = _liveAvailableBalance();
   var riskAmount = snap.risk;
   bsStake = riskAmount;
-  if (_avail < riskAmount) {
+  if (typeof _DB_PRIMARY_READS_ENABLED !== 'undefined' && _DB_PRIMARY_READS_ENABLED
+      && !_hasAuthoritativeBalance()) {
+    showToast('Unable to refresh balance. Placement blocked until balance loads.', 'error');
+    _cbErr('CONFIRM_BET_ERROR', null, 'reason=balance_unavailable');
+    try { loadPlayerDashboardFromDb(); } catch(_balRefreshErr) {}
+    return;
+  }
+  if (!(typeof _avail === 'number') || isNaN(_avail) || _avail < riskAmount) {
     showToast('Insufficient balance \xb7 have '+fmtBalance(), 'error');
     _cbErr('CONFIRM_BET_ERROR', null, 'reason=insufficient_balance avail='+_avail+' risk='+riskAmount);
     return;
@@ -8257,7 +8687,10 @@ async function confirmBet() {
 
     
 
-    var _iKey = 'BET_'+(_pid||'?')+'_'+now.replace(/[^0-9]/g,'').slice(0,14);
+    // Sticky client key: reuse across timeout/uncertain retries so the server
+    // replays instead of creating a second ticket (see docs/BET_PLACEMENT_IDEMPOTENCY.md).
+    var _iKey = _pendingPlaceIdemKey || _generateIdemKey('BET');
+    _pendingPlaceIdemKey = _iKey;
     var _dbPayload = {
       clubId:_cid, playerId:_pid, playerUsername:_lspl.username||_pid,
       betType: snap.type==='straight'?'Single':snap.type==='parlay'?'Parlay':snap.type==='rr'?'RoundRobin':snap.type==='sgp'?'SGP':'Teaser',
@@ -8285,12 +8718,11 @@ async function confirmBet() {
     // ── AbortController 10 s timeout ─────────────────────────────────────
     _cbAbortCtrl  = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     _cbAbortTimer = _cbAbortCtrl ? setTimeout(function(){
-      _cbAbortCtrl.abort();
+      // Abort only — catch path owns uncertain-state messaging + reconcile (no local success).
       _cbErr('CONFIRM_BET_ERROR', null,
         'reason=fetch_timeout_10s endpoint=/api/bets/place step='+_cbStep
         +' respStatus='+_cbRespStatus);
-      showToast('Bet placement timed out. Check your connection and try again.', 'error');
-      _cbBtnReady();
+      try { _cbAbortCtrl.abort(); } catch(_) {}
     }, 10000) : null;
 
     try {
@@ -8340,6 +8772,7 @@ async function confirmBet() {
       // ── Success ───────────────────────────────────────────────────────────
       if (_dbData.ok) {
         _cbStep = 'SUCCESS';
+        _pendingPlaceIdemKey = null;
         _dbPlacementAttempted = true;
         var _isRrResp = !!(snap.type === 'rr' && _dbData.groupId);
         _cbLog('CONFIRM_BET_SUCCESS',
@@ -8451,11 +8884,15 @@ async function confirmBet() {
             return (typeof _od.legIndex==='number' && i===_od.legIndex)
               ? Object.assign({},l,{odds:_od.serverOdds}) : l;
           });
+          // New odds = new intent: clear sticky key and use distinct _oa key.
+          _pendingPlaceIdemKey = null;
           var _rp=Object.assign({},_dbPayload,{legs:_updLegs,idempotencyKey:_dbPayload.idempotencyKey+'_oa'});
+          _pendingPlaceIdemKey = _rp.idempotencyKey;
           try {
             var _r2=await _pbFetch('/api/bets/place',{method:'POST',body:JSON.stringify(_rp)});
             var _rt=await _r2.text(); var _rd2; try{ _rd2=JSON.parse(_rt); }catch(_){ _rd2={}; }
             if (_rd2.ok) {
+              _pendingPlaceIdemKey = null;
               showToast('\u2705 Bet placed at new odds','success');
               try {
                 if (_rd2.balanceAfter != null && !isNaN(Number(_rd2.balanceAfter))) {
@@ -8510,6 +8947,8 @@ async function confirmBet() {
           'parlays_disabled','teasers_disabled','round_robins_disabled','too_many_parlay_legs',
           'sport_blocked','sport_not_allowed','market_blocked','live_betting_disabled',
           'player_open_risk_exceeded','club_open_risk_exceeded','event_risk_exceeded','market_risk_exceeded']);
+        // Definitive rejection: clear sticky key so a corrected stake/slip can place.
+        _pendingPlaceIdemKey = null;
         if (_RISK_CODES.has(_hardBlock)||_hardBlock.includes('host_diamond')||
             _hardBlock.includes('insufficient_balance')||_hardBlock.includes('conflict')||
             _hardBlock.includes('market_closed')||_hardBlock.includes('game_started')) {
@@ -8525,8 +8964,18 @@ async function confirmBet() {
       if (_cbAbortTimer) { clearTimeout(_cbAbortTimer); _cbAbortTimer=null; }
       var _isAbort = _e && (_e.name==='AbortError'||String(_e.message||'').toLowerCase().includes('abort'));
       if (_isAbort) {
-        // Timeout toast already shown by AbortController handler
-        _cbErr('CONFIRM_BET_ERROR', _e, 'reason=fetch_aborted step='+_cbStep);
+        // Timeout: request may have reached the server — do NOT fabricate local success.
+        // Do NOT auto-retry money POST; reconcile authoritative dashboard state instead.
+        _cbErr('CONFIRM_BET_ERROR', _e, 'reason=fetch_aborted_uncertain step='+_cbStep);
+        try {
+          if (typeof loadPlayerDashboardFromDb === 'function') {
+            await loadPlayerDashboardFromDb({ keepPending: false });
+            try { renderMyBets(); } catch(_) {}
+          }
+        } catch(_rec) {
+          _cbErr('CONFIRM_BET_RECONCILE_WARN', _rec, 'non-fatal');
+        }
+        showToast('Placement could not be confirmed. Check My Bets — your bet may or may not have been accepted. Do not place again until you verify.', 'warning');
       } else {
         _cbErr('CONFIRM_BET_ERROR', _e,
           'phase=network step='+_cbStep
@@ -8535,9 +8984,10 @@ async function confirmBet() {
           +' respBodyPreview='+(_cbRespText||'').slice(0,200).replace(/\n/g,' '));
         showToast(_hasLiveLeg
           ? 'Live bet not placed \u2014 connection required.'
-          : 'Network error placing bet \u2014 saved locally, syncing when back online', _hasLiveLeg ? 'error' : 'warning');
+          : 'Bet could not be placed. Your balance and tickets were not changed. Please try again.', 'error');
       }
-      // Fall through to localStorage
+      // P0: never fall through to localStorage success when DB-primary is on
+      return;
     } finally {
       if (_cbAbortTimer) { clearTimeout(_cbAbortTimer); _cbAbortTimer=null; }
       _cbBtnReady(); // always re-enable button
@@ -8545,10 +8995,21 @@ async function confirmBet() {
   } // end DB path
 
   // ══════════════════════════════════════════════════════════════════════════
-  //  LOCALSTORAGE FALLBACK PATH
+  //  LOCALSTORAGE PATH — gated (never authoritative financial truth)
+  //  When DB-primary is enabled, API failure/uncertainty must NOT invent tickets,
+  //  bankroll debit, or ledger rows. Legacy offline/dev only when flag is off.
   // ══════════════════════════════════════════════════════════════════════════
   _cbStep = 'LOCALSTORAGE';
   _cbLog('CONFIRM_BET_LOCALSTORAGE_PATH', '_DB_PRIMARY='+_DB_PRIMARY_READS_ENABLED+' tickets='+newTickets.length);
+
+  // P0 PHANTOM LEDGER GUARD: refuse synthetic success after any DB-primary attempt path
+  if (_DB_PRIMARY_READS_ENABLED) {
+    _cbErr('CONFIRM_BET_ERROR', null, 'phase=local_save reason=phantom_ledger_fallback_blocked');
+    showToast('Bet could not be confirmed. Your balance and tickets were not changed.', 'error');
+    _cbBtnReady();
+    return;
+  }
+
   if (_hasLiveLeg) {
     _cbErr('CONFIRM_BET_ERROR', null, 'phase=local_save reason=live_local_fallback_blocked');
     showToast('Live bet not placed \u2014 connection required.', 'error');
@@ -8579,7 +9040,7 @@ async function confirmBet() {
     return;
   }
 
-  // Mirror to Supabase fire-and-forget (never block UI)
+  // Mirror to Supabase fire-and-forget (never block UI) — legacy offline path only
   if (!_dbPlacementAttempted) {
     newTickets.forEach(function(t){
       try { _mirrorTicketToBackend(t); } catch(_) {}
@@ -8674,12 +9135,32 @@ function requestBetDelete(ticketId, event) {
   if (sb) sb.addEventListener('click', function(){ submitDeleteRequest(ticketId); });
 }
 
+var _cancelBetInFlight = false;
+
 async function submitDeleteRequest(ticketId) {
   var modal = document.getElementById('del-req-modal');
   if (modal) modal.remove();
 
+  if (_cancelBetInFlight) {
+    showToast('Cancellation already in progress…', 'info');
+    return;
+  }
+
+  // Snapshot pre-mutation state so failed cancels cannot leave phantom local changes
+  var _preCancelTicketsJson = null;
+  var _preCancelLedgerJson = null;
+  var _preCancelBalance = null;
+  try { _preCancelTicketsJson = JSON.stringify(betTickets); } catch(_e) {}
+  try { _preCancelLedgerJson = localStorage.getItem('pb-ledger'); } catch(_e) {}
+  try { _preCancelBalance = (typeof playerBalance === 'number') ? playerBalance : null; } catch(_e) {}
+
+  function _cancelFailToast(specific) {
+    showToast(specific || 'Cancellation could not be confirmed. Your bet has not been changed.', 'error');
+  }
+
   // ── DB-FIRST CANCEL (when DB primary mode enabled) ──────────────────────────────────
   if (_DB_PRIMARY_READS_ENABLED) {
+    _cancelBetInFlight = true;
     var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
     var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
     var pid  = _safeId(pl.id  != null ? pl.id  : pl.username);
@@ -8688,11 +9169,19 @@ async function submitDeleteRequest(ticketId) {
     try {
       var resp = await _pbFetch('/api/bets/cancel', {
         method: 'POST',
-        body: JSON.stringify({ ticketId, playerId:pid, clubId:cid, idempotencyKey:iKey, reason:'player_request' })
+        body: JSON.stringify({ ticketId: ticketId, playerId:pid, clubId:cid, idempotencyKey:iKey, reason:'player_request' })
       });
-      var data = await resp.json();
+      var data;
+      try { data = await resp.json(); } catch(_je) {
+        console.warn('[cancel bet] invalid JSON status='+resp.status);
+        try {
+          if (typeof loadPlayerDashboardFromDb === 'function') await loadPlayerDashboardFromDb();
+          try { renderMyBets(); } catch(_re){}
+        } catch(_rec) {}
+        _cancelFailToast();
+        return;
+      }
       if (data.ok) {
-        
         showToast('✅ Bet canceled — $'+((data.refundAmount||0).toFixed(2))+' refunded', 'success');
         try {
           if (data.balanceAfter != null && !isNaN(Number(data.balanceAfter))) {
@@ -8704,26 +9193,41 @@ async function submitDeleteRequest(ticketId) {
         try { renderMyBets(); } catch(_e){}
         return; // DO NOT fall through to localStorage path
       } else {
-        var errMsg = data.error || 'cancel failed';
+        var errMsg = data.error || data.code || 'cancel failed';
         console.warn('[cancel bet] DB rejected:', errMsg);
-        // Map server errors to readable messages
-        if (errMsg.includes('game_already_started')) {
-          showToast('Cannot cancel: game has already started', 'error'); return;
-        } else if (errMsg.includes('cannot_cancel_settled')) {
-          showToast('Cannot cancel: bet is already settled', 'error'); return;
-        } else if (errMsg.includes('not_owner')) {
-          showToast('Cannot cancel: not your bet', 'error'); return;
+        // Map server errors to readable messages — never invent local cancel success
+        if (String(errMsg).includes('game_already_started')) {
+          _cancelFailToast('Cannot cancel: game has already started'); return;
+        } else if (String(errMsg).includes('cannot_cancel_settled')) {
+          _cancelFailToast('Cannot cancel: bet is already settled'); return;
+        } else if (String(errMsg).includes('not_owner')) {
+          _cancelFailToast('Cannot cancel: not your bet'); return;
         }
-        // Other errors fall through to localStorage path
-        console.warn('[cancel bet] falling back to localStorage path');
+        _cancelFailToast();
+        return;
       }
     } catch(_e) {
-      console.warn('[cancel bet] DB fetch failed, using localStorage fallback:', _e.message);
+      console.warn('[cancel bet] DB fetch failed (no local mutation):', _e && _e.message);
+      // Ambiguous network: reconcile only — do not mark cancelled / credit locally
+      try {
+        if (typeof loadPlayerDashboardFromDb === 'function') await loadPlayerDashboardFromDb();
+        try { renderMyBets(); } catch(_re){}
+      } catch(_rec) {}
+      _cancelFailToast();
+      return;
+    } finally {
+      _cancelBetInFlight = false;
     }
   }
-  // ── localStorage path (fallback) ────────────────────────────────────────────────────
 
-  // Update ticket in betTickets
+  // ── localStorage path — legacy only when DB-primary is OFF ─────────────────────────
+  // P0: never treat local delete-request flags as confirmed cancellation when DB-primary.
+  if (_DB_PRIMARY_READS_ENABLED) {
+    _cancelFailToast();
+    return;
+  }
+
+  // Update ticket in betTickets (legacy host-request UX only)
   var idx = betTickets.findIndex(function(t){ return t.id === ticketId; });
   if (idx === -1) { showToast('Ticket not found'); return; }
   if (betTickets[idx].deleteRequestStatus === 'pending') { showToast('Request already sent'); return; }
@@ -8742,6 +9246,8 @@ async function submitDeleteRequest(ticketId) {
   }
   renderMyBets();
   showToast('✅ Delete request sent to host');
+  // Keep snapshots referenced so minifiers/tests can assert no silent wipe on failure paths
+  void _preCancelTicketsJson; void _preCancelLedgerJson; void _preCancelBalance;
 }
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -8811,7 +9317,7 @@ function _refreshFromStorage(reason) {
 window.addEventListener('storage', function(e) {
   if (e.key === 'pb-balance' || e.key === 'pb-balance-start') {
     if (typeof loadPlayerDashboardFromDb === 'function') {
-      try { loadPlayerDashboardFromDb(); } catch(_e) { loadBalance(); }
+      try { loadPlayerDashboardFromDb(); } catch(_e) { try { applyBalanceUnavailable('dashboard_refresh_failed'); } catch(__e){} }
     } else {
       loadBalance();
       syncBalanceDisplays();
@@ -10376,6 +10882,29 @@ window._isSupportedForGrading  = _isSupportedForGrading;
 
 async function checkOpenTickets() {
   
+  // DB-primary: Check Results must not invent grades/ledger in the browser.
+  // Server grades via /api/grade/run; UI hydrates from /api/player/dashboard.
+  if (typeof _DB_PRIMARY_READS_ENABLED !== 'undefined' && _DB_PRIMARY_READS_ENABLED
+      && typeof runServerGrade === 'function') {
+    var btnSrv = document.getElementById('check-results-btn');
+    if (btnSrv) { btnSrv.textContent = '⏳ Checking…'; btnSrv.disabled = true; }
+    try {
+      var srv = await runServerGrade({ daysBack: 3 });
+      if (srv && srv.ok === false && !srv.skipped && srv.error) {
+        showToast('Could not check results: ' + String(srv.error).replace(/_/g, ' '), 'error');
+      } else if (!srv || (!srv.graded && !srv.skipped && srv.ok !== true)) {
+        // Soft: hydrate anyway so display stays server-truthful
+        try { await loadPlayerDashboardFromDb(); try { renderMyBets(); } catch(_e){} } catch(_e2){}
+      }
+    } catch (e) {
+      console.warn('[checkOpenTickets] server grade failed:', e && e.message);
+      showToast('Could not check results right now. Your tickets were not changed locally.', 'error');
+    } finally {
+      if (btnSrv) { btnSrv.textContent = 'Check Results'; btnSrv.disabled = false; }
+    }
+    return;
+  }
+
   var btn = document.getElementById('check-results-btn');
   if (btn) { btn.textContent = '⏳ Checking…'; btn.disabled = true; }
 
@@ -10704,20 +11233,29 @@ function _applyDashboardTickets(data, opts) {
 
 async function loadPlayerDashboardFromDb(opts) {
   opts = opts || {};
+  _balanceLoadState = 'loading';
   var pl   = {}; try { pl   = JSON.parse(localStorage.getItem('pb-player')||'{}'); } catch(_e){}
   var club = {}; try { club = JSON.parse(localStorage.getItem('pb-club')||'{}');   } catch(_e){}
   var pid  = _safeId(pl.id != null ? pl.id : pl.username);
   var cid  = _safeId(club.id != null ? club.id : club.clubId);
   if (!pid) {
-    _balanceFromServer = false;
-    try { syncBalanceDisplays(); } catch(_e){}
-    return { ok:false, fallbackReason:'no_player_id' };
+    try { applyBalanceUnavailable('no_player_id'); } catch(_e){}
+    return { ok:false, fallbackReason:'no_player_id', balanceUnavailable:true };
   }
   try {
     var qs   = '?playerId='+encodeURIComponent(pid)+(cid?'&clubId='+encodeURIComponent(cid):'');
     var resp = await (typeof _pbFetch === 'function' ? _pbFetch('/api/player/dashboard'+qs) : fetch('/api/player/dashboard'+qs));
-    var data = await resp.json();
-    if (!data.ok) throw new Error(data.error||'dashboard not ok');
+    // Fail-closed on any non-2xx: never invent local bankroll (covers 401/403/404/409/429/500/502).
+    if (!resp || typeof resp.ok === 'undefined') throw new Error('dashboard_no_response');
+    if (!resp.ok) throw new Error('dashboard_http_' + resp.status);
+    var data;
+    try {
+      data = await resp.json();
+    } catch(_je) {
+      throw new Error('dashboard_malformed_json');
+    }
+    if (!data || typeof data !== 'object') throw new Error('dashboard_malformed_json');
+    if (!data.ok) throw new Error(data.error || data.code || ('dashboard_not_ok_' + (resp.status || '')));
     if (data.tickets) {
       try {
         var _fetcher = typeof _pbFetch === 'function' ? _pbFetch : fetch;
@@ -10749,20 +11287,25 @@ async function loadPlayerDashboardFromDb(opts) {
     if (b && b.availableBalance != null && !isNaN(Number(b.availableBalance))) {
       applyDisplayedBalance(Number(b.availableBalance));
       _balanceFromServer = true;
+      _updatePlayerSourceBadge('db');
     } else {
-      _balanceFromServer = false;
-      syncBalanceDisplays();
+      // Authoritative response without usable balance — fail closed (no $1000 / local calc).
+      applyBalanceUnavailable('missing_balance');
+      _updatePlayerSourceBadge('unavailable');
     }
-    _updatePlayerSourceBadge('db');
     var _activeN = (data.tickets && data.tickets.active) ? data.tickets.active.length : 0;
     
     return data;
   } catch(e) {
-    console.warn('[player dashboard db] fallback to localStorage:', e.message);
-    _balanceFromServer = false;
-    try { syncBalanceDisplays(); } catch(_e){}
-    _updatePlayerSourceBadge('localStorage');
-    return { ok:false, fallbackReason:e.message };
+    var msg = (e && e.message) ? e.message : 'dashboard_error';
+    // Offline / abort / timeout → same fail-closed UI (no synthetic bankroll).
+    if (/abort|timeout|failed to fetch|networkerror|offline/i.test(String(msg))) {
+      msg = 'dashboard_unreachable';
+    }
+    console.warn('[player dashboard db] fail-closed (no local balance):', msg);
+    try { applyBalanceUnavailable(msg); } catch(_e){}
+    _updatePlayerSourceBadge('unavailable');
+    return { ok:false, fallbackReason:msg, balanceUnavailable:true };
   }
 }
 
@@ -10776,10 +11319,11 @@ function _updatePlayerSourceBadge(source) {
     document.body.appendChild(badge);
   }
   var isDb = source === 'db';
-  badge.style.background = isDb ? '#0c1a2e' : '#1a0a00';
-  badge.style.border = '1px solid '+(isDb?'#2563eb':'#ea580c');
-  badge.style.color  = isDb ? '#93c5fd' : '#fdba74';
-  badge.textContent  = '👤 Player:'+(isDb?'DB':'Local');
+  var isUnavail = source === 'unavailable';
+  badge.style.background = isDb ? '#0c1a2e' : (isUnavail ? '#1a1010' : '#1a0a00');
+  badge.style.border = '1px solid '+(isDb?'#2563eb':(isUnavail?'#b91c1c':'#ea580c'));
+  badge.style.color  = isDb ? '#93c5fd' : (isUnavail ? '#fca5a5' : '#fdba74');
+  badge.textContent  = isDb ? '👤 Player:DB' : (isUnavail ? '👤 Player:Balance unavailable' : '👤 Player:Local');
 }
 
 async function runPlayerDashboardDbAudit() {
@@ -11329,7 +11873,12 @@ var _MONEY_ENDPOINTS = new Set([
   '/api/host/settle-player', '/api/host/weekly-rollover'
 ]);
 // Per-action key store: prevents double-click generating two different keys
+// Keyed by API path (not absolute URL) so money-endpoint matching works.
 var _pendingIdemKeys = {};
+var _confirmBetInFlight = false;
+// Sticky place key: reuse across timeout/uncertain retries until success or hard reject.
+var _pendingPlaceIdemKey = null;
+
 
 function _generateIdemKey(prefix) {
   var arr = new Uint8Array(8);
@@ -11340,6 +11889,14 @@ function _generateIdemKey(prefix) {
   }
   var hex = Array.from(arr).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
   return (prefix||'IK') + '_' + Date.now() + '_' + hex;
+}
+
+function _bodyIdempotencyKey(body) {
+  if (!body || typeof body !== 'string') return null;
+  try {
+    var parsed = JSON.parse(body);
+    return (parsed && parsed.idempotencyKey) ? String(parsed.idempotencyKey) : null;
+  } catch (_e) { return null; }
 }
 
 // _pbFetch: wraps fetch() with auth headers + idempotency key for money actions
@@ -11353,15 +11910,16 @@ async function _pbFetch(url, opts) {
     try { await _ensureFreshToken(); } catch (_e) {}
   }
   var headers = Object.assign(_getActorHeaders(), opts.headers || {});
-  // Auto-inject Idempotency-Key for money POST endpoints
-  if (opts.method === 'POST' && _MONEY_ENDPOINTS.has(url.replace(/\?.*$/,''))) {
+  // Auto-inject Idempotency-Key for money POST endpoints (match path, not absolute URL).
+  // Prefer body.idempotencyKey so middleware + place_bet_tx share one canonical key.
+  if (opts.method === 'POST' && _MONEY_ENDPOINTS.has(path)) {
     if (!headers['Idempotency-Key']) {
-      // Reuse in-flight key for same endpoint (double-click protection)
-      var existingKey = _pendingIdemKeys[url];
+      var bodyKey = _bodyIdempotencyKey(opts.body);
+      var existingKey = bodyKey || _pendingIdemKeys[path];
       if (!existingKey) {
         existingKey = _generateIdemKey('PB');
-        _pendingIdemKeys[url] = existingKey;
       }
+      _pendingIdemKeys[path] = existingKey;
       headers['Idempotency-Key'] = existingKey;
     }
   }
@@ -11379,16 +11937,16 @@ async function _pbFetch(url, opts) {
       }
       if (fatal) {
         _authRedirectToLogin('Session invalid — please sign in again');
-        delete _pendingIdemKeys[url];
+        delete _pendingIdemKeys[path];
         return resp;
       }
     }
-    if (resp.status === 429) {
+    if (resp.status === 429 && _isAuthApiPath(path)) {
       try {
         var peek429 = await resp.clone().json();
         _authHandleResponse(429, peek429);
       } catch (_e) { _authHandleResponse(429, {}); }
-      delete _pendingIdemKeys[url];
+      delete _pendingIdemKeys[path];
       return resp;
     }
     var expired = resp.status === 401;
@@ -11410,7 +11968,7 @@ async function _pbFetch(url, opts) {
       _authHandleResponse(resp.status, authPeek);
     } catch (_e) { _authHandleResponse(resp.status, {}); }
   }
-  delete _pendingIdemKeys[url];
+  delete _pendingIdemKeys[path];
   return resp;
 }
 
@@ -11514,6 +12072,7 @@ window._pollEvents       = _pollEvents;
 var _SESSION_REFRESH_THRESHOLD_SEC = 5 * 60; // refresh if <5min left
 
 async function _verifyOrRefreshSession() {
+  if (window._bootTokenRecoveryInFlight) return { ok:false, reason:'boot_recovery_in_flight' };
   if (!_authCanAttempt()) return { ok:false, reason:'auth_give_up' };
   var token = null;
   try { token = localStorage.getItem('pb-session-token') || localStorage.getItem('pb-sports-token'); } catch(_e){}
@@ -11653,10 +12212,11 @@ function _dispatchGradePoll() {
 }
 // ════════════════════════════════════════════════════════════════════════════
 
-var _myBetsFilter = { q: '', status: 'all', range: 'week', sort: 'newest' };
+var _myBetsFilter = _myBetsFilter || { q: '', status: 'all', range: 'week', sort: 'newest' };
 var _myBetsSearchFocused = false;
 function _myBetsApply(key, val) {
   _myBetsFilter[key] = val;
+  if (!_pbNavApplying) _pbNavSyncUrl({ push: false });
   renderMyBets();
 }
 
@@ -12306,9 +12866,9 @@ function renderMyBets() {
   var _lg = localStorage.getItem('pb-last-graded');
   if (_lg) html += '<div style="padding:0 14px 6px;font-size:0.65rem;color:#aaa">Last graded: ' + new Date(_lg).toLocaleString() + '</div>';
   if (!betTickets.length) {
-    html += '<div style="text-align:center;padding:50px 20px;color:#aaa;font-size:0.9rem">No bets yet</div>';
+    html += _pbStateHtml({ title: 'No bets yet', body: 'Place a wager from the sportsbook to see it here.' });
   } else if (!active.length && !settled.length) {
-    html += '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:0.88rem">No bets match these filters</div>';
+    html += _pbStateHtml({ title: 'No matching bets', body: 'Try a different filter or date range.' });
   } else {
     if (active.length) {
       html += '<div style="padding:4px 14px;font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#0064c8">Active Bets ('+active.length+')</div>';
@@ -14893,7 +15453,7 @@ function loadLiveGamesFromSportsDataIO(){
     
     return;
   }
-  el.innerHTML = '<div class="empty">Loading…</div>';
+  el.innerHTML = _pbStateHtml({ kind: 'loading', title: 'Loading live events…' });
   _liveFetchToday().then(function(games){
     games = Array.isArray(games) ? games : [];
     var live = games.filter(function(g){ return g && _liveIsLiveStatus(g.Status); });
@@ -15774,7 +16334,7 @@ function _notifRenderList(list) {
   var el = document.getElementById('notif-list');
   if (!el) return;
   if (!list || !list.length) {
-    el.innerHTML = '<div class="notif-empty">No notifications yet</div>';
+    el.innerHTML = '<div class="notif-empty">No notifications<br><span style="opacity:.85">You’re all caught up</span></div>';
     return;
   }
   el.innerHTML = list.map(function(n) {
@@ -15834,15 +16394,30 @@ async function _playerRespondCashout(action, ticketId, notificationId) {
 }
 
 async function _loadNotifications() {
+  var listEl = document.getElementById('notif-list');
   try {
+    if (_notifOpen && listEl && /Loading/.test(listEl.textContent || '')) {
+      /* keep loading chrome while open */
+    } else if (_notifOpen && listEl && !(listEl.querySelector('.notif-item'))) {
+      listEl.innerHTML = '<div class="pb-loading" style="margin:8px">Loading notifications…</div>';
+    }
     var resp = await (typeof _pbFetch === 'function'
       ? _pbFetch(API + '/api/notifications')
       : fetch(API + '/api/notifications', { headers: _getActorHeaders() }));
     var d = await resp.json();
-    if (!d || !d.ok) return;
+    if (!d || !d.ok) {
+      if (_notifOpen && listEl) {
+        listEl.innerHTML = '<div class="notif-empty">Notifications unavailable<br><span style="opacity:.85">Pull to reopen and retry</span></div>';
+      }
+      return;
+    }
     _notifUpdateBadge(d.unread || 0);
     if (_notifOpen) _notifRenderList(d.notifications || []);
-  } catch (_e) {}
+  } catch (_e) {
+    if (_notifOpen && listEl) {
+      listEl.innerHTML = '<div class="notif-empty">Couldn’t load notifications<br><span style="opacity:.85">Check connection and reopen</span></div>';
+    }
+  }
 }
 
 async function _markNotificationsRead() {

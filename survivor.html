@@ -325,6 +325,55 @@ const API = 'https://pocketbooks-sports-backend-production.up.railway.app';
 let TOKEN = localStorage.getItem('pb-sports-token') || '';
 var _TOKEN_SKEW_MS = 5 * 60 * 1000;
 var _tokenRefreshInFlight = null;
+var _AUTH_MAX_RETRIES = 3;
+var _authFailCount = 0;
+var _authBlockedUntil = 0;
+var _authGiveUp = false;
+var _AUTH_STORAGE_KEYS = [
+  'pb-sports-token','pb-token-expires','pb-session-token','pb-test-user',
+  'pb-dev-email','pb-dev-pass','pb-player','pb-host','pb-actor-role',
+  'pb-active-club','pb-clubs','pb-club','pb-user-clubs','pb-player-email'
+];
+function _authSleep(ms) { return new Promise(function(r){ setTimeout(r, ms); }); }
+function _authBackoffMs(n) { return Math.min(1000 * Math.pow(2, n), 4000); }
+function _clearAuthLocalStorage() {
+  try { _AUTH_STORAGE_KEYS.forEach(function(k){ localStorage.removeItem(k); }); } catch(_e) {}
+  TOKEN = '';
+}
+function _authRedirectToLogin(msg) {
+  if (_authGiveUp) return;
+  _authGiveUp = true;
+  _clearAuthLocalStorage();
+  window.location.href = 'lobby.html?screen=signin&msg=' + encodeURIComponent(msg || 'Your session expired — please sign in again');
+}
+function _authCanAttempt() {
+  if (_authGiveUp) return false;
+  if (_authFailCount >= _AUTH_MAX_RETRIES) {
+    _authRedirectToLogin('Authentication failed after multiple attempts — please sign in again');
+    return false;
+  }
+  if (Date.now() < _authBlockedUntil) return false;
+  return true;
+}
+function _authHandleResponse(status, data) {
+  if (status === 401 || status === 403) {
+    _authRedirectToLogin('Session invalid — please sign in again');
+    return 'fatal';
+  }
+  if (status === 429) {
+    var sec = Math.max(60, (data && data.retryAfterSec) || 60);
+    _authBlockedUntil = Date.now() + sec * 1000;
+    _authFailCount++;
+    return 'rate_limited';
+  }
+  return 'ok';
+}
+async function _authFetchOnce(url, opts) {
+  var r = await fetch(url, opts);
+  var data = {};
+  try { data = await r.json(); } catch(_e) { data = {}; }
+  return { status: r.status, data: data, ok: r.ok };
+}
 
 function _decodeJwtPayload(token) {
   try {
@@ -346,13 +395,14 @@ function _storeAuthToken(token, expiresInSec) {
   TOKEN = token;
   try {
     localStorage.setItem('pb-sports-token', token);
+    localStorage.setItem('pb-session-token', token);
     var expMs = expiresInSec ? (Date.now() + Number(expiresInSec) * 1000) : _tokenExpMs(token);
     if (!expMs) expMs = Date.now() + 86400 * 1000;
     localStorage.setItem('pb-token-expires', String(expMs));
   } catch (_e) {}
 }
 function _redirectToSignIn() {
-  window.location.href = 'lobby.html?screen=signin&msg=' + encodeURIComponent('Your session expired — please sign in again');
+  _authRedirectToLogin('Your session expired — please sign in again');
 }
 function _storedActorClub() {
   var pl = null, club = null;
@@ -372,34 +422,52 @@ function _isExpiredAuth(status, data) {
   return status === 403 && (err === 'expired_token' || /expired token/i.test(err));
 }
 async function _doRefreshAuthToken() {
+  if (!_authCanAttempt()) return false;
   var ids = _storedActorClub();
   if (ids) {
     try {
-      var r = await fetch(API + '/api/auth/token', {
+      var tok = await _authFetchOnce(API + '/api/auth/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ actorId: ids.actorId, clubId: ids.clubId })
       });
-      var data = await r.json();
-      if (data && data.token) {
-        _storeAuthToken(data.token, data.expiresIn);
+      var tokVerdict = _authHandleResponse(tok.status, tok.data);
+      if (tokVerdict === 'fatal' || tokVerdict === 'rate_limited') return false;
+      if (tok.data && tok.data.token) {
+        _authFailCount = 0;
+        _storeAuthToken(tok.data.token, tok.data.expiresIn);
         return true;
       }
-    } catch (_e) {}
+      _authFailCount++;
+      if (_authFailCount >= _AUTH_MAX_RETRIES) { _authRedirectToLogin('Could not refresh session — please sign in again'); return false; }
+      await _authSleep(_authBackoffMs(_authFailCount - 1));
+    } catch (_e) {
+      _authFailCount++;
+      if (_authFailCount >= _AUTH_MAX_RETRIES) { _authRedirectToLogin('Authentication network error — please sign in again'); return false; }
+      await _authSleep(_authBackoffMs(_authFailCount - 1));
+    }
   }
+  if (!_authCanAttempt()) return false;
   var current = TOKEN || localStorage.getItem('pb-sports-token') || '';
   if (current && _isClubSessionToken(current) && _tokenExpMs(current) > Date.now()) {
     try {
-      var r2 = await fetch(API + '/api/auth/refresh', {
+      var ref = await _authFetchOnce(API + '/api/auth/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + current }
       });
-      var data2 = await r2.json();
-      if (data2 && data2.token) {
-        _storeAuthToken(data2.token, data2.expiresIn);
+      var refVerdict = _authHandleResponse(ref.status, ref.data);
+      if (refVerdict === 'fatal' || refVerdict === 'rate_limited') return false;
+      if (ref.data && ref.data.token) {
+        _authFailCount = 0;
+        _storeAuthToken(ref.data.token, ref.data.expiresIn);
         return true;
       }
-    } catch (_e) {}
+      _authFailCount++;
+      if (_authFailCount >= _AUTH_MAX_RETRIES) { _authRedirectToLogin('Could not refresh session — please sign in again'); return false; }
+    } catch (_e) {
+      _authFailCount++;
+      if (_authFailCount >= _AUTH_MAX_RETRIES) { _authRedirectToLogin('Authentication network error — please sign in again'); return false; }
+    }
   }
   return false;
 }
@@ -413,6 +481,7 @@ function _refreshAuthToken() {
   return p;
 }
 async function _ensureFreshToken() {
+  if (!_authCanAttempt()) return;
   var token = TOKEN || localStorage.getItem('pb-sports-token') || '';
   if (!token) return;
   var exp = parseInt(localStorage.getItem('pb-token-expires') || '0', 10) || _tokenExpMs(token);
@@ -496,7 +565,8 @@ function esc(s){
 }
 
 async function api(method, path, body, _retried){
-  if (!_isAuthApiPath(path)) {
+  if (_authGiveUp) return { error: 'auth_give_up', _status: 401 };
+  if (!_retried && !_isAuthApiPath(path)) {
     try { await _ensureFreshToken(); } catch (_e) {}
   }
   var token = TOKEN || localStorage.getItem('pb-sports-token') || '';
@@ -512,10 +582,26 @@ async function api(method, path, body, _retried){
   try { data = await r.json(); } catch(_e){}
   if (!r.ok && !data.error) data.error = 'request_failed';
   data._status = r.status;
-  if (_isExpiredAuth(r.status, data) && !_retried && !_isAuthApiPath(path)) {
+  if (r.status === 401 || r.status === 403) {
+    if (_isAuthApiPath(path)) {
+      _authRedirectToLogin('Session invalid — please sign in again');
+      return data;
+    }
+    var hard403 = r.status === 403 && !_isExpiredAuth(r.status, data);
+    if (r.status === 401 || hard403) {
+      _authRedirectToLogin('Session invalid — please sign in again');
+      return data;
+    }
+  }
+  if (r.status === 429 && _isAuthApiPath(path)) {
+    _authHandleResponse(429, data);
+    data.error = 'too_many_requests';
+    return data;
+  }
+  if (_isExpiredAuth(r.status, data) && !_retried && !_isAuthApiPath(path) && _authCanAttempt()) {
     var ok = await _refreshAuthToken();
-    if (ok) return api(method, path, body, true);
-    _redirectToSignIn();
+    if (ok && !_authGiveUp) return api(method, path, body, true);
+    if (!_authGiveUp) _redirectToSignIn();
     data.error = 'expired_token';
   }
   return data;
@@ -1519,6 +1605,16 @@ window.signOut = signOut;
 
 (function init(){
   if (!TOKEN) { window.location.href = 'lobby.html'; return; }
+  var _tokParts = String(TOKEN).split('.');
+  if (_tokParts.length !== 3) {
+    _authRedirectToLogin('Session invalid — please sign in again');
+    return;
+  }
+  try { JSON.parse(atob(_tokParts[1].replace(/-/g,'+').replace(/_/g,'/'))); }
+  catch(_e) {
+    _authRedirectToLogin('Session invalid — please sign in again');
+    return;
+  }
   setupSurvivorNav();
   try { JSON.parse(localStorage.getItem('pb-club') || 'null'); } catch(_e){}
   var q = new URLSearchParams(window.location.search).get('pool');
