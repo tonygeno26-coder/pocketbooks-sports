@@ -956,15 +956,20 @@
       writePersistentCache(key, { miss: true });
     } catch (_e) {}
 
-    // Soccer: try team logo before initials
+    // Soccer: try team logo before text-only fallback
     if (normalizeSport(sport) === 'soccer' && step === 0 && team) {
       var logoHtml = soccerTeamLogoFallback(team, size, className);
       if (logoHtml) {
+        img.onerror = null;
+        img.style.display = 'none';
         img.outerHTML = logoHtml;
         return;
       }
     }
 
+    img.onerror = null;
+    img.style.display = 'none';
+    img.style.visibility = 'hidden';
     img.outerHTML = initialsHtml(name, size, className, team, sport);
   }
 
@@ -998,6 +1003,7 @@
       ' src="' + esc(url) + '"' +
       ' alt="' + esc(name) + '"' +
       ' width="' + size + '" height="' + size + '"' +
+      ' loading="lazy" decoding="async"' +
       ' style="width:' + size + 'px;height:' + size + 'px;object-fit:' + esc(objectFit) +
       ';display:block;border-radius:' + esc(String(borderRadius)) + '"' +
       ' referrerpolicy="no-referrer"' +
@@ -1025,6 +1031,8 @@
     img.alt = name;
     img.width = size;
     img.height = size;
+    img.loading = 'lazy';
+    img.decoding = 'async';
     img.style.cssText = 'width:' + size + 'px;height:' + size + 'px;object-fit:' + objectFit +
       ';display:block;border-radius:' + borderRadius;
     img.referrerPolicy = 'no-referrer';

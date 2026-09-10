@@ -1422,6 +1422,26 @@ body{
   .market-card .mc-team > div{min-width:0;flex:1}
 }
 
+/* ═══ A11Y B+ — focus, SR, landmarks, touch ═══ */
+.pb-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.pb-skip-link{position:absolute;left:-9999px;top:auto;width:1px;height:1px;overflow:hidden}
+.pb-skip-link:focus{position:fixed;left:12px;top:12px;width:auto;height:auto;overflow:visible;z-index:999999;padding:12px 16px;background:var(--accent,#00c2ff);color:#041018;font-weight:900;border-radius:12px;outline:2px solid #fff;outline-offset:2px}
+button:disabled,.odds-box[aria-disabled="true"]{opacity:0.45;cursor:not-allowed}
+.bn:focus-visible,.hdr-back:focus-visible,.sport-tab:focus-visible,.pill:focus-visible,
+.mc-props-tab:focus-visible,.mc-prop-team-pill:focus-visible,.mc-props-btn:focus-visible,
+.dkslip-tab:focus-visible,.dkslip-qa:focus-visible,.dkslip-close:focus-visible,.dkslip-clear:focus-visible,
+.buy-diamonds-nav-btn:focus-visible,.notif-bell:focus-visible,.icon-btn:focus-visible,
+.mc-prop-show-more:focus-visible,.place-btn:focus-visible,#bs-place-btn:focus-visible,
+.odds-box:focus-visible,.odds-cell:focus-visible,.mc-prop-ou:focus-visible,.mkt-odds-box:focus-visible{
+  outline:2px solid var(--accent,#00c2ff);outline-offset:2px
+}
+.dkslip-place-btn:focus-visible,#bs-place-btn:focus-visible{outline:2px solid #041018;outline-offset:2px}
+.mc-col-label,.mc-time,.mc-sport{color:#94A3B8}
+.odds-box:active:not(.live-stale):not(.suspended),.mc-prop-ou:active,.pill:active,.sport-tab:active{transform:scale(0.97)}
+@media (prefers-reduced-motion: reduce){
+  .odds-box:active,.mc-prop-ou:active,.pill:active,.sport-tab:active,.dkslip-place-btn.ready:active{transform:none}
+}
+
 </style>
 
 <script>
@@ -1577,15 +1597,17 @@ function _debugClearTickets() {
 
 </script></head>
 <body>
+<a class="pb-skip-link" href="#sportsbook-section">Skip to sportsbook</a>
+<div id="pb-a11y-live" class="pb-sr-only" aria-live="polite" aria-atomic="true"></div>
 
 <!-- HEADER -->
-<div class="header">
+<header class="header" role="banner">
   <div class="h-left">
     <button type="button" class="hdr-back" onclick="returnToLobby()" aria-label="Back to Lobby">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
     </button>
     <div class="hdr-brand">
-      <img class="hdr-logo" src="./logo.jpg" width="34" height="34" alt="PB Sports">
+      <img class="hdr-logo" src="./logo.jpg" width="34" height="34" alt="PB Sports" loading="eager" decoding="async">
       <div class="hdr-club" aria-hidden="true">RT</div>
     </div>
   </div>
@@ -1599,19 +1621,19 @@ function _debugClearTickets() {
     </div>
     <button type="button" class="buy-diamonds-nav-btn" id="buy-diamonds-btn" onclick="openBuyDiamondsModal()" aria-label="Buy Diamonds" title="Buy Diamonds"><span aria-hidden="true">💎</span><span class="hdr-diamond-lbl">Buy</span></button>
     <div class="notif-wrap" id="notif-wrap">
-      <button type="button" class="notif-bell" id="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications" title="Notifications">🔔</button>
+      <button type="button" class="notif-bell" id="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications" title="Notifications" aria-haspopup="true" aria-expanded="false">🔔</button>
       <span class="notif-badge" id="notif-badge"></span>
-      <div class="notif-dd" id="notif-dd">
+      <div class="notif-dd" id="notif-dd" role="region" aria-label="Notifications">
         <div class="notif-dd-hd">Notifications</div>
         <div id="notif-list"><div class="pb-loading" style="margin:8px">Loading notifications…</div></div>
       </div>
     </div>
-    <span class="icon-btn" id="open-profile-btn" style="cursor:pointer" onclick="showPlayerSettings()" role="button" aria-label="Account">👤</span>
+    <span class="icon-btn" id="open-profile-btn" style="cursor:pointer" onclick="showPlayerSettings()" role="button" tabindex="0" aria-label="Account settings">👤</span>
   </div>
-</div>
+</header>
 
 <!-- TOP TABS -->
-<div id="sportsbook-section">
+<main id="sportsbook-section" tabindex="-1">
 <!-- SPORT GRID -->
 <div class="sport-grid" role="tablist" aria-label="Sports">
   <button type="button" class="sport-tab" id="st-nfl" onclick="setSport(this,'nfl')" role="tab" aria-selected="false"><span class="sport-tab-emoji"><img src="https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png" width="36" height="36" alt="NFL" onerror="this.onerror=null;this.replaceWith(document.createTextNode('🏈'))"></span><span class="sport-tab-name">NFL</span><span class="sport-tab-count"></span></button>
@@ -1646,7 +1668,7 @@ function _debugClearTickets() {
 <!-- GAMES -->
 <div style="height:20px"></div>
 <div id="games-list"><div class="pb-loading">Loading events…</div></div>
-</div><!-- /sportsbook-section -->
+</main><!-- /sportsbook-section -->
 <div id="mybets-section" style="display:none;background:#070b12;min-height:100vh;padding-bottom:100px"></div>
 <div id="live-section" style="display:none;background:#0a0a0a;min-height:100vh;padding:14px 0 100px">
   <div style="display:flex;align-items:center;gap:8px;padding:0 16px 14px">
@@ -1670,13 +1692,13 @@ function _debugClearTickets() {
 </div>
 
 <!-- BET SLIP MODAL -->
-<div class="modal-bg" id="modal-slip">
+<div class="modal-bg" id="modal-slip" role="dialog" aria-modal="true" aria-label="Bet Slip">
   <div class="modal">
     <div class="mh">
       <div class="mh-title">Bet Slip <span class="sl-badge" id="sl-badge">0</span></div>
       <div style="display:flex;gap:12px;align-items:center">
-        <span style="font-size:0.78rem;color:var(--red, #ff4444);cursor:pointer" onclick="clearSlip()">Clear</span>
-        <button class="mclose" onclick="closeSlip()">✕</button>
+        <button type="button" style="font-size:0.78rem;color:var(--red, #ff4444);cursor:pointer;background:none;border:none;padding:8px;min-height:44px" onclick="clearSlip()" aria-label="Clear bet slip">Clear</button>
+        <button type="button" class="mclose" onclick="closeSlip()" aria-label="Close bet slip">✕</button>
       </div>
     </div>
     <div class="stype-row">
@@ -1732,8 +1754,10 @@ function _debugClearTickets() {
   </button>
 </nav>
 
+<script src="pb-a11y.js"></script>
 <script src="player-photos.js"></script>
 <script src="team-logos.js"></script>
+<script src="scripts/owls-live-scores.js"></script>
 <script>
 // Preview/dev params — hoisted before session gate (avoids TDZ ReferenceError on _pDev)
 var _pp = new URLSearchParams(window.location.search);
@@ -1830,11 +1854,13 @@ function _showSessionExpiredModal(result) {
   overlay.innerHTML = [
     '<div style="background:#1a1a1a;border:1.5px solid #ef4444;border-radius:20px;padding:32px 24px;max-width:320px;width:90%;text-align:center;box-shadow:0 0 40px rgba(239,68,68,0.25)">',
       '<div style="font-size:2rem;margin-bottom:12px">&#128274;</div>',
-      '<div style="font-weight:800;font-size:1.1rem;color:#fff;margin-bottom:10px">Session Expired</div>',
+      '<div style="font-weight:800;font-size:1.1rem;color:#fff;margin-bottom:10px">' +
+        (reason === 'too_many_requests' ? 'Too Many Requests' : 'Session Expired') + '</div>',
       '<div style="color:#aaa;font-size:0.85rem;line-height:1.5;margin-bottom:24px">',
-        'Your session is no longer valid.<br>',
-        'Return to the lobby and re-enter your club to continue.',
-        (reason ? '<br><span style="font-size:0.75rem;color:#666;margin-top:6px;display:block">Reason: '+reason+'</span>' : ''),
+        (reason === 'too_many_requests'
+          ? 'Please wait a minute, then return to the lobby and sign in again.'
+          : 'Your session is no longer valid.<br>Return to the lobby and re-enter your club to continue.'),
+        (reason && reason !== 'too_many_requests' ? '<br><span style="font-size:0.75rem;color:#666;margin-top:6px;display:block">Reason: '+reason+'</span>' : ''),
       '</div>',
       '<button id="session-lobby-btn" style="width:100%;padding:14px;background:#00ff87;border:none;border-radius:12px;color:#000;font-weight:800;font-size:1rem;cursor:pointer">',
         '&#8592; Return to Lobby',
@@ -2007,6 +2033,7 @@ function _authCanAttempt() {
   if (Date.now() < _authBlockedUntil) return false;
   return true;
 }
+// Classify only — never redirect here (refresh paths must stay non-destructive).
 function _authHandleResponse(status, data) {
   // Classify-only — never redirect here (redirects during refresh break recovery).
   if (status === 401 || status === 403) {
@@ -2212,7 +2239,7 @@ function _isAuthApiPath(path) {
 }
 function _isSoftAuthPath(path) {
   // Soft-fail notifications — never session-nuke / never wipe on poll 401.
-  return /\/api\/notifications(\/|$)/.test(path || '');
+  return /^\/api\/notifications(\/|$)/.test(path || '');
 }
 function _isExpiredAuth(status, data) {
   if (status === 401) return true;
@@ -2684,9 +2711,17 @@ function showPlayerSettings() {
     '</div>' +
   '</div>';
   (document.documentElement || document.body).appendChild(ov);
-  
-  ov.addEventListener('click', function(e){ if (e.target===ov) ov.remove(); });
-  ov.querySelector('#ps-close').addEventListener('click', function(){ ov.remove(); });
+  ov.setAttribute('role', 'dialog');
+  ov.setAttribute('aria-modal', 'true');
+  ov.setAttribute('aria-label', 'Player settings');
+  ov.addEventListener('click', function(e){ if (e.target===ov) { if (window.PbA11y) PbA11y.deactivate(ov); ov.remove(); } });
+  ov.querySelector('#ps-close').addEventListener('click', function(){ if (window.PbA11y) PbA11y.deactivate(ov); ov.remove(); });
+  if (window.PbA11y) {
+    PbA11y.activate(ov, {
+      onEscape: function(){ if (window.PbA11y) PbA11y.deactivate(ov); ov.remove(); },
+      initialFocus: '#ps-close'
+    });
+  }
   // chip wiring
   Array.prototype.forEach.call(ov.querySelectorAll('[data-pset-theme]'), function(b){
     b.addEventListener('click', function() { s.theme = b.dataset.psetTheme; savePlayerSettings(s); applyPlayerTheme(); showPlayerSettings(); });
@@ -2924,8 +2959,17 @@ function teamAvatar(name, sport, opts) {
 
 function _pbCollapseImgToText(img) {
   if (!img) return;
-  var label = (img.getAttribute('alt') || img.getAttribute('data-team-name') ||
-    img.getAttribute('data-player-name') || '').trim() || '—';
+  img.onerror = null;
+  img.removeAttribute('src');
+  img.removeAttribute('srcset');
+  img.style.display = 'none';
+  img.style.visibility = 'hidden';
+  img.setAttribute('aria-hidden', 'true');
+  img.removeAttribute('alt');
+  img.alt = '';
+  var label = (img.getAttribute('data-team-name') ||
+    img.getAttribute('data-player-name') || img.getAttribute('title') || '').trim() || '—';
+  // Prefer replace so no empty focusable/img control remains in the tree.
   var span = document.createElement('span');
   span.className = 'pb-text-fallback';
   span.setAttribute('aria-hidden', 'true');
@@ -3346,23 +3390,53 @@ function _pbFormatLiveStateText(g) {
   return bits.join(' · ');
 }
 
+function _pbDevMode() {
+  try {
+    if (localStorage.getItem('pb-dev-mode') === '1') return true;
+  } catch (_e) {}
+  var h = String(location && location.hostname || '');
+  return h === 'localhost' || h === '127.0.0.1' || /\.local$/.test(h);
+}
+
+function _pbDevLogLiveScore(tag, payload) {
+  if (!_pbDevMode()) return;
+  try { console.debug('[live-score:' + tag + ']', payload); } catch (_e) {}
+}
+
+function _pbHasSafeNumericScore(g) {
+  if (!g) return false;
+  if (g._scoreMatchSafe === true || g.scoreSource === 'owls_scores_live') {
+    return g.homeScore != null || g.awayScore != null;
+  }
+  return false;
+}
+
+function _pbLiveScoreContextOnly(g) {
+  if (!g) return false;
+  return !!(g.gameStateText || g.period != null || g.clock || g.inning != null ||
+    g.down != null || g.setScore != null || g.gameScore != null || g.statusDetail);
+}
+
 function _pbLiveScoreboardHtml(g) {
   if (!_pbMarketIsLive(g)) return '';
-  var hasScore = g.homeScore != null || g.awayScore != null || g.gameStateText ||
-    g.period != null || g.clock || g.inning != null || g.down != null ||
-    g.setScore != null || g.gameScore != null || g.statusDetail;
-  if (!hasScore) {
-    // Live odds without scoreboard — keep betting, omit empty scoreboard.
+  var safeNumeric = _pbHasSafeNumericScore(g);
+  var stateTxt = _pbFormatLiveStateText(g);
+  if (!safeNumeric && !_pbLiveScoreContextOnly(g)) {
+    // Live odds without a safe score — keep betting, omit scoreboard.
     return '';
+  }
+  if (!safeNumeric) {
+    // Uncertain identity: keep event + LIVE context, suppress numeric score.
+    return '<div class="mc-live-score mc-live-score--context-only" aria-hidden="true">' +
+      '<span class="mc-live-state">' + (stateTxt || '● LIVE') + '</span></div>';
   }
   var aw = (g.away || g.away_team) || '';
   var hw = (g.home || g.home_team) || '';
+  var sport = _pbSportKeyOf(g);
   var awN = aw.split(' ').slice(-1)[0] || aw;
   var hwN = hw.split(' ').slice(-1)[0] || hw;
-  var awSc = g.awayScore != null ? g.awayScore : '—';
-  var hwSc = g.homeScore != null ? g.homeScore : '—';
-  var stateTxt = _pbFormatLiveStateText(g);
-  var sport = _pbSportKeyOf(g);
+  var awSc = g.awayScore != null ? g.awayScore : '';
+  var hwSc = g.homeScore != null ? g.homeScore : '';
   var extras = [];
   if (sport === 'mlb' || sport.indexOf('baseball') >= 0) {
     if (g.outs != null && !(g.gameStateText && String(g.gameStateText).toLowerCase().indexOf('out') >= 0)) {
@@ -3377,14 +3451,140 @@ function _pbLiveScoreboardHtml(g) {
     if (g.setScore != null && stateTxt.indexOf(String(g.setScore)) < 0) extras.push('<span>Sets ' + g.setScore + '</span>');
     if (g.gameScore != null && stateTxt.indexOf(String(g.gameScore)) < 0) extras.push('<span>' + g.gameScore + '</span>');
   }
-  return '<div class="mc-live-score">' +
+  return '<div class="mc-live-score" aria-hidden="true">' +
     '<div class="mc-live-score-row">' +
-      '<span>' + awN + ' <span class="mc-live-pts">' + awSc + '</span></span>' +
+      '<span>' + awN + (awSc !== '' ? ' <span class="mc-live-pts">' + awSc + '</span>' : '') + '</span>' +
       (stateTxt ? '<span class="mc-live-state">' + stateTxt + '</span>' : '<span style="color:#64748B">● LIVE</span>') +
-      '<span><span class="mc-live-pts">' + hwSc + '</span> ' + hwN + '</span>' +
+      '<span>' + (hwSc !== '' ? '<span class="mc-live-pts">' + hwSc + '</span> ' : '') + hwN + '</span>' +
     '</div>' +
     (extras.length ? '<div class="mc-live-extras">' + extras.join('') + '</div>' : '') +
   '</div>';
+}
+
+var _pbLiveScoreIndexCache = {};
+
+function _pbIsSoccerOrTennisSport(sport) {
+  var s = String(sport || '').toLowerCase();
+  return s.indexOf('soccer') >= 0 || s === 'epl' || s === 'mls' || s === 'ucl' ||
+    s.indexOf('tennis') >= 0 || s === 'atp' || s === 'wta';
+}
+
+function _pbScoreSportShort(sport) {
+  var s = String(sport || '').toLowerCase();
+  if (s.indexOf('soccer') >= 0 || s === 'epl' || s === 'mls' || s === 'ucl') return 'soccer';
+  if (s.indexOf('tennis') >= 0 || s === 'atp' || s === 'wta') return 'tennis';
+  return s;
+}
+
+async function _pbFetchLiveScoreIndex(sport) {
+  if (!window.OwlsLiveScores || typeof OwlsLiveScores.indexOwlsLiveScores !== 'function') return null;
+  var short = _pbScoreSportShort(sport);
+  if (short !== 'soccer' && short !== 'tennis') return null;
+  var now = Date.now();
+  var cached = _pbLiveScoreIndexCache[short];
+  if (cached && (now - cached.fetchedAt) < 10000) return cached.index;
+
+  var events = [];
+  var seenIds = {};
+  function addEvent(ev) {
+    if (!ev || !ev.id || seenIds[ev.id]) return;
+    seenIds[ev.id] = true;
+    events.push(ev);
+  }
+
+  try {
+    var r1 = await fetch(API + '/api/markets/live', { cache: 'no-store' });
+    if (r1.ok) {
+      var d1 = await r1.json();
+      (d1.games || []).forEach(function(g) {
+        if (!g || !_pbMarketIsLive(g)) return;
+        if (_pbScoreSportShort(g.sport_key || g.sport) !== short) return;
+        var ev = OwlsLiveScores.scoreEventFromFlatGame({
+          id: g.id,
+          eventId: g.eventId || g.owlsEventId,
+          providerGameId: g.providerGameId,
+          home: g.home_team || g.home,
+          away: g.away_team || g.away,
+          homeScore: g.homeScore,
+          awayScore: g.awayScore,
+          scheduledStart: g.commence_time || g.scheduledStart || g.time,
+          clock: g.clock,
+          period: g.period,
+          setScore: g.setScore,
+          gameScore: g.gameScore,
+          statusDetail: g.statusDetail,
+          isLive: true,
+          status: 'live',
+          league: g.league
+        });
+        if (ev) addEvent(ev);
+      });
+    }
+  } catch (_e1) {}
+
+  try {
+    var r2 = await fetch(API + '/api/odds/live?sport=' + encodeURIComponent(short), { cache: 'no-store' });
+    if (r2.ok) {
+      var d2 = await r2.json();
+      (d2.games || []).forEach(function(g) {
+        if (!g) return;
+        var ev = OwlsLiveScores.scoreEventFromFlatGame(g);
+        if (ev) addEvent(ev);
+      });
+    }
+  } catch (_e2) {}
+
+  var index = OwlsLiveScores.indexOwlsLiveScores(events, short);
+  _pbLiveScoreIndexCache[short] = { fetchedAt: now, index: index };
+  _pbDevLogLiveScore('index-built', { sport: short, events: events.length, liveRows: (index.list || []).length });
+  return index;
+}
+
+async function _pbHydrateLiveScoresForGames(games, sport) {
+  if (!Array.isArray(games) || !games.length) return games;
+  if (!_pbIsSoccerOrTennisSport(sport)) return games;
+  if (!window.OwlsLiveScores) return games;
+
+  var needs = games.filter(function(g) {
+    return g && _pbMarketIsLive(g) && !_pbHasSafeNumericScore(g);
+  });
+  if (!needs.length) return games;
+
+  var index = await _pbFetchLiveScoreIndex(sport);
+  if (!index || !(index.list || []).length) {
+    _pbDevLogLiveScore('hydrate-skip', { sport: sport, reason: 'empty_index', needs: needs.length });
+    return games;
+  }
+
+  var short = _pbScoreSportShort(sport);
+  var result = OwlsLiveScores.hydrateGamesWithOwlsScores(needs, (function() {
+    var map = {};
+    map[short] = index;
+    return map;
+  })(), function(sk, fields) {
+    return _pbFormatLiveStateText(Object.assign({ sport: sk }, fields || {}));
+  });
+
+  needs.forEach(function(g) {
+    if (g && (g.homeScore != null || g.awayScore != null) && g._scoreMatchSafe) {
+      _pbDevLogLiveScore('matched', {
+        id: g.id,
+        eventId: g.eventId,
+        canonicalGameKey: g.canonicalGameKey,
+        away: g.away || g.away_team,
+        home: g.home || g.home_team,
+        score: (g.awayScore != null ? g.awayScore : '?') + '-' + (g.homeScore != null ? g.homeScore : '?')
+      });
+    }
+  });
+
+  _pbDevLogLiveScore('hydrate-done', {
+    sport: short,
+    matched: result.matched,
+    unmatchedLive: result.unmatchedLive,
+    needs: needs.length
+  });
+  return games;
 }
 
 function _pbLiveBadgeHtml() {
@@ -3596,7 +3796,7 @@ async function _loadOddsComparison(sport) {
 }
 
 function _pbOddsCellHtml(g, aw, hw, sp, id, top, odds, marketType, teamPick, teamName) {
-  if (!odds) return '<div class="odds-box" style="cursor:default;pointer-events:none"><span style="color:var(--gray)">—</span></div>';
+  if (!odds) return '<div class="odds-box" style="cursor:default;pointer-events:none" aria-hidden="true"><span style="color:var(--gray)">—</span></div>';
   var isLiveMarket = _pbMarketIsLive(g);
   var c = odds > 0 ? 'odds-pos' : 'odds-neg';
   var f = (odds > 0 ? '+' : '') + odds;
@@ -3608,7 +3808,11 @@ function _pbOddsCellHtml(g, aw, hw, sp, id, top, odds, marketType, teamPick, tea
   if (pickLabel && /^[+-]?\d+\.?\d*$/.test(String(pickLabel).trim()) && teamName) pickLabel = teamName + ' ' + pickLabel;
   var safePick = (pickLabel || 'Unknown Selection').replace(/"/g, '').replace(/'/g, '');
   var safeGameId = String(g.id || g.providerGameId || '').replace(/"/g, '');
+  var aria = (safeGame ? safeGame + ', ' : '') + (safeMkt ? safeMkt + ', ' : '') + safePick + ', ' + f;
   return '<div class="odds-box odds-cell" id="c-' + id + '"' +
+    ' role="button" tabindex="0"' +
+    ' aria-label="' + aria.replace(/"/g, '&quot;') + '"' +
+    ' aria-pressed="false"' +
     ' data-id="' + id + '"' +
     ' data-game-id="' + safeGameId + '"' +
     ' data-game="' + safeGame + '"' +
@@ -3620,8 +3824,8 @@ function _pbOddsCellHtml(g, aw, hw, sp, id, top, odds, marketType, teamPick, tea
     ' data-sport="' + sp + '"' +
     ' data-status="' + (g.status || g.state || '') + '"' +
     ' data-live-market="' + (isLiveMarket ? 'true' : 'false') + '"' +
-    '>' + (top ? '<span class="odds-line">' + top + '</span>' : '') +
-    '<span class="odds-num ' + c + '">' + f + '</span>' +
+    '>' + (top ? '<span class="odds-line" aria-hidden="true">' + top + '</span>' : '') +
+    '<span class="odds-num ' + c + '" aria-hidden="true">' + f + '</span>' +
     _oddsCmpIndicatorHtml(_oddsCmpLookup(safeGameId, safeMkt, teamName || teamPick || top, top)) +
     '</div>';
 }
@@ -4076,17 +4280,28 @@ function _pbIsGolfSport(sport) {
   return _pbAvatarSportKey(sport || '') === 'golf';
 }
 
-/** Outrights / tournament winners — not 2-player matchups; skip in lobby cards. */
-function _pbIsGolfOutright(g) {
+function _pbIsNascarSport(sport) {
+  var s = String(sport || '').toLowerCase();
+  return s === 'nascar' || s.indexOf('nascar') === 0 || s === 'motorsport';
+}
+
+/** Outrights / tournament boards — not 2-way matchups; prefer empty slate over unsafe wagering. */
+function _pbIsOutrightBoard(g) {
   if (!g) return false;
   var aw = String((g.away || g.away_team) || '');
   var hw = String((g.home || g.home_team) || '');
   if (/^outright$/i.test(hw.trim())) return true;
-  if (/winner/i.test(aw) || /winner/i.test(hw)) return true;
+  if (/winner|championship|manufacturer|winning team|winning manufacturer/i.test(aw) ||
+      /winner|championship|manufacturer/i.test(hw)) return true;
   var ml = Array.isArray(g.moneyline) ? g.moneyline : [];
-  // Matchups are 2-way; fields with many ML selections are tournament boards.
+  // Matchups are 2-way; fields with many ML selections are tournament/futures boards.
   if (ml.length > 2) return true;
   return false;
+}
+
+/** @deprecated use _pbIsOutrightBoard — kept for call-site compatibility */
+function _pbIsGolfOutright(g) {
+  return _pbIsOutrightBoard(g);
 }
 
 function _pbRenderGameCardHtml(g) {
@@ -4101,7 +4316,10 @@ function _pbRenderGameCardHtml(g) {
     }
     var sportRouteEarly = _ODDS_ROUTE_KEY[String((g.sport || '')).toLowerCase()] || String((g.sport || '')).toLowerCase();
     var isGolfCard = sportRouteEarly === 'golf' || _pbIsGolfSport(g.sport || '');
-    if (isGolfCard && _pbIsGolfOutright(g)) {
+    if (isGolfCard && _pbIsOutrightBoard(g)) {
+      return '';
+    }
+    if (_pbIsNascarSport(g.sport || sportRouteEarly) && _pbIsOutrightBoard(g)) {
       return '';
     }
     var awN = aw.split(' ').slice(-1)[0] || aw, hwN = hw.split(' ').slice(-1)[0] || hw;
@@ -4273,7 +4491,7 @@ function _pbSyncGamesListInPlace(el, games) {
 
 var _pbExpandedPropsGameId = null;
 var _pbExpandedAltGameId = null;
-var _PB_PROPS_SUPPORTED_SPORTS = ['mlb', 'nba', 'nfl', 'nhl', 'ncaab', 'ncaaf', 'wnba', 'tennis'];
+var _PB_PROPS_SUPPORTED_SPORTS = ['mlb', 'nba', 'nfl', 'nhl', 'ncaab', 'ncaaf', 'wnba'];
 var _pbPropsCache = {};
 var _pbPropsUiState = {};
 /** Cache: "sport|away|home" → { map:{normName:'away'|'home'}, ready, loading, promise } */
@@ -4286,6 +4504,7 @@ var _ESPN_SITE_PATH = {
   ncaaf: 'football/college-football', ncaafb: 'football/college-football'
 };
 var _PB_PROP_SECTION_LIMIT = 5;
+var _PB_PROP_EAGER_SECTIONS = 4; // defer body DOM beyond this (all markets still in cache/filter)
 var _PB_PROP_TAB_DEFS = {
   mlb: [
     { id: 'popular', label: 'Popular' },
@@ -4466,7 +4685,7 @@ function _pbPlayerPropAvatar(playerName, team, sport) {
     '" data-player-team="' + teamAttr + '" data-espn-key="' + cacheKey.replace(/"/g, '') + '"';
   if (cached && cached.headshotUrl) {
     return '<div class="mc-prop-avatar"' + dataAttrs + '>' +
-      '<img src="' + cached.headshotUrl + '" alt="" referrerpolicy="no-referrer" ' +
+      '<img src="' + cached.headshotUrl + '" alt="" width="36" height="36" loading="lazy" decoding="async" referrerpolicy="no-referrer" ' +
       'data-photo-step="0" data-player-name="' + nameAttr + '" data-player-sport="' + sport +
       '" data-player-team="' + teamAttr + '" ' +
       'onerror="window._pbPropHeadshotError&&window._pbPropHeadshotError(this)">' +
@@ -5156,7 +5375,12 @@ function _pbRenderPropOddsBtn(p, gameId, gameLabel, sport, sideLabel, lineLabel)
   var side = String(p.side || '').trim().toLowerCase();
   var photoMeta = _pbResolvePropPhotoMeta(playerName, playerTeam, p.sport || sport);
   var escAttr = function(v) { return String(v || '').replace(/"/g, '&quot;'); };
+  var ariaBits = [gameLabel, playerName, propType, sideLabel || side, lineTxt, fmt].filter(function(x) {
+    return x !== '' && x != null;
+  }).join(', ');
   return '<div class="mc-prop-ou odds-cell' + (isSel ? ' selected' : '') + '" id="c-' + cellId + '" ' +
+    'role="button" tabindex="0" aria-pressed="' + (isSel ? 'true' : 'false') + '" ' +
+    'aria-label="' + escAttr(ariaBits || ('Prop odds ' + fmt)) + '" ' +
     'data-id="' + cellId + '" data-game-id="' + (p.gameId || gameId) + '" ' +
     'data-game="' + String(gameLabel || '').replace(/"/g, '') + '" ' +
     'data-time="' + (p.scheduledStart || '') + '" data-market="Prop" ' +
@@ -5170,9 +5394,9 @@ function _pbRenderPropOddsBtn(p, gameId, gameLabel, sport, sideLabel, lineLabel)
     (photoMeta && photoMeta.id ? 'data-player-id="' + escAttr(photoMeta.id) + '" ' : '') +
     (photoMeta && photoMeta.headshotUrl ? 'data-photo-url="' + escAttr(photoMeta.headshotUrl) + '" ' : '') +
     '>' +
-    '<span class="mc-prop-ou-label">' + label + '</span>' +
-    (lineTxt !== '' && lineTxt != null ? '<span class="mc-prop-ou-line">' + lineTxt + '</span>' : '') +
-    '<span class="odds-num ' + c + '">' + fmt + '</span>' +
+    '<span class="mc-prop-ou-label" aria-hidden="true">' + label + '</span>' +
+    (lineTxt !== '' && lineTxt != null ? '<span class="mc-prop-ou-line" aria-hidden="true">' + lineTxt + '</span>' : '') +
+    '<span class="odds-num ' + c + '" aria-hidden="true">' + fmt + '</span>' +
     (function() {
       var cmp = _oddsCmpLookup(p.gameId || gameId, 'player_prop', p.playerName || p.pick, p.line);
       if (!cmp) cmp = _oddsCmpLookup(p.gameId || gameId, 'player_prop', p.pick, p.line);
@@ -5279,7 +5503,7 @@ function _pbGetPropsUiState(gameId) {
   return _pbPropsUiState[key];
 }
 
-function _pbRenderPropSectionHtml(section, gameId, gameLabel, sport, away, home, ui, secKey, teamMap) {
+function _pbRenderPropSectionHtml(section, gameId, gameLabel, sport, away, home, ui, secKey, teamMap, deferBody) {
   var rows = _pbGroupPlayerPropRows(section.props, away, home, teamMap);
   var teamFilter = ui.team || 'all';
   if (teamFilter !== 'all') {
@@ -5290,19 +5514,33 @@ function _pbRenderPropSectionHtml(section, gameId, gameLabel, sport, away, home,
   var showAll = !!(ui.showAll && ui.showAll[secKey]);
   var collapsed = !!(ui.collapsed && ui.collapsed[secKey]);
   var visibleRows = showAll ? rows : rows.slice(0, _PB_PROP_SECTION_LIMIT);
-  var html = '<div class="mc-prop-section' + (collapsed ? ' collapsed' : '') + '" data-sec-key="' + secKey.replace(/"/g, '') + '">';
-  html += '<div class="mc-prop-sec-hdr" onclick="_pbTogglePropSection(this)">' +
-    '<span class="mc-prop-sec-title">' + String(section.title).toUpperCase() + '</span>' +
-    '<span class="mc-prop-sec-chev">▾</span></div>';
+  var html = '<div class="mc-prop-section' + (collapsed ? ' collapsed' : '') + (deferBody ? ' mc-prop-section-deferred' : '') +
+    '" data-sec-key="' + secKey.replace(/"/g, '') + '" data-prop-row-count="' + rows.length + '">';
+  html += '<div class="mc-prop-sec-hdr" role="button" tabindex="0" aria-expanded="' + (collapsed ? 'false' : 'true') + '" onclick="_pbTogglePropSection(this)" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();_pbTogglePropSection(this)}">' +
+    '<span class="mc-prop-sec-title">' + String(section.title).toUpperCase() +
+    (rows.length ? ' <span class="pb-sr-only">(' + rows.length + ' props)</span>' : '') +
+    '</span>' +
+    '<span class="mc-prop-sec-chev" aria-hidden="true">▾</span></div>';
   html += '<div class="mc-prop-sec-body">';
-  if (!visibleRows.length) {
+  if (deferBody && !showAll) {
+    html += '<div class="mc-prop-deferred-slot" data-defer-sec="' + secKey.replace(/"/g, '&quot;') + '" data-defer-rows="' + rows.length + '" aria-hidden="true">Scroll to load ' + rows.length + ' props…</div>';
+    // Keep full body payload for IO hydrate without dropping markets
+    // <template> contents stay inert (not announced) until expand.
+    html += '<template class="mc-prop-deferred-tpl">' +
+      visibleRows.map(function(r) { return _pbRenderPlayerPropRowHtml(r, gameId, gameLabel, sport, away, home, teamMap); }).join('') +
+      (rows.length > _PB_PROP_SECTION_LIMIT
+        ? '<button type="button" class="mc-prop-show-more" onclick="_pbTogglePropShowMore(this)">' +
+          (showAll ? 'Show less' : ('Show more (' + (rows.length - _PB_PROP_SECTION_LIMIT) + ')')) + '</button>'
+        : '') +
+      '</template>';
+  } else if (!visibleRows.length) {
     html += '<div class="mc-props-empty">No props match this filter</div>';
   } else {
     html += visibleRows.map(function(r) { return _pbRenderPlayerPropRowHtml(r, gameId, gameLabel, sport, away, home, teamMap); }).join('');
-  }
-  if (rows.length > _PB_PROP_SECTION_LIMIT) {
-    html += '<button type="button" class="mc-prop-show-more" onclick="_pbTogglePropShowMore(this)">' +
-      (showAll ? 'Show less' : ('Show more (' + (rows.length - _PB_PROP_SECTION_LIMIT) + ')')) + '</button>';
+    if (rows.length > _PB_PROP_SECTION_LIMIT) {
+      html += '<button type="button" class="mc-prop-show-more" onclick="_pbTogglePropShowMore(this)">' +
+        (showAll ? 'Show less' : ('Show more (' + (rows.length - _PB_PROP_SECTION_LIMIT) + ')')) + '</button>';
+    }
   }
   html += '</div></div>';
   return html;
@@ -5373,13 +5611,48 @@ function _pbRenderInlinePropsHtml(props, gameId, sport, meta) {
   if (!sections.length) {
     html += '<div class="mc-props-empty">No props in this category</div>';
   } else {
-    sections.forEach(function(sec) {
+    var deferHeavy = props.length >= 100;
+    sections.forEach(function(sec, idx) {
       var secKey = ui.tab + '::' + sec.title;
-      html += _pbRenderPropSectionHtml(sec, gameId, gameLabel, s, away, home, ui, secKey, teamMap);
+      var deferBody = deferHeavy && idx >= _PB_PROP_EAGER_SECTIONS;
+      html += _pbRenderPropSectionHtml(sec, gameId, gameLabel, s, away, home, ui, secKey, teamMap, deferBody);
     });
   }
   html += '</div></div>';
   return html;
+}
+
+function _pbHydrateDeferredPropSections(panel) {
+  if (!panel || typeof IntersectionObserver === 'undefined') {
+    if (panel) {
+      Array.prototype.forEach.call(panel.querySelectorAll('.mc-prop-section-deferred'), function(sec) {
+        _pbExpandDeferredPropSection(sec);
+      });
+    }
+    return;
+  }
+  var slots = panel.querySelectorAll('.mc-prop-deferred-slot');
+  if (!slots.length) return;
+  var io = new IntersectionObserver(function(entries) {
+    entries.forEach(function(en) {
+      if (!en.isIntersecting) return;
+      var slot = en.target;
+      var sec = slot.closest('.mc-prop-section-deferred');
+      io.unobserve(slot);
+      if (sec) _pbExpandDeferredPropSection(sec);
+    });
+  }, { root: null, rootMargin: '200px 0px', threshold: 0.01 });
+  Array.prototype.forEach.call(slots, function(slot) { io.observe(slot); });
+}
+
+function _pbExpandDeferredPropSection(sec) {
+  if (!sec || !sec.classList.contains('mc-prop-section-deferred')) return;
+  var tpl = sec.querySelector('template.mc-prop-deferred-tpl');
+  var body = sec.querySelector('.mc-prop-sec-body');
+  if (!tpl || !body) return;
+  body.innerHTML = tpl.innerHTML;
+  sec.classList.remove('mc-prop-section-deferred');
+  if (window.PbA11y && PbA11y.enhanceOddsIn) PbA11y.enhanceOddsIn(body);
 }
 
 function _pbRerenderPropsPanel(gameId) {
@@ -5392,9 +5665,22 @@ function _pbRerenderPropsPanel(gameId) {
   var meta = cached.meta || {};
   if (!meta.away && cached.away) meta.away = cached.away;
   if (!meta.home && cached.home) meta.home = cached.home;
+  var t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   panel.innerHTML = _pbRenderInlinePropsHtml(cached.props, gameId, cached.sport, meta);
+  _pbHydrateDeferredPropSections(panel);
   _pbResyncBetSlipSelections();
-  _pbHydratePropHeadshots(panel, cached.props, cached.sport);
+  if (window.PbA11y && PbA11y.enhanceOddsIn) PbA11y.enhanceOddsIn(panel);
+  var hydrate = function() { _pbHydratePropHeadshots(panel, cached.props, cached.sport); };
+  if (cached.props && cached.props.length >= 100 && typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(function() { setTimeout(hydrate, 0); });
+  } else {
+    hydrate();
+  }
+  var t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  try {
+    panel.setAttribute('data-props-render-ms', String(Math.round(t1 - t0)));
+    panel.setAttribute('data-props-count', String((cached.props && cached.props.length) || 0));
+  } catch (_e) {}
 }
 
 function _pbSetPropTab(btn, tabId) {
@@ -5824,9 +6110,13 @@ async function loadGames(sport, opts){
     // Rule 2: keep isLive games (LIVE badge + bettable when live betting enabled).
     // Rule 3: keep pre-game (!isLive && !isFinal).
     games = games.filter(function(g){ return !_pbMarketIsFinal(g); });
-    // Golf: drop tournament outrights so matchup cards populate the lobby.
-    if (_pbIsGolfSport(_sportLc) || _sport === 'golf') {
-      games = games.filter(function(g){ return !_pbIsGolfOutright(g); });
+    games.forEach(function(g) {
+      if (g && g.scoreSource === 'owls_scores_live') g._scoreMatchSafe = true;
+    });
+    try { await _pbHydrateLiveScoresForGames(games, _sportLc); } catch (_hs) {}
+    // Golf / NASCAR: drop tournament outrights & futures — prefer empty slate over unsafe wagering.
+    if (_pbIsGolfSport(_sportLc) || _sport === 'golf' || _pbIsNascarSport(_sportLc) || _sport === 'nascar') {
+      games = games.filter(function(g){ return !_pbIsOutrightBoard(g); });
     }
 
     if (!games.length) {
@@ -5958,6 +6248,18 @@ async function loadAllLiveGames(opts) {
         all.push(g);
       });
     });
+    all.forEach(function(g) {
+      if (g && g.scoreSource === 'owls_scores_live') g._scoreMatchSafe = true;
+    });
+    try {
+      var _liveScoreSports = ['soccer', 'tennis'];
+      for (var _lsi = 0; _lsi < _liveScoreSports.length; _lsi++) {
+        var _subset = all.filter(function(g) {
+          return g && _pbScoreSportShort(g.sport || g.sport_key) === _liveScoreSports[_lsi];
+        });
+        if (_subset.length) await _pbHydrateLiveScoresForGames(_subset, _liveScoreSports[_lsi]);
+      }
+    } catch (_hl) {}
     var live = all.filter(_pbMarketIsLive).slice().sort(_pbCompareLiveRecentlyStarted);
     var nextStart = null;
     var nowMs = Date.now();
@@ -6014,8 +6316,21 @@ function updBar(){
     document.body.classList.toggle('has-slip-items', !!hasItems);
   } catch(_e){}
 }
-function openSlip(){document.getElementById('modal-slip').classList.add('open');renderLegs();updPayout();}
-function closeSlip(){document.getElementById('modal-slip').classList.remove('open');}
+function openSlip(){
+  var el = document.getElementById('modal-slip');
+  if (el) el.classList.add('open');
+  renderLegs();updPayout();
+  if (window.PbA11y && el) {
+    PbA11y.activate(el, { onEscape: function(){ closeSlip(); }, initialFocus: '.mclose' });
+  }
+}
+function closeSlip(){
+  var el = document.getElementById('modal-slip');
+  if (el) {
+    el.classList.remove('open');
+    if (window.PbA11y) PbA11y.deactivate(el);
+  }
+}
 // NOTE: legacy clearSlip() removed (BUG #6). Canonical definition lives near line 2499
 // (operates on betSlip/bsStakes/bsStake — the dkslip data model). The old one
 // referenced obsolete vars (slip, risk-inp, pbox, place-btn) and was being
@@ -6301,12 +6616,16 @@ function _updateSportTabs() {
     if (!sportsByKey) return null;
     if (sportsByKey[sport]) return sportsByKey[sport];
     var als = catalogAliases[sport] || [];
-    var games = 0, found = false;
+    var games = 0, found = false, enabled = true;
     for (var a = 0; a < als.length; a++) {
       var e = sportsByKey[als[a]];
-      if (e) { found = true; games += (e.games || 0); }
+      if (e) {
+        found = true;
+        games += (e.games || 0);
+        if (e.enabled === false) enabled = false;
+      }
     }
-    return found ? { games: games } : null;
+    return found ? { games: games, enabled: enabled } : null;
   }
   // Counters for the post-apply diagnostic line.
   var _vis = 0, _hidden = 0, _dim = 0;
@@ -6315,7 +6634,10 @@ function _updateSportTabs() {
     if (!tab) return;
     var blocked = isSportBlocked(sport);
     var entry    = catalogEntry(sport);
+    // Boxing absent from /api/sports → treat as empty. NASCAR enabled=false → zero badge.
     var gameCount = entry ? (entry.games || 0) : (sportsByKey ? 0 : null);
+    if (entry && entry.enabled === false) gameCount = 0;
+    if (sport === 'boxing' && sportsByKey && !sportsByKey.boxing) gameCount = 0;
     var hasGames = gameCount === null || gameCount > 0;
     tab.style.display = '';
     tab.style.opacity = blocked ? '0.35' : '';
@@ -6325,7 +6647,7 @@ function _updateSportTabs() {
     tab.classList.toggle('zero-games', !blocked && gameCount === 0);
     tab.title = blocked
       ? ('Your host has disabled ' + sport.toUpperCase() + ' betting')
-      : (hasGames ? '' : 'No games available right now');
+      : (hasGames ? '' : 'No events available');
     var badge = tab.querySelector('.sport-tab-count');
     if (!badge) {
       badge = document.createElement('span');
@@ -6520,8 +6842,12 @@ function showToast(msg, type) {
 
   var t = document.createElement('div');
   t.className = '_pbs-toast ' + type;
-  t.innerHTML = '<span class="_pbs-toast-icon">' + icon + '</span><span class="_pbs-toast-body">' + cleanMsg.replace(/</g,'&lt;') + '</span>';
+  t.setAttribute('role', type === 'error' ? 'alert' : 'status');
+  t.innerHTML = '<span class="_pbs-toast-icon" aria-hidden="true">' + icon + '</span><span class="_pbs-toast-body">' + cleanMsg.replace(/</g,'&lt;') + '</span>';
   document.body.appendChild(t);
+  if (window.PbA11y && PbA11y.announce) {
+    PbA11y.announce(cleanMsg, type === 'error' ? 'assertive' : 'polite');
+  }
 
   var dur = type === 'error' ? 4000 : type === 'warning' ? 3500 : 2500;
   setTimeout(function() {
@@ -9163,11 +9489,20 @@ function requestBetDelete(ticketId, event) {
       '</div>' +
     '</div>';
   document.body.appendChild(modal);
-  modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-label', 'Request bet deletion');
+  modal.addEventListener('click', function(e){ if(e.target===modal) { if (window.PbA11y) PbA11y.deactivate(modal); modal.remove(); } });
   var cb = document.getElementById('del-cancel-btn');
   var sb = document.getElementById('del-send-btn');
-  if (cb) cb.addEventListener('click', function(){ modal.remove(); });
-  if (sb) sb.addEventListener('click', function(){ submitDeleteRequest(ticketId); });
+  if (cb) cb.addEventListener('click', function(){ if (window.PbA11y) PbA11y.deactivate(modal); modal.remove(); });
+  if (sb) sb.addEventListener('click', function(){ if (window.PbA11y) PbA11y.deactivate(modal); submitDeleteRequest(ticketId); });
+  if (window.PbA11y) {
+    PbA11y.activate(modal, {
+      onEscape: function(){ if (window.PbA11y) PbA11y.deactivate(modal); modal.remove(); },
+      initialFocus: '#del-cancel-btn'
+    });
+  }
 }
 
 var _cancelBetInFlight = false;
@@ -11964,8 +12299,8 @@ async function _pbFetch(url, opts) {
   delete fetchOpts._retried;
   var resp = await fetch(url, fetchOpts);
   if (!retried && !_isAuthApiPath(path)) {
-    // Soft-fail notifications — never session-nuke / never wipe on poll 401.
-    if (_isSoftAuthPath(path) && (resp.status === 401 || resp.status === 403)) {
+    // Soft-fail notifications — never session-nuke / never wipe on poll 401/429.
+    if (_isSoftAuthPath(path) && (resp.status === 401 || resp.status === 403 || resp.status === 429)) {
       delete _pendingIdemKeys[path];
       return resp;
     }
@@ -11977,39 +12312,41 @@ async function _pbFetch(url, opts) {
       delete _pendingIdemKeys[path];
       return resp;
     }
-    var expired = resp.status === 401;
-    if (!expired && resp.status === 403) {
-      try {
-        var peek = await resp.clone().json();
-        expired = peek && (peek.error === 'expired_token' || /expired token/i.test(String(peek.error || peek.message || '')));
-      } catch (_e) {}
+    var peek = null;
+    if (resp.status === 401 || resp.status === 403) {
+      try { peek = await resp.clone().json(); } catch (_e) { peek = {}; }
     }
+    var expired = (typeof _isExpiredAuth === 'function')
+      ? _isExpiredAuth(resp.status, peek)
+      : (resp.status === 401 || (resp.status === 403 && peek && (peek.error === 'expired_token' || /expired token/i.test(String(peek.error || peek.message || '')))));
     // Refresh-before-redirect: never treat first 401 as immediately fatal.
     if (expired && _authCanAttempt()) {
       var refreshed = await _refreshAuthToken();
       if (refreshed && !_authGiveUp) return _pbFetch(url, Object.assign({}, opts, { _retried: true }));
-      if (!_authGiveUp) _redirectToSignIn();
+      if (!_authGiveUp) {
+        if (typeof _redirectToSignIn === 'function') _redirectToSignIn();
+        else if (typeof _authRedirectToLogin === 'function') _authRedirectToLogin('Your session expired — please sign in again');
+      }
       delete _pendingIdemKeys[path];
       return resp;
     }
     if (resp.status === 403) {
-      var hard403 = true;
-      try {
-        var peek403 = await resp.clone().json();
-        hard403 = !(peek403 && (peek403.error === 'expired_token' || /expired token/i.test(String(peek403.error || peek403.message || ''))));
-      } catch (_e) { hard403 = true; }
-      if (hard403 && !_authGiveUp && !_isTestUserPreview()) {
-        _authRedirectToLogin('Session invalid — please sign in again');
+      var hard403 = !(peek && (peek.error === 'expired_token' || /expired token/i.test(String(peek.error || peek.message || ''))));
+      if (hard403 && !_authGiveUp && !(typeof _isTestUserPreview === 'function' && _isTestUserPreview())) {
+        if (typeof _authRedirectToLogin === 'function') _authRedirectToLogin('Session invalid — please sign in again');
+        else if (typeof _redirectToSignIn === 'function') _redirectToSignIn();
         delete _pendingIdemKeys[path];
         return resp;
       }
+    } else if (resp.status === 401 && !_authCanAttempt() && !_authGiveUp) {
+      if (typeof _authRedirectToLogin === 'function') _authRedirectToLogin('Session invalid — please sign in again');
+      else if (typeof _redirectToSignIn === 'function') _redirectToSignIn();
+      delete _pendingIdemKeys[path];
+      return resp;
     }
   }
-  if (_isAuthApiPath(path) && (resp.status === 401 || resp.status === 403)) {
-    try {
-      var authPeek = await resp.clone().json();
-      _authHandleResponse(resp.status, authPeek);
-    } catch (_e) { _authHandleResponse(resp.status, {}); }
+  if (_isAuthApiPath(path) && (resp.status === 401 || resp.status === 403) && !_authGiveUp) {
+    if (typeof _authRedirectToLogin === 'function') _authRedirectToLogin('Session invalid — please sign in again');
   }
   delete _pendingIdemKeys[path];
   return resp;
@@ -12138,7 +12475,10 @@ async function _verifyOrRefreshSession() {
       if (hardErrors.includes(data.error)) {
         console.warn('[session] '+data.error+' — clearing stored token');
         try { localStorage.removeItem('pb-session-token'); } catch(_e){}
+        try { localStorage.removeItem('pb-sports-token'); } catch(_e){}
+        try { localStorage.removeItem('pb-token-expires'); } catch(_e){}
         try { localStorage.removeItem('pb-actor-role'); } catch(_e){}
+        TOKEN = '';
         return { ok:false, reason:data.error, cleared:true };
       }
       if (data.error === 'expired_token') {
@@ -13590,10 +13930,21 @@ function openBetSlip() {
     bsSyncPlaceBtn();
   }, 30);
   document.getElementById('bs-overlay').classList.add('show');
+  if (window.PbA11y && drawer) {
+    PbA11y.activate(drawer, {
+      onEscape: function(){ closeBetSlip(); },
+      initialFocus: '#bs-stake-inp, .dkslip-close'
+    });
+    PbA11y.announce('Bet slip opened with ' + (typeof betSlip !== 'undefined' ? betSlip.length : 0) + ' selections');
+  }
 }
 function closeBetSlip() {
   var drawer = document.getElementById('bs-drawer');
-  if (drawer) { drawer.classList.remove('open'); drawer.style.pointerEvents = 'none'; }
+  if (drawer) {
+    drawer.classList.remove('open');
+    drawer.style.pointerEvents = 'none';
+    if (window.PbA11y) PbA11y.deactivate(drawer);
+  }
   var pbw2 = document.getElementById('place-bet-wrap');
   if (pbw2) pbw2.style.display = 'none';
   var fb = document.getElementById('bs-fixed-bar'); if (fb) fb.style.display = 'none';
@@ -13633,6 +13984,11 @@ document.addEventListener('click', function(e) {
     // DESELECT: remove from slip
     betSlip.splice(existingIdx, 1);
     cell.classList.remove('selected');
+    cell.setAttribute('aria-pressed', 'false');
+    if (window.PbA11y) {
+      PbA11y.enhanceOddsCell(cell);
+      PbA11y.announce('Removed ' + pick + ' from bet slip');
+    }
   } else {
     // Only remove picks that are TRUE contradictions (same game, same market, opposite side)
     var replaced = false;
@@ -13744,6 +14100,11 @@ document.addEventListener('click', function(e) {
     });
     
     cell.classList.add('selected');
+    cell.setAttribute('aria-pressed', 'true');
+    if (window.PbA11y) {
+      PbA11y.enhanceOddsCell(cell);
+      PbA11y.announce('Added ' + pick + ' at ' + (odds > 0 ? '+' : '') + odds);
+    }
     
 
     // Same-game parlay: allowed if different markets
@@ -13751,6 +14112,36 @@ document.addEventListener('click', function(e) {
 
   bsUpdate();
 }, true); // useCapture=true ensures this fires before any stopPropagation
+
+// Enhance odds cells after game list paints
+document.addEventListener('DOMContentLoaded', function() {
+  if (window.PbA11y && PbA11y.enhanceOddsIn) PbA11y.enhanceOddsIn(document);
+  var prof = document.getElementById('open-profile-btn');
+  if (prof) {
+    prof.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showPlayerSettings(); }
+    });
+  }
+});
+var _pbOddsEnhanceObserver = null;
+try {
+  _pbOddsEnhanceObserver = new MutationObserver(function(muts) {
+    if (!window.PbA11y) return;
+    for (var i = 0; i < muts.length; i++) {
+      var nodes = muts[i].addedNodes;
+      for (var j = 0; j < nodes.length; j++) {
+        var n = nodes[j];
+        if (n.nodeType !== 1) continue;
+        if (n.classList && n.classList.contains('odds-cell')) PbA11y.enhanceOddsCell(n);
+        else if (n.querySelectorAll) PbA11y.enhanceOddsIn(n);
+      }
+    }
+  });
+  if (document.body) _pbOddsEnhanceObserver.observe(document.body, { childList: true, subtree: true });
+  else document.addEventListener('DOMContentLoaded', function() {
+    _pbOddsEnhanceObserver.observe(document.body, { childList: true, subtree: true });
+  });
+} catch (_obsErr) {}
 
 // ════════════════════════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════════════════════════
@@ -15815,13 +16206,13 @@ window.openGradingConsole = openGradingConsole;
 </div>
 
 <!-- DK BET SLIP DRAWER -->
-<div class="dkslip" id="bs-drawer">
+<div class="dkslip" id="bs-drawer" role="dialog" aria-modal="true" aria-label="Bet Slip">
   <!-- Header -->
   <div class="dkslip-hdr">
     <div class="dkslip-badge" id="bs-badge2">0</div>
     <span class="dkslip-title">Bet Slip</span>
-    <button class="dkslip-clear" onclick="clearSlip()">Clear All</button>
-    <button class="dkslip-close" onclick="closeBetSlip()">✕</button>
+    <button type="button" class="dkslip-clear" onclick="clearSlip()" aria-label="Clear all selections">Clear All</button>
+    <button type="button" class="dkslip-close" onclick="closeBetSlip()" aria-label="Close bet slip">✕</button>
   </div>
   <!-- Tabs -->
   <div class="dkslip-tabs">

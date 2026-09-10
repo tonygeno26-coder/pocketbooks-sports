@@ -62,6 +62,51 @@ test('player.html uses text fallback helpers / collapse-to-text', function () {
   assert(html.indexOf('dkslip-player-fallback pb-text-fallback') >= 0);
 });
 
+test('onerror handlers hide broken img before text fallback', function () {
+  var teamSrc = fs.readFileSync(path.join(root, 'team-logos.js'), 'utf8');
+  var photoSrc = fs.readFileSync(path.join(root, 'player-photos.js'), 'utf8');
+  var html = fs.readFileSync(path.join(root, 'player.html'), 'utf8');
+  assert(teamSrc.indexOf("img.style.display = 'none'") >= 0, 'team logo error should hide img');
+  assert(photoSrc.indexOf("img.style.display = 'none'") >= 0, 'player photo error should hide img');
+  assert(html.indexOf("img.style.display = 'none'") >= 0, '_pbCollapseImgToText should hide img');
+
+  var sandbox = {
+    console: console,
+    document: {
+      createElement: function (tag) {
+        return { tagName: tag, style: {}, setAttribute: function () {}, textContent: '', parentNode: null };
+      }
+    },
+    localStorage: { getItem: function () { return null; }, setItem: function () {}, removeItem: function () {}, key: function () { return null; }, length: 0 },
+    fetch: async function () { return { ok: false }; }
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(root, 'player-photos.js'), 'utf8'), sandbox);
+  vm.runInContext(fs.readFileSync(path.join(root, 'team-logos.js'), 'utf8'), sandbox);
+
+  var img = {
+    style: {},
+    onerror: function () {},
+    setAttribute: function (k, v) { img[k] = v; },
+    getAttribute: function (k) {
+      if (k === 'data-photo-step') return '1';
+      if (k === 'data-player-name') return 'Test Player';
+      if (k === 'data-player-sport') return 'mlb';
+      return '';
+    },
+    outerHTML: ''
+  };
+  Object.defineProperty(img, 'outerHTML', {
+    set: function (v) { img._replaced = v; },
+    get: function () { return img._replaced || ''; }
+  });
+  sandbox.handlePlayerPhotoError(img);
+  assert(img.style.display === 'none', 'handlePlayerPhotoError should hide img');
+  assert(/pb-text-fallback/.test(img._replaced || ''), 'should replace with text fallback');
+});
+
 test('bet-slip O/U/Draw hierarchy preserved', function () {
   var html = fs.readFileSync(path.join(root, 'player.html'), 'utf8');
   var idxProp = html.indexOf('if (_slipIsPlayerProp(b))');
