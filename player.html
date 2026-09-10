@@ -1757,6 +1757,7 @@ function _debugClearTickets() {
 <script src="pb-a11y.js"></script>
 <script src="player-photos.js"></script>
 <script src="team-logos.js"></script>
+<script src="scripts/owls-live-scores.js"></script>
 <script>
 // Preview/dev params — hoisted before session gate (avoids TDZ ReferenceError on _pDev)
 var _pp = new URLSearchParams(window.location.search);
@@ -2959,10 +2960,16 @@ function teamAvatar(name, sport, opts) {
 function _pbCollapseImgToText(img) {
   if (!img) return;
   img.onerror = null;
+  img.removeAttribute('src');
+  img.removeAttribute('srcset');
   img.style.display = 'none';
   img.style.visibility = 'hidden';
-  var label = (img.getAttribute('alt') || img.getAttribute('data-team-name') ||
-    img.getAttribute('data-player-name') || '').trim() || '—';
+  img.setAttribute('aria-hidden', 'true');
+  img.removeAttribute('alt');
+  img.alt = '';
+  var label = (img.getAttribute('data-team-name') ||
+    img.getAttribute('data-player-name') || img.getAttribute('title') || '').trim() || '—';
+  // Prefer replace so no empty focusable/img control remains in the tree.
   var span = document.createElement('span');
   span.className = 'pb-text-fallback';
   span.setAttribute('aria-hidden', 'true');
@@ -3383,23 +3390,53 @@ function _pbFormatLiveStateText(g) {
   return bits.join(' · ');
 }
 
+function _pbDevMode() {
+  try {
+    if (localStorage.getItem('pb-dev-mode') === '1') return true;
+  } catch (_e) {}
+  var h = String(location && location.hostname || '');
+  return h === 'localhost' || h === '127.0.0.1' || /\.local$/.test(h);
+}
+
+function _pbDevLogLiveScore(tag, payload) {
+  if (!_pbDevMode()) return;
+  try { console.debug('[live-score:' + tag + ']', payload); } catch (_e) {}
+}
+
+function _pbHasSafeNumericScore(g) {
+  if (!g) return false;
+  if (g._scoreMatchSafe === true || g.scoreSource === 'owls_scores_live') {
+    return g.homeScore != null || g.awayScore != null;
+  }
+  return false;
+}
+
+function _pbLiveScoreContextOnly(g) {
+  if (!g) return false;
+  return !!(g.gameStateText || g.period != null || g.clock || g.inning != null ||
+    g.down != null || g.setScore != null || g.gameScore != null || g.statusDetail);
+}
+
 function _pbLiveScoreboardHtml(g) {
   if (!_pbMarketIsLive(g)) return '';
-  var hasScore = g.homeScore != null || g.awayScore != null || g.gameStateText ||
-    g.period != null || g.clock || g.inning != null || g.down != null ||
-    g.setScore != null || g.gameScore != null || g.statusDetail;
-  if (!hasScore) {
-    // Live odds without scoreboard — keep betting, omit empty scoreboard.
+  var safeNumeric = _pbHasSafeNumericScore(g);
+  var stateTxt = _pbFormatLiveStateText(g);
+  if (!safeNumeric && !_pbLiveScoreContextOnly(g)) {
+    // Live odds without a safe score — keep betting, omit scoreboard.
     return '';
+  }
+  if (!safeNumeric) {
+    // Uncertain identity: keep event + LIVE context, suppress numeric score.
+    return '<div class="mc-live-score mc-live-score--context-only" aria-hidden="true">' +
+      '<span class="mc-live-state">' + (stateTxt || '● LIVE') + '</span></div>';
   }
   var aw = (g.away || g.away_team) || '';
   var hw = (g.home || g.home_team) || '';
+  var sport = _pbSportKeyOf(g);
   var awN = aw.split(' ').slice(-1)[0] || aw;
   var hwN = hw.split(' ').slice(-1)[0] || hw;
-  var awSc = g.awayScore != null ? g.awayScore : '—';
-  var hwSc = g.homeScore != null ? g.homeScore : '—';
-  var stateTxt = _pbFormatLiveStateText(g);
-  var sport = _pbSportKeyOf(g);
+  var awSc = g.awayScore != null ? g.awayScore : '';
+  var hwSc = g.homeScore != null ? g.homeScore : '';
   var extras = [];
   if (sport === 'mlb' || sport.indexOf('baseball') >= 0) {
     if (g.outs != null && !(g.gameStateText && String(g.gameStateText).toLowerCase().indexOf('out') >= 0)) {
@@ -3414,14 +3451,140 @@ function _pbLiveScoreboardHtml(g) {
     if (g.setScore != null && stateTxt.indexOf(String(g.setScore)) < 0) extras.push('<span>Sets ' + g.setScore + '</span>');
     if (g.gameScore != null && stateTxt.indexOf(String(g.gameScore)) < 0) extras.push('<span>' + g.gameScore + '</span>');
   }
-  return '<div class="mc-live-score">' +
+  return '<div class="mc-live-score" aria-hidden="true">' +
     '<div class="mc-live-score-row">' +
-      '<span>' + awN + ' <span class="mc-live-pts">' + awSc + '</span></span>' +
+      '<span>' + awN + (awSc !== '' ? ' <span class="mc-live-pts">' + awSc + '</span>' : '') + '</span>' +
       (stateTxt ? '<span class="mc-live-state">' + stateTxt + '</span>' : '<span style="color:#64748B">● LIVE</span>') +
-      '<span><span class="mc-live-pts">' + hwSc + '</span> ' + hwN + '</span>' +
+      '<span>' + (hwSc !== '' ? '<span class="mc-live-pts">' + hwSc + '</span> ' : '') + hwN + '</span>' +
     '</div>' +
     (extras.length ? '<div class="mc-live-extras">' + extras.join('') + '</div>' : '') +
   '</div>';
+}
+
+var _pbLiveScoreIndexCache = {};
+
+function _pbIsSoccerOrTennisSport(sport) {
+  var s = String(sport || '').toLowerCase();
+  return s.indexOf('soccer') >= 0 || s === 'epl' || s === 'mls' || s === 'ucl' ||
+    s.indexOf('tennis') >= 0 || s === 'atp' || s === 'wta';
+}
+
+function _pbScoreSportShort(sport) {
+  var s = String(sport || '').toLowerCase();
+  if (s.indexOf('soccer') >= 0 || s === 'epl' || s === 'mls' || s === 'ucl') return 'soccer';
+  if (s.indexOf('tennis') >= 0 || s === 'atp' || s === 'wta') return 'tennis';
+  return s;
+}
+
+async function _pbFetchLiveScoreIndex(sport) {
+  if (!window.OwlsLiveScores || typeof OwlsLiveScores.indexOwlsLiveScores !== 'function') return null;
+  var short = _pbScoreSportShort(sport);
+  if (short !== 'soccer' && short !== 'tennis') return null;
+  var now = Date.now();
+  var cached = _pbLiveScoreIndexCache[short];
+  if (cached && (now - cached.fetchedAt) < 10000) return cached.index;
+
+  var events = [];
+  var seenIds = {};
+  function addEvent(ev) {
+    if (!ev || !ev.id || seenIds[ev.id]) return;
+    seenIds[ev.id] = true;
+    events.push(ev);
+  }
+
+  try {
+    var r1 = await fetch(API + '/api/markets/live', { cache: 'no-store' });
+    if (r1.ok) {
+      var d1 = await r1.json();
+      (d1.games || []).forEach(function(g) {
+        if (!g || !_pbMarketIsLive(g)) return;
+        if (_pbScoreSportShort(g.sport_key || g.sport) !== short) return;
+        var ev = OwlsLiveScores.scoreEventFromFlatGame({
+          id: g.id,
+          eventId: g.eventId || g.owlsEventId,
+          providerGameId: g.providerGameId,
+          home: g.home_team || g.home,
+          away: g.away_team || g.away,
+          homeScore: g.homeScore,
+          awayScore: g.awayScore,
+          scheduledStart: g.commence_time || g.scheduledStart || g.time,
+          clock: g.clock,
+          period: g.period,
+          setScore: g.setScore,
+          gameScore: g.gameScore,
+          statusDetail: g.statusDetail,
+          isLive: true,
+          status: 'live',
+          league: g.league
+        });
+        if (ev) addEvent(ev);
+      });
+    }
+  } catch (_e1) {}
+
+  try {
+    var r2 = await fetch(API + '/api/odds/live?sport=' + encodeURIComponent(short), { cache: 'no-store' });
+    if (r2.ok) {
+      var d2 = await r2.json();
+      (d2.games || []).forEach(function(g) {
+        if (!g) return;
+        var ev = OwlsLiveScores.scoreEventFromFlatGame(g);
+        if (ev) addEvent(ev);
+      });
+    }
+  } catch (_e2) {}
+
+  var index = OwlsLiveScores.indexOwlsLiveScores(events, short);
+  _pbLiveScoreIndexCache[short] = { fetchedAt: now, index: index };
+  _pbDevLogLiveScore('index-built', { sport: short, events: events.length, liveRows: (index.list || []).length });
+  return index;
+}
+
+async function _pbHydrateLiveScoresForGames(games, sport) {
+  if (!Array.isArray(games) || !games.length) return games;
+  if (!_pbIsSoccerOrTennisSport(sport)) return games;
+  if (!window.OwlsLiveScores) return games;
+
+  var needs = games.filter(function(g) {
+    return g && _pbMarketIsLive(g) && !_pbHasSafeNumericScore(g);
+  });
+  if (!needs.length) return games;
+
+  var index = await _pbFetchLiveScoreIndex(sport);
+  if (!index || !(index.list || []).length) {
+    _pbDevLogLiveScore('hydrate-skip', { sport: sport, reason: 'empty_index', needs: needs.length });
+    return games;
+  }
+
+  var short = _pbScoreSportShort(sport);
+  var result = OwlsLiveScores.hydrateGamesWithOwlsScores(needs, (function() {
+    var map = {};
+    map[short] = index;
+    return map;
+  })(), function(sk, fields) {
+    return _pbFormatLiveStateText(Object.assign({ sport: sk }, fields || {}));
+  });
+
+  needs.forEach(function(g) {
+    if (g && (g.homeScore != null || g.awayScore != null) && g._scoreMatchSafe) {
+      _pbDevLogLiveScore('matched', {
+        id: g.id,
+        eventId: g.eventId,
+        canonicalGameKey: g.canonicalGameKey,
+        away: g.away || g.away_team,
+        home: g.home || g.home_team,
+        score: (g.awayScore != null ? g.awayScore : '?') + '-' + (g.homeScore != null ? g.homeScore : '?')
+      });
+    }
+  });
+
+  _pbDevLogLiveScore('hydrate-done', {
+    sport: short,
+    matched: result.matched,
+    unmatchedLive: result.unmatchedLive,
+    needs: needs.length
+  });
+  return games;
 }
 
 function _pbLiveBadgeHtml() {
@@ -4117,17 +4280,28 @@ function _pbIsGolfSport(sport) {
   return _pbAvatarSportKey(sport || '') === 'golf';
 }
 
-/** Outrights / tournament winners — not 2-player matchups; skip in lobby cards. */
-function _pbIsGolfOutright(g) {
+function _pbIsNascarSport(sport) {
+  var s = String(sport || '').toLowerCase();
+  return s === 'nascar' || s.indexOf('nascar') === 0 || s === 'motorsport';
+}
+
+/** Outrights / tournament boards — not 2-way matchups; prefer empty slate over unsafe wagering. */
+function _pbIsOutrightBoard(g) {
   if (!g) return false;
   var aw = String((g.away || g.away_team) || '');
   var hw = String((g.home || g.home_team) || '');
   if (/^outright$/i.test(hw.trim())) return true;
-  if (/winner/i.test(aw) || /winner/i.test(hw)) return true;
+  if (/winner|championship|manufacturer|winning team|winning manufacturer/i.test(aw) ||
+      /winner|championship|manufacturer/i.test(hw)) return true;
   var ml = Array.isArray(g.moneyline) ? g.moneyline : [];
-  // Matchups are 2-way; fields with many ML selections are tournament boards.
+  // Matchups are 2-way; fields with many ML selections are tournament/futures boards.
   if (ml.length > 2) return true;
   return false;
+}
+
+/** @deprecated use _pbIsOutrightBoard — kept for call-site compatibility */
+function _pbIsGolfOutright(g) {
+  return _pbIsOutrightBoard(g);
 }
 
 function _pbRenderGameCardHtml(g) {
@@ -4142,7 +4316,10 @@ function _pbRenderGameCardHtml(g) {
     }
     var sportRouteEarly = _ODDS_ROUTE_KEY[String((g.sport || '')).toLowerCase()] || String((g.sport || '')).toLowerCase();
     var isGolfCard = sportRouteEarly === 'golf' || _pbIsGolfSport(g.sport || '');
-    if (isGolfCard && _pbIsGolfOutright(g)) {
+    if (isGolfCard && _pbIsOutrightBoard(g)) {
+      return '';
+    }
+    if (_pbIsNascarSport(g.sport || sportRouteEarly) && _pbIsOutrightBoard(g)) {
       return '';
     }
     var awN = aw.split(' ').slice(-1)[0] || aw, hwN = hw.split(' ').slice(-1)[0] || hw;
@@ -4314,7 +4491,7 @@ function _pbSyncGamesListInPlace(el, games) {
 
 var _pbExpandedPropsGameId = null;
 var _pbExpandedAltGameId = null;
-var _PB_PROPS_SUPPORTED_SPORTS = ['mlb', 'nba', 'nfl', 'nhl', 'ncaab', 'ncaaf', 'wnba', 'tennis'];
+var _PB_PROPS_SUPPORTED_SPORTS = ['mlb', 'nba', 'nfl', 'nhl', 'ncaab', 'ncaaf', 'wnba'];
 var _pbPropsCache = {};
 var _pbPropsUiState = {};
 /** Cache: "sport|away|home" → { map:{normName:'away'|'home'}, ready, loading, promise } */
@@ -5346,8 +5523,9 @@ function _pbRenderPropSectionHtml(section, gameId, gameLabel, sport, away, home,
     '<span class="mc-prop-sec-chev" aria-hidden="true">▾</span></div>';
   html += '<div class="mc-prop-sec-body">';
   if (deferBody && !showAll) {
-    html += '<div class="mc-prop-deferred-slot" data-defer-sec="' + secKey.replace(/"/g, '&quot;') + '" data-defer-rows="' + rows.length + '">Scroll to load ' + rows.length + ' props…</div>';
+    html += '<div class="mc-prop-deferred-slot" data-defer-sec="' + secKey.replace(/"/g, '&quot;') + '" data-defer-rows="' + rows.length + '" aria-hidden="true">Scroll to load ' + rows.length + ' props…</div>';
     // Keep full body payload for IO hydrate without dropping markets
+    // <template> contents stay inert (not announced) until expand.
     html += '<template class="mc-prop-deferred-tpl">' +
       visibleRows.map(function(r) { return _pbRenderPlayerPropRowHtml(r, gameId, gameLabel, sport, away, home, teamMap); }).join('') +
       (rows.length > _PB_PROP_SECTION_LIMIT
@@ -5932,9 +6110,13 @@ async function loadGames(sport, opts){
     // Rule 2: keep isLive games (LIVE badge + bettable when live betting enabled).
     // Rule 3: keep pre-game (!isLive && !isFinal).
     games = games.filter(function(g){ return !_pbMarketIsFinal(g); });
-    // Golf: drop tournament outrights so matchup cards populate the lobby.
-    if (_pbIsGolfSport(_sportLc) || _sport === 'golf') {
-      games = games.filter(function(g){ return !_pbIsGolfOutright(g); });
+    games.forEach(function(g) {
+      if (g && g.scoreSource === 'owls_scores_live') g._scoreMatchSafe = true;
+    });
+    try { await _pbHydrateLiveScoresForGames(games, _sportLc); } catch (_hs) {}
+    // Golf / NASCAR: drop tournament outrights & futures — prefer empty slate over unsafe wagering.
+    if (_pbIsGolfSport(_sportLc) || _sport === 'golf' || _pbIsNascarSport(_sportLc) || _sport === 'nascar') {
+      games = games.filter(function(g){ return !_pbIsOutrightBoard(g); });
     }
 
     if (!games.length) {
@@ -6066,6 +6248,18 @@ async function loadAllLiveGames(opts) {
         all.push(g);
       });
     });
+    all.forEach(function(g) {
+      if (g && g.scoreSource === 'owls_scores_live') g._scoreMatchSafe = true;
+    });
+    try {
+      var _liveScoreSports = ['soccer', 'tennis'];
+      for (var _lsi = 0; _lsi < _liveScoreSports.length; _lsi++) {
+        var _subset = all.filter(function(g) {
+          return g && _pbScoreSportShort(g.sport || g.sport_key) === _liveScoreSports[_lsi];
+        });
+        if (_subset.length) await _pbHydrateLiveScoresForGames(_subset, _liveScoreSports[_lsi]);
+      }
+    } catch (_hl) {}
     var live = all.filter(_pbMarketIsLive).slice().sort(_pbCompareLiveRecentlyStarted);
     var nextStart = null;
     var nowMs = Date.now();
@@ -6422,12 +6616,16 @@ function _updateSportTabs() {
     if (!sportsByKey) return null;
     if (sportsByKey[sport]) return sportsByKey[sport];
     var als = catalogAliases[sport] || [];
-    var games = 0, found = false;
+    var games = 0, found = false, enabled = true;
     for (var a = 0; a < als.length; a++) {
       var e = sportsByKey[als[a]];
-      if (e) { found = true; games += (e.games || 0); }
+      if (e) {
+        found = true;
+        games += (e.games || 0);
+        if (e.enabled === false) enabled = false;
+      }
     }
-    return found ? { games: games } : null;
+    return found ? { games: games, enabled: enabled } : null;
   }
   // Counters for the post-apply diagnostic line.
   var _vis = 0, _hidden = 0, _dim = 0;
@@ -6436,7 +6634,10 @@ function _updateSportTabs() {
     if (!tab) return;
     var blocked = isSportBlocked(sport);
     var entry    = catalogEntry(sport);
+    // Boxing absent from /api/sports → treat as empty. NASCAR enabled=false → zero badge.
     var gameCount = entry ? (entry.games || 0) : (sportsByKey ? 0 : null);
+    if (entry && entry.enabled === false) gameCount = 0;
+    if (sport === 'boxing' && sportsByKey && !sportsByKey.boxing) gameCount = 0;
     var hasGames = gameCount === null || gameCount > 0;
     tab.style.display = '';
     tab.style.opacity = blocked ? '0.35' : '';
@@ -6446,7 +6647,7 @@ function _updateSportTabs() {
     tab.classList.toggle('zero-games', !blocked && gameCount === 0);
     tab.title = blocked
       ? ('Your host has disabled ' + sport.toUpperCase() + ' betting')
-      : (hasGames ? '' : 'No games available right now');
+      : (hasGames ? '' : 'No events available');
     var badge = tab.querySelector('.sport-tab-count');
     if (!badge) {
       badge = document.createElement('span');
