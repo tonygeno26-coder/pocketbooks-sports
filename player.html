@@ -1757,6 +1757,7 @@ function _debugClearTickets() {
 <script src="pb-a11y.js"></script>
 <script src="player-photos.js"></script>
 <script src="team-logos.js"></script>
+<script src="parlay-correlation.js"></script>
 <script src="scripts/owls-live-scores.js"></script>
 <script>
 // Preview/dev params — hoisted before session gate (avoids TDZ ReferenceError on _pDev)
@@ -7261,8 +7262,9 @@ function slipIsSGPEligible() {
   return betSlip.every(function(b){ return b.game === game; });
 }
 function sgpDecimalOdds(legs) {
-  var d = legs.reduce(function(p,b){ return p * amToDecimal(b.odds); }, 1);
-  return d * 0.85;
+  // No fake correlation discount — SGP requires a real pricing engine.
+  // Correlated slips are blocked before payout display/placement.
+  return legs.reduce(function(p,b){ return p * amToDecimal(b.odds); }, 1);
 }
 function sgpAmericanOdds(legs) {
   var d = sgpDecimalOdds(legs);
@@ -7270,31 +7272,30 @@ function sgpAmericanOdds(legs) {
   var a = amer(d);
   return (a > 0 ? '+' : '') + a;
 }
-// SGP correlation reducer: if a combo has 2+ legs from same game, apply discount
+// Same-game detection (labeling only — never invent SGP-adjusted odds)
 function comboHasSGP(combo) {
   var gc = {};
-  combo.forEach(function(b){ gc[b.game] = (gc[b.game]||0)+1; });
+  combo.forEach(function(b){
+    var k = (b && (b.canonicalGameKey || b.game)) || '';
+    gc[k] = (gc[k]||0)+1;
+  });
   return Object.values(gc).some(function(c){ return c > 1; });
 }
 function sgpAdjust(d, combo) {
-  if (comboHasSGP(combo)) return d * 0.70; // same-game correlation reducer
+  // Hard rule: never multiply standalone odds with a fake correlation factor.
   return d;
 }
 function parlayAdjust(d, legs) {
-  var gc = {};
-  legs.forEach(function(b){ gc[b.game] = (gc[b.game]||0)+1; });
-  var hasSGP = Object.values(gc).some(function(c){ return c > 1; });
-  return hasSGP ? d * 0.75 : d; // SGPx parlay reducer
+  // Hard rule: never apply invented SGP/parlay correlation discounts.
+  return d;
 }
 
 function calcPayout(stake, legs, type) {
   if (!stake || !legs.length) return 0;
-  if (type === 'sgp') {
-    return stake * sgpDecimalOdds(legs);
-  }
-  if (type === 'parlay') {
+  if (type === 'sgp' || type === 'parlay') {
+    // Product math only for INDEPENDENT legs; correlated slips are gated elsewhere.
     var d = legs.reduce(function(p,b){ return p * amToDecimal(b.odds); }, 1);
-    return stake * parlayAdjust(d, legs);
+    return stake * d;
   }
   if (type === 'teaser') {
     var tOdds = getTeaserOdds(legs.length, teaserPts);
@@ -7740,59 +7741,14 @@ function _hydrateSlipPlayerPhotos(root) {
 function bsValidate() {
   var warnings = [];
 
-  // SGP leg validity: flag invalid same-game combinations in parlay/rr/sgp
-  if (bsType === 'parlay' || bsType === 'rr' || bsType === 'sgp') {
-    var _sgpViolations = _validateSlipSGP(betSlip);
-    _sgpViolations.forEach(function(v){
-      var label = (v.leg1.game || v.gameKey).split('|').slice(0,3).join(' ');
-      var already = warnings.some(function(w){ return w.includes(label); });
-      if (!already) warnings.push('Invalid SGP combination: '+label+' — this combination is not allowed.');
-    });
+  // Parlay correlation: flag non-independent pairs immediately on the slip
+  if (bsType === 'parlay' || bsType === 'rr' || bsType === 'sgp' || bsType === 'teaser') {
+    var _corr = _classifySlipCorrelation(betSlip);
+    if (_corr && _corr.relationship && _corr.relationship !== 'INDEPENDENT') {
+      warnings.push(_corr.message || ('Correlation: ' + _corr.relationship));
+    }
   }
 
-  // Only flag TRUE contradictions: same game + same market category + opposite side
-  // e.g. Over 8.5 + Under 8.5, Phillies -1.5 + Marlins +1.5, Phillies ML + Marlins ML
-  var byGame = {};
-  betSlip.forEach(function(b) {
-    if (!byGame[b.game]) byGame[b.game] = [];
-    byGame[b.game].push(b);
-  });
-  Object.keys(byGame).forEach(function(game) {
-    var legs = byGame[game];
-    if (legs.length < 2) return;
-    // Check for direct market contradictions within same game
-    legs.forEach(function(a, ai) {
-      legs.forEach(function(b, bi) {
-        if (bi <= ai) return;
-        var am = (a.market||'').toLowerCase();
-        var bm = (b.market||'').toLowerCase();
-        // Same market category?
-        var aIsTotal = am.includes('total') || am.includes('over') || am.includes('under');
-        var bIsTotal = bm.includes('total') || bm.includes('over') || bm.includes('under');
-        var aIsSpread = am.includes('run line') || am.includes('spread') || am.includes('puck line');
-        var bIsSpread = bm.includes('run line') || bm.includes('spread') || bm.includes('puck line');
-        var aIsML = am.includes('moneyline') || am.includes('to win');
-        var bIsML = bm.includes('moneyline') || bm.includes('to win');
-        // Both totals — Over vs Under = conflict
-        if (aIsTotal && bIsTotal) {
-          var aOver = (a.pick||'').toLowerCase().includes('over');
-          var bOver = (b.pick||'').toLowerCase().includes('over');
-          if (aOver !== bOver) warnings.push('Conflict: Over + Under in same game');
-        }
-        // Both spreads — opposite teams = conflict
-        if (aIsSpread && bIsSpread && a.game === b.game) {
-          var aTeam = (a.pick||'').split(' ')[0];
-          var bTeam = (b.pick||'').split(' ')[0];
-          if (aTeam && bTeam && aTeam !== bTeam) warnings.push('Conflict: opposite spreads in same game');
-        }
-        // Both moneyline — different teams = conflict
-        if (aIsML && bIsML) {
-          warnings.push('Conflict: two moneylines in same game');
-        }
-        // Different market categories (spread + total, ML + total, ML + spread) = ALLOWED, no warning
-      });
-    });
-  });
   return warnings;
 }
 
@@ -7975,19 +7931,25 @@ function bsRenderLegs() {
   } else if (bsType === 'sgp') {
     legs = (function(){
       var validLegs = betSlip.filter(function(b){ return b.odds && !isNaN(b.odds); });
+      var _corrSlip = _classifySlipCorrelation(validLegs);
+      var blocked = !_assertSlipCorrelationAllowed(validLegs, 'SGP').ok;
       var d = sgpDecimalOdds(validLegs);
-      var co = (validLegs.length < 2) ? '--' : sgpAmericanOdds(validLegs);
-      var sgpPayout = bsStake > 0 ? fmtDollar(bsStake * d) : null;
+      var co = (validLegs.length < 2 || blocked) ? '--' : sgpAmericanOdds(validLegs);
+      var sgpPayout = (!blocked && bsStake > 0) ? fmtDollar(bsStake * d) : null;
+      var note = blocked
+        ? '<div style="padding:6px 14px;font-size:0.7rem;color:#f87171;background:#1a0000;border-bottom:1px solid #7f1d1d">' +
+            ((_corrSlip && _corrSlip.message) || 'Same-game parlays require a correlation pricing engine (not wired).') + '</div>'
+        : '<div style="padding:4px 14px 8px;font-size:0.65rem;color:#888">SGP requires correlation pricing (not available — same-game blocked)</div>';
       var legLimitHtml = '<div class="dkslip-leg-limit">' + betSlip.length + ' / ' + _MAX_PARLAY_LEGS + ' legs</div>';
       return legLimitHtml + '<div class="dkslip-card">' +
         '<div class="dkslip-card-hdr">' +
           '<span class="dkslip-card-title">Same Game Parlay</span>' +
           '<span style="display:flex;align-items:center;gap:6px">' +
-            (validLegs.length >= 2 ? '<button type="button" class="dkslip-share-btn" onclick="event.stopPropagation();shareParlaySlip()">Share</button>' : '') +
+            (validLegs.length >= 2 && !blocked ? '<button type="button" class="dkslip-share-btn" onclick="event.stopPropagation();shareParlaySlip()">Share</button>' : '') +
             '<span class="dkslip-card-odds">'+co+'</span>' +
           '</span>' +
         '</div>' +
-        '<div style="padding:4px 14px 8px;font-size:0.65rem;color:#888">Correlation-adjusted odds (×0.85)</div>' +
+        note +
         betSlip.map(function(b,i){
           var pm = b.market||'Market', pp = b.pick||'Unknown Selection', pg = b.game||'';
           var pteams = pg.split(' vs ');
@@ -8013,29 +7975,27 @@ function bsRenderLegs() {
     (function(){
       
       var validLegs = betSlip.filter(function(b){ return b.odds && !isNaN(b.odds); });
-      // Detect same-game legs
-      var gameCount = {};
-      validLegs.forEach(function(b){ gameCount[b.game] = (gameCount[b.game]||0)+1; });
-      var hasSGP = Object.values(gameCount).some(function(c){ return c > 1; });
-      var sgpGameCount = Object.keys(gameCount).filter(function(g){ return gameCount[g] > 1; }).length;
-      // SGP: use standard parlay math for MVP (no correlation discount yet — architecture ready for future engine)
+      var _corrSlip = _classifySlipCorrelation(validLegs);
+      var hasCorr = _corrSlip && _corrSlip.relationship && _corrSlip.relationship !== 'INDEPENDENT';
+      // Never invent SGP-adjusted odds. Product math only when INDEPENDENT.
       var d = validLegs.reduce(function(p,b){ return p*amToDecimal(b.odds); }, 1);
       var raw = Math.round((d-1)*100);
-      var co = (validLegs.length < 2) ? '--' : (isNaN(raw) ? '--' : (raw > 0 ? '+'+raw : ''+Math.round(-100/(d-1))));
-      var parlayLabel = hasSGP
-        ? (betSlip.length + ' Pick ' + (sgpGameCount > 1 ? 'SGPx' : 'SGP'))
+      var co = (validLegs.length < 2 || hasCorr) ? '--' : (isNaN(raw) ? '--' : (raw > 0 ? '+'+raw : ''+Math.round(-100/(d-1))));
+      var parlayLabel = hasCorr
+        ? (betSlip.length + ' Pick — correlation blocked')
         : (betSlip.length + ' Pick Parlay');
-      var oddsDisplay = co; // show real odds for SGP (standard math)
-      var adjD = parlayAdjust(d, validLegs);
-      var parlayPayout = bsStake > 0 ? fmtDollar(bsStake * adjD) : null;
-      // No blocking note for SGP — future: replace with correlation disclaimer if needed
-      var sgpNote = '';
+      var oddsDisplay = co;
+      var parlayPayout = (!hasCorr && bsStake > 0) ? fmtDollar(bsStake * d) : null;
+      var sgpNote = hasCorr
+        ? '<div style="padding:6px 14px;font-size:0.7rem;color:#f87171;background:#1a0000;border-bottom:1px solid #7f1d1d">' +
+            (_corrSlip.message || 'Same-event correlation is not allowed without SGP pricing.') + '</div>'
+        : '';
       var legLimitHtml = '<div class="dkslip-leg-limit">' + betSlip.length + ' / ' + _MAX_PARLAY_LEGS + ' legs</div>';
       return legLimitHtml + '<div class="dkslip-card">' +
         '<div class="dkslip-card-hdr">' +
           '<span class="dkslip-card-title">'+parlayLabel+'</span>' +
           '<span style="display:flex;align-items:center;gap:6px">' +
-            (validLegs.length >= 2 ? '<button type="button" class="dkslip-share-btn" onclick="event.stopPropagation();shareParlaySlip()">Share</button>' : '') +
+            (validLegs.length >= 2 && !hasCorr ? '<button type="button" class="dkslip-share-btn" onclick="event.stopPropagation();shareParlaySlip()">Share</button>' : '') +
             '<span class="dkslip-card-odds">'+oddsDisplay+'</span>' +
           '</span>' +
         '</div>' +
@@ -8918,6 +8878,21 @@ async function confirmBet() {
     showToast(_pg.message || 'game is final', 'error');
     _cbErr('CONFIRM_BET_ERROR', null, 'reason=placement_gate leg='+_pg.legIndex);
     return;
+  }
+
+  // ── Parlay correlation gate (fail-closed; mirrors backend) ────────────────
+  _cbStep = 'CORRELATION_GATE';
+  if (snap.type !== 'straight' && (snap.legs || []).length > 1) {
+    var _corrBetType = snap.type === 'rr' ? 'RoundRobin'
+      : snap.type === 'sgp' ? 'SGP'
+      : snap.type === 'teaser' ? 'Teaser' : 'Parlay';
+    var _corrOk = _assertSlipCorrelationAllowed(snap.legs || [], _corrBetType);
+    if (!_corrOk.ok) {
+      closeBetConfirm();
+      showToast(_corrOk.message || 'This combination is not allowed.', 'error');
+      _cbErr('CONFIRM_BET_ERROR', null, 'reason=parlay_correlation code='+(_corrOk.code||''));
+      return;
+    }
   }
 
   // ── Balance check ─────────────────────────────────────────────────────────
@@ -13670,14 +13645,18 @@ function bsSyncPlaceBtn() {
     }
   }
 
-  // ── SGP validity gate: disable Place Bet on invalid SGP combinations ──
-  if (valid && (bsType === 'parlay' || bsType === 'rr' || bsType === 'sgp')) {
-    var _sgpV = _validateSlipSGP(betSlip);
-    if (_sgpV.length > 0) {
+  // ── Correlation gate: disable Place Bet on non-independent multi-leg slips ──
+  if (valid && (bsType === 'parlay' || bsType === 'rr' || bsType === 'sgp' || bsType === 'teaser')) {
+    var _corrGate = _assertSlipCorrelationAllowed(betSlip,
+      bsType === 'rr' ? 'RoundRobin' : bsType === 'sgp' ? 'SGP' : bsType === 'teaser' ? 'Teaser' : 'Parlay');
+    if (!_corrGate.ok) {
       if (btn) {
         btn.style.display='block'; btn.dataset.disabled='true';
         btn.style.background='#1a0000'; btn.style.color='#f87171'; btn.style.cursor='default';
-        btn.style.border='1px solid #7f1d1d'; btn.textContent='⚠️ Invalid SGP combination';
+        btn.style.border='1px solid #7f1d1d';
+        btn.textContent = (_corrGate.code === 'MUTUALLY_EXCLUSIVE' || _corrGate.code === 'DUPLICATE')
+          ? '⚠️ Conflicting legs'
+          : '⚠️ Correlation blocked';
       }
       return;
     }
@@ -14209,55 +14188,41 @@ function _checkTicketPlacementGate(legs, nowMs) {
 // Prevents betting both sides of the same game in slip or vs active tickets.
 // Uses canonicalGameKey as primary conflict key.
 // ════════════════════════════════════════════════════════════════════════════
-// ── SGP leg validity engine ───────────────────────────────────────────────────────────────
-function _sgpIsML(market) {
-  var m=(market||'').toLowerCase();
-  return m.includes('moneyline')||m.includes('to win')||m.includes('h2h')||m==='ml';
+// ── Parlay correlation protection (see docs/PARLAY_CORRELATION_RULES.md) ──
+function _pbCorr() {
+  return (typeof PocketBooksParlayCorrelation !== 'undefined') ? PocketBooksParlayCorrelation : null;
 }
-function _sgpIsSpread(market) {
-  var m=(market||'').toLowerCase();
-  return m.includes('spread')||m.includes('run line')||m.includes('puck line')||
-         m.includes('handicap')||m.includes('point spread');
-}
-function _sgpIsTotal(market) {
-  var m=(market||'').toLowerCase();
-  return m.includes('total')||m.includes('over')||m.includes('under')||m.includes('o/u');
-}
-
 function _checkSGPLegValidity(existingSameGameLegs, newLeg) {
-  var nm=newLeg.market||''; var np=(newLeg.pick||'').toLowerCase();
-  var newML=_sgpIsML(nm); var newSp=_sgpIsSpread(nm); var newTo=_sgpIsTotal(nm);
-  for (var i=0;i<existingSameGameLegs.length;i++) {
-    var ex=existingSameGameLegs[i]; var em=ex.market||''; var ep=(ex.pick||'').toLowerCase();
-    var exML=_sgpIsML(em); var exSp=_sgpIsSpread(em); var exTo=_sgpIsTotal(em);
-    if (newML&&exML) return {invalid:true,reason:'two_moneylines_same_game',
-      message:'This same-game combination is not allowed.'};
-    if ((newML&&exSp)||(newSp&&exML)) return {invalid:true,reason:'moneyline_plus_spread_same_game',
-      message:'This same-game combination is not allowed.'};
-    if (newSp&&exSp) return {invalid:true,reason:'two_spreads_same_game',
-      message:'This same-game combination is not allowed.'};
-    if (newTo&&exTo) return {invalid:true,reason:'two_totals_same_game',
-      message:'This same-game combination is not allowed.'};
-  }
-  return {invalid:false,reason:null};
-}
-
-function _validateSlipSGP(legs) {
-  var byGame={};
-  (legs||[]).forEach(function(l){
-    var gk=l.canonicalGameKey||l.game||'__x';
-    if(!byGame[gk]) byGame[gk]=[];
-    byGame[gk].push(l);
-  });
-  var violations=[];
-  Object.keys(byGame).forEach(function(gk){
-    var gl=byGame[gk]; if(gl.length<2) return;
-    for (var i=0;i<gl.length;i++) for (var j=i+1;j<gl.length;j++) {
-      var r=_checkSGPLegValidity([gl[i]],gl[j]);
-      if(r.invalid) violations.push({gameKey:gk,leg1:gl[i],leg2:gl[j],reason:r.reason});
+  var eng = _pbCorr();
+  if (!eng) return { invalid:true, reason:'correlation_engine_missing',
+    message:'Correlation checks unavailable — cannot combine same-game legs.' };
+  for (var i = 0; i < (existingSameGameLegs || []).length; i++) {
+    var r = eng.classifyLegRelationship(existingSameGameLegs[i], newLeg);
+    if (r.relationship !== 'INDEPENDENT') {
+      return { invalid:true, reason:r.reason, message:r.message, relationship:r.relationship };
     }
+  }
+  return { invalid:false, reason:null };
+}
+function _validateSlipSGP(legs) {
+  var eng = _pbCorr();
+  if (!eng) return [{ reason:'correlation_engine_missing' }];
+  return (eng.classifyAllPairs(legs) || []).filter(function(p) {
+    return p.relationship !== 'INDEPENDENT';
+  }).map(function(p) {
+    return { gameKey:(p.legA && (p.legA.canonicalGameKey||p.legA.game))||'',
+      leg1:p.legA, leg2:p.legB, reason:p.reason, relationship:p.relationship, message:p.message };
   });
-  return violations;
+}
+function _classifySlipCorrelation(legs) {
+  var eng = _pbCorr();
+  if (!eng) return { relationship:'UNSUPPORTED_CORRELATION', message:'Correlation checks unavailable.' };
+  return eng.classifySlip(legs || []);
+}
+function _assertSlipCorrelationAllowed(legs, betType) {
+  var eng = _pbCorr();
+  if (!eng) return { ok:false, code:'UNSUPPORTED_CORRELATION', message:'Correlation checks unavailable.', financialMutation:'NONE' };
+  return eng.assertParlayCorrelationAllowed(legs || [], { betType: betType || 'Parlay' });
 }
 // ───────────────────────────────────────────────────────────────────────────
 
@@ -14284,15 +14249,25 @@ function _checkBetConflict(newLeg) {
   var newToken = _pickConflictToken(newLeg);
   if (!newToken) return { conflict: false };
 
-  // ── SGP leg validity check: block invalid same-game combinations ──
-  if (newLeg.canonicalGameKey) {
-    var _sameGameLegs = betSlip.filter(function(b){
-      return b.cellId !== newLeg.cellId && b.canonicalGameKey === newLeg.canonicalGameKey;
-    });
-    if (_sameGameLegs.length > 0) {
-      var _sgpCheck = _checkSGPLegValidity(_sameGameLegs, newLeg);
-      if (_sgpCheck.invalid) {
-        return { conflict:true, reason:_sgpCheck.reason, message:_sgpCheck.message };
+  // ── Correlation classify on add (multi-leg types only; singles are independent tickets) ──
+  var _multiType = (typeof bsType === 'string') && (bsType === 'parlay' || bsType === 'rr' || bsType === 'sgp' || bsType === 'teaser');
+  if (_multiType && betSlip.length > 0) {
+    var _corrEng = _pbCorr();
+    if (_corrEng) {
+      for (var _ci = 0; _ci < betSlip.length; _ci++) {
+        if (betSlip[_ci].cellId === newLeg.cellId) continue;
+        var _cr = _corrEng.classifyLegRelationship(betSlip[_ci], newLeg);
+        if (_cr.relationship !== 'INDEPENDENT') {
+          return { conflict:true, reason:_cr.reason, message:_cr.message, relationship:_cr.relationship };
+        }
+      }
+    } else if (newLeg.canonicalGameKey) {
+      var _sameGameLegs = betSlip.filter(function(b){
+        return b.cellId !== newLeg.cellId && b.canonicalGameKey === newLeg.canonicalGameKey;
+      });
+      if (_sameGameLegs.length > 0) {
+        return { conflict:true, reason:'correlation_engine_missing',
+          message:'Correlation checks unavailable — cannot combine same-game legs.' };
       }
     }
   }
