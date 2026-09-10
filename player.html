@@ -7938,12 +7938,12 @@ function bsRenderLegs() {
       var sgpPayout = (!blocked && bsStake > 0) ? fmtDollar(bsStake * d) : null;
       var note = blocked
         ? '<div style="padding:6px 14px;font-size:0.7rem;color:#f87171;background:#1a0000;border-bottom:1px solid #7f1d1d">' +
-            ((_corrSlip && _corrSlip.message) || 'Same-game parlays require a correlation pricing engine (not wired).') + '</div>'
-        : '<div style="padding:4px 14px 8px;font-size:0.65rem;color:#888">SGP requires correlation pricing (not available — same-game blocked)</div>';
+            ((_corrSlip && _corrSlip.message) || 'This combination isn\'t currently available as a parlay.') + '</div>'
+        : '<div style="padding:4px 14px 8px;font-size:0.65rem;color:#888">This combination isn\'t currently available as a parlay.</div>';
       var legLimitHtml = '<div class="dkslip-leg-limit">' + betSlip.length + ' / ' + _MAX_PARLAY_LEGS + ' legs</div>';
       return legLimitHtml + '<div class="dkslip-card">' +
         '<div class="dkslip-card-hdr">' +
-          '<span class="dkslip-card-title">Same Game Parlay</span>' +
+          '<span class="dkslip-card-title">' + (blocked ? 'Same-game combination unavailable' : 'Same Game Parlay') + '</span>' +
           '<span style="display:flex;align-items:center;gap:6px">' +
             (validLegs.length >= 2 && !blocked ? '<button type="button" class="dkslip-share-btn" onclick="event.stopPropagation();shareParlaySlip()">Share</button>' : '') +
             '<span class="dkslip-card-odds">'+co+'</span>' +
@@ -7988,7 +7988,7 @@ function bsRenderLegs() {
       var parlayPayout = (!hasCorr && bsStake > 0) ? fmtDollar(bsStake * d) : null;
       var sgpNote = hasCorr
         ? '<div style="padding:6px 14px;font-size:0.7rem;color:#f87171;background:#1a0000;border-bottom:1px solid #7f1d1d">' +
-            (_corrSlip.message || 'Same-event correlation is not allowed without SGP pricing.') + '</div>'
+            (_corrSlip.message || 'This combination isn\'t currently available as a parlay.') + '</div>'
         : '';
       var legLimitHtml = '<div class="dkslip-leg-limit">' + betSlip.length + ' / ' + _MAX_PARLAY_LEGS + ' legs</div>';
       return legLimitHtml + '<div class="dkslip-card">' +
@@ -8081,8 +8081,9 @@ function bsRenderLegs() {
           '<div class="parlay-mini-hdr">' +
             (function(){
           var gc={};betSlip.forEach(function(b){gc[b.game]=(gc[b.game]||0)+1;});
-          var hasSGP2=Object.values(gc).some(function(c){return c>1;});
-          return '<span class="parlay-mini-title">'+betSlip.length+' Pick '+(hasSGP2?'SGP':'Parlay')+'</span>';
+          var hasSameGame=Object.values(gc).some(function(c){return c>1;});
+          // Never label as SGP while correlation pricing is unavailable.
+          return '<span class="parlay-mini-title">'+betSlip.length+' Pick '+(hasSameGame?'Parlay (same game)':'Parlay')+'</span>';
         })() +
             '<span class="parlay-mini-odds">'+co+'</span>' +
           '</div>' +
@@ -13656,7 +13657,7 @@ function bsSyncPlaceBtn() {
         btn.style.border='1px solid #7f1d1d';
         btn.textContent = (_corrGate.code === 'MUTUALLY_EXCLUSIVE' || _corrGate.code === 'DUPLICATE')
           ? '⚠️ Conflicting legs'
-          : '⚠️ Correlation blocked';
+          : ((_corrGate.message) || 'This combination isn\'t currently available as a parlay.');
       }
       return;
     }
@@ -13753,7 +13754,7 @@ function bsSyncPlaceBtn() {
       btn.style.opacity     = '1';
       btn.style.pointerEvents = 'auto';
       var label = bsType === 'rr' ? 'Place Round Robin'
-        : bsType === 'sgp' ? 'Place SGP'
+        : bsType === 'sgp' ? 'Unavailable'
         : bsType === 'parlay' ? 'Place Parlay'
         : bsType === 'straight' && betSlip.length > 1 ? 'Place ' + betSlip.length + ' Bets'
         : 'Place Bet';
@@ -13768,7 +13769,7 @@ function bsSyncPlaceBtn() {
       btn.style.pointerEvents = 'none';
       btn.textContent = !hasPicks
         ? (bsType === 'parlay' ? 'Add 2+ picks for a parlay'
-          : bsType === 'sgp'   ? 'Add 2+ same-game picks for SGP'
+          : bsType === 'sgp'   ? 'Combination isn\'t currently available as a parlay'
           : bsType === 'rr'    ? 'Add 3+ picks for a round robin'
           : 'Add picks to continue')
         : 'Enter stake to continue';
