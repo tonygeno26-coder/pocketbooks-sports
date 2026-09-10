@@ -251,38 +251,97 @@ body{font-family:'SF Pro Display',-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .mybets-toolbar{display:none!important}
 .rb-head{padding:10px 12px 6px}
 .rb-head-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
-.rb-title{font-size:1.05rem;font-weight:900;color:#f4f7fb;letter-spacing:-0.2px;line-height:1.15}
-.rb-sub{font-size:0.72rem;color:#8b93a7;margin-top:4px;font-weight:600}
-.rb-view-results{font-size:0.72rem;font-weight:800;color:#0064c8;background:none;border:none;cursor:pointer;padding:4px 0;white-space:nowrap;flex-shrink:0}
-.rb-card{background:var(--card,#141a24);border-radius:14px;margin:8px 0;padding:14px;border:1px solid var(--border,#243044);box-shadow:0 1px 4px rgba(0,0,0,0.08)}
-.rb-card--active{border-left:3px solid #0064c8}
-.rb-card--won{border-left:3px solid #22C55E}
-.rb-card--lost{border-left:3px solid #EF4444}
-.rb-card--push{border-left:3px solid #F59E0B}
-.rb-card--void{border-left:3px solid #888;opacity:0.95}
-.rb-card-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
-.rb-status{font-size:0.68rem;font-weight:800;padding:4px 10px;border-radius:20px;border:1px solid}
-.rb-ewc{text-align:right}
-.rb-ewc-label{font-size:0.55rem;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;color:#8b93a7}
-.rb-ewc-val{font-size:0.95rem;font-weight:900;color:#f4f7fb;margin-top:2px}
-.rb-type{font-size:0.88rem;font-weight:900;color:#f4f7fb}
-.rb-placed{font-size:0.62rem;color:#8b93a7;margin-top:2px;margin-bottom:8px}
-.rb-odds-line{font-size:0.78rem;font-weight:800;color:#0064c8;margin:6px 0 8px}
-.rb-foot{display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid var(--border,#243044);gap:8px}
-.rb-stat{text-align:center;flex:1}
-.rb-stat-label{font-size:0.58rem;color:#8b93a7;margin-bottom:2px;text-transform:uppercase;letter-spacing:0.3px}
+.rb-title{font-size:1.05rem;font-weight:900;color:var(--pb-white,#f4f7fb);letter-spacing:-0.2px;line-height:1.15}
+.rb-sub{font-size:0.72rem;color:var(--pb-gray,#8b93a7);margin-top:4px;font-weight:600}
+.rb-view-results{font-size:0.72rem;font-weight:800;color:var(--pb-accent);background:none;border:none;cursor:pointer;padding:4px 0;white-space:nowrap;flex-shrink:0}
+.rb-view-results:hover{text-decoration:underline;text-underline-offset:2px}
+.rb-card{
+  --rb-accent:var(--pb-accent);
+  background:var(--pb-card,var(--card,#121a27));
+  border-radius:var(--pb-radius-sm,12px);
+  margin:8px 0;padding:14px 14px 12px;
+  border:1px solid var(--pb-border,var(--border,#1e2a3c));
+  box-shadow:var(--pb-shadow,0 8px 28px rgba(0,0,0,0.35));
+  position:relative;overflow:hidden;
+}
+.rb-card::before{
+  content:'';position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:var(--rb-accent);border-radius:3px 0 0 3px;
+}
+.rb-card--active{--rb-accent:var(--pb-accent);border-color:rgba(61,139,253,0.22)}
+.rb-card--won{--rb-accent:var(--pb-win);border-color:rgba(61,214,140,0.22)}
+.rb-card--lost{--rb-accent:var(--pb-loss);border-color:rgba(255,77,106,0.22)}
+.rb-card--push,.rb-card--void{--rb-accent:var(--pb-gray,#7a8799);border-color:var(--pb-border-soft,rgba(255,255,255,0.06));opacity:0.96}
+.rb-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px}
+.rb-status{font-size:0.64rem;font-weight:800;padding:3px 9px;border-radius:20px;border:1px solid;letter-spacing:0.25px;line-height:1.2}
+.rb-status--active{color:var(--pb-accent);background:var(--pb-accent-soft);border-color:rgba(61,139,253,0.35)}
+.rb-status--won{color:var(--pb-win);background:var(--pb-win-dim);border-color:rgba(61,214,140,0.35)}
+.rb-status--lost{color:var(--pb-loss);background:var(--pb-red-dim,rgba(255,77,106,0.12));border-color:rgba(255,77,106,0.35)}
+.rb-status--push,.rb-status--void,.rb-status--muted{color:var(--pb-gray);background:rgba(122,135,153,0.12);border-color:rgba(122,135,153,0.28)}
+.rb-status--warn{color:var(--pb-gold,#e8c547);background:var(--pb-gold-dim,rgba(232,197,71,0.12));border-color:rgba(232,197,71,0.35)}
+.rb-status--cyan{color:var(--pb-cyan);background:var(--pb-cyan-dim);border-color:rgba(94,177,255,0.45)}
+.rb-ewc{text-align:right;flex-shrink:0}
+.rb-ewc-label{font-size:0.55rem;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;color:var(--pb-gray,#8b93a7)}
+.rb-ewc-val{font-size:0.95rem;font-weight:900;color:var(--pb-white,#f4f7fb);margin-top:2px}
+.rb-type{font-size:0.88rem;font-weight:900;color:var(--pb-white,#f4f7fb);line-height:1.25}
+.rb-sport{font-size:0.58rem;font-weight:800;letter-spacing:0.4px;color:var(--pb-accent);background:var(--pb-accent-soft);border:1px solid rgba(61,139,253,0.28);border-radius:6px;padding:1px 6px;margin-right:6px;text-transform:uppercase;vertical-align:middle}
+.rb-placed{font-size:0.62rem;color:var(--pb-gray,#8b93a7);margin-top:2px;margin-bottom:8px}
+.rb-legs{display:flex;flex-direction:column;margin:2px 0 4px}
+.rb-leg{display:flex;gap:8px;padding:8px 0;border-bottom:1px solid var(--pb-border-soft,rgba(255,255,255,0.06));align-items:flex-start}
+.rb-leg:last-child{border-bottom:none;padding-bottom:0}
+.rb-leg-idx{font-size:0.58rem;font-weight:800;color:var(--pb-gray);letter-spacing:0.3px;min-width:22px;padding-top:2px;flex-shrink:0}
+.rb-leg-body{flex:1;min-width:0}
+.rb-leg-pick{font-size:0.82rem;font-weight:800;color:var(--pb-white,#f4f7fb);line-height:1.25;word-break:break-word}
+.rb-leg-pick--won{color:var(--pb-win)}
+.rb-leg-pick--lost{color:var(--pb-loss)}
+.rb-leg-pick--push{color:var(--pb-gray)}
+.rb-leg-meta{font-size:0.68rem;color:var(--pb-gray,#8b93a7);margin-top:3px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;line-height:1.35}
+.rb-leg-odds{color:var(--pb-accent);font-weight:800}
+.rb-leg-matchup{font-size:0.64rem;color:var(--pb-gray);margin-top:2px;line-height:1.3}
+.rb-legs-toggle{margin-top:6px;background:none;border:none;color:var(--pb-accent);font-size:0.66rem;font-weight:800;cursor:pointer;padding:0}
+.rb-odds-line{font-size:0.76rem;font-weight:800;color:var(--pb-accent);margin:6px 0 8px;letter-spacing:0.1px}
+.rb-foot{display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid var(--pb-border-soft,rgba(255,255,255,0.06));gap:8px}
+.rb-stat{text-align:center;flex:1;min-width:0}
+.rb-stat-label{font-size:0.58rem;color:var(--pb-gray,#8b93a7);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.3px}
 .rb-stat-val{font-size:0.88rem;font-weight:900}
-.rb-details-btn{margin-top:10px;background:none;border:1px solid var(--border,#334);color:#8b93a7;border-radius:18px;padding:5px 12px;font-size:0.7rem;font-weight:700;cursor:pointer}
-.rb-details{display:none;margin-top:10px;background:rgba(255,255,255,0.03);border:1px solid var(--border,#243044);border-radius:10px;padding:10px 12px;font-size:0.72rem;color:#c8d0dc;line-height:1.55}
+.rb-stat-val--win{color:var(--pb-win)}
+.rb-stat-val--loss{color:var(--pb-loss)}
+.rb-stat-val--accent{color:var(--pb-accent)}
+.rb-stat-val--muted{color:var(--pb-gray)}
+.rb-stat-val--white{color:var(--pb-white,#f4f7fb)}
+.rb-details-btn{
+  display:block;width:100%;margin-top:10px;background:transparent;border:none;
+  color:var(--pb-gray,#8b93a7);font-size:0.66rem;font-weight:700;cursor:pointer;
+  padding:6px 0;text-align:center;letter-spacing:0.2px;
+}
+.rb-details-btn:hover,.rb-details-btn:focus-visible{color:var(--pb-light,#a8b3c4)}
+.rb-details{display:none;margin-top:4px;background:var(--pb-bg-elev,rgba(255,255,255,0.03));border:1px solid var(--pb-border-soft,rgba(255,255,255,0.06));border-radius:10px;padding:10px 12px;font-size:0.72rem;color:var(--pb-light,#c8d0dc);line-height:1.55}
 .rb-empty{text-align:center;padding:36px 18px 20px}
-.rb-empty-title{font-size:0.95rem;font-weight:900;color:#f4f7fb;margin-bottom:8px}
-.rb-empty-sub{font-size:0.78rem;color:#8b93a7;margin-bottom:14px;line-height:1.4}
+.rb-empty-title{font-size:0.95rem;font-weight:900;color:var(--pb-white,#f4f7fb);margin-bottom:8px}
+.rb-empty-sub{font-size:0.78rem;color:var(--pb-gray,#8b93a7);margin-bottom:14px;line-height:1.4}
 .rb-list{padding:0 10px 12px}
+[data-rb-dev-slot]{opacity:0.72;margin-top:6px}
+[data-rb-dev-slot] button{font-size:0.58rem!important;padding:3px 8px!important;font-weight:700!important}
 @media (max-width:430px){
   .rb-head{padding:6px 8px 4px}
   .rb-list{padding:0 6px 8px}
   .rb-card{margin:6px 0;padding:12px}
   #mybets-section{padding-top:0!important}
+}
+@media (max-width:390px){
+  .rb-head{padding:6px 6px 2px}
+  .rb-list{padding:0 4px 8px}
+  .rb-card{margin:5px 0;padding:11px 11px 10px;border-radius:11px}
+  .rb-card-top{flex-wrap:wrap;gap:6px}
+  .rb-ewc{text-align:left;width:100%;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+  .rb-ewc-val{font-size:0.88rem}
+  .rb-type{font-size:0.82rem}
+  .rb-leg{gap:6px;padding:7px 0}
+  .rb-leg-pick{font-size:0.78rem}
+  .rb-foot{gap:4px;padding-top:8px}
+  .rb-stat-val{font-size:0.8rem}
+  .rb-stat-label{font-size:0.54rem}
+  .rb-odds-line{font-size:0.72rem;margin:4px 0 6px}
 }
 .notif-item-actions{display:flex;gap:8px;margin-top:8px}
 .notif-act{flex:1;padding:7px 8px;border-radius:8px;font-size:0.68rem;font-weight:800;cursor:pointer;border:none}
@@ -1201,9 +1260,10 @@ body{
 #mybets-section [style*="color:#444"],
 #mybets-section [style*="color:#555"]{color:var(--light)!important}
 /* Preserve status colors on My Bets receipts (won/lost/push). */
-#mybets-section [style*="color:#22C55E"]{color:#22C55E!important}
-#mybets-section [style*="color:#EF4444"]{color:#EF4444!important}
-#mybets-section [style*="color:#F59E0B"]{color:#F59E0B!important}
+#mybets-section [style*="color:#22C55E"]{color:var(--pb-win)!important}
+#mybets-section [style*="color:#EF4444"]{color:var(--pb-loss)!important}
+#mybets-section [style*="color:#F59E0B"]{color:var(--pb-gray)!important}
+#mybets-section [style*="color:#0064c8"]{color:var(--pb-accent)!important}
 #mybets-section [style*="border-top:1px solid #f0f0f0"],
 #mybets-section [style*="border-bottom:1px solid #f0f0f0"],
 #mybets-section [style*="border:1px solid #e8e8e8"],
@@ -13077,7 +13137,8 @@ function renderMyBets() {
         name: parts.slice(-1)[0]
       };
     }
-    var pickRows = rawLegs.map(function(s){
+    var _isMultiLeg = rawLegs.length > 1;
+    var pickRows = rawLegs.map(function(s, legIdx){
       var pickText    = _legPickText(s);
       var matchupText = _legMatchupText(s);
       var oddsText    = _legOddsText(s);
@@ -13086,81 +13147,82 @@ function renderMyBets() {
       var teamSplit    = _splitCityName(pickedTeam || '');
       var jerseyHtml   = pickedTeam ? _safeTeamAvatar(pickedTeam, s.sport || (t && t.sport)) : '';
       var matchupBlock = (matchupText && matchupText.toLowerCase() !== pickText.toLowerCase())
-        ? '<div style="font-size:0.66rem;color:#888;margin-top:2px">' + matchupText + '</div>'
+        ? '<div class="rb-leg-matchup">' + matchupText + '</div>'
         : '';
       var legRes = String((s && (s.result || s.legResult || s.outcome)) || '').toLowerCase();
       if (legRes === 'pushed') legRes = 'push';
-      var pickColor = '#f4f7fb';
-      if (legRes === 'won') pickColor = '#22C55E';
-      else if (legRes === 'lost') pickColor = '#EF4444';
-      else if (legRes === 'push') pickColor = '#F59E0B';
-      else if (displayStatus === 'won') pickColor = '#22C55E';
-      else if (displayStatus === 'lost') pickColor = '#EF4444';
-      else if (displayStatus === 'push' || displayStatus === 'pushed') pickColor = '#F59E0B';
-      else if (displayStatus === 'canceled' || displayStatus === 'cancelled' || displayStatus === 'voided' || displayStatus === 'deleted') pickColor = '#888';
+      var pickClass = 'rb-leg-pick';
+      if (legRes === 'won') pickClass += ' rb-leg-pick--won';
+      else if (legRes === 'lost') pickClass += ' rb-leg-pick--lost';
+      else if (legRes === 'push') pickClass += ' rb-leg-pick--push';
+      else if (displayStatus === 'won') pickClass += ' rb-leg-pick--won';
+      else if (displayStatus === 'lost') pickClass += ' rb-leg-pick--lost';
+      else if (displayStatus === 'push' || displayStatus === 'pushed') pickClass += ' rb-leg-pick--push';
+      else if (displayStatus === 'canceled' || displayStatus === 'cancelled' || displayStatus === 'voided' || displayStatus === 'deleted') pickClass += ' rb-leg-pick--push';
+      var metaHtml = '<div class="rb-leg-meta">' +
+        (oddsText ? '<span class="rb-leg-odds">'+oddsText+'</span>' : '') +
+        (marketText ? (oddsText ? '<span>·</span>' : '') + '<span>'+marketText+'</span>' : '') +
+      '</div>';
+      var idxHtml = _isMultiLeg ? '<div class="rb-leg-idx">L'+(legIdx+1)+'</div>' : '';
       if (jerseyHtml) {
-        return '<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06)">' +
-          '<div class="mc-team" style="gap:10px">' +
-            jerseyHtml +
-            '<div style="flex:1;min-width:0">' +
-              (teamSplit.city ? '<div class="mc-city">'+teamSplit.city+'</div>' : '') +
-              '<div class="mc-name" style="color:'+pickColor+'">'+pickText+'</div>' +
-              '<div style="font-size:0.7rem;color:#888;margin-top:2px">'+
-                (oddsText ? '<span style="color:#0064c8;font-weight:800">'+oddsText+'</span>' : '') +
-                (marketText ? (oddsText?' · ':'')+'<span>'+marketText+'</span>' : '') +
+        return '<div class="rb-leg">' + idxHtml +
+          '<div class="rb-leg-body">' +
+            '<div class="mc-team" style="gap:10px">' +
+              jerseyHtml +
+              '<div style="flex:1;min-width:0">' +
+                (teamSplit.city ? '<div class="mc-city">'+teamSplit.city+'</div>' : '') +
+                '<div class="'+pickClass+'">'+pickText+'</div>' +
+                metaHtml +
+                matchupBlock +
               '</div>' +
-              matchupBlock +
             '</div>' +
           '</div>' +
         '</div>';
       }
-      return '<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06)">' +
-        '<div class="mc-name" style="color:'+pickColor+'">'+pickText+'</div>' +
-        '<div style="font-size:0.7rem;color:#888;margin-top:2px">'+
-          (oddsText ? '<span style="color:#0064c8;font-weight:800">'+oddsText+'</span>' : '') +
-          (marketText ? (oddsText?' · ':'')+'<span>'+marketText+'</span>' : '') +
+      return '<div class="rb-leg">' + idxHtml +
+        '<div class="rb-leg-body">' +
+          '<div class="'+pickClass+'">'+pickText+'</div>' +
+          metaHtml +
+          matchupBlock +
         '</div>' +
-        matchupBlock +
       '</div>';
     });
     var picks = pickRows.slice(0, 3).join('');
     if (!picks) {
-      picks = '<div style="font-size:0.78rem;color:#c8d0dc;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06)">' +
-              '<span style="font-weight:800">Unknown matchup</span>' +
-              '</div>';
+      picks = '<div class="rb-leg"><div class="rb-leg-body"><div class="rb-leg-pick">Unknown matchup</div></div></div>';
     }
     var extraLegs = pickRows.slice(3).join('');
     var morePicks = extraLegs
-      ? '<button type="button" data-expand-parlay="'+t.id+'" data-leg-count="'+rawLegs.length+'" style="margin-top:6px;background:none;border:none;color:#0064c8;font-size:0.68rem;font-weight:800;cursor:pointer;padding:0">Show all '+rawLegs.length+' legs ▾</button>' +
-        '<div id="parlay-extra-'+t.id+'" style="display:none">'+extraLegs+'</div>'
+      ? '<button type="button" class="rb-legs-toggle" data-expand-parlay="'+t.id+'" data-leg-count="'+rawLegs.length+'">Show all '+rawLegs.length+' legs ▾</button>' +
+        '<div class="rb-legs" id="parlay-extra-'+t.id+'" style="display:none">'+extraLegs+'</div>'
       : '';
 
     var __firstLeg   = rawLegs[0] || {};
     var ticketSport  = _ticketSportLabel(t, __firstLeg);
     var sportBadge   = ticketSport
-      ? '<span style="font-size:0.6rem;font-weight:800;letter-spacing:0.4px;color:#0064c8;background:rgba(0,100,200,0.12);border:1px solid rgba(0,100,200,0.35);border-radius:6px;padding:1px 6px;margin-right:6px;text-transform:uppercase">'+ticketSport+'</span>'
+      ? '<span class="rb-sport">'+ticketSport+'</span>'
       : '';
 
     var isDeletePending = t.deleteRequestStatus === 'pending';
     var isDeleteDenied  = t.deleteRequestStatus === 'denied';
     var isVoided        = displayStatus === 'voided' || displayStatus === 'deleted' || displayStatus === 'canceled' || displayStatus === 'cancelled';
     var statusBadge = isDeletePending
-      ? '<span class="rb-status" style="color:#F59E0B;background:rgba(245,158,11,0.14);border-color:#F59E0B">DELETE REQUESTED</span>'
+      ? '<span class="rb-status rb-status--warn">DELETE REQUESTED</span>'
       : isDeleteDenied
-        ? '<span class="rb-status" style="color:#EF4444;background:rgba(239,68,68,0.14);border-color:#EF4444">REQUEST DENIED</span>'
+        ? '<span class="rb-status rb-status--lost">REQUEST DENIED</span>'
         : displayStatus === 'canceled' || displayStatus === 'cancelled'
-          ? '<span class="rb-status" style="color:#888;background:rgba(136,136,136,0.14);border-color:#888">CANCELED</span>'
+          ? '<span class="rb-status rb-status--muted">CANCELED</span>'
           : (displayStatus === 'cashed_out' || displayStatus === 'cashedout')
-            ? '<span class="rb-status" style="color:var(--pb-cyan);background:var(--pb-cyan-dim);border-color:rgba(94,177,255,0.45)">CASHED OUT</span>'
+            ? '<span class="rb-status rb-status--cyan">CASHED OUT</span>'
           : isVoided
-            ? '<span class="rb-status" style="color:#888;background:rgba(136,136,136,0.14);border-color:#888">VOID</span>'
+            ? '<span class="rb-status rb-status--muted">VOID</span>'
           : displayStatus === 'lost'
-            ? '<span class="rb-status" style="color:#fff;background:#EF4444;border-color:#EF4444">LOST</span>'
+            ? '<span class="rb-status rb-status--lost">LOST</span>'
           : displayStatus === 'won'
-            ? '<span class="rb-status" style="color:#fff;background:#22C55E;border-color:#22C55E">WON</span>'
+            ? '<span class="rb-status rb-status--won">WON</span>'
           : displayStatus === 'push' || displayStatus === 'pushed'
-            ? '<span class="rb-status" style="color:#111;background:#F59E0B;border-color:#F59E0B">PUSH</span>'
-          : '<span class="rb-status" style="color:#0064c8;background:rgba(0,100,200,0.12);border-color:#0064c8">'+(displayStatus||'active').toUpperCase()+'</span>';
+            ? '<span class="rb-status rb-status--muted">PUSH</span>'
+          : '<span class="rb-status rb-status--active">'+(displayStatus||'active').toUpperCase()+'</span>';
 
     var _cancelElig = (typeof evaluateCancelEligibility === 'function')
       ? evaluateCancelEligibility(t, new Date())
@@ -13204,9 +13266,7 @@ function renderMyBets() {
                   + t.comboCount + ' combo' + (t.comboCount !== 1 ? 's' : '') + '</span>';
     }
     if (_isRrSlip && rawLegs.length === 0) {
-      picks = '<div style="font-size:0.8rem;color:#c8d0dc;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)">' +
-              '<span style="font-weight:700">'+t.comboCount+' independent combo ticket'+(t.comboCount !== 1 ? 's' : '')+'</span>' +
-              '</div>';
+      picks = '<div class="rb-leg"><div class="rb-leg-body"><div class="rb-leg-pick">'+t.comboCount+' independent combo ticket'+(t.comboCount !== 1 ? 's' : '')+'</div></div></div>';
       morePicks = '';
     }
     var _rrCombosLocal = t._rrCombos || [];
@@ -13215,34 +13275,31 @@ function renderMyBets() {
       var _rrLost = _rrCombosLocal.filter(function(c){ return String(c.status||'').toLowerCase() === 'lost'; }).length;
       var _rrAct  = _rrCombosLocal.filter(function(c){ var s=String(c.status||'').toLowerCase(); return s==='active'||s==='open'; }).length;
       if (_rrAct > 0) {
-        statusBadge = '<span class="rb-status" style="color:#0064c8;background:rgba(0,100,200,0.12);border-color:#0064c8">'
+        statusBadge = '<span class="rb-status rb-status--active">'
                     + _rrAct + ' ACTIVE' + (_rrWon ? ' · '+_rrWon+' WON' : '') + (_rrLost ? ' · '+_rrLost+' LOST' : '') + '</span>';
       } else if (_rrWon > 0 && _rrLost > 0) {
-        statusBadge = '<span class="rb-status" style="color:#F59E0B;background:rgba(245,158,11,0.14);border-color:#F59E0B">'
+        statusBadge = '<span class="rb-status rb-status--warn">'
                     + _rrWon + ' WON · ' + _rrLost + ' LOST</span>';
       } else if (_rrWon === _rrCombosLocal.length) {
-        statusBadge = '<span class="rb-status" style="color:#fff;background:#22C55E;border-color:#22C55E">ALL WON</span>';
+        statusBadge = '<span class="rb-status rb-status--won">ALL WON</span>';
       } else if (_rrLost === _rrCombosLocal.length) {
-        statusBadge = '<span class="rb-status" style="color:#fff;background:#EF4444;border-color:#EF4444">ALL LOST</span>';
+        statusBadge = '<span class="rb-status rb-status--lost">ALL LOST</span>';
       }
     }
 
     var riskAmt = (t.riskAmount != null) ? t.riskAmount : t.risk_amount;
     var profitAmt = (t.potentialProfit != null) ? t.potentialProfit : t.potential_profit;
     var estPay = (t.estimatedPayout != null) ? t.estimatedPayout : t.estimated_payout;
-    var riskColor = (displayStatus === 'lost') ? '#EF4444'
-      : (displayStatus === 'won') ? '#f4f7fb'
-      : (isVoided) ? '#888'
-      : '#f4f7fb';
-    var toWinColor = (displayStatus === 'won') ? '#22C55E'
-      : (displayStatus === 'lost') ? '#888'
-      : (displayStatus === 'push' || displayStatus === 'pushed') ? '#F59E0B'
-      : '#22C55E';
-    var payoutColor = (displayStatus === 'won') ? '#22C55E'
-      : (displayStatus === 'lost') ? '#EF4444'
-      : (displayStatus === 'push' || displayStatus === 'pushed') ? '#F59E0B'
-      : isVoided ? '#888'
-      : '#0064c8';
+    var riskClass = (displayStatus === 'lost') ? 'rb-stat-val--loss'
+      : (isVoided) ? 'rb-stat-val--muted'
+      : 'rb-stat-val--white';
+    var toWinClass = (displayStatus === 'won') ? 'rb-stat-val--win'
+      : (displayStatus === 'lost' || displayStatus === 'push' || displayStatus === 'pushed') ? 'rb-stat-val--muted'
+      : 'rb-stat-val--win';
+    var payoutClass = (displayStatus === 'won') ? 'rb-stat-val--win'
+      : (displayStatus === 'lost') ? 'rb-stat-val--loss'
+      : (displayStatus === 'push' || displayStatus === 'pushed' || isVoided) ? 'rb-stat-val--muted'
+      : 'rb-stat-val--accent';
     var payoutLabel = (displayStatus === 'won' || displayStatus === 'lost' || displayStatus === 'push' || displayStatus === 'pushed') ? 'PAYOUT' : 'EST. PAYOUT';
     var payoutValue = (displayStatus === 'lost') ? fmtDollar(0)
       : (displayStatus === 'push' || displayStatus === 'pushed') ? fmtDollar(riskAmt)
@@ -13273,7 +13330,9 @@ function renderMyBets() {
       var gd = new Date(t.gradedAt || t.graded_at);
       detailRows.push(['Graded', isNaN(gd) ? String(t.gradedAt || t.graded_at) : gd.toLocaleString()]);
     }
-    if (t.gradingSource || t.simulated) detailRows.push(['Grading', t.gradingSource || (t.simulated ? 'simulated' : '—')]);
+    if (_isRecentBetsDevTools() && (t.gradingSource || t.simulated)) {
+      detailRows.push(['Grading', t.gradingSource || (t.simulated ? 'simulated' : '—')]);
+    }
     rawLegs.forEach(function(s, idx){
       var start = s.startTime || s.commence_time || s.eventStart || s.gameStart || '';
       var startStr = '';
@@ -13298,20 +13357,20 @@ function renderMyBets() {
       '</div>' +
       '<div class="rb-type">' + sportBadge + typeLabel + '</div>' +
       '<div class="rb-placed">'+dateStr+'</div>' +
-      '<div>' + picks + morePicks + '</div>' +
+      '<div class="rb-legs">' + picks + morePicks + '</div>' +
       (oddsDisplay ? '<div class="rb-odds-line">Odds '+oddsDisplay+'</div>' : '') +
       '<div class="rb-foot">' +
         '<div class="rb-stat">' +
           '<div class="rb-stat-label">Risk</div>' +
-          '<div class="rb-stat-val" style="color:'+riskColor+'">'+fmtDollar(riskAmt)+'</div>' +
+          '<div class="rb-stat-val '+riskClass+'">'+fmtDollar(riskAmt)+'</div>' +
         '</div>' +
         '<div class="rb-stat">' +
           '<div class="rb-stat-label">To Win</div>' +
-          '<div class="rb-stat-val" style="color:'+toWinColor+'">'+fmtDollar(profitAmt)+'</div>' +
+          '<div class="rb-stat-val '+toWinClass+'">'+fmtDollar(profitAmt)+'</div>' +
         '</div>' +
         '<div class="rb-stat">' +
           '<div class="rb-stat-label">'+payoutLabel+'</div>' +
-          '<div class="rb-stat-val" style="color:'+payoutColor+'">'+payoutValue+'</div>' +
+          '<div class="rb-stat-val '+payoutClass+'">'+payoutValue+'</div>' +
         '</div>' +
       '</div>' +
       '<button type="button" class="rb-details-btn" data-rb-details="'+t.id+'">View Details</button>' +
@@ -13350,7 +13409,7 @@ function renderMyBets() {
       (showDev
         ? '<div data-rb-dev-slot="1" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">' +
             '<button type="button" onclick="openGradedAudit && openGradedAudit()" style="font-size:0.65rem;font-weight:700;color:var(--pb-accent);background:var(--pb-accent-soft);border:1.5px solid var(--pb-accent);border-radius:20px;padding:4px 10px;cursor:pointer">🧪 Graded</button>' +
-            '<button type="button" id="check-results-btn" onclick="checkOpenTickets && checkOpenTickets()" style="font-size:0.65rem;font-weight:700;color:#0064c8;background:none;border:1.5px solid #0064c8;border-radius:20px;padding:4px 10px;cursor:pointer">Check Results</button>' +
+            '<button type="button" id="check-results-btn" onclick="checkOpenTickets && checkOpenTickets()" style="font-size:0.65rem;font-weight:700;color:var(--pb-accent);background:none;border:1.5px solid var(--pb-accent);border-radius:20px;padding:4px 10px;cursor:pointer">Check Results</button>' +
           '</div>'
         : '') +
     '</div>';
