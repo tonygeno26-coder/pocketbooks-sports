@@ -36,3 +36,7 @@ Cross-club host mutations and player self-scoping on `/api/player/dashboard` / p
 - Privileged `full_admin` in-club may still view another member's dashboard (intentional host ops).
 - `platform_admin` remains cross-club escape hatch.
 - Mirror admin tooling (`admin.html`) must send a session token after this change.
+
+## Wave follow-up (`cursor/idor-audit-wave`)
+
+This branch carries deferred FE authz (JWT-preferred playerId + fixtures). Backend companion at BE `cursor/idor-audit-wave` / `docs/IDOR_AUDIT_WAVE.md`: cash-out club bind, dashboard fail-closed, join-queue host gate, settlement period IDOR, mirror audit auth.
