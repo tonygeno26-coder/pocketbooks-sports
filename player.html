@@ -218,13 +218,42 @@ body{font-family:-apple-system,'SF Pro Display',Arial,sans-serif;background:var(
 .odds-cmp-worse{color:#dc2626}
 .odds-cmp-even{color:#9ca3af}
 .odds-best-tag{display:block;font-size:0.48rem;font-weight:800;color:#16a34a;letter-spacing:0.2px;margin-top:1px}
-.mybets-toolbar{padding:0 14px 10px}
-.mybets-search{width:100%;padding:10px 12px;border:1.5px solid #e0e0e0;border-radius:10px;font-size:0.85rem;font-weight:600;outline:none;background:#fff;color:#111}
-.mybets-search:focus{border-color:#0064c8}
-.mybets-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.mybets-chip{border:1.5px solid #ddd;background:#fff;color:#555;border-radius:16px;padding:5px 10px;font-size:0.68rem;font-weight:800;cursor:pointer}
-.mybets-chip.on{background:#0064c8;border-color:#0064c8;color:#fff}
-.mybets-chip.range.on{background:#111;border-color:#111}
+.mybets-toolbar{display:none!important}
+.rb-head{padding:10px 12px 6px}
+.rb-head-row{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.rb-title{font-size:1.05rem;font-weight:900;color:#f4f7fb;letter-spacing:-0.2px;line-height:1.15}
+.rb-sub{font-size:0.72rem;color:#8b93a7;margin-top:4px;font-weight:600}
+.rb-view-results{font-size:0.72rem;font-weight:800;color:#0064c8;background:none;border:none;cursor:pointer;padding:4px 0;white-space:nowrap;flex-shrink:0}
+.rb-card{background:var(--card,#141a24);border-radius:14px;margin:8px 0;padding:14px;border:1px solid var(--border,#243044);box-shadow:0 1px 4px rgba(0,0,0,0.08)}
+.rb-card--active{border-left:3px solid #0064c8}
+.rb-card--won{border-left:3px solid #22C55E}
+.rb-card--lost{border-left:3px solid #EF4444}
+.rb-card--push{border-left:3px solid #F59E0B}
+.rb-card--void{border-left:3px solid #888;opacity:0.95}
+.rb-card-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.rb-status{font-size:0.68rem;font-weight:800;padding:4px 10px;border-radius:20px;border:1px solid}
+.rb-ewc{text-align:right}
+.rb-ewc-label{font-size:0.55rem;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;color:#8b93a7}
+.rb-ewc-val{font-size:0.95rem;font-weight:900;color:#f4f7fb;margin-top:2px}
+.rb-type{font-size:0.88rem;font-weight:900;color:#f4f7fb}
+.rb-placed{font-size:0.62rem;color:#8b93a7;margin-top:2px;margin-bottom:8px}
+.rb-odds-line{font-size:0.78rem;font-weight:800;color:#0064c8;margin:6px 0 8px}
+.rb-foot{display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid var(--border,#243044);gap:8px}
+.rb-stat{text-align:center;flex:1}
+.rb-stat-label{font-size:0.58rem;color:#8b93a7;margin-bottom:2px;text-transform:uppercase;letter-spacing:0.3px}
+.rb-stat-val{font-size:0.88rem;font-weight:900}
+.rb-details-btn{margin-top:10px;background:none;border:1px solid var(--border,#334);color:#8b93a7;border-radius:18px;padding:5px 12px;font-size:0.7rem;font-weight:700;cursor:pointer}
+.rb-details{display:none;margin-top:10px;background:rgba(255,255,255,0.03);border:1px solid var(--border,#243044);border-radius:10px;padding:10px 12px;font-size:0.72rem;color:#c8d0dc;line-height:1.55}
+.rb-empty{text-align:center;padding:36px 18px 20px}
+.rb-empty-title{font-size:0.95rem;font-weight:900;color:#f4f7fb;margin-bottom:8px}
+.rb-empty-sub{font-size:0.78rem;color:#8b93a7;margin-bottom:14px;line-height:1.4}
+.rb-list{padding:0 10px 12px}
+@media (max-width:430px){
+  .rb-head{padding:6px 8px 4px}
+  .rb-list{padding:0 6px 8px}
+  .rb-card{margin:6px 0;padding:12px}
+  #mybets-section{padding-top:0!important}
+}
 .notif-item-actions{display:flex;gap:8px;margin-top:8px}
 .notif-act{flex:1;padding:7px 8px;border-radius:8px;font-size:0.68rem;font-weight:800;cursor:pointer;border:none}
 .notif-act.accept{background:#00c853;color:#fff}
@@ -8598,7 +8627,7 @@ async function confirmBet() {
         id: 'T'+Date.now()+Math.floor(Math.random()*10000),
         playerId:pl.id, playerUsername:pl.name, playerRealName:pl.realName,
         playerName:pl.name, clubId:pl.clubId, clubName:pl.clubName,
-        type:'Single', status:'active', source:'player', placedAt:now,
+        type:'Single', status:'active', source:'player', placedAt:now, createdAt:now, created_at:now,
         selections:[_makeSelection(b)],
         odds:fmtOdds(b.odds), riskAmount:st,
         estimatedPayout:tPayout, potentialProfit:Math.round((tPayout-st)*100)/100
@@ -8610,7 +8639,7 @@ async function confirmBet() {
       id:'T'+Date.now(),
       playerId:pl.id, playerUsername:pl.name, playerRealName:pl.realName,
       playerName:pl.name, clubId:pl.clubId, clubName:pl.clubName,
-      type:_tLabel, status:'active', source:'player', placedAt:now,
+      type:_tLabel, status:'active', source:'player', placedAt:now, createdAt:now, created_at:now,
       selections:snap.legs.map(_makeSelection),
       odds:(function(){
         if (snap.type === 'sgp') return sgpAmericanOdds(snap.legs);
@@ -11196,7 +11225,9 @@ function _normalizeDbTicket(t) {
     riskAmount:      t.riskAmount != null ? Number(t.riskAmount) : Number(t.risk_amount),
     potentialProfit: t.potentialProfit != null ? Number(t.potentialProfit) : Number(t.potential_profit),
     estimatedPayout: t.estimatedPayout != null ? Number(t.estimatedPayout) : Number(t.estimated_payout),
-    placedAt:        t.placedAt || t.placed_at,
+    placedAt:        t.placedAt || t.placed_at || t.createdAt || t.created_at,
+    createdAt:       t.createdAt || t.created_at || t.placedAt || t.placed_at,
+    created_at:      t.created_at || t.createdAt || t.placed_at || t.placedAt,
     gradedAt:        t.gradedAt || t.graded_at,
     rrGroupId:       t.rrGroupId || t.rr_group_id,
     insuranceEnabled: !!(t.insuranceEnabled || t.insurance_enabled),
@@ -12232,6 +12263,137 @@ function _myBetsApply(key, val) {
   renderMyBets();
 }
 
+// ═══ Recent Bets feed (My Bets tab) ═══════════════════════════════════════
+// Visibility uses authoritative ticket created_at (fallback placed_at) —
+// NOT localStorage as the 12h clock. Tickets are never deleted after 12h;
+// they simply leave Recent and remain permanently in Results.
+var RECENT_BETS_TTL_MS = 12 * 60 * 60 * 1000;
+
+function _ticketCreatedAtIso(t) {
+  if (!t) return null;
+  return t.created_at || t.createdAt || t.placed_at || t.placedAt || null;
+}
+function _ticketCreatedAtMs(t) {
+  var iso = _ticketCreatedAtIso(t);
+  if (!iso) return NaN;
+  var ms = Date.parse(iso);
+  return isFinite(ms) ? ms : NaN;
+}
+function _isRecentBetTicket(t, nowMs) {
+  var ms = _ticketCreatedAtMs(t);
+  if (!isFinite(ms)) return false;
+  var age = (nowMs != null ? nowMs : Date.now()) - ms;
+  return age >= 0 && age < RECENT_BETS_TTL_MS;
+}
+function _parseAmericanOdds(raw) {
+  if (raw == null || raw === '') return null;
+  var s = String(raw).trim().replace(/^\+/, '');
+  if (!s) return null;
+  var n = parseInt(s, 10);
+  if (!isFinite(n) || n === 0) return null;
+  // Restore sign for positive strings that lost '+'
+  if (String(raw).trim().charAt(0) === '+') n = Math.abs(n);
+  else if (String(raw).trim().charAt(0) !== '-' && n > 0) { /* ok */ }
+  return n;
+}
+function _americanImpliedProb(american) {
+  var a = Number(american);
+  if (!isFinite(a) || a === 0) return null;
+  if (a > 0) return 100 / (a + 100);
+  return Math.abs(a) / (Math.abs(a) + 100);
+}
+function _americanToDecimal(american) {
+  var a = Number(american);
+  if (!isFinite(a) || a === 0) return null;
+  if (a > 0) return 1 + (a / 100);
+  return 1 + (100 / Math.abs(a));
+}
+function _ticketCombinedAmericanOdds(t) {
+  if (!t) return null;
+  var candidates = [
+    t.combinedOdds, t.combined_odds, t.americanOdds, t.american_odds,
+    t.odds, t.ticketOdds, t.ticket_odds
+  ];
+  for (var i = 0; i < candidates.length; i++) {
+    var n = _parseAmericanOdds(candidates[i]);
+    if (n != null) return n;
+  }
+  return null;
+}
+function _ticketEstWinChancePct(t) {
+  // Informational only from ticket odds / implied probability.
+  var combined = _ticketCombinedAmericanOdds(t);
+  var legs = [];
+  if (Array.isArray(t && t.selections) && t.selections.length) legs = t.selections;
+  else if (Array.isArray(t && t.legs) && t.legs.length) legs = t.legs;
+
+  var type = String((t && (t.type || t.betType || t.bet_type)) || '').toLowerCase();
+  var isMulti = type === 'parlay' || type === 'sgp' || type.indexOf('round') !== -1 ||
+                type === 'teaser' || legs.length > 1;
+
+  if (combined != null && (isMulti || legs.length <= 1)) {
+    var p = _americanImpliedProb(combined);
+    if (p != null) return Math.round(p * 100);
+  }
+  if (!isMulti && legs.length <= 1) {
+    var legOdds = legs[0] ? _parseAmericanOdds(legs[0].odds != null ? legs[0].odds : legs[0].line) : null;
+    if (legOdds == null && combined != null) legOdds = combined;
+    var p1 = _americanImpliedProb(legOdds);
+    return p1 != null ? Math.round(p1 * 100) : null;
+  }
+  // Parlay without combined: multiply decimal odds → implied = 1/product
+  if (legs.length > 1) {
+    var product = 1;
+    var ok = 0;
+    for (var i = 0; i < legs.length; i++) {
+      var lo = _parseAmericanOdds(legs[i] && (legs[i].odds != null ? legs[i].odds : legs[i].line));
+      var dec = _americanToDecimal(lo);
+      if (dec == null || dec <= 0) continue;
+      product *= dec;
+      ok++;
+    }
+    if (ok > 0 && product > 0) return Math.round((1 / product) * 100);
+  }
+  if (combined != null) {
+    var pc = _americanImpliedProb(combined);
+    if (pc != null) return Math.round(pc * 100);
+  }
+  return null;
+}
+function _formatEstWinChance(pct) {
+  if (pct == null || !isFinite(pct)) return '—';
+  return Math.round(pct) + '%';
+}
+function _isRecentBetsDevTools() {
+  try {
+    var qs = new URLSearchParams(location.search);
+    return qs.get('testmode') === '1' || qs.get('preview') === '1' || qs.get('dev') === '1';
+  } catch (_e) { return false; }
+}
+function _goToPlayerResults() {
+  try {
+    var btn = document.getElementById('bn-results');
+    if (btn && typeof setBNav === 'function') { setBNav(btn, 'results'); return; }
+  } catch (_e) {}
+  try {
+    var sec = document.getElementById('results-section');
+    if (sec) {
+      document.querySelectorAll('.bn').forEach(function(n){ n.classList.remove('active'); });
+      var rb = document.getElementById('bn-results'); if (rb) rb.classList.add('active');
+      ['sportsbook-section','mybets-section','predictions-section','live-section','results-section'].forEach(function(id){
+        var s = document.getElementById(id); if (s) s.style.display = 'none';
+      });
+      sec.style.display = 'block';
+      if (typeof renderPlayerResults === 'function') renderPlayerResults();
+    }
+  } catch (_e2) {}
+}
+window._ticketCreatedAtMs = _ticketCreatedAtMs;
+window._isRecentBetTicket = _isRecentBetTicket;
+window._ticketEstWinChancePct = _ticketEstWinChancePct;
+window._americanImpliedProb = _americanImpliedProb;
+window._goToPlayerResults = _goToPlayerResults;
+
 function renderMyBets() {
   try {
     var el = document.getElementById('mybets-section');
@@ -12248,16 +12410,10 @@ function renderMyBets() {
     if (!Array.isArray(betTickets)) betTickets = [];
 
     // ── RR grouping: collapse per-combo Parlay tickets into a single slip card ─
-    // After loadPlayerDashboardFromDb(), betTickets may contain N Parlay tickets
-    // with rr_group_id set — one per combo.  Group them into a synthetic "Round
-    // Robin" slip ticket so My Bets shows one card per slip, not N combo cards.
-    // Local slip tickets (type='Round Robin', rrGroupId set) pass through as-is.
     (function() {
       var _groups = {}; var _ungrouped = [];
       betTickets.forEach(function(t) {
         var gid = t.rr_group_id || t.rrGroupId;
-        // Only collapse DB-originated Parlay combos (type=Parlay + rr_group_id).
-        // Locally-stored slip tickets already have type='Round Robin'.
         if (gid && (t.type === 'Parlay' || t.type === 'parlay') && t.rr_group_id) {
           if (!_groups[gid]) _groups[gid] = [];
           _groups[gid].push(t);
@@ -12284,63 +12440,41 @@ function renderMyBets() {
           riskAmount:       Math.round(totalRisk   * 100) / 100,
           potentialProfit:  Math.round(totalProfit * 100) / 100,
           estimatedPayout:  Math.round(totalPayout * 100) / 100,
-          placedAt:         first.placed_at || first.placedAt,
+          placedAt:         first.placed_at || first.placedAt || first.created_at || first.createdAt,
+          createdAt:        first.created_at || first.createdAt || first.placed_at || first.placedAt,
+          created_at:       first.created_at || first.createdAt || first.placed_at || first.placedAt,
           comboCount:       combos.length,
           _rrCombos:        combos,
           selections:       first.selections || [],
+          odds:             first.odds || first.combined_odds || first.combinedOdds,
           source:           'db-grouped'
         });
       });
-      // Sort merged list by placedAt descending so grouped slips appear in time order.
       _grouped.sort(function(a, b) {
-        return new Date(b.placedAt || 0) - new Date(a.placedAt || 0);
+        return (_ticketCreatedAtMs(b) || 0) - (_ticketCreatedAtMs(a) || 0);
       });
       betTickets = _grouped;
     })();
-    // ── end RR grouping ────────────────────────────────────────────────────────
 
-    // Header counts source data (graded/ledger were referenced but undefined,
-    // throwing ReferenceError and blanking the tab). Define them here.
-    var graded = [];
-    try { graded = betTickets.filter(function(t){ var s = String(t && t.status || '').toLowerCase(); return s === 'won' || s === 'lost' || s === 'push' || s === 'pushed'; }); }
-    catch(_ge){ console.error('[renderMyBets] graded filter failed', _ge); graded = []; }
-    var ledger = [];
-    try { ledger = JSON.parse(localStorage.getItem('pb-ledger') || '[]'); if (!Array.isArray(ledger)) ledger = []; }
-    catch(_le){ console.error('[renderMyBets] pb-ledger JSON parse failed', _le); ledger = []; }
-  var sc = { active:'#0064c8', open:'#0064c8', won:'#22C55E', lost:'#EF4444', push:'#F59E0B', pushed:'#F59E0B', partial:'#F59E0B', cashed_out:'#7c3aed', cashedout:'#7c3aed', canceled:'#888', cancelled:'#888', voided:'#888', deleted:'#888' };
   function ticketCard(t) {
-    // Settled display guard: never paint WON/LOST/PUSH on a ticket that
-    // fails the 5-guard, even if t.status is stale-set to 'lost'.
     var displayStatus = _displayStatus(t);
     try { _logSettledDisplayGuard(t); } catch(_e){}
-    var color = sc[displayStatus] || '#555';
-    var leftBorder =
-      (displayStatus === 'won') ? '#22C55E' :
-      (displayStatus === 'lost') ? '#EF4444' :
-      (displayStatus === 'active' || displayStatus === 'open') ? '#0064c8' :
-      (displayStatus === 'push' || displayStatus === 'pushed') ? '#F59E0B' :
-      (displayStatus === 'canceled' || displayStatus === 'cancelled' || displayStatus === 'voided' || displayStatus === 'deleted') ? '#888' :
-      '#e8e8e8';
-    var d = new Date(t.placedAt);
-    var dateStr = isNaN(d) ? t.placedAt : d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    var leftClass =
+      (displayStatus === 'won') ? 'won' :
+      (displayStatus === 'lost') ? 'lost' :
+      (displayStatus === 'active' || displayStatus === 'open') ? 'active' :
+      (displayStatus === 'push' || displayStatus === 'pushed') ? 'push' :
+      (displayStatus === 'canceled' || displayStatus === 'cancelled' || displayStatus === 'voided' || displayStatus === 'deleted') ? 'void' :
+      'active';
+    var createdIso = _ticketCreatedAtIso(t);
+    var d = new Date(createdIso);
+    var dateStr = isNaN(d) ? (createdIso || '') : d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 
-    // Build a list of leg-like objects. Field-name reality check, from
-    // ACTUAL writers in this codebase:
-    //   _makeSelection (live placement) → { pick, market, matchup,
-    //                                       homeTeam, awayTeam, odds,
-    //                                       sport, gameId, side }
-    //   _resSeedMockIfEmpty             → { label }                only
-    //   bet-slip groups (place-bet)     → { name, pick, market,
-    //                                       game, odds, id, time }
-    //   _recoverTicketsFromHostMirror   → whatever host-side wrote
-    // So the fallback chain MUST include label, name, game in addition
-    // to pick/matchup/description.
     var rawLegs = [];
     if (Array.isArray(t.selections) && t.selections.length) rawLegs = t.selections;
     else if (Array.isArray(t.legs) && t.legs.length) rawLegs = t.legs;
     else if (t.pick || t.matchup || t.description || t.team ||
              t.homeTeam || t.awayTeam || t.label || t.name || t.game) {
-      // Single-leg fallback synthesized from top-level fields.
       rawLegs = [{
         pick:        t.pick,
         team:        t.team,
@@ -12351,22 +12485,20 @@ function renderMyBets() {
         label:       t.label,
         name:        t.name,
         game:        t.game,
-        sport:       t.sport
+        sport:       t.sport,
+        startTime:   t.startTime || t.commence_time || t.eventStart
       }];
     }
     function _legPickText(s) {
       if (!s) return 'Unknown matchup';
-      // Order of preference: explicit pick, team+market combo, matchup,
-      // description, slip-leg label/name, game, away/home, team alone.
-      // Never emit 'undefined' or an empty string.
       var candidates = [
         s.pick,
         (s.team && s.market) ? (s.team + ' ' + s.market) : null,
         s.matchup,
         s.description,
-        s.label,                                                    // mock seeder
-        s.name,                                                     // bet-slip group
-        s.game,                                                     // legacy slip-leg
+        s.label,
+        s.name,
+        s.game,
         (s.awayTeam && s.homeTeam) ? (s.awayTeam + ' @ ' + s.homeTeam) : null,
         s.awayTeam,
         s.homeTeam,
@@ -12381,9 +12513,6 @@ function renderMyBets() {
       return 'Unknown matchup';
     }
     function _legMatchupText(s) {
-      // The game / matchup string, separate from the pick. Falls back
-      // across alternate field names. Returns '' when nothing available
-      // so the UI can omit the row instead of showing a blank.
       if (!s) return '';
       var candidates = [
         s.matchup,
@@ -12433,12 +12562,6 @@ function renderMyBets() {
                   'rocketleague':'Rocket League' };
       return map[v.toLowerCase()] || v.toUpperCase();
     }
-    // Derive WHICH team the user picked (so we can show that team's logo
-    // next to the pick text). Strategy: scan pick text against homeTeam
-    // and awayTeam (full name OR last-word) and return whichever is
-    // mentioned. Falls back to homeTeam, awayTeam, or s.team when the pick
-    // is non-team-specific (Over/Under). Returns null when nothing useful
-    // is available so the renderer can omit the avatar.
     function _legPickedTeamName(s) {
       if (!s) return null;
       var pick = String(s.pick || '').toLowerCase().trim();
@@ -12455,19 +12578,12 @@ function renderMyBets() {
         if (_mentions(home)) return home;
         if (_mentions(away)) return away;
       }
-      // Over/Under / total etc — no team-specific avatar to show.
       if (pick && (pick.indexOf('over') !== -1 || pick.indexOf('under') !== -1 ||
                    pick.indexOf('o ') === 0 || pick.indexOf('u ') === 0)) {
         return null;
       }
-      // Falls: explicit team field, then either side of the matchup.
       return s.team || home || away || null;
     }
-    // Defensive wrapper around the existing teamAvatar() so a missing or
-    // bad name never throws. teamAvatar(name) does name.split(' ').slice(-1)
-    // which crashes on null/empty. Returns the raw teamAvatar() HTML
-    // (a .mc-jersey div) so consumers can drop it into the sportsbook
-    // .mc-team layout pattern unchanged.
     function _safeTeamAvatar(name, sport) {
       var clean = (name != null) ? String(name).trim() : '';
       if (!clean) return '';
@@ -12478,9 +12594,6 @@ function renderMyBets() {
         return '<div class="mc-jersey">' + abbr + '</div>';
       }
     }
-    // Split a full team name into the sportsbook's city / short-name pair.
-    // 'Los Angeles Angels' -> { city:'Los Angeles', name:'Angels' }.
-    // Single-word names just become { city:'', name:'Yankees' }.
     function _splitCityName(full) {
       var s = String(full || '').trim();
       if (!s) return { city: '', name: '' };
@@ -12496,22 +12609,15 @@ function renderMyBets() {
       var matchupText = _legMatchupText(s);
       var oddsText    = _legOddsText(s);
       var marketText  = _legMarketText(s);
-      var oddsBlock   = oddsText   ? ' <span style="color:#0064c8;font-size:0.7rem;font-weight:800">'+oddsText+'</span>' : '';
-      var marketBlock = marketText ? ' <span style="color:#aaa;font-size:0.68rem">· '+marketText+'</span>' : '';
-      // Selected team for the logo, derived from pick text + home/away.
-      // Returns null for non-team picks (Over/Under) — we then omit the
-      // .mc-jersey entirely rather than show a placeholder.
       var pickedTeam   = _legPickedTeamName(s);
       var teamSplit    = _splitCityName(pickedTeam || '');
       var jerseyHtml   = pickedTeam ? _safeTeamAvatar(pickedTeam, s.sport || (t && t.sport)) : '';
-      // Matchup text on a quiet second line, sportsbook-time style.
       var matchupBlock = (matchupText && matchupText.toLowerCase() !== pickText.toLowerCase())
         ? '<div style="font-size:0.66rem;color:#888;margin-top:2px">' + matchupText + '</div>'
         : '';
-      // Per-leg result color when available; else ticket status for settled singles/parlays.
       var legRes = String((s && (s.result || s.legResult || s.outcome)) || '').toLowerCase();
       if (legRes === 'pushed') legRes = 'push';
-      var pickColor = '#111';
+      var pickColor = '#f4f7fb';
       if (legRes === 'won') pickColor = '#22C55E';
       else if (legRes === 'lost') pickColor = '#EF4444';
       else if (legRes === 'push') pickColor = '#F59E0B';
@@ -12519,40 +12625,34 @@ function renderMyBets() {
       else if (displayStatus === 'lost') pickColor = '#EF4444';
       else if (displayStatus === 'push' || displayStatus === 'pushed') pickColor = '#F59E0B';
       else if (displayStatus === 'canceled' || displayStatus === 'cancelled' || displayStatus === 'voided' || displayStatus === 'deleted') pickColor = '#888';
-      // Match the sportsbook .mc-team / .mc-city / .mc-name pattern
-      // exactly so the avatar inherits the same jersey gradient, size,
-      // and responsive breakpoints used on the home odds cards. When the
-      // pick has no team (totals), fall back to a clean pick-only row.
       if (jerseyHtml) {
-        return '<div style="padding:8px 0;border-bottom:1px solid #f0f0f0">' +
+        return '<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06)">' +
           '<div class="mc-team" style="gap:10px">' +
             jerseyHtml +
             '<div style="flex:1;min-width:0">' +
               (teamSplit.city ? '<div class="mc-city">'+teamSplit.city+'</div>' : '') +
               '<div class="mc-name" style="color:'+pickColor+'">'+pickText+'</div>' +
-              '<div style="font-size:0.7rem;color:#555;margin-top:2px">'+
+              '<div style="font-size:0.7rem;color:#888;margin-top:2px">'+
                 (oddsText ? '<span style="color:#0064c8;font-weight:800">'+oddsText+'</span>' : '') +
-                (marketText ? (oddsText?' · ':'')+'<span style="color:#888">'+marketText+'</span>' : '') +
+                (marketText ? (oddsText?' · ':'')+'<span>'+marketText+'</span>' : '') +
               '</div>' +
               matchupBlock +
             '</div>' +
           '</div>' +
         '</div>';
       }
-      // No team-specific avatar (Over/Under, totals, etc.). Keep the row
-      // tidy with just the pick text + odds + market + matchup line.
-      return '<div style="padding:8px 0;border-bottom:1px solid #f0f0f0">' +
+      return '<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06)">' +
         '<div class="mc-name" style="color:'+pickColor+'">'+pickText+'</div>' +
-        '<div style="font-size:0.7rem;color:#555;margin-top:2px">'+
+        '<div style="font-size:0.7rem;color:#888;margin-top:2px">'+
           (oddsText ? '<span style="color:#0064c8;font-weight:800">'+oddsText+'</span>' : '') +
-          (marketText ? (oddsText?' · ':'')+'<span style="color:#888">'+marketText+'</span>' : '') +
+          (marketText ? (oddsText?' · ':'')+'<span>'+marketText+'</span>' : '') +
         '</div>' +
         matchupBlock +
       '</div>';
     });
     var picks = pickRows.slice(0, 3).join('');
     if (!picks) {
-      picks = '<div style="font-size:0.78rem;color:#333;padding:4px 0;border-bottom:1px solid #f0f0f0">' +
+      picks = '<div style="font-size:0.78rem;color:#c8d0dc;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06)">' +
               '<span style="font-weight:800">Unknown matchup</span>' +
               '</div>';
     }
@@ -12565,34 +12665,30 @@ function renderMyBets() {
     var __firstLeg   = rawLegs[0] || {};
     var ticketSport  = _ticketSportLabel(t, __firstLeg);
     var sportBadge   = ticketSport
-      ? '<span style="font-size:0.6rem;font-weight:800;letter-spacing:0.4px;color:#0064c8;background:#eef4ff;border:1px solid #cfe0ff;border-radius:6px;padding:1px 6px;margin-right:6px;text-transform:uppercase">'+ticketSport+'</span>'
+      ? '<span style="font-size:0.6rem;font-weight:800;letter-spacing:0.4px;color:#0064c8;background:rgba(0,100,200,0.12);border:1px solid rgba(0,100,200,0.35);border-radius:6px;padding:1px 6px;margin-right:6px;text-transform:uppercase">'+ticketSport+'</span>'
       : '';
 
     var isDeletePending = t.deleteRequestStatus === 'pending';
     var isDeleteDenied  = t.deleteRequestStatus === 'denied';
-    var isVoided        = displayStatus === 'voided' || displayStatus === 'deleted' || displayStatus === 'canceled';
-    // Badge fills use rgba (not #fff…) so dark-theme attribute overrides
-    // cannot force LOST/WON text white.
+    var isVoided        = displayStatus === 'voided' || displayStatus === 'deleted' || displayStatus === 'canceled' || displayStatus === 'cancelled';
     var statusBadge = isDeletePending
-      ? '<span style="font-size:0.68rem;font-weight:800;color:#F59E0B;background:rgba(245,158,11,0.14);padding:4px 10px;border-radius:20px;border:1px solid #F59E0B">DELETE REQUESTED</span>'
+      ? '<span class="rb-status" style="color:#F59E0B;background:rgba(245,158,11,0.14);border-color:#F59E0B">DELETE REQUESTED</span>'
       : isDeleteDenied
-        ? '<span style="font-size:0.68rem;font-weight:800;color:#EF4444;background:rgba(239,68,68,0.14);padding:4px 10px;border-radius:20px;border:1px solid #EF4444">REQUEST DENIED</span>'
-        : displayStatus === 'canceled'
-          ? '<span style="font-size:0.68rem;font-weight:800;color:#888;background:rgba(136,136,136,0.14);padding:4px 10px;border-radius:20px;border:1px solid #888">CANCELED</span>'
+        ? '<span class="rb-status" style="color:#EF4444;background:rgba(239,68,68,0.14);border-color:#EF4444">REQUEST DENIED</span>'
+        : displayStatus === 'canceled' || displayStatus === 'cancelled'
+          ? '<span class="rb-status" style="color:#888;background:rgba(136,136,136,0.14);border-color:#888">CANCELED</span>'
           : (displayStatus === 'cashed_out' || displayStatus === 'cashedout')
-            ? '<span style="font-size:0.68rem;font-weight:800;color:#7c3aed;background:rgba(124,58,237,0.14);padding:4px 10px;border-radius:20px;border:1px solid #c4b5fd">CASHED OUT</span>'
+            ? '<span class="rb-status" style="color:#7c3aed;background:rgba(124,58,237,0.14);border-color:#c4b5fd">CASHED OUT</span>'
           : isVoided
-            ? '<span style="font-size:0.68rem;font-weight:800;color:#888;background:rgba(136,136,136,0.14);padding:4px 10px;border-radius:20px;border:1px solid #888">VOIDED</span>'
+            ? '<span class="rb-status" style="color:#888;background:rgba(136,136,136,0.14);border-color:#888">VOID</span>'
           : displayStatus === 'lost'
-            ? '<span style="font-size:0.68rem;font-weight:800;color:#fff;background:#EF4444;padding:4px 10px;border-radius:20px;border:1px solid #EF4444">LOST</span>'
+            ? '<span class="rb-status" style="color:#fff;background:#EF4444;border-color:#EF4444">LOST</span>'
           : displayStatus === 'won'
-            ? '<span style="font-size:0.68rem;font-weight:800;color:#fff;background:#22C55E;padding:4px 10px;border-radius:20px;border:1px solid #22C55E">WON</span>'
+            ? '<span class="rb-status" style="color:#fff;background:#22C55E;border-color:#22C55E">WON</span>'
           : displayStatus === 'push' || displayStatus === 'pushed'
-            ? '<span style="font-size:0.68rem;font-weight:800;color:#111;background:#F59E0B;padding:4px 10px;border-radius:20px;border:1px solid #F59E0B">PUSH</span>'
-          : '<span style="font-size:0.68rem;font-weight:800;color:#0064c8;background:rgba(0,100,200,0.12);padding:4px 10px;border-radius:20px;border:1px solid #0064c8">'+displayStatus.toUpperCase()+'</span>';
-    // Cancel eligibility: pure UI gating. evaluateCancelEligibility() owns
-    // the rule. Status-based suppression (settled/voided/pending-request)
-    // continues to take precedence so the existing badges keep rendering.
+            ? '<span class="rb-status" style="color:#111;background:#F59E0B;border-color:#F59E0B">PUSH</span>'
+          : '<span class="rb-status" style="color:#0064c8;background:rgba(0,100,200,0.12);border-color:#0064c8">'+(displayStatus||'active').toUpperCase()+'</span>';
+
     var _cancelElig = (typeof evaluateCancelEligibility === 'function')
       ? evaluateCancelEligibility(t, new Date())
       : { canRequestCancel: (displayStatus==='active'||displayStatus==='open') && !isDeletePending && !isVoided, reason: 'eligible' };
@@ -12604,12 +12700,10 @@ function renderMyBets() {
       && (displayStatus==='active'||displayStatus==='open')
       && !isDeletePending && !isVoided;
     var deleteBtn = isDeletePending
-        ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;font-size:0.72rem;color:#f59e0b;font-weight:700;text-align:center">⏳ Waiting for host approval…</div>'
+        ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06);font-size:0.72rem;color:#f59e0b;font-weight:700;text-align:center">⏳ Waiting for host approval…</div>'
         : isDeleteDenied
-          ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;font-size:0.72rem;color:#cc0000;font-weight:700;text-align:center">❌ Delete request denied</div>'
+          ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06);font-size:0.72rem;color:#cc0000;font-weight:700;text-align:center">❌ Delete request denied</div>'
           : '';
-    // Overflow menu (⋯) lives in the header on active tickets only.
-    // Cancel Bet reuses data-reqdelete → requestBetDelete (existing flow).
     var showBetMenu = (displayStatus==='active'||displayStatus==='open') && !isVoided;
     var overflowMenu = showBetMenu
       ? '<div class="bet-menu-wrap" id="bet-menu-'+t.id+'">' +
@@ -12621,55 +12715,52 @@ function renderMyBets() {
           '</div>' +
         '</div>'
       : '';
-    // Ticket type label fallback chain so we never paint 'undefined' at
-    // the top of a card. Modern tickets have t.type ('Straight' /
-    // 'Parlay' / etc.); older shapes may only have bet_type or imply
-    // type from selections length.
+
     var typeLabel = t.type || t.betType || t.bet_type ||
                     (rawLegs.length > 1 ? 'Parlay' :
-                     rawLegs.length === 1 ? 'Straight' : 'Bet');
+                     rawLegs.length === 1 ? 'Single' : 'Bet');
     if (typeof typeLabel !== 'string' || !typeLabel.trim() || typeLabel.toLowerCase() === 'undefined') {
       typeLabel = 'Bet';
     }
-    // RR grouped slip: augment type label with combo count badge and override picks
-    var _isRrSlip = (t.rrGroupId || t.rr_group_id) && (typeLabel === 'Round Robin');
+    var _tl = String(typeLabel).toLowerCase();
+    if (_tl === 'straight' || _tl === 'single') typeLabel = 'Single';
+    if (_tl === 'sgp' || _tl === 'same game parlay') typeLabel = 'SGP';
+    var _isRrSlip = (t.rrGroupId || t.rr_group_id) && (String(typeLabel).indexOf('Round Robin') !== -1 || _tl === 'round robin');
     if (_isRrSlip && t.comboCount) {
-      typeLabel = 'Round Robin <span style="font-size:0.6rem;font-weight:700;color:#7c3aed;background:#f3f0ff;border:1px solid #c4b5fd;border-radius:6px;padding:1px 7px;margin-left:4px;vertical-align:middle">'
+      typeLabel = 'Round Robin <span style="font-size:0.6rem;font-weight:700;color:#7c3aed;background:rgba(124,58,237,0.14);border:1px solid #c4b5fd;border-radius:6px;padding:1px 7px;margin-left:4px;vertical-align:middle">'
                   + t.comboCount + ' combo' + (t.comboCount !== 1 ? 's' : '') + '</span>';
     }
     if (_isRrSlip && rawLegs.length === 0) {
-      // No leg detail available for grouped RR (DB returns only ticket-level fields).
-      // Build a summary row from _rrCombos if available.
-      var _rrCombosArr = t._rrCombos || [];
-      var _rrLegCount  = _rrCombosArr.length > 0 ? ((_rrCombosArr[0].selections || []).length || 'N') : 'N';
-      picks = '<div style="font-size:0.8rem;color:#444;padding:6px 0;border-bottom:1px solid #f0f0f0">' +
+      picks = '<div style="font-size:0.8rem;color:#c8d0dc;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)">' +
               '<span style="font-weight:700">'+t.comboCount+' independent combo ticket'+(t.comboCount !== 1 ? 's' : '')+'</span>' +
               '</div>';
       morePicks = '';
     }
-    // RR composite status badge overrides the single-ticket badge when we
-    // have per-combo breakdown.
     var _rrCombosLocal = t._rrCombos || [];
     if (_isRrSlip && _rrCombosLocal.length > 0) {
       var _rrWon  = _rrCombosLocal.filter(function(c){ return String(c.status||'').toLowerCase() === 'won';  }).length;
       var _rrLost = _rrCombosLocal.filter(function(c){ return String(c.status||'').toLowerCase() === 'lost'; }).length;
       var _rrAct  = _rrCombosLocal.filter(function(c){ var s=String(c.status||'').toLowerCase(); return s==='active'||s==='open'; }).length;
       if (_rrAct > 0) {
-        statusBadge = '<span style="font-size:0.68rem;font-weight:800;color:#0064c8;background:rgba(0,100,200,0.12);padding:4px 10px;border-radius:20px;border:1px solid #0064c8">'
+        statusBadge = '<span class="rb-status" style="color:#0064c8;background:rgba(0,100,200,0.12);border-color:#0064c8">'
                     + _rrAct + ' ACTIVE' + (_rrWon ? ' · '+_rrWon+' WON' : '') + (_rrLost ? ' · '+_rrLost+' LOST' : '') + '</span>';
       } else if (_rrWon > 0 && _rrLost > 0) {
-        statusBadge = '<span style="font-size:0.68rem;font-weight:800;color:#F59E0B;background:rgba(245,158,11,0.14);padding:4px 10px;border-radius:20px;border:1px solid #F59E0B">'
+        statusBadge = '<span class="rb-status" style="color:#F59E0B;background:rgba(245,158,11,0.14);border-color:#F59E0B">'
                     + _rrWon + ' WON · ' + _rrLost + ' LOST</span>';
       } else if (_rrWon === _rrCombosLocal.length) {
-        statusBadge = '<span style="font-size:0.68rem;font-weight:800;color:#fff;background:#22C55E;padding:4px 10px;border-radius:20px;border:1px solid #22C55E">ALL WON</span>';
+        statusBadge = '<span class="rb-status" style="color:#fff;background:#22C55E;border-color:#22C55E">ALL WON</span>';
       } else if (_rrLost === _rrCombosLocal.length) {
-        statusBadge = '<span style="font-size:0.68rem;font-weight:800;color:#fff;background:#EF4444;padding:4px 10px;border-radius:20px;border:1px solid #EF4444">ALL LOST</span>';
+        statusBadge = '<span class="rb-status" style="color:#fff;background:#EF4444;border-color:#EF4444">ALL LOST</span>';
       }
     }
+
+    var riskAmt = (t.riskAmount != null) ? t.riskAmount : t.risk_amount;
+    var profitAmt = (t.potentialProfit != null) ? t.potentialProfit : t.potential_profit;
+    var estPay = (t.estimatedPayout != null) ? t.estimatedPayout : t.estimated_payout;
     var riskColor = (displayStatus === 'lost') ? '#EF4444'
-      : (displayStatus === 'won') ? '#111'
-      : (displayStatus === 'canceled' || displayStatus === 'cancelled' || displayStatus === 'voided' || displayStatus === 'deleted') ? '#888'
-      : '#111';
+      : (displayStatus === 'won') ? '#f4f7fb'
+      : (isVoided) ? '#888'
+      : '#f4f7fb';
     var toWinColor = (displayStatus === 'won') ? '#22C55E'
       : (displayStatus === 'lost') ? '#888'
       : (displayStatus === 'push' || displayStatus === 'pushed') ? '#F59E0B'
@@ -12677,53 +12768,85 @@ function renderMyBets() {
     var payoutColor = (displayStatus === 'won') ? '#22C55E'
       : (displayStatus === 'lost') ? '#EF4444'
       : (displayStatus === 'push' || displayStatus === 'pushed') ? '#F59E0B'
-      : (displayStatus === 'canceled' || displayStatus === 'cancelled' || displayStatus === 'voided' || displayStatus === 'deleted') ? '#888'
+      : isVoided ? '#888'
       : '#0064c8';
-    var payoutLabel = (displayStatus === 'won' || displayStatus === 'lost' || displayStatus === 'push' || displayStatus === 'pushed') ? 'PAYOUT' : 'EST PAYOUT';
+    var payoutLabel = (displayStatus === 'won' || displayStatus === 'lost' || displayStatus === 'push' || displayStatus === 'pushed') ? 'PAYOUT' : 'EST. PAYOUT';
     var payoutValue = (displayStatus === 'lost') ? fmtDollar(0)
-      : (displayStatus === 'push' || displayStatus === 'pushed') ? fmtDollar(t.riskAmount)
-      : fmtDollar(t.estimatedPayout);
-    return '<div style="background:#fff;border-radius:14px;margin:8px 0;padding:16px;border:1px solid ' + (_isRrSlip ? '#e9d5ff' : '#e8e8e8') + ';border-left:3px solid '+leftBorder+';box-shadow:0 1px 4px rgba(0,0,0,0.06)">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
-        '<div>' +
-          '<div style="font-size:0.88rem;font-weight:900;color:#111">' + sportBadge + typeLabel+'</div>' +
-          '<div style="font-size:0.62rem;color:#aaa;margin-top:2px">'+dateStr+'</div>' +
+      : (displayStatus === 'push' || displayStatus === 'pushed') ? fmtDollar(riskAmt)
+      : (isVoided) ? fmtDollar(riskAmt)
+      : fmtDollar(estPay);
+
+    var ewcPct = _ticketEstWinChancePct(t);
+    var ewcHtml = '<div class="rb-ewc">' +
+      '<div class="rb-ewc-label">Est. Win Chance</div>' +
+      '<div class="rb-ewc-val">'+_formatEstWinChance(ewcPct)+'</div>' +
+    '</div>';
+
+    var combinedOdds = _ticketCombinedAmericanOdds(t);
+    var oddsDisplay = '';
+    if (combinedOdds != null) {
+      oddsDisplay = (combinedOdds > 0 ? '+' : '') + combinedOdds;
+    } else if (rawLegs.length === 1) {
+      oddsDisplay = _legOddsText(rawLegs[0]);
+    } else if (rawLegs.length > 1) {
+      oddsDisplay = rawLegs.map(_legOddsText).filter(Boolean).join(' · ');
+    }
+
+    // View Details: ticket ID, legs, market, event/start, grading, timestamps
+    var detailRows = [];
+    detailRows.push(['Ticket ID', t.id || '—']);
+    detailRows.push(['Placed', createdIso ? (isNaN(d) ? String(createdIso) : d.toLocaleString()) : '—']);
+    if (t.gradedAt || t.graded_at) {
+      var gd = new Date(t.gradedAt || t.graded_at);
+      detailRows.push(['Graded', isNaN(gd) ? String(t.gradedAt || t.graded_at) : gd.toLocaleString()]);
+    }
+    if (t.gradingSource || t.simulated) detailRows.push(['Grading', t.gradingSource || (t.simulated ? 'simulated' : '—')]);
+    rawLegs.forEach(function(s, idx){
+      var start = s.startTime || s.commence_time || s.eventStart || s.gameStart || '';
+      var startStr = '';
+      if (start) { var sd = new Date(start); startStr = isNaN(sd) ? String(start) : sd.toLocaleString(); }
+      detailRows.push(['Leg '+(idx+1), _legPickText(s)]);
+      var mkt = _legMarketText(s); if (mkt) detailRows.push(['  Market', mkt]);
+      var mu = _legMatchupText(s); if (mu) detailRows.push(['  Event', mu]);
+      if (startStr) detailRows.push(['  Start', startStr]);
+      var lr = s.result || s.legResult || s.outcome; if (lr) detailRows.push(['  Result', String(lr).toUpperCase()]);
+    });
+    var detailsInner = detailRows.map(function(r){
+      return '<div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px dashed rgba(255,255,255,0.06)">' +
+        '<span style="color:#8b93a7">'+r[0]+'</span>' +
+        '<span style="font-weight:700;text-align:right;word-break:break-word;max-width:62%">'+r[1]+'</span>' +
+      '</div>';
+    }).join('');
+
+    return '<div class="rb-card rb-card--'+leftClass+'">' +
+      '<div class="rb-card-top">' +
+        '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' + statusBadge + overflowMenu + '</div>' +
+        ewcHtml +
+      '</div>' +
+      '<div class="rb-type">' + sportBadge + typeLabel + '</div>' +
+      '<div class="rb-placed">'+dateStr+'</div>' +
+      '<div>' + picks + morePicks + '</div>' +
+      (oddsDisplay ? '<div class="rb-odds-line">Odds '+oddsDisplay+'</div>' : '') +
+      '<div class="rb-foot">' +
+        '<div class="rb-stat">' +
+          '<div class="rb-stat-label">Risk</div>' +
+          '<div class="rb-stat-val" style="color:'+riskColor+'">'+fmtDollar(riskAmt)+'</div>' +
         '</div>' +
-        '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
-          ((t.insurance_enabled || t.insuranceEnabled)
-            ? '<span style="font-size:0.62rem;font-weight:800;color:#7c3aed;background:rgba(124,58,237,0.14);padding:3px 8px;border-radius:20px;border:1px solid #c4b5fd">INSURED</span>'
-            : '') +
-          statusBadge +
-          overflowMenu +
+        '<div class="rb-stat">' +
+          '<div class="rb-stat-label">To Win</div>' +
+          '<div class="rb-stat-val" style="color:'+toWinColor+'">'+fmtDollar(profitAmt)+'</div>' +
+        '</div>' +
+        '<div class="rb-stat">' +
+          '<div class="rb-stat-label">'+payoutLabel+'</div>' +
+          '<div class="rb-stat-val" style="color:'+payoutColor+'">'+payoutValue+'</div>' +
         '</div>' +
       '</div>' +
-      '<div style="margin-bottom:10px">' + picks + morePicks + '</div>' +
-      '<div style="font-size:0.6rem;color:#ccc;margin-bottom:10px">Ticket: '+t.id+'</div>' +
-      '<div style="display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid #f0f0f0">' +
-        '<div style="text-align:center">' +
-          '<div style="font-size:0.6rem;color:#aaa;margin-bottom:2px">RISK</div>' +
-          '<div style="font-size:0.88rem;font-weight:900;color:'+riskColor+'">'+fmtDollar(t.riskAmount)+'</div>' +
-        '</div>' +
-        '<div style="text-align:center">' +
-          '<div style="font-size:0.6rem;color:#aaa;margin-bottom:2px">TO WIN</div>' +
-          '<div style="font-size:0.88rem;font-weight:900;color:'+toWinColor+'">'+fmtDollar(t.potentialProfit)+'</div>' +
-        '</div>' +
-        '<div style="text-align:center">' +
-          '<div style="font-size:0.6rem;color:#aaa;margin-bottom:2px">'+payoutLabel+'</div>' +
-          '<div style="font-size:0.88rem;font-weight:900;color:'+payoutColor+'">'+payoutValue+'</div>' +
-        '</div>' +
-      '</div>' +
-      // ── Audit row ──────────────────────────────────────────────
-      '<div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0;display:flex;gap:8px;flex-wrap:wrap">' +
-        '<button onclick="event.stopPropagation();toggleAuditPanel(\''+t.id+'\')" style="font-size:0.7rem;font-weight:700;color:#555;background:none;border:1px solid #ccc;border-radius:18px;padding:5px 12px;cursor:pointer">View Audit</button>' +
-      '</div>' +
-      '<div id="audit-'+t.id+'" style="display:none;margin-top:10px;background:#fafafa;border:1px solid #eee;border-radius:10px;padding:10px 12px;font-size:0.72rem;color:#333;line-height:1.55;font-family:ui-monospace,Menlo,monospace"></div>' +
+      '<button type="button" class="rb-details-btn" data-rb-details="'+t.id+'">View Details</button>' +
+      '<div class="rb-details" id="rb-details-'+t.id+'">'+detailsInner+'</div>' +
       deleteBtn +
     '</div>';
   }
-  // Section split uses _displayStatus so any ticket failing the 5-guard
-  // sits in Active, NOT Settled — regardless of what t.status says.
-  // Wrap _displayStatus so a single bad ticket cannot blank the tab.
+
   function _safeDisplayStatus(t){
     try {
       if (typeof _displayStatus === 'function') return _displayStatus(t);
@@ -12734,196 +12857,47 @@ function renderMyBets() {
     if (!s || s === 'active' || s === 'open') return 'active';
     return s;
   }
-  var active   = betTickets.filter(function(t){ var ds = _safeDisplayStatus(t); return ds === 'active' || ds === 'open'; });
-  var settledAll = betTickets.filter(function(t){ var ds = _safeDisplayStatus(t); return ds !== 'active' && ds !== 'open'; });
 
-  // ===== My Bets ticket lifecycle =====================================
-  // Default: ACTIVE forever + SETTLED for 12 hours. Search / All Time /
-  // status filters show the full already-loaded history client-side.
-  var MYBETS_SETTLED_TTL_MS = 12 * 60 * 60 * 1000;
   var _nowMs = Date.now();
-  function _settledTicketAgeMs(t) {
-    var iso = (t && t.gradedAt) ||
-              (t && t.grading && t.grading.gradedAt) ||
-              (t && t.settledAt) || null;
-    if (!iso) return Number.POSITIVE_INFINITY;
-    var ms = Date.parse(iso);
-    if (!isFinite(ms)) return Number.POSITIVE_INFINITY;
-    return _nowMs - ms;
-  }
-  var _f = _myBetsFilter || { q:'', status:'all', range:'week', sort:'newest' };
-  var _showFullHistory = !!String(_f.q||'').trim() || _f.status !== 'all' || _f.range === 'all' || _f.range === 'lastweek' || _f.range === 'month';
-  var settled = _showFullHistory ? settledAll : settledAll.filter(function(t){
-    return _settledTicketAgeMs(t) <= MYBETS_SETTLED_TTL_MS;
-  });
-  var hiddenSettledCount = settledAll.length - settled.length;
+  // Recent Bets: only tickets with now - created_at < 12 hours.
+  // Status does not matter — WON within 12h still appears here.
+  var recent = betTickets.filter(function(t){ return _isRecentBetTicket(t, _nowMs); });
+  recent.sort(function(a,b){ return (_ticketCreatedAtMs(b)||0) - (_ticketCreatedAtMs(a)||0); });
 
-  function _ticketHaystack(t) {
-    var parts = [t.type, t.betType, t.sport, t.pick, t.matchup, t.game];
-    (t.selections || t.legs || []).forEach(function(s) {
-      if (!s) return;
-      parts.push(s.pick, s.market, s.matchup, s.game, s.homeTeam, s.awayTeam, s.team, s.sport, s.label);
-    });
-    return parts.filter(Boolean).join(' ').toLowerCase();
-  }
-  function _ticketIsParlay(t) {
-    var ty = String(t.type || t.betType || '').toLowerCase();
-    if (ty === 'parlay' || ty === 'sgp' || ty === 'round robin' || ty === 'roundrobin' || ty === 'teaser') return true;
-    var n = (t.selections || t.legs || []).length;
-    return n > 1;
-  }
-  function _ticketInRange(t) {
-    var ms = Date.parse(t.placedAt || t.placed_at || 0) || 0;
-    if (_f.range === 'all') return true;
-    var now = new Date();
-    var start, end = Infinity;
-    if (_f.range === 'week') {
-      start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).getTime();
-    } else if (_f.range === 'lastweek') {
-      end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).getTime();
-      start = end - 7 * 86400000;
-    } else if (_f.range === 'month') {
-      start = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-    } else {
-      start = 0;
-    }
-    return ms >= start && ms < end;
-  }
-  function _ticketMatchesStatus(t) {
-    var ds = _safeDisplayStatus(t);
-    if (_f.status === 'all') return true;
-    if (_f.status === 'active') return ds === 'active' || ds === 'open';
-    if (_f.status === 'won') return ds === 'won';
-    if (_f.status === 'lost') return ds === 'lost';
-    if (_f.status === 'canceled') return ds === 'canceled' || ds === 'cancelled' || ds === 'voided';
-    if (_f.status === 'parlays') return _ticketIsParlay(t);
-    if (_f.status === 'singles') return !_ticketIsParlay(t);
-    return true;
-  }
-  function _filterTicketList(list) {
-    var q = String(_f.q || '').trim().toLowerCase();
-    return list.filter(function(t) {
-      if (!_ticketMatchesStatus(t)) return false;
-      if (!_ticketInRange(t)) return false;
-      if (q && _ticketHaystack(t).indexOf(q) === -1) return false;
-      return true;
-    });
-  }
-  function _sortTickets(list) {
-    var arr = list.slice();
-    if (_f.sort === 'oldest') {
-      arr.sort(function(a,b){ return Date.parse(a.placedAt||0) - Date.parse(b.placedAt||0); });
-    } else if (_f.sort === 'win') {
-      arr.sort(function(a,b){
-        function w(t){ var s=_safeDisplayStatus(t); return (s==='won'||s==='cashed_out') ? (parseFloat(t.potentialProfit||t.estimatedPayout)||0) : -1; }
-        return w(b) - w(a);
-      });
-    } else if (_f.sort === 'loss') {
-      arr.sort(function(a,b){
-        function l(t){ return _safeDisplayStatus(t)==='lost' ? (parseFloat(t.riskAmount)||0) : -1; }
-        return l(b) - l(a);
-      });
-    } else {
-      arr.sort(function(a,b){ return Date.parse(b.placedAt||0) - Date.parse(a.placedAt||0); });
-    }
-    return arr;
-  }
-  active = _sortTickets(_filterTicketList(active));
-  settled = _sortTickets(_filterTicketList(_showFullHistory ? settledAll : settled));
-  // One-shot debug so we can verify the cutoff is doing the right thing.
-  try {
-    
-  } catch(_e){}
-  // [render source] — explicit attribution so we never again wonder
-  // 'is My Bets rendering from somewhere other than pb-tickets?'.
-  // renderMyBets ALWAYS reloads betTickets from pb-tickets at the top of
-  // its body; the active/settled arrays below are derived from that
-  // reload. Any ticket appearing in the UI MUST have an id that exists
-  // in pb-tickets at this moment. No mock seeder, no in-memory fixture,
-  // no host-mirror direct rendering.
+  var showDev = _isRecentBetsDevTools();
   var html =
-    '<div style="padding:16px 14px 8px;display:flex;justify-content:space-between;align-items:center">' +
-      '<span style="font-size:1rem;font-weight:900;color:#f4f7fb">My Bets</span>' +
-      '<div style="display:flex;gap:6px">' +
-        '<button onclick="openGradedAudit()" style="font-size:0.7rem;font-weight:700;color:#7c3aed;background:rgba(124,58,237,0.08);border:1.5px solid #7c3aed;border-radius:20px;padding:5px 12px;cursor:pointer">🧪 Graded ('+(graded.length)+')</button>' +
-        '<button id="check-results-btn" onclick="checkOpenTickets()" style="font-size:0.7rem;font-weight:700;color:#0064c8;background:none;border:1.5px solid #0064c8;border-radius:20px;padding:5px 12px;cursor:pointer">Check Results</button>' +
+    '<div class="rb-head">' +
+      '<div class="rb-head-row">' +
+        '<div>' +
+          '<div class="rb-title">Recent Bets</div>' +
+          '<div class="rb-sub">Bets placed in the last 12 hours</div>' +
+        '</div>' +
+        '<button type="button" class="rb-view-results" data-rb-goto-results="1">View Results</button>' +
       '</div>' +
-    '</div>' +
-    // Counts bar
-    '<div style="display:flex;gap:12px;padding:0 14px 10px;font-size:0.68rem;color:#aaa">' +
-      '<span>Active: <strong style="color:#0064c8">'+(active.length)+'</strong></span>' +
-      '<span>Graded: <strong style="color:#00875a">'+(graded.length)+'</strong></span>' +
-      '<span>Ledger rows: <strong style="color:#555">'+(ledger.length)+'</strong></span>' +
-    '<span id="last-graded-display" style="margin-left:auto"></span>' +
-    '</div>' +
-    '<div class="mybets-toolbar">' +
-      '<input id="mybets-search" class="mybets-search" type="search" placeholder="Search team, sport, or bet type" value="'+String(_f.q||'').replace(/"/g,'&quot;')+'">' +
-      '<div class="mybets-chips" id="mybets-status-chips">' +
-        [['all','All'],['active','Active'],['won','Won'],['lost','Lost'],['canceled','Canceled'],['parlays','Parlays'],['singles','Singles']].map(function(p){
-          return '<button type="button" class="mybets-chip'+(_f.status===p[0]?' on':'')+'" data-mb-status="'+p[0]+'">'+p[1]+'</button>';
-        }).join('') +
-      '</div>' +
-      '<div class="mybets-chips">' +
-        [['week','This Week'],['lastweek','Last Week'],['month','This Month'],['all','All Time']].map(function(p){
-          return '<button type="button" class="mybets-chip range'+(_f.range===p[0]?' on':'')+'" data-mb-range="'+p[0]+'">'+p[1]+'</button>';
-        }).join('') +
-      '</div>' +
-      '<div class="mybets-chips">' +
-        [['newest','Newest'],['oldest','Oldest'],['win','Biggest Win'],['loss','Biggest Loss']].map(function(p){
-          return '<button type="button" class="mybets-chip'+(_f.sort===p[0]?' on':'')+'" data-mb-sort="'+p[0]+'">'+p[1]+'</button>';
-        }).join('') +
-      '</div>' +
+      (showDev
+        ? '<div data-rb-dev-slot="1" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">' +
+            '<button type="button" onclick="openGradedAudit && openGradedAudit()" style="font-size:0.65rem;font-weight:700;color:#7c3aed;background:rgba(124,58,237,0.08);border:1.5px solid #7c3aed;border-radius:20px;padding:4px 10px;cursor:pointer">🧪 Graded</button>' +
+            '<button type="button" id="check-results-btn" onclick="checkOpenTickets && checkOpenTickets()" style="font-size:0.65rem;font-weight:700;color:#0064c8;background:none;border:1.5px solid #0064c8;border-radius:20px;padding:4px 10px;cursor:pointer">Check Results</button>' +
+          '</div>'
+        : '') +
     '</div>';
-  // Last graded timestamp
-  var _lg = localStorage.getItem('pb-last-graded');
-  if (_lg) html += '<div style="padding:0 14px 6px;font-size:0.65rem;color:#aaa">Last graded: ' + new Date(_lg).toLocaleString() + '</div>';
-  if (!betTickets.length) {
-    html += _pbStateHtml({ title: 'No bets yet', body: 'Place a wager from the sportsbook to see it here.' });
-  } else if (!active.length && !settled.length) {
-    html += _pbStateHtml({ title: 'No matching bets', body: 'Try a different filter or date range.' });
+
+  if (!recent.length) {
+    html += '<div class="rb-empty">' +
+      '<div class="rb-empty-title">No recent bets</div>' +
+      '<div class="rb-empty-sub">Bets you place will appear here for 12 hours.</div>' +
+      '<button type="button" class="rb-view-results" data-rb-goto-results="1">View Results</button>' +
+    '</div>';
   } else {
-    if (active.length) {
-      html += '<div style="padding:4px 14px;font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#0064c8">Active Bets ('+active.length+')</div>';
-      html += '<div style="padding:0 14px">' + active.map(ticketCard).join('') + '</div>';
-    }
-    if (settled.length) {
-      html += '<div style="padding:12px 14px 4px;font-size:0.65rem;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#888">Settled ('+settled.length+')</div>';
-      html += '<div style="padding:0 14px">' + settled.map(ticketCard).join('') + '</div>';
-    }
-    // Hidden-older-settled notice. Data is intact in Results; this is
-    // just a heads-up so the user doesn't think tickets disappeared.
-    if (!_showFullHistory && hiddenSettledCount > 0) {
-      html += '<div style="padding:10px 14px 4px;font-size:0.66rem;color:#888;text-align:center">' +
-              '+' + hiddenSettledCount + ' older settled ticket' + (hiddenSettledCount===1?'':'s') +
-              ' hidden — view full history in <strong style="color:#0064c8">Results</strong></div>';
-    }
+    html += '<div class="rb-list">' + recent.map(ticketCard).join('') + '</div>';
   }
-  html += '<div style="height:80px"></div>'; // nav clearance
+  html += '<div style="height:80px"></div>';
   el.innerHTML = html;
   el.style.background = '#070b12';
   el.style.minHeight = '100vh';
-  var _search = document.getElementById('mybets-search');
-  if (_search) {
-    _search.value = _f.q || '';
-    if (_myBetsSearchFocused) {
-      _search.focus();
-      try { var _sl = _search.value.length; _search.setSelectionRange(_sl, _sl); } catch(_e){}
-    }
-    _search.addEventListener('input', function() {
-      _myBetsFilter.q = _search.value;
-      _myBetsSearchFocused = true;
-      renderMyBets();
-    });
-    _search.addEventListener('blur', function(){ setTimeout(function(){ _myBetsSearchFocused = false; }, 200); });
-  }
-  el.querySelectorAll('[data-mb-status]').forEach(function(btn){
-    btn.addEventListener('click', function(){ _myBetsApply('status', btn.getAttribute('data-mb-status')); });
-  });
-  el.querySelectorAll('[data-mb-range]').forEach(function(btn){
-    btn.addEventListener('click', function(){ _myBetsApply('range', btn.getAttribute('data-mb-range')); });
-  });
-  el.querySelectorAll('[data-mb-sort]').forEach(function(btn){
-    btn.addEventListener('click', function(){ _myBetsApply('sort', btn.getAttribute('data-mb-sort')); });
+
+  el.querySelectorAll('[data-rb-goto-results]').forEach(function(btn){
+    btn.addEventListener('click', function(){ _goToPlayerResults(); });
   });
   el.querySelectorAll('[data-expand-parlay]').forEach(function(btn){
     btn.addEventListener('click', function(){
@@ -12936,8 +12910,17 @@ function renderMyBets() {
       btn.textContent = open ? ('Show all '+n+' legs ▾') : 'Hide extra legs ▴';
     });
   });
+  el.querySelectorAll('[data-rb-details]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var id = btn.getAttribute('data-rb-details');
+      var panel = document.getElementById('rb-details-'+id);
+      if (!panel) return;
+      var open = panel.style.display === 'block';
+      panel.style.display = open ? 'none' : 'block';
+      btn.textContent = open ? 'View Details' : 'Hide Details';
+    });
+  });
   } catch (err) {
-    // CRITICAL: never let a thrown error leave My Bets blank without a trace.
     console.error('[renderMyBets] FATAL — render aborted, tab will appear blank:', err);
     try {
       var _el = document.getElementById('mybets-section');
@@ -14118,21 +14101,17 @@ function _resTicketsForDay(dayStart, dayEnd){
   var out = [];
   for (var i = 0; i < bets.length; i++) {
     var t = bets[i]; if (!t) continue;
-    // Use _displayStatus so day expansion agrees with aggregate
-    var s = (typeof _displayStatus === 'function') ? _displayStatus(t) : String(t.status||'').toLowerCase();
-    var isCanceled = (s === 'canceled' || s === 'voided' || s === 'deleted');
-    var isActive   = (s === 'active' || s === 'open');
-    // Settled tickets: bucket by placedAt (when bet was placed)
-    // Active/canceled: bucket by placedAt
-    var iso = t.placedAt || t.placed_at || t.createdAt;
+    // Results grouping: calendar DATE PLACED (created_at / placed_at),
+    // never graded_at. ACTIVE tickets older than 12h still appear here.
+    var iso = t.created_at || t.createdAt || t.placedAt || t.placed_at;
     var ts  = iso ? Date.parse(iso) : NaN;
     if (isNaN(ts)) continue;
     if (ts >= dsT && ts < deT) out.push(t);
   }
   // Newest first within the day.
   out.sort(function(a,b){
-    var ax = Date.parse(a.placedAt || a.placed_at || a.createdAt) || 0;
-    var bx = Date.parse(b.placedAt || b.placed_at || b.createdAt) || 0;
+    var ax = Date.parse(a.created_at || a.createdAt || a.placedAt || a.placed_at) || 0;
+    var bx = Date.parse(b.created_at || b.createdAt || b.placedAt || b.placed_at) || 0;
     return bx - ax;
   });
   return out;
@@ -14818,20 +14797,15 @@ function _wireResultsButtons(el){
     var el = document.getElementById('mybets-section');
     if (!el) return;
     if (el.querySelector('[data-sim-grade-btn]')) return; // already there
-    // Look for the "Check Results" header row
-    var headers = el.querySelectorAll('div');
-    for (var i = 0; i < headers.length; i++) {
-      var h = headers[i];
-      if (h.textContent && h.textContent.indexOf('My Bets') !== -1 && h.querySelector && h.querySelector('button')) {
-        var btn = document.createElement('button');
-        btn.setAttribute('data-sim-grade-btn','1');
-        btn.textContent = '\ud83c\udfb2 Simulate Grade Results';
-        btn.style.cssText = 'font-size:0.7rem;font-weight:800;color:#fff;background:linear-gradient(135deg,#7c3aed,#a855f7);border:none;border-radius:20px;padding:6px 12px;cursor:pointer;margin-left:8px;letter-spacing:0.3px';
-        btn.onclick = function(){ simulateGradeResults(); };
-        h.appendChild(btn);
-        break;
-      }
-    }
+    // Developer/preview slot only — never mounts on ordinary player Recent Bets.
+    var slot = el.querySelector('[data-rb-dev-slot]');
+    if (!slot) return;
+    var btn = document.createElement('button');
+    btn.setAttribute('data-sim-grade-btn','1');
+    btn.textContent = '\ud83c\udfb2 Simulate Grade Results';
+    btn.style.cssText = 'font-size:0.65rem;font-weight:800;color:#fff;background:linear-gradient(135deg,#7c3aed,#a855f7);border:none;border-radius:20px;padding:4px 10px;cursor:pointer;letter-spacing:0.3px';
+    btn.onclick = function(){ simulateGradeResults(); };
+    slot.appendChild(btn);
   }
   // Re-inject after each render (renderMyBets rewrites the section)
   var _miObs = new MutationObserver(function(){ _injectButton(); });
@@ -15041,27 +15015,29 @@ function showBalanceHistory(playerId) {
 }
 window.showBalanceHistory = showBalanceHistory;
 
-// Mount a "📒 Balance History" button next to "Check Results" on My Bets.
+// Mount Balance History only in developer/preview workflows — not ordinary players.
 (function(){
+  function _devOk() {
+    try {
+      var qs = new URLSearchParams(location.search);
+      return qs.get('testmode') === '1' || qs.get('preview') === '1' || qs.get('dev') === '1';
+    } catch (_e) { return false; }
+  }
   function inject() {
+    if (!_devOk()) return;
     var el = document.getElementById('mybets-section');
     if (!el || el.querySelector('[data-balhist-btn]')) return;
-    var headers = el.querySelectorAll('div');
-    for (var i=0;i<headers.length;i++){
-      var h = headers[i];
-      if (h.textContent && h.textContent.indexOf('My Bets') !== -1 && h.querySelector && h.querySelector('button')) {
-        var btn = document.createElement('button');
-        btn.setAttribute('data-balhist-btn','1');
-        btn.textContent = '📒 Balance History';
-        btn.style.cssText = 'font-size:0.7rem;font-weight:700;color:#0064c8;background:none;border:1.5px solid #0064c8;border-radius:20px;padding:5px 12px;cursor:pointer;margin-left:8px';
-        btn.onclick = function(){
-          var pl = (function(){ try { return JSON.parse(localStorage.getItem('pb-player')||'null'); } catch(_e){ return null; }})() || {};
-          showBalanceHistory(pl.id || null);
-        };
-        h.appendChild(btn);
-        break;
-      }
-    }
+    var slot = el.querySelector('[data-rb-dev-slot]');
+    if (!slot) return;
+    var btn = document.createElement('button');
+    btn.setAttribute('data-balhist-btn','1');
+    btn.textContent = '📒 Balance History';
+    btn.style.cssText = 'font-size:0.65rem;font-weight:700;color:#0064c8;background:none;border:1.5px solid #0064c8;border-radius:20px;padding:4px 10px;cursor:pointer';
+    btn.onclick = function(){
+      var pl = (function(){ try { return JSON.parse(localStorage.getItem('pb-player')||'null'); } catch(_e){ return null; }})() || {};
+      showBalanceHistory(pl.id || null);
+    };
+    slot.appendChild(btn);
   }
   document.addEventListener('DOMContentLoaded', function(){
     var el = document.getElementById('mybets-section');
@@ -15784,25 +15760,20 @@ function openGradingConsole() {
 }
 window.openGradingConsole = openGradingConsole;
 
-// Mount "🧪 Grading Console" button (test mode only) on My Bets header
+// Mount Grading Console button (test/preview only) on Recent Bets dev slot
 (function(){
   if (!_isTestModeAudit()) return;
   function inject() {
     var el = document.getElementById('mybets-section');
     if (!el || el.querySelector('[data-grading-console-btn]')) return;
-    var headers = el.querySelectorAll('div');
-    for (var i=0;i<headers.length;i++){
-      var h = headers[i];
-      if (h.textContent && h.textContent.indexOf('My Bets') !== -1 && h.querySelector && h.querySelector('button')) {
-        var btn = document.createElement('button');
-        btn.setAttribute('data-grading-console-btn','1');
-        btn.textContent = '🧪 Grading Console';
-        btn.style.cssText = 'font-size:0.7rem;font-weight:700;color:#fff;background:linear-gradient(135deg,#0064c8,#0093e9);border:none;border-radius:20px;padding:6px 12px;cursor:pointer;margin-left:8px';
-        btn.onclick = function(){ openGradingConsole(); };
-        h.appendChild(btn);
-        break;
-      }
-    }
+    var slot = el.querySelector('[data-rb-dev-slot]');
+    if (!slot) return;
+    var btn = document.createElement('button');
+    btn.setAttribute('data-grading-console-btn','1');
+    btn.textContent = '🧪 Grading Console';
+    btn.style.cssText = 'font-size:0.65rem;font-weight:700;color:#fff;background:linear-gradient(135deg,#0064c8,#0093e9);border:none;border-radius:20px;padding:4px 10px;cursor:pointer';
+    btn.onclick = function(){ openGradingConsole(); };
+    slot.appendChild(btn);
   }
   document.addEventListener('DOMContentLoaded', function(){
     var el = document.getElementById('mybets-section');
