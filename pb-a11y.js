@@ -5,6 +5,7 @@
   'use strict';
 
   var _sessions = new WeakMap();
+  var _stack = []; // top-most modal only handles Escape
   var _liveEl = null;
 
   function _focusable(root) {
@@ -33,12 +34,16 @@
 
     var prevFocus = document.activeElement;
     var keyHandler = function (e) {
+      // ESC closes only the top-most active modal (stack).
       if (e.key === 'Escape') {
+        if (_stack.length && _stack[_stack.length - 1] !== overlay) return;
         e.preventDefault();
+        if (typeof e.stopPropagation === 'function') e.stopPropagation();
         if (typeof opts.onEscape === 'function') opts.onEscape();
         return;
       }
       if (e.key !== 'Tab') return;
+      if (_stack.length && _stack[_stack.length - 1] !== overlay) return;
       var focusables = _focusable(dialog);
       if (!focusables.length) {
         e.preventDefault();
@@ -60,6 +65,7 @@
 
     document.addEventListener('keydown', keyHandler, true);
     _sessions.set(overlay, { prevFocus: prevFocus, keyHandler: keyHandler });
+    _stack.push(overlay);
 
     var initial = null;
     if (opts.initialFocus && dialog.querySelector) {
@@ -78,6 +84,8 @@
     if (!session) return;
     document.removeEventListener('keydown', session.keyHandler, true);
     _sessions.delete(overlay);
+    var idx = _stack.indexOf(overlay);
+    if (idx >= 0) _stack.splice(idx, 1);
     if (session.prevFocus && typeof session.prevFocus.focus === 'function') {
       try { session.prevFocus.focus(); } catch (_e) {}
     }
