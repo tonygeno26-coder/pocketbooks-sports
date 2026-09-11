@@ -300,6 +300,15 @@ test('Players tab is DB-first via _hostPlayersFromDbOrLocal', function() {
   assert(hostHtml.indexOf("loadHostDashboardFromDb('players_tab')") !== -1, 'Players tab refetches dashboard');
 });
 
+test('Players tab preserves display name and renders username second', function() {
+  assert(
+    hostHtml.indexOf('playerName: dp.playerName || dp.displayName || dp.username') !== -1,
+    'API display name is not overwritten by username'
+  );
+  assert(hostHtml.indexOf("var usernameLabel = username ? '@'") !== -1, 'username is rendered as @username');
+  assert(hostHtml.indexOf('String(p.playerId || \'\').slice(0, 8)') !== -1, 'short ID is the last fallback');
+});
+
 test('Your Players list is filled from the same rows as the Players tab', function() {
   assert(hostHtml.indexOf("getElementById('player-list')") !== -1, 'renderPlayersTab writes #player-list');
   assert(hostHtml.indexOf('id="players-tab-list"') !== -1, 'Players tab has dedicated #players-tab-list');

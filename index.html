@@ -3457,9 +3457,10 @@ function _applyHostDashboardPlayers(players) {
       // stale local balance:0 cannot stick after a successful dashboard fetch.
       byId[pid] = Object.assign({}, prev, {
         playerId: pid,
-        playerName: dp.username || dp.playerName || prev.playerName || pid,
+        username: dp.username || prev.username || '',
+        playerName: dp.playerName || dp.displayName || dp.username || prev.playerName || pid,
         status: prev.status || 'approved',
-        realName: prev.realName || ((dp.playerName && dp.playerName !== dp.username) ? dp.playerName : ''),
+        realName: (dp.playerName && dp.playerName !== dp.username) ? dp.playerName : (prev.realName || ''),
         availableBalance: Object.prototype.hasOwnProperty.call(dp, 'availableBalance')
           ? dp.availableBalance : prev.availableBalance,
         currentBalance: Object.prototype.hasOwnProperty.call(dp, 'currentBalance')
@@ -3491,7 +3492,7 @@ function _hostPlayersFromDbOrLocal(){
       return {
         playerId: String(pid),
         username: dp.username || '',
-        playerName: dp.username || dp.playerName || String(pid),
+        playerName: dp.playerName || dp.displayName || dp.username || String(pid).slice(0, 8),
         status: dp.status || 'approved',
         realName: (dp.playerName && dp.playerName !== dp.username) ? dp.playerName : '',
         availableBalance: dp.availableBalance,
@@ -4618,7 +4619,8 @@ async function loadRequests(){
     pendingRequests = reqs.map(function(r){
       return {
         playerId: r.playerId || r.player_id || r.actor_id || r.user_id,
-        playerName: r.playerName || r.username || r.name || r.email || 'Player',
+        playerName: r.playerName || r.display_name || r.name || r.username || r.email || 'Player',
+        username: r.username || '',
         clubId: clubId,
         clubName: (currentClub && currentClub.name) || '',
         membershipId: r.id || r.membership_id || r.membershipId,
@@ -4848,7 +4850,11 @@ function renderPlayersTab(){
       var alias = (p.username || p.playerName || '').toString().trim().toLowerCase();
       if (alias) dbp = _hostDbPlayersById[alias] || null;
     }
-    var uname = (dbp && dbp.username) ? dbp.username : (p.username || p.playerName || p.playerId);
+    var username = (dbp && dbp.username) ? dbp.username : (p.username || '');
+    var displayName = (dbp && (dbp.playerName || dbp.displayName))
+      || p.playerName
+      || (username ? '@'+String(username).replace(/^@/, '') : String(p.playerId || '').slice(0, 8));
+    var usernameLabel = username ? '@'+String(username).replace(/^@/, '') : '';
     // Authoritative bankroll — never creditLimit, never fake $0 for missing data.
     var avail = _resolveHostPlayerBalance(p, dbp);
     var balTxt = _fmtHostPlayerBalance(avail);
@@ -4864,13 +4870,14 @@ function renderPlayersTab(){
     var sc=p.status==='blocked'?'#ff3d57':p.status==='approved'?'#00ff88':'#f5c842';
     return '<div data-pid="'+p.playerId+'" style="border-bottom:1px solid rgba(255,255,255,0.04)">'
       +'<div onclick="togglePlayerExpand(this.parentNode.dataset.pid)" style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent">'
-      +avatarHtml(uname, p.color||'#2a4a3a')
+      +avatarHtml(displayName, p.color||'#2a4a3a')
       +'<div style="flex:1;min-width:0">'
         +'<div style="display:flex;align-items:center;gap:8px">'
-          +'<span style="font-size:0.88rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+uname+'</span>'
+          +'<span style="font-size:0.88rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+displayName+'</span>'
           +'<span style="font-size:0.6rem;font-weight:800;color:'+sc+';background:rgba(0,0,0,0.3);padding:2px 7px;border-radius:10px;border:1px solid '+sc+';flex-shrink:0">'+(p.status||'approved').toUpperCase()+'</span>'
         +'</div>'
-        +(p.realName?'<div style="font-size:0.72rem;color:var(--light);margin-top:1px">'+p.realName+'</div>':'')
+        +(usernameLabel && usernameLabel.toLowerCase() !== String(displayName).toLowerCase()
+          ? '<div style="font-size:0.72rem;color:var(--light);margin-top:1px">'+usernameLabel+'</div>' : '')
         +'<div style="font-size:0.68rem;color:var(--gray);margin-top:2px">'
           +'<span style="color:#8eb6ff">'+balTxt+'</span> bal'
           +' · <span style="color:#ff6b6b">$'+openRisk.toFixed(2)+' open</span>'
