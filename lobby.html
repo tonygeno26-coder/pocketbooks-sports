@@ -773,6 +773,11 @@ function _setAuthScreenVisible(show) {
     if (_authFieldFocused()) return;
     el.style.display = 'flex';
   } else {
+    try {
+      var forced = document.getElementById('pb-force-auth');
+      if (forced && forced.parentNode) forced.parentNode.removeChild(forced);
+      if (window.__pbForceAuth) window.__pbForceAuth = '';
+    } catch (_e) {}
     el.style.display = 'none';
   }
 }

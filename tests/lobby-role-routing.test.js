@@ -79,6 +79,14 @@ test('post-login route stays on the lobby until membership is confirmed', functi
   assert(routeFn.indexOf('survivor.html') === -1, 'login must not send new players to survivor');
 });
 
+test('successful login can clear forced auth-screen overlay', function() {
+  assert(html.indexOf('pb-force-auth') !== -1, 'forced auth pre-render style missing');
+  assert(html.indexOf("document.getElementById('pb-force-auth')") !== -1,
+    'hideAuthScreen must remove forced auth style after login');
+  assert(html.indexOf('window.__pbForceAuth =') !== -1,
+    'hideAuthScreen must clear forced auth flag after login');
+});
+
 test('pre-render does not infer membership from localStorage', function() {
   assert(html.indexOf('Membership is not inferred from localStorage') !== -1,
     'lobby pre-render must not bounce from stored roles');
