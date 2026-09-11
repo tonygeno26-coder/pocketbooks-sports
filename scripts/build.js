@@ -28,7 +28,7 @@ require('./stamp-build.js');
 
 // ── Step 2: JS syntax check on all HTML files ────────────────────────────────
 console.log('\n── Step 2: JS syntax check');
-const htmlFiles = ['player.html', 'index.html', 'dev.html']
+const htmlFiles = ['player.html', 'index.html', 'lobby.html', 'dev.html']
   .map(f => path.join(ROOT, f))
   .filter(f => fs.existsSync(f));
 
