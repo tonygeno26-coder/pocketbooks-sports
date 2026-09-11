@@ -94,6 +94,22 @@ test('successful login can clear forced auth-screen overlay', function() {
     'hideAuthScreen must clear forced auth flag after login');
 });
 
+test('successful login resets stale auth failure latch', function() {
+  assert(html.indexOf('_authGiveUp = false') !== -1,
+    'login success must clear auth give-up state before club entry');
+  assert(html.indexOf('_authFailCount = 0') !== -1,
+    'login success must clear auth retry count before club entry');
+  assert(html.indexOf('window.history.replaceState') !== -1,
+    'login success must remove stale sign-in error URL');
+});
+
+test('club entry can use canonical actor id sources', function() {
+  assert(html.indexOf('actorId: c.actorId || c.actor_id || c.playerId || c.player_id || null') !== -1,
+    'normalized membership must preserve actor id if supplied');
+  assert(html.indexOf('activeClub.actorId ||') !== -1,
+    'club entry must prefer canonical membership actor id before local profile fallback');
+});
+
 test('pre-render does not infer membership from localStorage', function() {
   assert(html.indexOf('Membership is not inferred from localStorage') !== -1,
     'lobby pre-render must not bounce from stored roles');

@@ -1074,6 +1074,13 @@ async function submitAuth(e) {
 
     TOKEN = data.token;
     _storeAuthToken(data.token, data.expiresIn);
+    _authGiveUp = false;
+    _authFailCount = 0;
+    _authBlockedUntil = 0;
+    try {
+      var cleanUrl = window.location.pathname + window.location.hash;
+      window.history.replaceState(null, '', cleanUrl || 'lobby.html');
+    } catch(_e){}
     var storedEmail = signupEmail || email || loginEmail || (data.user && data.user.email) || '';
     if (storedEmail) {
       localStorage.setItem('pb-player-email', storedEmail);
@@ -1636,6 +1643,7 @@ function normalizeMembership(c, fallbackRole) {
   var role = normRole(c.role || fallbackRole || 'player');
   return Object.assign({}, c, {
     id: c.id,
+    actorId: c.actorId || c.actor_id || c.playerId || c.player_id || null,
     code: c.code,
     name: c.name,
     role: role,
@@ -1777,6 +1785,7 @@ async function joinBetaClub() {
   if (_membershipActive(_betaMembership)) {
     activeClub = normalizeMembership({
       id: PB_BETA_CLUB_ID,
+      actorId: _betaMembership.actorId || _betaMembership.actor_id || _betaMembership.playerId || _betaMembership.player_id || null,
       name: (_betaClub && _betaClub.name) || 'PocketBooks Beta',
       role: _betaMembership.role || 'player',
       status: status === 'active' ? 'active' : 'approved'
@@ -1995,7 +2004,7 @@ function enterActiveClub(action) {
   // Acquire a fresh club-scoped token before navigating
   var _navPlayer = null;
   try { _navPlayer = JSON.parse(localStorage.getItem('pb-player')||'null'); } catch(_){}
-  var _navPid = _navPlayer && (_navPlayer.id != null ? String(_navPlayer.id) : _navPlayer.username) || null;
+  var _navPid = activeClub.actorId || (activeClub.membership && (activeClub.membership.actorId || activeClub.membership.actor_id || activeClub.membership.playerId || activeClub.membership.player_id)) || (_navPlayer && (_navPlayer.id != null ? String(_navPlayer.id) : _navPlayer.username)) || null;
   var _navCid = String(activeClub.id != null ? activeClub.id : (activeClub.clubId || ''));
   
 
