@@ -78,6 +78,10 @@ test('host dashboard denies sessions that are not club-scoped host tokens', func
 test('active member route is the player dashboard', function() {
   assert(lobby.indexOf("var dest = isHostRole(canonicalRole) ? 'index.html' : 'player.html'") !== -1);
   assert(lobby.indexOf('unknown_status') !== -1);
+  assert(player.indexOf('location.replace(\'survivor.html\')') === -1,
+    'player dashboard must not auto-redirect beta players to Survivor');
+  assert(player.indexOf('Player beta sportsbook sessions stay on player.html') !== -1,
+    'player dashboard should document the beta sportsbook default');
 });
 
 test('mobile lobby card stays within 390 and 430', function() {
