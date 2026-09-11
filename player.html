@@ -2292,8 +2292,8 @@ function _showSessionExpiredModal(result) {
 })();
 // ══════════════════════════════════════════════════════════════════════════════
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '2361bfa';
-window.PBS_BUILD_DATE = '2026-09-10T23:29:52.363Z';
+window.PBS_BUILD_SHA = 'b5ab937';
+window.PBS_BUILD_DATE = '2026-09-11T09:16:30.081Z';
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 try { window.API = API; } catch (_eApi) {}
 // ESPN league logos for sport grid (verified working CDN paths; ncaa/soccer/atp/pga/boxing/rugby preferred slugs 404)
@@ -9533,38 +9533,32 @@ async function confirmBet() {
             '<div style="color:#aaa;font-size:0.9rem;margin-bottom:16px">Line changed from <b style="color:#fff">'+_od.submittedOdds+'</b> to <b style="color:#00ff87">'+_od.serverOdds+'</b></div>',
             '<div style="display:flex;gap:10px;justify-content:center">',
               '<button id="odds-reject-btn" style="flex:1;padding:12px;background:#222;border:1px solid #444;border-radius:10px;color:#fff;font-weight:700;font-size:0.9rem">Cancel Bet</button>',
-              '<button id="odds-accept-btn" style="flex:1;padding:12px;background:#00ff87;border:none;border-radius:10px;color:#000;font-weight:700;font-size:0.9rem">Accept New Odds</button>',
+              '<button id="odds-accept-btn" style="flex:1;padding:12px;background:#00ff87;border:none;border-radius:10px;color:#000;font-weight:700;font-size:0.9rem">Update Slip</button>',
             '</div>',
           '</div>'
         ].join('');
         document.body.appendChild(_odModal);
         document.getElementById('odds-reject-btn').onclick=function(){ _odModal.remove(); showToast('Bet canceled \u2014 line moved','info'); };
-        document.getElementById('odds-accept-btn').onclick=async function(){
+        document.getElementById('odds-accept-btn').onclick=function(){
           _odModal.remove();
-          var _updLegs=_dbPayload.legs.map(function(l,i){
-            return (typeof _od.legIndex==='number' && i===_od.legIndex)
-              ? Object.assign({},l,{odds:_od.serverOdds}) : l;
+          var _changed = false;
+          betSlip = betSlip.map(function(l,i){
+            var _match = (typeof _od.legIndex==='number' && i===_od.legIndex)
+              || (l && _od.leg && String(l.pick||'') === String(_od.leg))
+              || (l && _dbPayload.legs && _dbPayload.legs[i]
+                && String(l.canonicalGameKey||'') === String(_dbPayload.legs[i].canonicalGameKey||'')
+                && String(l.market||'') === String(_dbPayload.legs[i].market||'')
+                && String(l.pick||'') === String(_dbPayload.legs[i].pick||''));
+            if (!_match) return l;
+            _changed = true;
+            return Object.assign({}, l, { odds:_od.serverOdds });
           });
-          // New odds = new intent: clear sticky key and use distinct _oa key.
+          // New odds = new intent. Clear the sticky key, update the slip, and
+          // require the player to press Place Bet again; never auto-submit.
           _pendingPlaceIdemKey = null;
-          var _rp=Object.assign({},_dbPayload,{legs:_updLegs,idempotencyKey:_dbPayload.idempotencyKey+'_oa'});
-          _pendingPlaceIdemKey = _rp.idempotencyKey;
-          try {
-            var _r2=await _pbFetch('/api/bets/place',{method:'POST',body:JSON.stringify(_rp)});
-            var _rt=await _r2.text(); var _rd2; try{ _rd2=JSON.parse(_rt); }catch(_){ _rd2={}; }
-            if (_rd2.ok) {
-              _pendingPlaceIdemKey = null;
-              showToast('\u2705 Bet placed at new odds','success');
-              try {
-                if (_rd2.balanceAfter != null && !isNaN(Number(_rd2.balanceAfter))) {
-                  applyDisplayedBalance(Number(_rd2.balanceAfter));
-                  _balanceFromServer = true;
-                }
-              } catch(_){}
-              try{ loadPlayerDashboardFromDb({ keepPending: true }).then(function(){ try{renderMyBets();}catch(_){} }); }catch(_){ try{renderMyBets();}catch(_){} }
-            }
-            else { showToast((_rd2.code||_rd2.error||'placement failed').replace(/_/g,' '),'error'); }
-          } catch(_e2){ showToast('Network error \u2014 try again','error'); }
+          try { bsRenderLegs(); } catch(_renderErr) {}
+          try { bsSyncPlaceBtn(); } catch(_syncErr) {}
+          showToast(_changed ? 'Slip updated with current odds. Review and place again.' : 'Review the current market before placing.', 'info');
         };
         return;
 
@@ -16688,7 +16682,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO (debug panel only with ?debug=1 / pb-debug=1) -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;padding:2px 10px;display:none;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span id="build-info-label" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px">🔍 main · 2361bfa · Sep 10, 04:29 PM</span>
+  <span id="build-info-label" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px">🔍 main · b5ab937 · Sep 11, 02:16 AM</span>
 </div>
 <script>
 (function(){

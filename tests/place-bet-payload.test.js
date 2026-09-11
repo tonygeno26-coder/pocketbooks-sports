@@ -207,6 +207,19 @@ test('confirmBet / _makeSelection / click / bsToggle emit all contract fields', 
     'bsToggle must stamp contract fields via _buildContractPlaceLeg');
 });
 
+test('odds_changed review updates slip and does not auto-submit', function() {
+  var start = html.indexOf("document.getElementById('odds-accept-btn').onclick=function()");
+  assert(start !== -1, 'odds changed accept handler missing');
+  var end = html.indexOf('};', start);
+  var handler = html.slice(start, end);
+  assert(handler.indexOf("_pbFetch('/api/bets/place'") === -1,
+    'odds changed accept handler must not auto-submit a second placement');
+  assert(handler.indexOf('_pendingPlaceIdemKey = null') !== -1,
+    'new odds must clear sticky idempotency key before the next manual placement');
+  assert(handler.indexOf('bsRenderLegs') !== -1,
+    'new odds should refresh the visible slip');
+});
+
 test('market normalizer emits lowercase moneyline/total/spread', function() {
   assert(html.indexOf("return 'moneyline'") !== -1);
   assert(html.indexOf("return 'total'") !== -1);
