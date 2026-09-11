@@ -288,9 +288,13 @@ test('does not pin Bets tab to activeTickets[0]', function() {
   );
 });
 
-test('Bets tab expands all player groups by default', function() {
-  assert(hostHtml.indexOf('window._hostBetsExpanded[key] === undefined') !== -1, 'default-expand guard present');
-  assert(hostHtml.indexOf('_hostBetsExpanded[key] = true') !== -1, 'groups start expanded');
+test('Bets tab uses the approved single-player accordion', function() {
+  assert(hostHtml.indexOf('var _hostBetsExpandedPlayer = null') !== -1, 'groups start collapsed');
+  assert(hostHtml.indexOf('var open = _hostBetsExpandedPlayer === key') !== -1, 'only selected player opens');
+  assert(
+    hostHtml.indexOf('_hostBetsExpandedPlayer = (_hostBetsExpandedPlayer === k) ? null : k') !== -1,
+    'click toggles the selected player'
+  );
 });
 
 test('Players tab is DB-first via _hostPlayersFromDbOrLocal', function() {
