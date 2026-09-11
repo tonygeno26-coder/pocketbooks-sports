@@ -57,6 +57,23 @@ a.live-link{margin-left:auto;padding:7px 16px;background:rgba(0,194,255,0.12);bo
 .host-bypass-status.ok{color:#00ff88;border-color:rgba(0,255,136,0.25)}
 .host-bypass-status.bad{color:#ff3d57;border-color:rgba(255,61,87,0.3)}
 .screen-link.busy{opacity:0.6;pointer-events:none}
+.join-requests-panel{margin:0 0 16px;background:#111;border:1px solid #222;border-radius:12px;padding:12px 14px}
+.jrp-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.jrp-title{font-size:0.68rem;color:#00c2ff;text-transform:uppercase;letter-spacing:0.7px;font-weight:900}
+.jrp-meta{font-size:0.6rem;color:#666;margin-top:2px;font-family:ui-monospace,Menlo,monospace}
+.jrp-actions{display:flex;gap:7px;align-items:center}
+.jrp-btn{padding:7px 10px;border-radius:8px;border:1px solid #2a2a2a;background:#161616;color:#bbb;font-size:0.68rem;font-weight:900;cursor:pointer;font-family:inherit}
+.jrp-btn:hover{border-color:#00c2ff;color:#fff}
+.jrp-btn.primary{background:rgba(0,194,255,0.12);border-color:#00c2ff;color:#00c2ff}
+.jrp-btn.approve{background:rgba(0,255,136,0.12);border-color:rgba(0,255,136,0.4);color:#00ff88}
+.jrp-btn.deny{background:rgba(255,61,87,0.1);border-color:rgba(255,61,87,0.38);color:#ff3d57}
+.jrp-list{display:grid;gap:8px}
+.jrp-empty{padding:13px;border:1px dashed #2a2a2a;border-radius:10px;color:#777;font-size:0.72rem;text-align:center}
+.jrp-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;background:#0a0a0a;border:1px solid #242424;border-radius:10px;padding:10px 11px}
+.jrp-name{font-size:0.82rem;font-weight:900;color:#fff}
+.jrp-sub{font-size:0.62rem;color:#777;margin-top:3px;line-height:1.4}
+.jrp-status{display:inline-flex;align-items:center;gap:5px;margin-top:5px;padding:3px 7px;border-radius:999px;background:rgba(245,200,66,0.1);border:1px solid rgba(245,200,66,0.25);color:#f5c842;font-size:0.58rem;font-weight:900;text-transform:uppercase;letter-spacing:0.4px}
+.jrp-row-actions{display:flex;gap:6px;align-items:center}
 
 /* ── Preview stage ────────────────────────────────────────────────────────── */
 .stage{background:#0a0a0a;border:1px solid #1a1a1a;border-radius:14px;padding:18px;text-align:center;min-height:600px}
@@ -93,6 +110,21 @@ a.live-link{margin-left:auto;padding:7px 16px;background:rgba(0,194,255,0.12);bo
 
 <!-- Screen quick-pick (loads into preview iframe instead of new window). Public — no auth. -->
 <div id="host-bypass-status" class="host-bypass-status">Host bypass idle — Login as Host prompts once per tab, then skips lobby.html.</div>
+<section class="join-requests-panel" aria-label="Join requests">
+  <div class="jrp-head">
+    <div>
+      <div class="jrp-title">Join Requests</div>
+      <div class="jrp-meta">Test Club · TEST123 · pending only</div>
+    </div>
+    <div class="jrp-actions">
+      <button type="button" class="jrp-btn primary" id="jrp-refresh">Refresh</button>
+    </div>
+  </div>
+  <div id="jrp-status" class="host-bypass-status" style="margin:0 0 10px">Use Host Token or Login as Host, then refresh.</div>
+  <div id="jrp-list" class="jrp-list">
+    <div class="jrp-empty">Pending join requests will appear here.</div>
+  </div>
+</section>
 <div id="screens"></div>
 
 <!-- Stage / iframe -->
@@ -281,6 +313,123 @@ async function bypassApi(path, body) {
   return { ok: res.ok, status: res.status, data: data };
 }
 
+function getHostToken() {
+  return localStorage.getItem('pb-sports-token') || localStorage.getItem('pb-session-token') || '';
+}
+
+async function devApi(method, path, body) {
+  var token = getHostToken();
+  var res = await fetch(HOST_BYPASS.api + path, {
+    method: method || 'GET',
+    headers: Object.assign({ 'Content-Type': 'application/json' }, token ? { 'Authorization': 'Bearer ' + token } : {}),
+    body: body ? JSON.stringify(body) : undefined
+  });
+  var data = {};
+  try { data = await res.json(); } catch (_e) {}
+  return { ok: res.ok, status: res.status, data: data };
+}
+
+function setJoinRequestsStatus(msg, kind) {
+  var el = document.getElementById('jrp-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'host-bypass-status' + (kind ? ' ' + kind : '');
+}
+
+function requestDisplayName(r) {
+  return r.playerName || r.username || r.name || r.email || ('Player ' + (r.playerId || r.actor_id || '').slice(0, 6));
+}
+
+function renderJoinRequests(requests) {
+  var list = document.getElementById('jrp-list');
+  if (!list) return;
+  if (!requests || !requests.length) {
+    list.innerHTML = '<div class="jrp-empty">No pending requests for Test Club.</div>';
+    return;
+  }
+  list.innerHTML = requests.map(function(r) {
+    var pid = String(r.playerId || r.player_id || r.actor_id || r.user_id || '');
+    var mid = String(r.membershipId || r.id || '');
+    var name = requestDisplayName(r);
+    var requestedAt = r.joined_at || r.joinedAt || r.requestedAt || '';
+    return '<div class="jrp-row">'
+      + '<div>'
+        + '<div class="jrp-name">' + escapeHtml(name) + '</div>'
+        + '<div class="jrp-sub">' + escapeHtml(r.email || r.username || pid) + '<br>Requested club: Test Club' + (requestedAt ? ' · ' + escapeHtml(new Date(requestedAt).toLocaleString()) : '') + '</div>'
+        + '<span class="jrp-status">Pending</span>'
+      + '</div>'
+      + '<div class="jrp-row-actions">'
+        + '<button type="button" class="jrp-btn approve" data-jrp-action="approve" data-pid="' + escapeAttr(pid) + '" data-mid="' + escapeAttr(mid) + '">Approve</button>'
+        + '<button type="button" class="jrp-btn deny" data-jrp-action="deny" data-pid="' + escapeAttr(pid) + '" data-mid="' + escapeAttr(mid) + '">Deny</button>'
+      + '</div>'
+    + '</div>';
+  }).join('');
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+    return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c];
+  });
+}
+
+function escapeAttr(s) { return escapeHtml(s).replace(/`/g, '&#96;'); }
+
+async function refreshJoinRequests() {
+  if (!getHostToken()) {
+    setJoinRequestsStatus('Host token missing — click Host Token or Login as Host first.', 'bad');
+    renderJoinRequests([]);
+    return [];
+  }
+  setJoinRequestsStatus('Loading pending requests…');
+  var res = await devApi('GET', '/api/club/pending-requests?clubId=' + encodeURIComponent(HOST_BYPASS.clubId));
+  if (!res.ok) {
+    setJoinRequestsStatus('Could not load requests: ' + ((res.data && (res.data.error || res.data.message)) || ('HTTP ' + res.status)), 'bad');
+    renderJoinRequests([]);
+    return [];
+  }
+  var requests = Array.isArray(res.data) ? res.data : (res.data.requests || []);
+  renderJoinRequests(requests);
+  setJoinRequestsStatus(requests.length ? (requests.length + ' pending request' + (requests.length === 1 ? '' : 's')) : 'No pending requests for Test Club.', 'ok');
+  return requests;
+}
+
+async function verifyMembershipStatus(playerId, expectedStatus) {
+  var res = await bypassApi('/api/auth/token', { actorId: String(playerId), clubId: HOST_BYPASS.clubId });
+  var status = res.data && (res.data.status || res.data.membershipStatus || res.data.error);
+  if (expectedStatus === 'approved' || expectedStatus === 'active') {
+    return !!(res.ok && res.data && res.data.token && (status === 'approved' || status === 'active'));
+  }
+  if (expectedStatus === 'rejected' || expectedStatus === 'denied') {
+    return !res.ok && (status === 'rejected' || status === 'denied' || res.data.error === 'membership_inactive');
+  }
+  return false;
+}
+
+async function handleJoinRequestAction(playerId, action) {
+  if (!playerId) return;
+  var verb = action === 'approve' ? 'approve' : 'deny';
+  setJoinRequestsStatus((verb === 'approve' ? 'Approving ' : 'Denying ') + playerId + '…');
+  var path = verb === 'approve' ? '/api/club/members/approve' : '/api/club/members/deny';
+  var body = { clubId: HOST_BYPASS.clubId, targetActorId: String(playerId), playerId: String(playerId) };
+  if (verb === 'approve') {
+    body.balanceStart = 1000;
+    body.starting_balance = 1000;
+    body.credit_limit = 1000;
+  }
+  var res = await devApi('POST', path, body);
+  if (!res.ok || !(res.data && res.data.ok)) {
+    setJoinRequestsStatus((verb === 'approve' ? 'Approve' : 'Deny') + ' failed: ' + ((res.data && (res.data.error || res.data.message)) || ('HTTP ' + res.status)), 'bad');
+    return;
+  }
+  var verified = await verifyMembershipStatus(playerId, verb === 'approve' ? 'approved' : 'rejected');
+  if (!verified) {
+    setJoinRequestsStatus((verb === 'approve' ? 'Approve' : 'Deny') + ' returned ok, but membership verification failed.', 'bad');
+    return;
+  }
+  await refreshJoinRequests();
+  setJoinRequestsStatus((verb === 'approve' ? 'Approved' : 'Denied') + ' and verified membership state for ' + playerId + '.', 'ok');
+}
+
 function promptHostCreds() {
   var email = sessionStorage.getItem(HOST_BYPASS.ssEmail) || '';
   var pass = sessionStorage.getItem(HOST_BYPASS.ssPass) || '';
@@ -441,6 +590,20 @@ document.getElementById('go-btn').addEventListener('click', function(){
 document.getElementById('url-input').addEventListener('keydown', function(e){
   if (e.key === 'Enter') loadUrl(this.value.trim());
 });
+document.getElementById('jrp-refresh').addEventListener('click', function(){
+  refreshJoinRequests().catch(function(err){
+    setJoinRequestsStatus('Refresh failed: ' + (err && err.message ? err.message : err), 'bad');
+  });
+});
+document.getElementById('jrp-list').addEventListener('click', function(e){
+  var btn = e.target && e.target.closest && e.target.closest('[data-jrp-action]');
+  if (!btn) return;
+  var action = btn.getAttribute('data-jrp-action');
+  var pid = btn.getAttribute('data-pid');
+  handleJoinRequestAction(pid, action).catch(function(err){
+    setJoinRequestsStatus('Action failed: ' + (err && err.message ? err.message : err), 'bad');
+  });
+});
 
 // Re-cap stage width on actual window resizes (debounced).
 var _vpResizeT = null;
@@ -452,6 +615,7 @@ window.addEventListener('resize', function(){
 // Initial state
 setViewport('desktop');
 loadUrl(currentUrl);
+refreshJoinRequests().catch(function(){});
 </script>
 
 <script>
