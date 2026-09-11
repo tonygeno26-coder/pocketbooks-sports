@@ -1118,6 +1118,7 @@ async function submitAuth(e) {
         role:          _loginRole,
       };
       localStorage.setItem('pb-player', JSON.stringify(_rec));
+      await _primeBetaClubSession(_rec.id);
     } catch(_e){}
 
     // Everyone lands on the lobby. Do not infer membership from localStorage.
@@ -1673,6 +1674,34 @@ function dedupClubs(list) {
 const PB_BETA_CLUB_ID = 'd616dc2a-95a6-473a-97b1-7da330878479';
 var _betaClub = null;
 var _betaMembership = null;
+
+async function _primeBetaClubSession(actorId) {
+  if (!actorId || !TOKEN) return false;
+  try {
+    var beta = await _authFetchOnce(API + '/api/player-beta', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN }
+    });
+    if (!beta.ok || !beta.data || !beta.data.club || String(beta.data.club.id) !== PB_BETA_CLUB_ID) return false;
+    var membership = beta.data.membership || null;
+    if (!_membershipActive(membership)) return false;
+    _betaClub = beta.data.club;
+    _betaMembership = membership;
+    activeClub = normalizeMembership({
+      id: PB_BETA_CLUB_ID,
+      actorId: String(actorId),
+      name: (_betaClub && _betaClub.name) || 'PocketBooks Beta',
+      role: membership.role || 'player',
+      status: _membershipStatus(membership) === 'active' ? 'active' : 'approved'
+    }, 'player');
+    try { syncSelectedClubStorage(activeClub); } catch(_e){}
+    return _acquireClubToken(String(actorId), PB_BETA_CLUB_ID).then(function(result) {
+      return !!(result && result.ok);
+    }, function() { return false; });
+  } catch(_e) {
+    return false;
+  }
+}
 
 function _membershipStatus(m) {
   return String((m && m.status) || '').toLowerCase();

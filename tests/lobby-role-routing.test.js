@@ -110,6 +110,15 @@ test('club entry can use canonical actor id sources', function() {
     'club entry must prefer canonical membership actor id before local profile fallback');
 });
 
+test('approved beta login primes club-scoped token before player entry', function() {
+  assert(html.indexOf('await _primeBetaClubSession(_rec.id)') !== -1,
+    'login success must prime a club-scoped token for approved beta members');
+  assert(html.indexOf("API + '/api/player-beta'") !== -1,
+    'token prime must verify beta membership before minting');
+  assert(html.indexOf("_acquireClubToken(String(actorId), PB_BETA_CLUB_ID)") !== -1,
+    'token prime must mint the player dashboard club token');
+});
+
 test('pre-render does not infer membership from localStorage', function() {
   assert(html.indexOf('Membership is not inferred from localStorage') !== -1,
     'lobby pre-render must not bounce from stored roles');
