@@ -1669,6 +1669,35 @@ function _membershipActive(m) {
   return s === 'approved' || s === 'active';
 }
 
+function _rootLanding() {
+  try { return new URLSearchParams(window.location.search).get('root') === '1'; }
+  catch (_e) { return false; }
+}
+
+// Public `/` lands here via ?root=1. Active players continue into the player
+// experience. Hosts stay on the lobby and use existing host navigation.
+// Pending and non-members stay on the lobby card. Returns (?from=) do not
+// auto-enter, so player/host back-links cannot loop.
+function _maybeEnterPlayerFromRoot() {
+  if (!_rootLanding()) return;
+  var fromParam = '';
+  try { fromParam = new URLSearchParams(window.location.search).get('from') || ''; }
+  catch (_e) { fromParam = ''; }
+  if (fromParam === 'player' || fromParam === 'host') return;
+  if (sessionStorage.getItem('pb-force-lobby-home') === '1') return;
+  if (!_membershipActive(_betaMembership)) return;
+  if (isHostRole(_betaMembership && _betaMembership.role)) return;
+  if (sessionStorage.getItem('pb-root-player-entered') === '1') return;
+  sessionStorage.setItem('pb-root-player-entered', '1');
+  activeClub = normalizeMembership({
+    id: PB_BETA_CLUB_ID,
+    name: (_betaClub && _betaClub.name) || 'PocketBooks Beta',
+    role: _betaMembership.role || 'player',
+    status: _membershipStatus(_betaMembership) === 'active' ? 'active' : 'approved'
+  }, 'player');
+  enterActiveClub('player');
+}
+
 function paintBetaCard(club, membership) {
   var nameEl = document.getElementById('beta-club-name');
   var descEl = document.getElementById('beta-club-desc');
@@ -1730,6 +1759,7 @@ async function loadBetaClub() {
     _betaClub = data.club;
     _betaMembership = data.membership || null;
     paintBetaCard(_betaClub, _betaMembership);
+    _maybeEnterPlayerFromRoot();
   } catch (e) {
     paintBetaCard(null, null);
     if (btn) btn.textContent = 'Try again';
