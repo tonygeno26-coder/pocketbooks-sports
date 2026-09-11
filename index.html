@@ -26,7 +26,8 @@
       location.replace('lobby.html?screen=signin&msg=' + encodeURIComponent('Session invalid — please sign in again'));
       return;
     }
-    try { JSON.parse(atob(_bootParts[1].replace(/-/g,'+').replace(/_/g,'/'))); }
+    var payload = null;
+    try { payload = JSON.parse(atob(_bootParts[1].replace(/-/g,'+').replace(/_/g,'/'))); }
     catch(_e) {
       location.replace('lobby.html?screen=signin&msg=' + encodeURIComponent('Session invalid — please sign in again'));
       return;
@@ -38,34 +39,13 @@
         || n==='cohost'||n==='staff'||n==='settlement_manager'
         || n.indexOf('cohost_')===0||n.indexOf('staff_')===0;
     }
-    var role = '';
-    try { var p = JSON.parse(localStorage.getItem('pb-player')||'null'); if (p && p.role) role = p.role; } catch(_e){}
-    try { var h = JSON.parse(localStorage.getItem('pb-host')||'null'); if (h && _isHost(h.role)) role = h.role; } catch(_e){}
-    try { var ar = localStorage.getItem('pb-actor-role'); if (ar && _isHost(ar)) role = ar; } catch(_e){}
-    try {
-      if (!_isHost(role)) {
-        var tok = localStorage.getItem('pb-sports-token')||localStorage.getItem('pb-session-token')||'';
-        var parts = tok.split('.');
-        if (parts.length === 3) {
-          var payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
-          if (payload && payload.role) role = payload.role;
-        }
-      }
-    } catch(_e){}
-    var hostRec = false;
-    try { var hr = JSON.parse(localStorage.getItem('pb-host')||'null'); if (hr && (hr.id || hr.username || hr.hostId || hr.role)) hostRec = true; } catch(_e){}
-    try {
-      var clubs = JSON.parse(localStorage.getItem('pb-clubs')||'[]');
-      if (Array.isArray(clubs) && clubs.some(function(c){ return _isHost(c.role); })) hostRec = true;
-    } catch(_e){}
-    try {
-      var ac = JSON.parse(localStorage.getItem('pb-active-club')||localStorage.getItem('pb-club')||'null');
-      if (ac && _isHost(ac.role)) hostRec = true;
-    } catch(_e){}
-    // JWT `user` is the default users.role for real hosts. Only bounce
-    // confirmed player-only sessions with no stored host / host-role club.
-    if (!_isHost(role) && !hostRec && _nr(role) === 'player') {
-      location.replace('survivor.html');
+    // Host dashboard requires a club-scoped host token.
+    // Login JWTs and localStorage host records are not authorization.
+    var tokenRole = payload && payload.role ? payload.role : '';
+    var tokenClubId = payload && (payload.clubId || payload.club_id);
+    if (!_isHost(tokenRole) || !tokenClubId) {
+      location.replace('lobby.html');
+      return;
     }
   } catch(_e){}
 })();
@@ -1423,7 +1403,7 @@ function renderAdminCrypto() {
     </select>
     <span class="club-code" id="club-code-display" onclick="copyCode()" title="Click to copy invite code">Copy Code</span>
   </div>
-  <button class="create-club-btn" onclick="openCreateClub()">+ Club</button>
+  <button class="create-club-btn" id="create-club-btn" hidden style="display:none" onclick="openCreateClub()">Club creation is coming later.</button>
 </div>
 
 <!-- CREATE CLUB MODAL -->
@@ -5380,39 +5360,14 @@ function copyInviteLink() {
   showToast('✅ Invite link copied!');
 }
 
-function openCreateClub() { document.getElementById('modal-create-club').style.display = 'flex'; }
+function openCreateClub() {
+  showToast('Club creation is coming later.');
+}
 function closeCreateClub() { document.getElementById('modal-create-club').style.display = 'none'; }
 
 async function createClub() {
-  const name = (document.getElementById('cc-name') && document.getElementById('cc-name').value || '').trim();
-  if (!name) { showToast('Enter a club name'); return; }
-  const max_bet = parseFloat(document.getElementById('cc-maxbet').value)||500;
-  const max_parlay = parseFloat(document.getElementById('cc-maxparlay').value)||1000;
-  const desc = document.getElementById('cc-desc').value.trim();
-  try {
-    const club = await apiCall('POST', '/api/clubs', { name, description:desc, max_bet, max_parlay });
-    clubs.unshift(club);
-    const sel = document.getElementById('club-select');
-    sel.innerHTML = '<option value="">— Select Club —</option>' +
-      clubs.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
-    sel.value = club.id;
-    switchClub(club.id);
-    closeCreateClub();
-    showToast('✅ Club created! Code: ' + club.code);
-  } catch(e) {
-    // Demo mode - create locally
-    const demoClub = { id: Date.now(), name, code: Math.random().toString(36).substring(2,8).toUpperCase(), member_count: 0, is_locked: false };
-    clubs.unshift(demoClub);
-    const sel = document.getElementById('club-select');
-    sel.innerHTML = '<option value="">— Select Club —</option>' +
-      clubs.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
-    sel.value = demoClub.id;
-    currentClub = demoClub;
-    document.getElementById('club-code-display').textContent = demoClub.code;
-    _renderActiveClubIdentity();
-    closeCreateClub();
-    showToast('✅ Club created! Code: ' + demoClub.code);
-  }
+  showToast('Club creation is coming later.');
+  return;
 }
 
 function showToast(msg) {

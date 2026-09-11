@@ -2117,7 +2117,6 @@ function _validatePlayerSession() {
     }
   }
   if (!pid)  missing.push('playerId');
-  if (!cid)  missing.push('clubId');
 
   if (missing.length > 0) {
     _sessionValid = false;
@@ -2141,6 +2140,13 @@ function _validatePlayerSession() {
     _sessionValid = false;
     console.warn('[session-gate] INVALID reason=token_expired');
     return { ok:false, missing:[], reason:'token_expired', canRecover: !!(pid && cid) };
+  }
+
+  // Membership is a club-scoped token, not a localStorage club record.
+  if (!tokenClubId) {
+    _sessionValid = false;
+    console.warn('[session-gate] INVALID reason=no_club_membership');
+    return { ok:false, missing:['club_session'], reason:'no_club_membership', canRecover:false };
   }
 
   // Auto-repair club mismatch at load time (same logic as confirmBet)
@@ -2199,6 +2205,10 @@ function _showSessionExpiredModal(result) {
   }
   
   if (!_sgResult.ok) {
+    if (_sgResult.reason === 'no_club_membership') {
+      window.location.replace('lobby.html');
+      return;
+    }
     // Test P1/RR/Edge tiles install session asynchronously — don't flash expired modal
     if (_pDev && _pp.get('testUser')) {
       return;
@@ -7361,7 +7371,9 @@ setTimeout(function(){
 // Auto-join from URL param
 const urlParams = new URLSearchParams(window.location.search);
 const joinCode = urlParams.get('join');
-if (joinCode) { const jci=document.getElementById('join-code-input'); if(jci) jci.value=joinCode; if(typeof showJoinModal==='function') showJoinModal(); }
+if (joinCode) {
+  // Invite codes are not a discovery surface. Join the beta club from the lobby.
+}
 
 // Club join functions
 function showJoinModal() { document.getElementById('modal-join-club').style.display='flex'; }

@@ -332,12 +332,38 @@ body.theme-light [style*="color:var(--pb-accent)"]{color:#00875a!important}
   .action-grid{grid-template-columns:1fr 1fr;gap:8px;padding-left:10px;padding-right:10px}
   .secondary-row{grid-template-columns:1fr 1fr 1fr;padding-left:10px;padding-right:10px}
 }
+.beta-lobby{padding:8px 16px 20px;max-width:430px;margin:0 auto;box-sizing:border-box}
+.beta-kicker{font-size:0.68rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#94A3B8;margin:0 0 8px}
+.beta-title{font-size:1.35rem;font-weight:900;letter-spacing:-0.4px;color:#F5F7FA;line-height:1.15;margin:0 0 8px}
+.beta-sub{font-size:0.82rem;color:#94A3B8;line-height:1.5;margin:0 0 14px}
+.beta-card{background:#101A2E;border:1px solid #1D2B42;border-radius:16px;padding:16px}
+.beta-card-top{display:flex;align-items:center;gap:12px}
+.beta-mark{width:48px;height:48px;border-radius:14px;background:#0A1120;border:1px solid #1D2B42;display:flex;align-items:center;justify-content:center;font-weight:900;color:#2F8CFF;flex-shrink:0;overflow:hidden}
+.beta-mark img{width:100%;height:100%;object-fit:cover}
+.beta-card-name{font-size:1.05rem;font-weight:900;color:#F5F7FA}
+.beta-card-desc{font-size:0.75rem;color:#94A3B8;line-height:1.45;margin-top:4px}
+.beta-status{display:inline-flex;align-items:center;margin-top:12px;font-size:0.72rem;font-weight:800;border-radius:999px;padding:4px 10px}
+.beta-status.pending{color:#EAB308;background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.35)}
+.beta-status.open{color:#94A3B8;background:rgba(148,163,184,0.08);border:1px solid #1D2B42}
+.beta-status.active{color:#22C55E;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.35)}
+.beta-join{width:100%;min-height:48px;margin-top:14px;padding:14px 16px;background:#1677FF;color:#fff;border:none;border-radius:14px;font-size:0.95rem;font-weight:900;cursor:pointer}
+.beta-join:disabled{opacity:0.72;cursor:default}
+.beta-note{margin-top:12px;font-size:0.72rem;color:#64748B;line-height:1.45;text-align:center}
+.create-club-btn,.modal-create,#modal-create{display:none!important}
+@media (max-width:430px){
+  .beta-lobby{padding:6px 12px 16px}
+  .beta-title{font-size:1.2rem}
+  .beta-card{padding:14px}
+}
 @media (max-width:390px){
   .auth-content{padding:24px 12px 20px}
   .auth-inp,.auth-submit{width:100%;max-width:100%;box-sizing:border-box}
   .action-grid{grid-template-columns:1fr 1fr;gap:8px}
   .action-card{min-width:0}
   .ac-label{font-size:0.78rem}
+  .beta-lobby{padding:4px 10px 14px}
+  .beta-title{font-size:1.12rem}
+  .beta-join{min-height:44px;font-size:0.9rem}
 }
 
 </style>
@@ -357,56 +383,13 @@ body.theme-light [style*="color:var(--pb-accent)"]{color:#00875a!important}
       return;
     }
   } catch(_e){}
-  // Authed players skip the sportsbook lobby entirely. Hosts go to the dashboard
-  // unless they explicitly asked to stay (?from=host or ?stay=1).
+  // Open player beta: a signed-in session stays on the lobby.
+  // Membership is not inferred from localStorage. Club entry happens only
+  // after the server confirms an active membership.
   try {
     var _routeQs = new URLSearchParams(location.search);
-    if (_routeQs.get('preview') !== '1' && _routeQs.get('screen') !== 'signin' && _routeQs.get('screen') !== 'signup') {
-      var _tok = localStorage.getItem('pb-sports-token');
-      if (_tok) {
-        function _nr(r){ return String(r||'').toLowerCase().trim(); }
-        function _isHost(r){
-          var n = _nr(r);
-          return n==='host'||n==='admin'||n==='master_admin'||n==='owner'||n==='creator'||n==='full_admin'
-            || n==='cohost'||n==='staff'||n==='settlement_manager'
-            || n.indexOf('cohost_')===0||n.indexOf('staff_')===0;
-        }
-        var _role = '';
-        try { var _p = JSON.parse(localStorage.getItem('pb-player')||'null'); if (_p && _p.role) _role = _p.role; } catch(_e){}
-        try { var _h = JSON.parse(localStorage.getItem('pb-host')||'null'); if (_h && _isHost(_h.role)) _role = _h.role; } catch(_e){}
-        try { var _ar = localStorage.getItem('pb-actor-role'); if (_ar && _isHost(_ar)) _role = _ar; } catch(_e){}
-        try {
-          if (!_isHost(_role)) {
-            var _parts = _tok.split('.');
-            if (_parts.length === 3) {
-              var _pl = JSON.parse(atob(_parts[1].replace(/-/g,'+').replace(/_/g,'/')));
-              if (_pl && _pl.role) _role = _pl.role;
-            }
-          }
-        } catch(_e){}
-        var _hostRec = false;
-        try { var _hr = JSON.parse(localStorage.getItem('pb-host')||'null'); if (_hr && (_hr.id || _hr.username || _hr.hostId || _hr.role)) _hostRec = true; } catch(_e){}
-        try {
-          var _clubs = JSON.parse(localStorage.getItem('pb-clubs')||'[]');
-          if (Array.isArray(_clubs) && _clubs.some(function(c){ return _isHost(c.role); })) _hostRec = true;
-        } catch(_e){}
-        try {
-          var _ac = JSON.parse(localStorage.getItem('pb-active-club')||localStorage.getItem('pb-club')||'null');
-          if (_ac && _isHost(_ac.role)) _hostRec = true;
-        } catch(_e){}
-        var _stay = _routeQs.get('stay') === '1' || _routeQs.get('from') === 'host';
-        // Hosts (JWT host/admin OR stored pb-host / host-role club) stay on
-        // sportsbook. JWT role `user` is the default for real hosts too — do
-        // NOT treat it as a player-only signal or they bounce to Survivor.
-        if ((_isHost(_role) || _hostRec) && !_stay) {
-          location.replace('index.html?from=lobby');
-          return;
-        }
-        if (!_isHost(_role) && !_hostRec && _nr(_role) === 'player') {
-          location.replace('survivor.html');
-          return;
-        }
-      }
+    if (_routeQs.get('screen') === 'create') {
+      window.__pbCreateClubUnavailable = true;
     }
   } catch(_e){}
   var forceHome = sessionStorage.getItem('pb-force-lobby-home') === '1';
@@ -475,7 +458,7 @@ try {
         <div class="new-badge">New</div>
       </div>
       <div class="user-info">
-        <div class="user-name" id="u-name">TonyG26</div>
+        <div class="user-name" id="u-name">Guest</div>
         <div class="user-id" id="u-id">ID: loading...</div>
       </div>
     </div>
@@ -486,77 +469,42 @@ try {
     </div>
   </div>
 
-  <!-- WALLET BAR -->
-  <div class="wallet-bar">
-    <div class="vip-badge">VIP</div>
-    <div class="wallet-sep"></div>
+  <!-- No client bankroll. Diamonds come from the server only, never a local starting balance. -->
+  <div class="wallet-bar" id="wallet-bar" style="display:none" hidden>
     <div class="wallet-item">
       <span class="wallet-icon">💎</span>
-      <span class="wallet-val" id="w-diamonds">2,450</span>
-      <div class="wallet-add" onclick="openBuyDiamondsModal()">+</div>
-    </div>
-    <div class="wallet-sep"></div>
-    <div class="wallet-item">
-      <span class="wallet-icon">🟣</span>
-      <span class="wallet-val" id="w-credits">59</span>
-      <div class="wallet-add" onclick="showSection('buy-credits')">+</div>
+      <span class="wallet-val" id="w-diamonds">—</span>
     </div>
   </div>
 
-  <!-- ACTIVE CLUB CARD -->
-  <div class="active-club-wrap" id="active-club-wrap" onclick="goSurvivor()">
-    <div class="active-club-card">
-      <div class="ac-top">
-        <span class="ac-id" id="ac-id-display">Survivor Pool</span>
-        <span style="font-size:0.65rem;color:#999">TAP TO PLAY ›</span>
-      </div>
-      <div class="ac-body" id="ac-body-el">
-        <div id="ac-empty-state" style="text-align:center;padding:6px 10px">
-          <div style="font-size:2.5rem;margin-bottom:10px;opacity:0.85">🛡️</div>
-          <div style="font-size:0.82rem;font-weight:700;color:#333;margin-bottom:14px">Pick one NFL team each week.<br>Clubs are paused for this test.</div>
-          <div style="display:flex;gap:8px;justify-content:center">
-            <button onclick="event.stopPropagation();goSurvivor()" style="padding:8px 16px;background:#00ff88;color:#000;border:none;border-radius:20px;font-size:0.75rem;font-weight:900;cursor:pointer">Play Survivor</button>
-          </div>
-        </div>
-        <img src="./logo.jpg" class="ac-logo" id="ac-logo" alt="Club" style="display:none">
-      </div>
-      <div class="ac-footer">
-        <div class="ac-owner-avatar" id="ac-owner-av">PB</div>
+  <div class="beta-lobby" id="beta-lobby">
+    <div class="beta-kicker">PocketBooks beta</div>
+    <h1 class="beta-title">Join the PocketBooks beta club to start playing.</h1>
+    <p class="beta-sub">One club is open for this beta. Request access if the host has the club locked. Club creation is coming later.</p>
+    <div class="beta-card" id="beta-club-card">
+      <div class="beta-card-top">
+        <div class="beta-mark"><img src="./logo.jpg" alt=""></div>
         <div>
-          <div class="ac-owner-name" id="ac-club-name">Pocket Books Sports</div>
-          <div class="ac-owner-sub" id="ac-role-display">Survivor test group</div>
-        </div>
-        <div class="ac-stats">
-          <span>💎</span>
-          <span id="ac-balance">0</span>
+          <div class="beta-card-name" id="beta-club-name">PocketBooks Beta</div>
+          <div class="beta-card-desc" id="beta-club-desc">Private club for the PocketBooks player beta.</div>
         </div>
       </div>
+      <div class="beta-status open" id="beta-status">Loading club…</div>
+      <button type="button" class="beta-join" id="beta-join-btn" onclick="joinBetaClub()">Join club</button>
     </div>
+    <div class="beta-note" id="beta-note">Club creation is coming later.</div>
   </div>
 
-  <!-- ACTION GRID -->
-  <div class="action-grid">
-    <div class="action-card locked" onclick="clubsLockedGuard()">
-      <div class="ac-bg ac-bg-join"><div class="ac-icon">🔒</div></div>
-      <div class="ac-gradient"></div>
-      <div class="ac-label">Join Club<br><span class="ac-sublabel">Coming soon</span></div>
-    </div>
-    <div class="action-card locked" onclick="clubsLockedGuard()">
-      <div class="ac-bg ac-bg-create"><div class="ac-icon">🔒</div></div>
-      <div class="ac-gradient"></div>
-      <div class="ac-label">Create Club<br><span class="ac-sublabel">Coming soon</span></div>
-    </div>
-    <div class="action-card locked" onclick="clubsLockedGuard()" id="my-clubs-tile">
-      <div class="ac-bg ac-bg-clubs"><div class="ac-icon">🔒</div></div>
-      <div class="ac-gradient"></div>
-      <div class="ac-label" id="clubs-tile-content">My Clubs<br><span class="ac-sublabel" id="club-count-lbl">Paused</span></div>
-    </div>
-    <a class="action-card" href="survivor.html" style="text-decoration:none;color:inherit">
-      <div class="ac-bg ac-bg-survivor"><div class="ac-icon">🛡️</div></div>
-      <div class="ac-gradient"></div>
-      <div class="ac-label">Survivor Pool<br><span class="ac-sublabel">Last team standing</span></div>
-    </a>
-  </div>
+  <div id="club-count-lbl" style="display:none">0</div>
+  <div id="pending-badge" style="display:none">0</div>
+  <div id="ac-id-display" style="display:none"></div>
+  <div id="ac-club-name" style="display:none"></div>
+  <div id="ac-owner-av" style="display:none"></div>
+  <div id="ac-role-display" style="display:none"></div>
+  <div id="ac-balance" style="display:none"></div>
+  <div id="ac-empty-state" style="display:none"></div>
+  <img id="ac-logo" alt="" style="display:none">
+  <div id="clubs-tile-content" style="display:none"></div>
 
   <!-- SECONDARY ROW -->
   <div class="secondary-row">
@@ -614,7 +562,7 @@ try {
     <div class="auth-logo-wrap">
       <div class="auth-logo"><img src="./logo.jpg" alt="PBS" onerror="this.parentNode.style.background='#1a2a1a';this.style.display='none'"></div>
       <div class="auth-app-name">Pocket Books <span>Sports</span></div>
-      <div class="auth-tagline">Your private betting club platform</div>
+      <div class="auth-tagline">Join the PocketBooks beta club to start playing.</div>
     </div>
 
     <div class="auth-tabs" style="max-width:380px;width:100%">
@@ -732,7 +680,7 @@ try {
       <input id="cc-name" class="inp" placeholder="e.g. Vegas Crew" style="margin:0;font-size:1rem;font-weight:700" oninput="updateLogoInitials(this.value)">
     </div>
 
-    <button onclick="createClub()" style="width:100%;padding:16px;background:var(--pb-accent);color:#fff;border:none;border-radius:14px;font-size:1rem;font-weight:900;cursor:pointer;letter-spacing:0.3px;box-shadow:0 4px 20px rgba(61,139,253,0.25)">Create My Club →</button>
+    <button onclick="createClub()" style="width:100%;padding:16px;background:transparent;color:#94A3B8;border:1px solid #1D2B42;border-radius:14px;font-size:1rem;font-weight:900;cursor:pointer">Club creation is coming later.</button>
     <div style="text-align:center;font-size:0.68rem;color:var(--pb-gray);margin-top:10px;line-height:1.5">You can adjust betting limits after approving each player.</div>
   </div>
 </div>
@@ -1099,7 +1047,7 @@ async function submitAuth(e) {
       signupEmail = email
         || (signalContact   ? 'signal+'   + signalContact.replace(/[^a-zA-Z0-9]/g,'').toLowerCase()   + '@pocketbooks.local' : '')
         || (telegramContact ? 'telegram+' + telegramContact.replace(/[^a-zA-Z0-9]/g,'').toLowerCase() + '@pocketbooks.local' : '');
-      data = await apiCall('POST', '/api/auth/signup', { name: signupName, email: signupEmail, password: pass, role: 'user',
+      data = await apiCall('POST', '/api/auth/signup', { name: signupName, email: signupEmail, password: pass,
         signalContact: signalContact || null, telegramContact: telegramContact || null });
     } else {
       data = await apiCall('POST', '/api/auth/login', { email: loginEmail, password: pass });
@@ -1139,11 +1087,14 @@ async function submitAuth(e) {
         localStorage.setItem('pb-player-settings', JSON.stringify(_ps));
       } catch(_e){}
     }
-    // Seed a minimal canonical record for whichever role applies, so role/
-    // profile survives refresh even if /api/auth/me hasn't returned yet.
+    // New accounts are ordinary players. Do not persist a host record from
+    // the login JWT. Host tools require a club-scoped token later.
+    // Do not remove pb-host when JWT says `user` — that is the default
+    // users.role for real hosts. It is not authorization by itself.
     var _loginRole = 'player';
     try {
       _loginRole = (data.role || (data.user && data.user.role) || 'player');
+      if (_loginRole === 'user') _loginRole = 'player';
       var _uname = (authMode==='signup'
         ? (signupName || 'user')
         : ((data.user && data.user.name) || (storedEmail ? storedEmail.split('@')[0] : 'user')));
@@ -1155,24 +1106,14 @@ async function submitAuth(e) {
         role:          _loginRole,
       };
       localStorage.setItem('pb-player', JSON.stringify(_rec));
-      if (typeof isAppHostRole === 'function' ? isAppHostRole(_loginRole) : (_loginRole === 'host' || _loginRole === 'owner' || _loginRole === 'admin' || _loginRole === 'master_admin' || _loginRole === 'creator')) {
-        localStorage.setItem('pb-host', JSON.stringify(_rec));
-      }
-      // Do not remove pb-host when JWT says `user` — that is the default
-      // users.role for real hosts. Club / stored-host signals decide.
     } catch(_e){}
 
-    // JWT host/admin → dashboard. Stored host / hosted clubs → dashboard.
-    // Confirmed player-only (after club hydration) → Survivor.
-    if (typeof hydrateHostFromClubs === 'function') {
-      try { await hydrateHostFromClubs(); } catch(_he){}
-    }
+    // Everyone lands on the lobby. Do not infer membership from localStorage.
     if (typeof routeAuthedUser === 'function') {
       routeAuthedUser(_loginRole);
-    } else if (typeof isHostSession === 'function' ? isHostSession() : (['host','admin','master_admin','owner','creator','full_admin'].indexOf(String(_loginRole||'').toLowerCase()) !== -1)) {
-      window.location.href = 'index.html?from=lobby';
     } else {
-      window.location.href = 'survivor.html';
+      hideAuthScreen();
+      showLobbyContent();
     }
     return;
 
@@ -1204,13 +1145,10 @@ function returnToLobby() {
     }
     return;
   }
-  // Determine role — players never re-enter the sportsbook.
-  var _role = (_player && _player.role) || (_club && _club.role) || 'player';
-  if (typeof isHostSession === 'function' ? isHostSession() : (typeof isAppHostRole === 'function' ? isAppHostRole(_role) : (_role === 'host' || _role === 'owner' || _role === 'admin' || _role === 'master_admin'))) {
-    window.location.href = 'index.html?from=lobby';
-  } else {
-    window.location.href = 'survivor.html';
-  }
+  // Players stay on the lobby until the server confirms an active membership.
+  hideAuthScreen();
+  showLobbyContent();
+  if (typeof loadBetaClub === 'function') loadBetaClub();
 }
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -1231,16 +1169,7 @@ function hideAuthScreen() {
 function showLobbyContent() {
   var el = document.querySelector('.content');
   if (el) el.style.display = '';
-  // Restore clubs from storage into userClubs
-  var stored = JSON.parse(localStorage.getItem('pb-clubs') || '[]');
-  if (!stored.length) {
-    var c = JSON.parse(localStorage.getItem('pb-club') || 'null');
-    if (c) stored = [c];
-  }
-  if (!stored.length && localStorage.getItem('pb-club-players')) {
-    stored = [{ id:'local', name:'Pocket Books Club', role:'host', status:'approved', code:'LOCAL' }];
-  }
-  if (stored.length) userClubs = stored;
+  // Do not treat stored clubs as membership. The beta card loads from the server.
 }
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -1256,39 +1185,15 @@ function checkAuthGate() {
     } catch(_e){}
     return;
   }
-  // Bypass auth if coming from host dashboard via ?from=host. Players who
-  // somehow land here (including ?from=player) go to Survivor, not sportsbook.
+  // Direct returns stay on the lobby. Do not bounce to host or survivor
+  // from a stored role. Membership is loaded from the server.
   var fromParam = new URLSearchParams(window.location.search).get('from');
-  if (fromParam === 'player') {
-    if (typeof isHostSession === 'function' ? !isHostSession() : true) {
-      window.location.replace('survivor.html');
-      return;
-    }
-  }
-  if (fromParam === 'host') {
+  if (fromParam === 'player' || fromParam === 'host') {
     if (typeof _setAuthScreenVisible === 'function') _setAuthScreenVisible(false);
-    else { var _asHost = document.getElementById('auth-screen'); if (_asHost) _asHost.style.display = 'none'; }
-    // Ensure lobby home content is visible
-    var contentEl = document.querySelector('.content');
-    if (contentEl) contentEl.style.display = '';
-    // Render clubs list — try pb-clubs first, then synthesize from pb-club
-    var _storedClubs = JSON.parse(localStorage.getItem('pb-clubs') || '[]');
-    if (!_storedClubs.length) {
-      var _pbClub = JSON.parse(localStorage.getItem('pb-club') || 'null');
-      if (_pbClub) _storedClubs = [_pbClub];
-    }
-    // Ensure mock club for hosts with only pb-club-players
-    if (!_storedClubs.length && localStorage.getItem('pb-club-players')) {
-      _storedClubs = [{ id: 'local', name: 'Pocket Books Club', role: fromParam === 'host' ? 'host' : 'player', status: 'approved', code: 'LOCAL' }];
-    }
-    if (typeof renderClubsList === 'function') {
-      if (_storedClubs.length) userClubs = _storedClubs;
-      renderClubsList();
-      if (typeof updateClubsTilePreview === 'function') updateClubsTilePreview();
-    }
-    var _cntEl = document.getElementById('club-count-lbl');
-    if (_cntEl) _cntEl.textContent = _storedClubs.length + ' club' + (_storedClubs.length !== 1 ? 's' : '');
-    
+    else { var _asBack = document.getElementById('auth-screen'); if (_asBack) _asBack.style.display = 'none'; }
+    var contentBack = document.querySelector('.content');
+    if (contentBack) contentBack.style.display = '';
+    if (typeof loadBetaClub === 'function') loadBetaClub();
     return;
   }
   // Accept JWT OR any local session signal
@@ -1307,14 +1212,12 @@ function checkAuthGate() {
   if (isAuthed) {
     
     if (typeof hideSportsbookChromeForPlayers === 'function') hideSportsbookChromeForPlayers();
-    var _stay = fromParam === 'host' || new URLSearchParams(window.location.search).get('stay') === '1';
-    if (typeof isHostSession === 'function' && isHostSession()) {
-      if (!_stay) window.location.replace('index.html?from=lobby');
-    } else if (typeof isPlayerOnlyRole === 'function' && isPlayerOnlyRole(typeof readSessionRole === 'function' ? readSessionRole() : '') && !(typeof hasHostSessionSignals === 'function' && hasHostSessionSignals())) {
-      window.location.replace('survivor.html');
+    if (window.__pbCreateClubUnavailable && typeof showToast === 'function') {
+      showToast('Club creation is coming later.');
     }
-    // JWT `user` with no host signals yet: stay and let loadMyClubs +
-    // _maybeAutoRoute decide after club hydration.
+    if (typeof loadBetaClub === 'function') loadBetaClub();
+    // Stay on the lobby. Do not auto-send players to survivor or hosts to
+    // the dashboard from localStorage.
   }
 }
 
@@ -1586,31 +1489,16 @@ async function loadUser() {
         role:     (typeof isAppHostRole === 'function' && isAppHostRole(prev.role)) ? prev.role : (u.role || prev.role || 'player'),
       })));
     } catch(_e){}
-    await loadMyClubs();
-    try {
-      if (typeof hasHostSessionSignals === 'function' && hasHostSessionSignals() && typeof persistHostRecord === 'function') persistHostRecord();
-    } catch(_e){}
-    _maybeAutoRoute();
+    await loadBetaClub();
+    if (window.__pbCreateClubUnavailable && typeof showToast === 'function') {
+      showToast('Club creation is coming later.');
+    }
   } catch(e) {}
 }
 
-// Auto-route after sign-in / returning session (runs after club hydration):
-//   host/admin/master_admin/owner/creator OR stored host / host-role club → dashboard
-//   confirmed player-only (no host signals) → Survivor Pool
-//   JWT `user` is NOT player-only — hosts use that default role.
-// Hosts may stay on the lobby with ?from=host or ?stay=1.
+// Signed-in users stay on the lobby. Do not auto-route from stored roles.
 function _maybeAutoRoute() {
-  var params = new URLSearchParams(window.location.search);
-  if (params.get('preview') === '1') return;
-  if (window.__pbForceAuth) return;
-  if (params.get('stay') === '1') return;
-  var fromParam = params.get('from');
-  if (fromParam === 'host') return;
-  if (typeof isHostSession === 'function' ? isHostSession() : (typeof isAppHostRole === 'function' && isAppHostRole(readSessionRole()))) {
-    window.location.href = 'index.html?from=lobby';
-    return;
-  }
-  window.location.href = 'survivor.html';
+  if (typeof loadBetaClub === 'function') loadBetaClub();
 }
 
 // ══ SIGN OUT ══ Clears token + dev creds + per-user session keys, returns to auth.
@@ -1704,12 +1592,12 @@ function isHostSession() {
   return isAppHostRole(readSessionRole()) || hasHostSessionSignals();
 }
 function routeAuthedUser(role) {
-  if (isAppHostRole(role) || isHostSession()) {
-    if (!isAppHostRole(role) && hasHostSessionSignals()) persistHostRecord();
-    window.location.href = 'index.html?from=lobby';
-  } else {
-    window.location.href = 'survivor.html';
-  }
+  // Public player beta: every signed-in account lands on the lobby.
+  // Host tools open only after a club-scoped token confirms a host role.
+  // Do not treat localStorage host records as membership.
+  hideAuthScreen();
+  showLobbyContent();
+  if (typeof loadBetaClub === 'function') loadBetaClub();
 }
 function hideSportsbookChromeForPlayers() {
   if (isHostSession()) return;
@@ -1769,109 +1657,133 @@ function dedupClubs(list) {
   return out;
 }
 
-async function loadMyClubs() {
+const PB_BETA_CLUB_ID = 'd616dc2a-95a6-473a-97b1-7da330878479';
+var _betaClub = null;
+var _betaMembership = null;
+
+function _membershipStatus(m) {
+  return String((m && m.status) || '').toLowerCase();
+}
+function _membershipActive(m) {
+  var s = _membershipStatus(m);
+  return s === 'approved' || s === 'active';
+}
+
+function paintBetaCard(club, membership) {
+  var nameEl = document.getElementById('beta-club-name');
+  var descEl = document.getElementById('beta-club-desc');
+  var statusEl = document.getElementById('beta-status');
+  var btn = document.getElementById('beta-join-btn');
+  var note = document.getElementById('beta-note');
+  if (nameEl) nameEl.textContent = (club && club.name) || 'PocketBooks Beta';
+  if (descEl) descEl.textContent = (club && club.description) || 'Private club for the PocketBooks player beta.';
+  var status = _membershipStatus(membership);
+  var locked = !!(club && club.is_locked);
+  var hostRole = membership && isHostRole(membership.role);
+  if (!statusEl || !btn) return;
+  statusEl.className = 'beta-status';
+  btn.disabled = false;
+  if (!club) {
+    statusEl.className += ' open';
+    statusEl.textContent = 'Club unavailable right now';
+    btn.disabled = true;
+    btn.textContent = 'Try again';
+    return;
+  }
+  if (_membershipActive(membership)) {
+    statusEl.className += ' active';
+    statusEl.textContent = hostRole ? 'Host access' : 'You’re in';
+    btn.textContent = hostRole ? 'Open host tools' : 'Enter club';
+  } else if (status === 'pending') {
+    statusEl.className += ' pending';
+    statusEl.textContent = 'Request pending';
+    btn.disabled = true;
+    btn.textContent = 'Request pending';
+  } else if (status === 'rejected' || status === 'denied') {
+    statusEl.className += ' pending';
+    statusEl.textContent = 'Request not approved';
+    btn.disabled = true;
+    btn.textContent = 'Not approved';
+  } else if (locked) {
+    statusEl.className += ' pending';
+    statusEl.textContent = 'Host approval required';
+    btn.textContent = 'Request access';
+  } else {
+    statusEl.className += ' open';
+    statusEl.textContent = 'Open to join';
+    btn.textContent = 'Join club';
+  }
+  if (note) note.textContent = 'Club creation is coming later.';
+}
+
+async function loadBetaClub() {
   if (!TOKEN) return;
+  var btn = document.getElementById('beta-join-btn');
   try {
-    const [hosted, joined] = await Promise.all([
-      apiCall('GET', '/api/clubs'),
-      apiCall('GET', '/api/my-clubs').catch(()=>[])
-    ]);
-    var hostedNorm = (hosted||[]).map(c => normalizeMembership(c, c.role || 'owner'));
-    var joinedNorm = (joined||[]).map(c => normalizeMembership(c, c.role || 'player'));
-    // TODO: replace legacy /api/clubs + /api/my-clubs with the same canonical
-    // membership source used by /api/auth/token. Routing below still rechecks
-    // every entry with backend token issuance before navigation.
-    console.warn('LOBBY_LEGACY_MEMBERSHIP_SOURCE_CONSUMED routeAuthority=auth_token');
-    userClubs = dedupClubs([...hostedNorm, ...joinedNorm]);
-    localStorage.setItem('pb-clubs', JSON.stringify(userClubs));
-    renderClubsList();
-    document.getElementById('club-count-lbl').textContent = userClubs.length + ' clubs';
-    const pending = userClubs.filter(c=>c.status==='pending').length;
-    if (pending) {
-      document.getElementById('pending-badge').textContent = pending;
-      document.getElementById('pending-badge').style.display = 'inline-block';
-      // Show pending status on lobby
-      let ps = document.getElementById('pending-status-bar');
-      if (!ps) {
-        ps = document.createElement('div');
-        ps.id = 'pending-status-bar';
-        ps.style.cssText = 'margin:0 16px 10px;background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.4);border-radius:10px;padding:8px 14px;display:flex;align-items:center;gap:8px;font-size:0.75rem;font-weight:700;color:#EAB308';
-        ps.innerHTML = '<span style="font-size:0.9rem">⏳</span>' + pending + ' club' + (pending>1?'s':'') + ' pending approval';
-        const grid = document.querySelector('.action-grid');
-        grid.parentNode.insertBefore(ps, grid);
-      } else {
-        ps.querySelector('span+text') ;
-        ps.innerHTML = '<span style="font-size:0.9rem">⏳</span>' + pending + ' club' + (pending>1?'s':'') + ' pending approval';
-      }
+    var data = await apiCall('GET', '/api/player-beta');
+    if (!data || data.error || !data.club || String(data.club.id) !== PB_BETA_CLUB_ID) {
+      _betaClub = null;
+      _betaMembership = null;
+      paintBetaCard(null, null);
+      return;
     }
-    if (userClubs.length && !activeClub) setActiveClub(userClubs[0]);
-    updateClubsTilePreview();
-    // Show host-facing join-request count on Requests badge (API primary)
-    try {
-      var isHost = userClubs.some(function(c){
-        var role = String(c.role||'').toLowerCase();
-        return role==='host'||role==='owner'||role==='admin'||role==='full_admin';
-      });
-      var badge = document.getElementById('pending-badge');
-      var paintBadge = function(n){
-        if (!badge) return;
-        if (n > 0) { badge.textContent = String(n); badge.style.display = 'inline-block'; }
-        else badge.style.display = 'none';
-      };
-      if (isHost && TOKEN) {
-        var hostClub = userClubs.find(function(c){
-          var role = String(c.role||'').toLowerCase();
-          return role==='host'||role==='owner'||role==='admin'||role==='full_admin';
-        });
-        var hid = hostClub && (hostClub.id || hostClub.clubId);
-        if (hid) {
-          fetch(API+'/api/club/pending-requests?clubId='+encodeURIComponent(hid), {
-            headers: { 'Authorization':'Bearer '+TOKEN, 'Content-Type':'application/json' }
-          }).then(function(r){ return r.json(); }).then(function(data){
-            var arr = (data && data.requests) || [];
-            paintBadge(arr.length);
-            if (arr.length) {
-              try {
-                localStorage.setItem('pb-join-requests', JSON.stringify(arr.map(function(r){
-                  return {
-                    playerId: r.playerId || r.actor_id || r.player_id,
-                    playerName: r.playerName || r.username || r.name || 'Player',
-                    clubId: hid,
-                    clubName: hostClub.name || '',
-                    membershipId: r.membershipId || r.id,
-                    requestedAt: r.joined_at || r.requestedAt
-                  };
-                })));
-              } catch(_s){}
-            }
-          }).catch(function(){
-            var jr = JSON.parse(localStorage.getItem('pb-join-requests')||'[]');
-            paintBadge(jr.length);
-          });
-        } else {
-          var jr0 = JSON.parse(localStorage.getItem('pb-join-requests')||'[]');
-          paintBadge(jr0.length);
-        }
-      } else {
-        var jr = JSON.parse(localStorage.getItem('pb-join-requests')||'[]');
-        if (isHost) paintBadge(jr.length);
-      }
-    } catch(_jr){}
-    // Player notification: club join approved
-    try {
-      var me = JSON.parse(localStorage.getItem('pb-player')||'{}');
-      var myId = me.id || me.userId || null;
-      var notes = JSON.parse(localStorage.getItem('pb-notifications')||'[]');
-      var unread = notes.filter(function(n){
-        return n && !n.read && n.type==='club_approved' && (!myId || String(n.playerId)===String(myId));
-      });
-      if (unread.length) {
-        showToast(unread[0].body || unread[0].title || 'You were approved to join a club');
-        notes.forEach(function(n){ if (unread.indexOf(n)>=0) n.read = true; });
-        localStorage.setItem('pb-notifications', JSON.stringify(notes));
-      }
-    } catch(_n){}
-  } catch(e) { renderClubsList(); }
+    _betaClub = data.club;
+    _betaMembership = data.membership || null;
+    paintBetaCard(_betaClub, _betaMembership);
+  } catch (e) {
+    paintBetaCard(null, null);
+    if (btn) btn.textContent = 'Try again';
+  }
+}
+
+async function joinBetaClub() {
+  if (!TOKEN) { setAuthTab('login'); return; }
+  var status = _membershipStatus(_betaMembership);
+  if (_membershipActive(_betaMembership)) {
+    activeClub = normalizeMembership({
+      id: PB_BETA_CLUB_ID,
+      name: (_betaClub && _betaClub.name) || 'PocketBooks Beta',
+      role: _betaMembership.role || 'player',
+      status: status === 'active' ? 'active' : 'approved'
+    }, 'player');
+    enterActiveClub(isHostRole(_betaMembership.role) ? 'host' : 'player');
+    return;
+  }
+  if (status === 'pending' || status === 'rejected' || status === 'denied') return;
+  var btn = document.getElementById('beta-join-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Please wait…'; }
+  try {
+    var r = await apiCall('POST', '/api/club/join-request', { clubId: PB_BETA_CLUB_ID });
+    if (!r || r.error === 'club_not_found') {
+      showToast('This club is not available.');
+      if (btn) { btn.disabled = false; btn.textContent = 'Join club'; }
+      return;
+    }
+    if (r.error && !r.ok && !r.success) {
+      showToast(r.message || 'Could not join right now.');
+      if (btn) { btn.disabled = false; }
+      return;
+    }
+    await loadBetaClub();
+    var next = _membershipStatus(_betaMembership) || String(r.status || '').toLowerCase();
+    if (next === 'approved' || next === 'active') {
+      activeClub = normalizeMembership({
+        id: PB_BETA_CLUB_ID,
+        name: (_betaClub && _betaClub.name) || (r.club && r.club.name) || 'PocketBooks Beta',
+        role: (r.role || (_betaMembership && _betaMembership.role) || 'player'),
+        status: next === 'active' ? 'active' : 'approved'
+      }, 'player');
+      enterActiveClub(isHostRole(activeClub.role) ? 'host' : 'player');
+    }
+  } catch (e) {
+    showToast('Could not join right now.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Join club'; }
+  }
+}
+
+async function loadMyClubs() {
+  // Player beta lobby does not enumerate clubs. Only the beta club is loaded.
+  return loadBetaClub();
 }
 
 function renderClubsList() {
@@ -2011,31 +1923,17 @@ async function _acquireClubToken(playerId, clubId) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function enterActiveClub(action) {
-  if (CLUBS_LOCKED) { goSurvivor(); return; }
-  // Fallback: restore activeClub from pb-club or pb-club-players if returning from player/host
-  if (!activeClub) {
-    var _pbClub = JSON.parse(localStorage.getItem('pb-club') || 'null');
-    var _pbPlayers = JSON.parse(localStorage.getItem('pb-club-players') || '[]');
-    if (_pbClub) { activeClub = _pbClub; }
-    else if (_pbPlayers.length) {
-      // Infer role from pb-club-players — if current user is host, route to index
-      var _pbPlayer = JSON.parse(localStorage.getItem('pb-player') || 'null');
-      var _pid = _pbPlayer && _pbPlayer.id;
-      var _me = _pid && _pbPlayers.find(function(p){ return p.playerId === _pid; });
-      window.location.href = (_me && isHostRole(_me.role)) ? 'index.html' : 'survivor.html';
-      return;
-    }
+  if (!activeClub || String(activeClub.id) !== PB_BETA_CLUB_ID) {
+    showToast('Club access could not be verified.');
+    return;
   }
-  if (!activeClub) { openModal('modal-join'); return; }
   var _status = canonicalStatus(activeClub.status || 'unknown');
   if (_status === 'pending') {
-    document.getElementById('pending-club-name').textContent = activeClub.name;
-    document.getElementById('pending-club-code').textContent = 'PB-' + (activeClub.code||activeClub.id);
-    openModal('modal-pending');
+    paintBetaCard(_betaClub, { status:'pending', role:'player' });
     return;
   }
   if (_status === 'rejected' || _status === 'denied') {
-    showToast('Club access denied. Request access again or contact the host.');
+    showToast('Club access denied. Contact the host if you think this is a mistake.');
     return;
   }
   if (_status === 'suspended' || _status === 'inactive') {
@@ -2043,7 +1941,7 @@ function enterActiveClub(action) {
     return;
   }
   if (_status !== 'approved' && _status !== 'active') {
-    console.warn('ROUTE_DECISION_BLOCKED unknown_status='+_status+' clubId='+(activeClub.id||activeClub.clubId||'?'));
+    console.warn('ROUTE_DECISION_BLOCKED unknown_status='+_status);
     showToast('Club access status could not be verified.');
     return;
   }
@@ -2067,7 +1965,7 @@ function enterActiveClub(action) {
         return;
       }
       var canonicalRole = result.role || 'player';
-      var dest = isHostRole(canonicalRole) ? 'index.html' : 'survivor.html';
+      var dest = isHostRole(canonicalRole) ? 'index.html' : 'player.html';
       var syncedClub = Object.assign({}, activeClub, {
         id: result.club_id || result.clubId || activeClub.id,
         clubId: result.club_id || result.clubId || activeClub.clubId || activeClub.id,
@@ -2118,42 +2016,13 @@ async function searchClub() {
 }
 
 async function requestJoin(clubId, code, name) {
-  if (clubsLockedGuard()) return;
   if (!TOKEN) { showToast('Sign in to join clubs'); return; }
-  try {
-    var r = await apiCall('POST', '/api/club/request-join', {code: code, clubId: clubId});
-    if (!r || r.error === 'not_found' || (r.error && /Cannot POST|404/i.test(String(r.error||'')))) {
-      r = await apiCall('POST', '/api/club/join-request', {code: code, clubId: clubId});
-    }
-    if (r && (r.error === 'club_locked' || r.error === 'clubs_locked')) {
-      showToast(r.message || 'This club is not accepting new members right now');
-      return;
-    }
-    // Already pending/member: still show pending UI if status is pending.
-    if (r && r.error && String(r.status||'').toLowerCase() !== 'pending' && !r.ok && !r.success) {
-      showToast('❌ ' + (r.message || r.error));
-      return;
-    }
-    const newClub = normalizeMembership({id:clubId, code, name, role:'player', status:'pending', balance:0}, 'player');
-    userClubs = dedupClubs([newClub, ...userClubs]);
-    localStorage.setItem('pb-clubs', JSON.stringify(userClubs));
-    // Mirror to host-visible join requests so approval flow works locally.
-    try {
-      var jr = JSON.parse(localStorage.getItem('pb-join-requests')||'[]');
-      var pl = JSON.parse(localStorage.getItem('pb-player')||'null')||{};
-      var pid = pl.id || pl.username || ('P'+Date.now());
-      var pname = pl.username || pl.name || name || pid;
-      if (!jr.some(function(x){ return x.playerId === pid && x.clubId === clubId; })) {
-        jr.unshift({ playerId:pid, playerName:pname, clubId:clubId, clubName:name, code:code, requestedAt:new Date().toISOString() });
-        localStorage.setItem('pb-join-requests', JSON.stringify(jr));
-      }
-    } catch(_e){}
-    renderClubsList();
-    closeModal('modal-join');
-    document.getElementById('pending-club-name').textContent = name;
-    document.getElementById('pending-club-code').textContent = 'PB-' + code;
-    openModal('modal-pending');
-  } catch(e) { showToast('❌ ' + e.message); }
+  if (clubId && String(clubId) !== PB_BETA_CLUB_ID) {
+    showToast('This club is not available.');
+    return;
+  }
+  closeModal('modal-join');
+  return joinBetaClub();
 }
 
 // Create Club
@@ -2181,32 +2050,8 @@ function updateLogoInitials(name) {
 }
 
 async function createClub() {
-  if (clubsLockedGuard()) return;
-  const name = document.getElementById('cc-name').value.trim();
-  if (!name) { showToast('Enter a club name'); return; }
-  try {
-    const club = await apiCall('POST', '/api/clubs', {name});
-    const newClub = normalizeMembership({...club, role:'owner', status:'approved', balance:0}, 'owner');
-    userClubs = dedupClubs([newClub, ...userClubs]);
-    localStorage.setItem('pb-clubs', JSON.stringify(userClubs));
-    setActiveClub(newClub);
-    renderClubsList();
-    closeModal('modal-create');
-    showToast('✅ Club created! Code: PB-' + club.code);
-    document.getElementById('club-count-lbl').textContent = userClubs.length + ' clubs';
-    setTimeout(() => window.location.href = 'index.html', 1200);
-  } catch(e) {
-    // Demo mode
-    const code = Math.random().toString(36).substring(2,8).toUpperCase();
-    const demo = {id:Date.now(), code, name, role:'host', status:'approved', balance:0};
-    userClubs.unshift(demo);
-    localStorage.setItem('pb-clubs', JSON.stringify(userClubs));
-    setActiveClub(demo);
-    renderClubsList();
-    closeModal('modal-create');
-    showToast('✅ Club created! Code: PB-' + code);
-    document.getElementById('club-count-lbl').textContent = userClubs.length + ' clubs';
-  }
+  showToast('Club creation is coming later.');
+  return;
 }
 
 // Helpers — host Requests section shows pending club join applicants
@@ -2353,7 +2198,11 @@ function goSurvivor() {
   window.location.href = 'survivor.html';
 }
 function openModal(id) {
-  if (CLUBS_LOCKED && (id === 'modal-create' || id === 'modal-join')) {
+  if (id === 'modal-create') {
+    showToast('Club creation is coming later.');
+    return;
+  }
+  if (CLUBS_LOCKED && id === 'modal-join') {
     clubsLockedGuard();
     return;
   }
@@ -2601,7 +2450,13 @@ if (isPreview && !_isAuthScreen) {
     if (!FULL_SCREENS.includes(screen)) return; // home stays on main lobby
     const ps  = document.getElementById('preview-screen');
     const tpl = document.getElementById('tpl-' + screen);
-    if (!ps || !tpl) { console.warn('[preview] template missing for', screen); return; }
+    if (screen === 'create') {
+      ps.innerHTML = '<div style="padding:28px 20px;color:#F5F7FA"><div class="beta-kicker">PocketBooks beta</div><div class="beta-title">Club creation is coming later.</div><p class="beta-sub">Players can join the PocketBooks beta club. Creating a new club is not available.</p></div>';
+      ps.style.display = 'block';
+      const content = document.querySelector('.content');
+      if (content) content.style.display = 'none';
+      return;
+    }
     ps.innerHTML = '';
     ps.appendChild(tpl.content.cloneNode(true));
     ps.style.display = 'block';
@@ -2663,7 +2518,7 @@ if (activeClub) setActiveClub(activeClub);
   else {
     var mock = [
       { id:26819, code:'DNKYM', name:'DONKEYMANIA', role:'host', status:'approved', balance:8950, members:12, pendingRequests:2 },
-      { id:43107, code:'VGSAR', name:'Vegas Action Room', role:'player', status:'approved', balance:1000, members:8, pendingRequests:0 },
+      { id:43107, code:'VGSAR', name:'Vegas Action Room', role:'player', status:'approved', balance:0, members:8, pendingRequests:0 },
       { id:90214, code:'PBCLB', name:'Pocket Books Club', role:'player', status:'demo', balance:0, members:0, pendingRequests:0 }
     ];
     localStorage.setItem('pb-user-clubs', JSON.stringify(mock));
