@@ -32,6 +32,13 @@ test('club token acquisition returns canonical role, status, club id, and token'
     'token acquisition must return canonical club id');
 });
 
+test('club token acquisition retries without legacy login bearer', function() {
+  assert(html.indexOf("verdict === 'fatal' && TOKEN") !== -1,
+    'club token acquisition must retry after login-JWT rejection');
+  assert(html.indexOf('the backend still derives role/status from the authoritative DB row') !== -1,
+    'retry must remain server-authoritative');
+});
+
 test('routing derives destination from backend role after token success', function() {
   assert(html.indexOf('var canonicalRole = result.role ||') !== -1,
     'missing canonical role route decision');

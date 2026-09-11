@@ -1915,13 +1915,25 @@ async function _acquireClubToken(playerId, clubId) {
     return { ok:false, error:'auth_give_up' };
   }
   try {
+    var _tokenBody = JSON.stringify({ actorId: playerId, clubId: clubId });
     var tok = await _authFetchOnce(API + '/api/auth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json',
                  'Authorization': TOKEN ? ('Bearer ' + TOKEN) : '' },
-      body: JSON.stringify({ actorId: playerId, clubId: clubId })
+      body: _tokenBody
     });
     var verdict = _authHandleResponse(tok.status, tok.data);
+    if (verdict === 'fatal' && TOKEN) {
+      // Legacy login JWTs are not required for /api/auth/token and may be
+      // rejected by the club-session route. Retry once with actor+club only;
+      // the backend still derives role/status from the authoritative DB row.
+      tok = await _authFetchOnce(API + '/api/auth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: _tokenBody
+      });
+      verdict = _authHandleResponse(tok.status, tok.data);
+    }
     if (verdict === 'fatal') return { ok:false, error:'session_invalid' };
     if (verdict === 'rate_limited') {
       return { ok:false, error:'too_many_requests', message:'Too many requests — wait a minute and try again' };
