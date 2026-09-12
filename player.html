@@ -5329,16 +5329,18 @@ function _pbSportHasProps(sport) {
   var s = _pbNormalizePropSport(sport);
   if (!_pbSportSupportsProps(s)) return false;
   var catalog = window._sportsCatalog;
+  var knownLive = (s === 'nfl' || s === 'mlb' || s === 'ncaaf' || s === 'nba' || s === 'wnba');
   if (!catalog || !Array.isArray(catalog.sports)) {
-    // Catalog not loaded yet — fail closed for empty-prone sports; allow known live props sports.
-    return s === 'nfl' || s === 'mlb' || s === 'ncaaf' || s === 'nba' || s === 'wnba';
+    // Catalog not loaded yet — allow known live props sports; hide empty-prone (nhl/ncaab).
+    return knownLive;
   }
   var entry = null;
   for (var i = 0; i < catalog.sports.length; i++) {
     var row = catalog.sports[i];
     if (row && _pbNormalizePropSport(row.key) === s) { entry = row; break; }
   }
-  if (!entry) return false;
+  // WNBA (and similar) may be absent from /api/sports while Owls still publishes props.
+  if (!entry) return knownLive;
   if (entry.hasProps === true) return true;
   if (entry.hasProps === false) return false;
   return (Number(entry.propsCount) || 0) > 0;
