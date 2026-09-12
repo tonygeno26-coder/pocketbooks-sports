@@ -140,6 +140,8 @@ test('local visual QA auth bypass is localhost-gated', function() {
   assert(html.indexOf("h === 'localhost'") >= 0);
   assert(html.indexOf('function _isVisualQaPreview') >= 0);
   assert(html.indexOf('if (_isVisualQaPreview())') >= 0);
+  assert(html.indexOf('var _pDev = _isLocalHostName()') >= 0, '_pDev must be localhost-gated');
+  assert(html.indexOf('var _pPreview = _isLocalHostName()') >= 0, '_pPreview must be localhost-gated');
   var authFn = html.slice(html.indexOf('function _authRedirectToLogin'), html.indexOf('function _authRedirectToLogin') + 900);
   assert(authFn.indexOf('_isVisualQaPreview()') >= 0, 'auth redirect must suppress visual QA');
   assert(authFn.indexOf("lobby.html?screen=signin") >= 0, 'production sign-in redirect retained');

@@ -2510,18 +2510,20 @@ function _debugClearTickets() {
 <script>
 // Preview/dev params — hoisted before session gate (avoids TDZ ReferenceError on _pDev)
 var _pp = new URLSearchParams(window.location.search);
-var _pPreview = _pp.get('preview') === '1';
 function _isLocalHostName() {
   var h = String((typeof location !== 'undefined' && location.hostname) || '');
   return h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
 }
-// Local visual-QA only: preview/testUser flags on localhost. Never true on production hosts.
-var _pVisualQa = _isLocalHostName() && (_pPreview || !!_pp.get('testUser') || _pp.get('dev') === '1');
-var _pDev = _pp.get('dev') === '1'
-         || _pPreview
+// Raw query flags. On production hosts these MUST NOT arm auth/dev bypass.
+var _pPreviewFlag = _pp.get('preview') === '1';
+var _pTestUserFlag = !!_pp.get('testUser');
+var _pDevFlag = _pp.get('dev') === '1'
          || _pp.get('from') === 'dev'
-         || !!_pp.get('testUser')
          || (typeof window !== 'undefined' && window.location.pathname.includes('dev.html'));
+// Local visual-QA / preview / testUser: localhost only. Never true on production hosts.
+var _pVisualQa = _isLocalHostName() && (_pPreviewFlag || _pTestUserFlag || _pp.get('dev') === '1');
+var _pPreview = _isLocalHostName() && _pPreviewFlag;
+var _pDev = _isLocalHostName() && (_pDevFlag || _pPreviewFlag || _pTestUserFlag);
 var _devSessionReady = Promise.resolve();
 var _devSessionInstalling = false;
 function _isVisualQaPreview() {
