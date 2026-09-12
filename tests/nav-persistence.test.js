@@ -72,13 +72,19 @@ test('setSport / setBNav / setMarketFilter / props / my bets sync nav', function
   var setPropTeam = extractFn(playerSrc, '_pbSetPropTeamFilter');
   var myBetsApply = extractFn(playerSrc, '_myBetsApply');
   var toggleProps = extractFn(playerSrc, '_pbToggleGameProps');
+  var openProps = extractFn(playerSrc, '_pbOpenDedicatedProps');
+  var closeProps = extractFn(playerSrc, '_pbCloseDedicatedProps');
   assert(setSport.includes('_pbNavSyncUrl'), 'setSport must sync nav');
   assert(setBNav.includes('_pbNavSyncUrl'), 'setBNav must sync nav');
   assert(setMarket.includes('_pbNavSyncUrl'), 'setMarketFilter must sync nav');
   assert(setPropTab.includes('_pbNavSyncUrl'), 'prop tab must sync nav');
   assert(setPropTeam.includes('_pbNavSyncUrl'), 'prop team must sync nav');
   assert(myBetsApply.includes('_pbNavSyncUrl'), 'my bets filter must sync nav');
-  assert(toggleProps.includes('_pbNavSyncUrl'), 'event expand must sync nav');
+  assert(
+    openProps.includes('_pbNavSyncUrl') && closeProps.includes('_pbNavSyncUrl'),
+    'dedicated props open/close must sync nav'
+  );
+  assert(toggleProps.includes('_pbOpenDedicatedProps'), 'legacy toggle must delegate to dedicated props');
 });
 
 test('boot restores nav instead of hardcoding mlb only', function() {
