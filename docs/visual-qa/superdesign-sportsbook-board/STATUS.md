@@ -1,44 +1,30 @@
-# Superdesign — Sportsbook Board Enhancement
+# Sportsbook board + logo presence gate
 
-**Branch:** `cursor/superdesign-sportsbook-board`  
-**Base:** `main` @ `6ae492f` (Player Dashboard `--pb-*` tokens)  
-**Scope:** Sportsbook market cards, market rows, odds buttons, mobile sport rail. No betting logic / auth / settlement / grading changes.
+**Branch:** `cursor/sportsbook-board-logo-gate`  
+**Base:** `main` @ `852479c`  
+**Source visual intent:** `cursor/superdesign-sportsbook-board` @ `6ea1274` (ported, not merged as-is)
 
-## Critic findings → resolution
+## Why 6ea1274 was SAFE MERGE: NO
 
-| # | Finding | Status |
-|---|---------|--------|
-| 1 | Market cards charcoal `#1e1e1e` | Fixed → `var(--pb-card)` / `var(--pb-border)` at source + cascade lock |
-| 2 | Odds default charcoal | Fixed → `var(--pb-odds-recess)` |
-| 3 | Odds selected neon `#00ff88` | Fixed → `var(--pb-accent)` + soft blue glow |
-| 4 | Positive odds neon text-shadow | Fixed → `var(--pb-win)`, `text-shadow:none` |
-| 5 | Mobile sport rail too tall | Fixed → horizontal compact rail ≤767px |
+Documented blocker (STATUS on that branch): **hold for owner / visual QA** — not a financial or settlement defect.
 
-## Hierarchy
+Additional technical reason it stayed unsafe to merge as-is: branch tip was **stale vs main** (auth/lobby/odds UX/host commits landed after `43689c5`), and `player.html` **conflicts on direct merge**. Content itself was presentation-scoped (CSS + markup classes for board hierarchy).
 
-- **Line** (`.odds-line`): larger / heavier / white — primary
-- **Price** (`.odds-num`): smaller / secondary; ML-only cells keep larger price via `:not(:has(.odds-line))`
-- Logos: transparent, unboxed, drop-shadow only
+## This candidate
 
-## Before / after metrics (fixture card + live rail)
+- Fresh branch from current FE main
+- Ported sportsbook board hierarchy CSS + safe presentation classes (`mc-meta` / `market-card--live` / O-U line color classes)
+- Preserved all newer production fixes on main
+- Logo presence: larger board containers, 2× CDN fetch, CSS-fill imgs, restrained optical scale + dark-card edge separation
+- DEV-ONLY gallery: `docs/visual-qa/logo-presence-gallery.html` (not in production nav)
 
-| Width | Sport rail H before | Sport rail H after | Notes |
-|------:|--------------------:|-------------------:|-------|
-| 390 | ~461px | ~69px | Game Lines much higher |
-| 768 | ~331px | ~331px | 6-col grid retained |
-| 1440 | ~359px | ~359px | Dense desktop grid retained |
+## Untouched
 
-Screenshots: `before-{390,768,1440}.png`, `after-{390,768,1440}.png`
+- Betting / grading / bankroll / settlement
+- Odds math / parlay correlation
+- API contracts / global nav IA
+- Bet Slip and Recent Bets / Results ticket logic
 
-## SAFE MERGE
+## Safe merge
 
-**NO** — hold for visual QA on device / preview before merging to `main`.
-
-## Untouched (intentional)
-
-- `--pb-*` token values
-- Bottom-nav IA
-- Recent 12h / My Bets
-- Win/loss polarity semantics
-- Bet-slip sheet greens (`--pb-slip-*`)
-- Betting / odds / financial / grading / auth logic
+**Owner visual review required before merge.** Do not merge without owner approval.

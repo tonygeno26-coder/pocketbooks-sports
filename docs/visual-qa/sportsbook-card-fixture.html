@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sportsbook card fixture (DEV)</title>
+  <link rel="stylesheet" href="../../pb-theme.css" />
+  <style id="extracted">
+    /* Minimal board surface + ported logo rules for width QA */
+    body{margin:0;background:var(--pb-bg,#070b12);color:#fff;font-family:system-ui,sans-serif}
+    #sportsbook-section{padding:8px 0 40px}
+    #sportsbook-section .market-card{
+      margin:0 10px 10px;border-radius:14px;background:var(--pb-card,#0f1520);
+      border:1px solid var(--pb-border-soft,#1c2433);box-shadow:0 1px 0 rgba(255,255,255,0.03);
+    }
+    #sportsbook-section .mc-header{display:flex;align-items:center;gap:8px;padding:9px 12px 2px}
+    #sportsbook-section .mc-meta{display:flex;align-items:baseline;gap:8px;min-width:0;flex:1}
+    #sportsbook-section .mc-sport{color:#c5cedd;font-size:0.62rem;font-weight:800;letter-spacing:0.08em;text-transform:uppercase}
+    #sportsbook-section .mc-when{font-size:0.68rem;font-weight:650;color:#8b95a8}
+    #sportsbook-section .mc-when::before{content:"·";margin-right:8px;opacity:0.55}
+    #sportsbook-section .mc-cols{display:grid;grid-template-columns:1fr 90px 90px 90px;gap:6px;padding:4px 12px;font-size:0.54rem;color:#8b95a8;font-weight:700;letter-spacing:0.06em;text-transform:uppercase}
+    #sportsbook-section .mc-team-row{display:grid;grid-template-columns:1fr 90px 90px 90px;gap:6px;padding:0 12px 8px;align-items:center}
+    #sportsbook-section .mc-team{display:flex;align-items:center;gap:12px;min-width:0}
+    #sportsbook-section .mc-city{color:#8b95a8;font-size:0.58rem;letter-spacing:0.04em}
+    #sportsbook-section .mc-name{font-size:0.96rem;font-weight:800;letter-spacing:-0.02em}
+    #sportsbook-section .mc-jersey{width:54px;height:54px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+    #sportsbook-section .mc-jersey img{
+      width:100%!important;height:100%!important;object-fit:contain!important;display:block;
+      --pb-logo-optical:1.1;transform:scale(var(--pb-logo-optical));transform-origin:center;
+      filter:drop-shadow(0 1px 2px rgba(0,0,0,0.55)) drop-shadow(0 0 0.6px rgba(255,255,255,0.22));
+    }
+    #sportsbook-section .mc-jersey img[data-logo-optical="1.12"]{--pb-logo-optical:1.12}
+    #sportsbook-section .mc-jersey img[data-logo-optical="1.16"]{--pb-logo-optical:1.16}
+    #sportsbook-section .odds-box{
+      background:var(--pb-odds-recess,#101826);border:1px solid var(--pb-border,#243044);
+      border-radius:10px;min-height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      font-variant-numeric:tabular-nums;
+    }
+    #sportsbook-section .odds-line{color:#fff;font-weight:800;font-size:0.78rem}
+    #sportsbook-section .odds-num{color:#c5cedd;font-size:0.72rem;font-weight:700}
+    #sportsbook-section .odds-pos{color:var(--pb-win,#3dd68c)}
+    #sportsbook-section .mc-divider{height:1px;margin:0 12px;background:#1c2433}
+    @media (max-width:430px){
+      #sportsbook-section .market-card{margin:0 8px 8px;border-radius:12px}
+      #sportsbook-section .mc-name{font-size:0.88rem}
+      #sportsbook-section .market-card .mc-jersey{width:44px!important;height:44px!important}
+      #sportsbook-section .mc-cols,#sportsbook-section .mc-team-row{grid-template-columns:minmax(0,1fr) minmax(64px,78px) minmax(64px,78px) minmax(64px,78px);gap:4px;padding:0 10px}
+      #sportsbook-section .odds-box{min-height:46px;border-radius:8px}
+    }
+    @media (max-width:390px){
+      #sportsbook-section .market-card .mc-jersey{width:42px!important;height:42px!important}
+    }
+    @media (min-width:768px){
+      #sportsbook-section .market-card .mc-jersey{width:52px!important;height:52px!important}
+    }
+    @media (min-width:1100px){
+      #sportsbook-section .market-card .mc-jersey{width:56px!important;height:56px!important}
+    }
+    @media (min-width:1440px){
+      #sportsbook-section .market-card .mc-jersey{width:58px!important;height:58px!important}
+    }
+    #probe{position:fixed;top:8px;right:8px;background:#000c;padding:6px 8px;border-radius:8px;font:11px/1.4 monospace;z-index:9}
+  </style>
+</head>
+<body>
+  <div id="probe"></div>
+  <main id="sportsbook-section">
+    <div class="market-card market-card--upcoming">
+      <div class="mc-header"><div class="mc-meta"><span class="mc-sport">NFL</span><span class="mc-when">Sun, 01:00 PM</span></div></div>
+      <div class="mc-cols"><div></div><div>Spread</div><div>Total</div><div>To Win</div></div>
+      <div class="mc-team-row" id="row-aw"></div>
+      <div class="mc-divider"></div>
+      <div class="mc-team-row" id="row-hw"></div>
+    </div>
+    <div class="market-card market-card--live" style="border-left:2px solid #ff4d6a">
+      <div class="mc-header"><div class="mc-meta"><span class="mc-sport">NBA</span><span class="mc-when">LIVE</span></div>
+        <span class="mc-live-badge" style="margin-left:auto;color:#ff4d6a;font-size:0.55rem;font-weight:900">LIVE</span>
+      </div>
+      <div class="mc-cols"><div></div><div>Spread</div><div>Total</div><div>To Win</div></div>
+      <div class="mc-team-row" id="row2-aw"></div>
+      <div class="mc-divider"></div>
+      <div class="mc-team-row" id="row2-hw"></div>
+    </div>
+  </main>
+  <script src="../../team-logos.js"></script>
+  <script>
+    function odds(line, price){
+      return '<div class="odds-box">'+(line?'<span class="odds-line">'+line+'</span>':'')+
+        '<span class="odds-num odds-pos">'+price+'</span></div>';
+    }
+    function team(name, sport, city, nick){
+      return '<div class="mc-team"><div class="mc-jersey">'+getTeamLogoImg(name,sport,56)+
+        '</div><div><div class="mc-city">'+city+'</div><div class="mc-name">'+nick+'</div></div></div>'+
+        odds('-3.5','-110')+odds('O 47.5','-105')+odds(null,'+150');
+    }
+    document.getElementById('row-aw').innerHTML = team('Las Vegas Raiders','nfl','Las Vegas','Raiders');
+    document.getElementById('row-hw').innerHTML = team('Kansas City Chiefs','nfl','Kansas City','Chiefs');
+    document.getElementById('row2-aw').innerHTML = team('Brooklyn Nets','nba','Brooklyn','Nets');
+    document.getElementById('row2-hw').innerHTML = team('Los Angeles Lakers','nba','Los Angeles','Lakers');
+    function probe(){
+      var j = document.querySelector('#sportsbook-section .mc-jersey');
+      var img = j && j.querySelector('img');
+      var jr = j.getBoundingClientRect();
+      var ir = img.getBoundingClientRect();
+      document.getElementById('probe').textContent =
+        'vw='+window.innerWidth+' jersey='+Math.round(jr.width)+' opticalImg='+Math.round(ir.width)+
+        ' overflow='+(document.documentElement.scrollWidth>window.innerWidth+1);
+    }
+    probe();
+    addEventListener('resize', probe);
+  </script>
+</body>
+</html>

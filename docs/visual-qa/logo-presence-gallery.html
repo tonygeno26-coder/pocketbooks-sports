@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PocketBooks — Logo Presence QA (DEV ONLY)</title>
+  <link rel="stylesheet" href="../../pb-theme.css" />
+  <style>
+    :root{
+      --pb-bg:#070b12; --pb-card:#0f1520; --pb-border-soft:#1c2433;
+      --pb-white:#f4f7fb; --pb-gray:#8b95a8; --pb-light:#c5cedd; --pb-loss:#ff4d6a;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;min-height:100vh;background:var(--pb-bg);color:var(--pb-white);
+      font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+      padding:20px 16px 64px;
+    }
+    .banner{
+      margin:0 0 18px;padding:10px 12px;border-radius:10px;
+      background:#2a1a05;border:1px solid rgba(245,158,11,0.45);color:#fde68a;
+      font-size:0.78rem;font-weight:700;line-height:1.4;
+    }
+    h1{font-size:1.15rem;margin:0 0 6px;letter-spacing:-0.02em}
+    p.lead{margin:0 0 22px;color:var(--pb-gray);font-size:0.82rem;max-width:62ch}
+    h2{font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--pb-gray);margin:22px 0 10px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+    .card{
+      background:var(--pb-card);border:1px solid var(--pb-border-soft);border-radius:14px;
+      padding:12px;display:flex;align-items:center;gap:12px;min-height:84px;
+    }
+    .mc-jersey{
+      width:54px;height:54px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+      background:transparent;overflow:visible;
+    }
+    .mc-jersey img{
+      width:100%;height:100%;object-fit:contain;display:block;
+      --pb-logo-optical:1.1;
+      transform:scale(var(--pb-logo-optical));
+      transform-origin:center center;
+      filter:drop-shadow(0 1px 2px rgba(0,0,0,0.55)) drop-shadow(0 0 0.6px rgba(255,255,255,0.22));
+    }
+    .mc-jersey img[data-logo-optical="1.00"]{--pb-logo-optical:1}
+    .mc-jersey img[data-logo-optical="1.06"]{--pb-logo-optical:1.06}
+    .mc-jersey img[data-logo-optical="1.08"]{--pb-logo-optical:1.08}
+    .mc-jersey img[data-logo-optical="1.12"]{--pb-logo-optical:1.12}
+    .mc-jersey img[data-logo-optical="1.16"]{--pb-logo-optical:1.16}
+    .mc-jersey img[data-logo-optical="1.20"]{--pb-logo-optical:1.20}
+    .meta{min-width:0}
+    .city{font-size:0.58rem;color:var(--pb-gray);letter-spacing:0.04em;text-transform:uppercase}
+    .name{font-size:0.95rem;font-weight:800;letter-spacing:-0.02em}
+    .tag{font-size:0.58rem;color:var(--pb-light);margin-top:4px}
+    .sizes{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-top:8px}
+    .size-box{text-align:center}
+    .size-box .mc-jersey{margin:0 auto}
+    .size-label{font-size:0.55rem;color:var(--pb-gray);margin-top:4px}
+    @media (max-width:430px){
+      .mc-jersey{width:44px;height:44px}
+    }
+  </style>
+</head>
+<body>
+  <div class="banner">DEV ONLY — not linked from production nav. Optical-size QA for sportsbook team marks on real PocketBooks dark card surfaces.</div>
+  <h1>Logo Presence Gallery</h1>
+  <p class="lead">Representative verified logos across NFL / NBA / MLB / NHL / NCAAF / NCAAB / Soccer. Text-only if unverified. Compare optical fill on dark cards; look for padding outliers, dark marks, and crest detail.</p>
+
+  <div id="gallery"></div>
+
+  <script src="../../team-logos.js"></script>
+  <script>
+    var SAMPLES = [
+      { sport:'nfl', teams:[
+        ['Kansas City Chiefs','wide'],
+        ['Las Vegas Raiders','dark / white-heavy'],
+        ['Pittsburgh Steelers','round'],
+        ['Jacksonville Jaguars','detailed'],
+        ['Green Bay Packers','classic']
+      ]},
+      { sport:'nba', teams:[
+        ['Los Angeles Lakers','round'],
+        ['Brooklyn Nets','dark / white-heavy'],
+        ['San Antonio Spurs','simple'],
+        ['Golden State Warriors','detailed'],
+        ['Boston Celtics','classic']
+      ]},
+      { sport:'mlb', teams:[
+        ['New York Yankees','letter'],
+        ['Chicago White Sox','dark / white-heavy'],
+        ['Oakland Athletics','tall'],
+        ['Boston Red Sox','classic'],
+        ['Los Angeles Dodgers','letter']
+      ]},
+      { sport:'nhl', teams:[
+        ['Vegas Golden Knights','detailed'],
+        ['Anaheim Ducks','dark'],
+        ['Toronto Maple Leafs','classic'],
+        ['Chicago Blackhawks','detailed crest'],
+        ['Boston Bruins','round']
+      ]},
+      { sport:'ncaafb', teams:[
+        ['Michigan Wolverines','classic'],
+        ['Ohio State Buckeyes','letter'],
+        ['Alabama Crimson Tide','classic'],
+        ['Georgia Bulldogs','detailed'],
+        ['Texas Longhorns','letter']
+      ]},
+      { sport:'ncaab', teams:[
+        ['Duke Blue Devils','classic'],
+        ['North Carolina Tar Heels','letter'],
+        ['Kentucky Wildcats','classic'],
+        ['Kansas Jayhawks','detailed'],
+        ['Gonzaga Bulldogs','letter']
+      ]},
+      { sport:'soccer', teams:[
+        ['Manchester United','crest'],
+        ['Arsenal','crest'],
+        ['Tottenham Hotspur','crest'],
+        ['Inter Miami','crest'],
+        ['LA Galaxy','crest']
+      ]}
+    ];
+
+    function splitName(full) {
+      var parts = String(full || '').trim().split(/\s+/);
+      if (parts.length < 2) return { city:'', name:full };
+      return { city: parts.slice(0, -1).join(' '), name: parts[parts.length - 1] };
+    }
+
+    function render() {
+      var root = document.getElementById('gallery');
+      var html = '';
+      SAMPLES.forEach(function(group) {
+        html += '<h2>' + group.sport.toUpperCase() + '</h2><div class="grid">';
+        group.teams.forEach(function(row) {
+          var team = row[0], note = row[1];
+          var parts = splitName(team);
+          var img = '';
+          if (group.sport === 'soccer' && typeof getSoccerTeamLogoImg === 'function') {
+            img = getSoccerTeamLogoImg(team, 56);
+          } else if (typeof getTeamLogoImg === 'function') {
+            img = getTeamLogoImg(team, group.sport, 56);
+          }
+          if (!img || img.indexOf('<img') < 0) {
+            img = '<span style="font-size:0.7rem;font-weight:800;color:var(--pb-light)">TEXT</span>';
+          }
+          html += '<div class="card">' +
+            '<div class="mc-jersey">' + img + '</div>' +
+            '<div class="meta"><div class="city">' + parts.city + '</div>' +
+            '<div class="name">' + parts.name + '</div>' +
+            '<div class="tag">' + note + '</div></div></div>';
+        });
+        html += '</div>';
+      });
+
+      html += '<h2>Optical size ladder (Chiefs)</h2><div class="card"><div class="sizes">';
+      [42,44,48,54,56,58].forEach(function(sz) {
+        var img = getTeamLogoImg('Kansas City Chiefs', 'nfl', sz);
+        html += '<div class="size-box"><div class="mc-jersey" style="width:' + sz + 'px;height:' + sz + 'px">' +
+          img + '</div><div class="size-label">' + sz + 'px</div></div>';
+      });
+      html += '</div></div>';
+      root.innerHTML = html;
+    }
+    render();
+  </script>
+</body>
+</html>

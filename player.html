@@ -1615,7 +1615,7 @@ body:has(.dkslip.open) ._pbs-toast{animation:_pbsToastInSlip 0.22s cubic-bezier(
   border-color:var(--pb-accent)!important;
   background:var(--pb-accent-soft)!important;
   outline:none!important;
-  box-shadow:0 0 0 1px rgba(61,139,253,0.35),0 0 14px rgba(61,139,253,0.28)!important;
+  box-shadow:none!important;
 }
 .odds-pos,.mkt-odds-num.pos,.odds-num.odds-pos{
   color:var(--pb-win)!important;
@@ -1752,9 +1752,332 @@ button:disabled,.odds-box[aria-disabled="true"]{opacity:0.45;cursor:not-allowed}
 .bs-odds-val{color:var(--pb-slip-cta)!important}
 .pb-state-empty,.empty-state,.mybets-empty,.rb-empty{color:var(--pb-gray)!important}
 .pb-state-error,.error-state{color:var(--pb-red)!important}
+
 .pb-state-loading,.loading-state{color:var(--pb-light)!important}
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   SUPERDESIGN — sportsbook board (presentation only) + logo presence
+   Ported from 6ea1274 onto current main; logos sized for optical presence.
+   Does not restyle the bet slip or Recent Bets / Results tickets.
+   ═══════════════════════════════════════════════════════════════════════════ */
+#sportsbook-section .pb-board-spacer{height:6px}
+#_player_source_badge{display:none!important}
+#live-odds-refresh-status,
+#live-odds-refresh-status.stale{
+  margin:2px 12px 4px!important;padding:0!important;
+  background:transparent!important;border:none!important;border-radius:0!important;
+  box-shadow:none!important;color:var(--pb-gray)!important;
+  font-size:0.62rem!important;font-weight:700!important;text-align:left!important;
+}
+#live-odds-refresh-status.stale{color:var(--pb-gold)!important}
+#sportsbook-section .filter-row{
+  padding:2px 10px 0;gap:2px;border-bottom:1px solid var(--pb-border-soft);
+}
+#sportsbook-section .sport-tab{transition:opacity 160ms ease}
+#sportsbook-section .sport-tab.active .sport-tab-emoji{
+  border-color:var(--pb-accent);
+  box-shadow:0 0 0 1.5px var(--pb-accent);
+}
+#sportsbook-section .sport-tab:not(.active):hover .sport-tab-emoji{
+  border-color:rgba(61,139,253,0.35);
+  box-shadow:none;
+}
+#live-section{background:var(--pb-bg)!important;color:var(--pb-white)}
+#live-section .pb-live-board-hd{display:flex;align-items:center;gap:8px;padding:2px 12px 8px}
+#live-section .pb-live-board-dot{
+  width:6px;height:6px;border-radius:50%;background:var(--pb-loss);box-shadow:none;
+  animation:pbLivePulse 1.6s ease-in-out infinite;
+}
+#live-section .pb-live-board-title{font-size:0.92rem;font-weight:800;letter-spacing:-0.01em;color:var(--pb-white)}
+#live-section .pb-live-board-count{
+  margin-left:auto;font-size:0.62rem;color:var(--pb-gray);font-weight:700;
+  text-transform:uppercase;letter-spacing:0.04em;
+}
+
+#sportsbook-section .market-card,
+#live-section .market-card{
+  margin:0 10px 10px!important;border-radius:14px!important;
+  background:var(--pb-card)!important;border:1px solid var(--pb-border-soft)!important;
+  box-shadow:0 1px 0 rgba(255,255,255,0.03)!important;
+  transition:border-color 160ms ease,transform 160ms ease;
+}
+#sportsbook-section .market-card.market-card--live,
+#live-section .market-card.market-card--live{
+  border-left:2px solid var(--pb-loss)!important;background:var(--pb-card)!important;
+}
+@media (hover:hover){
+  #sportsbook-section .market-card:hover,
+  #live-section .market-card:hover{
+    transform:translateY(-1px);
+    border-color:rgba(61,139,253,0.28)!important;
+    box-shadow:none!important;
+  }
+}
+#sportsbook-section .market-card.props-expanded,
+#sportsbook-section .market-card.alt-expanded,
+#live-section .market-card.props-expanded,
+#live-section .market-card.alt-expanded{
+  border-color:rgba(61,139,253,0.4)!important;box-shadow:none!important;
+}
+#sportsbook-section .mc-header,
+#live-section .mc-header{display:flex;align-items:center;gap:8px;padding:9px 12px 2px!important}
+#sportsbook-section .mc-meta,
+#live-section .mc-meta{display:flex;align-items:baseline;gap:8px;min-width:0;flex:1}
+#sportsbook-section .mc-sport,
+#live-section .mc-sport{
+  color:var(--pb-light)!important;font-size:0.62rem!important;font-weight:800!important;
+  letter-spacing:0.08em;text-transform:uppercase;flex-shrink:0;
+}
+#sportsbook-section .mc-when,
+#live-section .mc-when{
+  font-size:0.68rem;font-weight:650;color:var(--pb-gray);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;
+}
+#sportsbook-section .mc-when::before,
+#live-section .mc-when::before{content:"·";margin-right:8px;opacity:0.55}
+#sportsbook-section .mc-live-badge,
+#live-section .mc-live-badge{
+  margin-left:auto;flex-shrink:0;background:var(--pb-red-dim)!important;
+  border:1px solid rgba(255,77,106,0.35)!important;color:var(--pb-loss)!important;
+  border-radius:6px!important;box-shadow:none!important;padding:2px 6px;
+}
+#sportsbook-section .mc-live-badge-dot,
+#live-section .mc-live-badge-dot{box-shadow:none}
+#sportsbook-section .mc-footer .mc-time,
+#live-section .mc-footer .mc-time{display:none}
+#sportsbook-section .market-card-golf .mc-vs,
+#live-section .market-card-golf .mc-vs{display:none}
+#sportsbook-section .mc-cols,
+#live-section .mc-cols{padding-top:4px;padding-bottom:4px}
+#sportsbook-section .mc-col-label,
+#live-section .mc-col-label{
+  color:var(--pb-gray)!important;font-size:0.54rem!important;font-weight:700;letter-spacing:0.06em;
+}
+#sportsbook-section .mc-name,
+#live-section .mc-name{font-size:0.96rem;font-weight:800;letter-spacing:-0.02em;color:var(--pb-white)}
+#sportsbook-section .mc-city,
+#live-section .mc-city{color:var(--pb-gray)!important;font-size:0.58rem;letter-spacing:0.04em}
+#sportsbook-section .mc-team,
+#live-section .mc-team{gap:12px}
+#sportsbook-section .mc-jersey,
+#live-section .mc-jersey{
+  width:54px;height:54px;flex-shrink:0;
+  background:transparent!important;border:none!important;box-shadow:none!important;
+  padding:0!important;overflow:visible;
+}
+#sportsbook-section .mc-jersey img,
+#live-section .mc-jersey img{
+  width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important;
+  object-fit:contain!important;display:block;
+  background:transparent!important;border:none!important;box-shadow:none!important;
+  /* Optical fill + soft edge separation on dark cards (no white box / no glow) */
+  --pb-logo-optical:1.1;
+  transform:scale(var(--pb-logo-optical));
+  transform-origin:center center;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,0.55)) drop-shadow(0 0 0.6px rgba(255,255,255,0.22));
+}
+#sportsbook-section .mc-jersey img[data-logo-optical="1.00"],
+#live-section .mc-jersey img[data-logo-optical="1.00"]{--pb-logo-optical:1}
+#sportsbook-section .mc-jersey img[data-logo-optical="1.06"],
+#live-section .mc-jersey img[data-logo-optical="1.06"]{--pb-logo-optical:1.06}
+#sportsbook-section .mc-jersey img[data-logo-optical="1.08"],
+#live-section .mc-jersey img[data-logo-optical="1.08"]{--pb-logo-optical:1.08}
+#sportsbook-section .mc-jersey img[data-logo-optical="1.12"],
+#live-section .mc-jersey img[data-logo-optical="1.12"]{--pb-logo-optical:1.12}
+#sportsbook-section .mc-jersey img[data-logo-optical="1.16"],
+#live-section .mc-jersey img[data-logo-optical="1.16"]{--pb-logo-optical:1.16}
+#sportsbook-section .mc-jersey img[data-logo-optical="1.20"],
+#live-section .mc-jersey img[data-logo-optical="1.20"]{--pb-logo-optical:1.20}
+#sportsbook-section .mc-jersey.mc-jersey-headshot img,
+#live-section .mc-jersey.mc-jersey-headshot img{
+  transform:none;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));object-fit:cover!important;
+}
+#sportsbook-section .mc-divider,
+#live-section .mc-divider{height:1px;margin:0 12px;background:var(--pb-border-soft)!important}
+#sportsbook-section .mc-footer,
+#live-section .mc-footer{padding:2px 8px 8px!important}
+#sportsbook-section .mc-footer:not(:has(.mc-footer-actions)),
+#live-section .mc-footer:not(:has(.mc-footer-actions)){display:none}
+#sportsbook-section .mc-props-btn,
+#live-section .mc-props-btn{
+  color:var(--pb-accent)!important;background:transparent!important;border:none!important;
+  font-size:0.68rem;font-weight:750;padding:6px 8px;border-radius:8px;
+  transition:color 160ms ease,background 160ms ease;
+}
+#sportsbook-section .mc-props-btn:hover,
+#live-section .mc-props-btn:hover{color:var(--pb-cyan);background:var(--pb-accent-dim)!important}
+
+#sportsbook-section .odds-box,
+#sportsbook-section .mkt-odds-box,
+#live-section .odds-box,
+#live-section .mkt-odds-box{
+  background:var(--pb-odds-recess)!important;border:1px solid var(--pb-border)!important;
+  border-radius:10px!important;box-shadow:none!important;min-height:48px;
+  font-variant-numeric:tabular-nums;
+  transition:border-color 160ms ease,background 160ms ease,transform 140ms ease!important;
+}
+#sportsbook-section .odds-box:hover,
+#sportsbook-section .mkt-odds-box:hover,
+#live-section .odds-box:hover,
+#live-section .mkt-odds-box:hover{
+  border-color:rgba(61,139,253,0.42)!important;background:#101826!important;box-shadow:none!important;
+}
+#sportsbook-section .odds-box.sel,
+#sportsbook-section .odds-cell.selected,
+#sportsbook-section .mkt-odds-box.selected,
+#live-section .odds-box.sel,
+#live-section .odds-cell.selected,
+#live-section .mkt-odds-box.selected{
+  background:var(--pb-accent-soft)!important;border:1px solid var(--pb-accent)!important;
+  box-shadow:none!important;outline:none!important;
+}
+#sportsbook-section .odds-line,
+#live-section .odds-line{color:var(--pb-white)!important;text-shadow:none!important;font-weight:800}
+#sportsbook-section .odds-num,
+#live-section .odds-num{color:var(--pb-light);text-shadow:none!important}
+#sportsbook-section .odds-pos,
+#live-section .odds-pos{color:var(--pb-win)!important;text-shadow:none!important}
+#sportsbook-section .odds-neg,
+#live-section .odds-neg{color:var(--pb-light)!important;text-shadow:none!important}
+#sportsbook-section .odds-box--over,
+#live-section .odds-box--over{background:var(--pb-odds-recess)!important}
+#sportsbook-section .odds-box--over .odds-line,
+#live-section .odds-box--over .odds-line{color:var(--pb-win)!important}
+#sportsbook-section .odds-box--under,
+#live-section .odds-box--under{background:var(--pb-odds-recess)!important}
+#sportsbook-section .odds-box--under .odds-line,
+#live-section .odds-box--under .odds-line{color:var(--pb-loss)!important}
+#sportsbook-section .odds-box--empty,
+#sportsbook-section .odds-box.live-stale,
+#sportsbook-section .odds-box.suspended,
+#sportsbook-section .odds-box[aria-disabled="true"],
+#live-section .odds-box--empty,
+#live-section .odds-box.live-stale,
+#live-section .odds-box.suspended,
+#live-section .odds-box[aria-disabled="true"]{
+  opacity:0.42!important;background:var(--pb-bg-elev)!important;
+  border-color:var(--pb-border)!important;box-shadow:none!important;cursor:not-allowed;
+}
+#sportsbook-section .mc-live-score,
+#live-section .mc-live-score{background:transparent!important;color:var(--pb-gray);padding:2px 12px 4px}
+#sportsbook-section .mc-live-score .mc-live-state,
+#live-section .mc-live-score .mc-live-state{color:var(--pb-loss)}
+#sportsbook-section .mc-live-pts,
+#live-section .mc-live-pts{color:var(--pb-white)!important;font-weight:900}
+
+#sportsbook-section .pb-empty,
+#live-section .pb-empty{
+  margin:8px 12px 16px;padding:22px 12px 8px;
+  background:transparent!important;border:none!important;box-shadow:none!important;
+}
+#sportsbook-section .pb-empty-title,
+#live-section .pb-empty-title{font-size:0.95rem;font-weight:800;color:var(--pb-white)}
+#sportsbook-section .pb-empty-body,
+#live-section .pb-empty-body{color:var(--pb-gray);font-size:0.78rem}
+#sportsbook-section .pb-error,
+#live-section .pb-error{
+  background:var(--pb-red-dim)!important;border:1px solid rgba(255,77,106,0.28)!important;color:var(--pb-light)!important;
+}
+#games-list > .pb-loading,
+#live-games-list > .pb-loading{
+  position:relative;color:transparent;font-size:0;margin:0 10px 10px;padding:0;
+  min-height:152px;height:168px;border-radius:14px;background:var(--pb-card);
+  border:1px solid var(--pb-border-soft);overflow:hidden;
+}
+#games-list > .pb-loading::before,
+#live-games-list > .pb-loading::before,
+#games-list > .pb-loading::after,
+#live-games-list > .pb-loading::after{
+  content:"";position:absolute;left:12px;right:12px;height:40px;border-radius:8px;
+  border:none;width:auto;margin:0;animation:pbCardSkel 1.3s ease-in-out infinite;
+  background:linear-gradient(90deg,var(--pb-card2) 0%,rgba(255,255,255,0.05) 48%,var(--pb-card2) 100%);
+  background-size:200% 100%;
+}
+#games-list > .pb-loading::before,
+#live-games-list > .pb-loading::before{top:28px}
+#games-list > .pb-loading::after,
+#live-games-list > .pb-loading::after{top:80px;animation-delay:120ms}
+@keyframes pbCardSkel{0%{background-position:100% 0}100%{background-position:-100% 0}}
+
+#sportsbook-section .mc-props-tabs,
+#live-section .mc-props-tabs{border-bottom-color:var(--pb-border-soft)}
+#sportsbook-section .mc-prop-ou,
+#live-section .mc-prop-ou{
+  background:var(--pb-odds-recess)!important;border:1px solid var(--pb-border)!important;
+  border-radius:10px!important;box-shadow:none!important;
+  transition:border-color 160ms ease,background 160ms ease;
+}
+#sportsbook-section .mc-prop-section,
+#live-section .mc-prop-section{border-top-color:var(--pb-border-soft)}
+#sportsbook-section .mc-prop-show-more,
+#live-section .mc-prop-show-more{
+  background:transparent!important;border:1px solid var(--pb-border)!important;color:var(--pb-light)!important;
+}
+#sportsbook-section .mc-alt-slider-selected,
+#live-section .mc-alt-slider-selected{
+  background:var(--pb-bg-elev)!important;border:1px solid var(--pb-border)!important;
+}
+
+@media (max-width:430px){
+  #sportsbook-section .pb-board-spacer{height:2px}
+  #sportsbook-section .filter-row{padding:0 6px 0}
+  #sportsbook-section .sport-grid{padding-top:6px!important;padding-bottom:4px!important;border-bottom:none!important}
+  #sportsbook-section .market-card,
+  #live-section .market-card{margin:0 8px 8px!important;border-radius:12px!important}
+  #sportsbook-section .mc-header,
+  #live-section .mc-header{padding:8px 10px 0!important}
+  #sportsbook-section .mc-name,
+  #live-section .mc-name{font-size:0.88rem}
+  #sportsbook-section .mc-team,
+  #live-section .mc-team{gap:10px}
+  #sportsbook-section .market-card .mc-jersey,
+  #live-section .market-card .mc-jersey{width:44px!important;height:44px!important}
+  #sportsbook-section .odds-box,
+  #live-section .odds-box{min-height:46px;border-radius:8px!important}
+}
+@media (max-width:390px){
+  #sportsbook-section .market-card .mc-jersey,
+  #live-section .market-card .mc-jersey{width:42px!important;height:42px!important}
+}
+@media (min-width:768px){
+  #sportsbook-section .pb-board-spacer{height:10px}
+  #sportsbook-section .market-card,
+  #live-section .market-card{border-radius:16px!important}
+  #sportsbook-section .mc-name,
+  #live-section .mc-name{font-size:1rem}
+  #sportsbook-section .market-card .mc-jersey,
+  #live-section .market-card .mc-jersey{width:52px!important;height:52px!important}
+}
+@media (min-width:1100px){
+  #sportsbook-section .market-card .mc-jersey,
+  #live-section .market-card .mc-jersey{width:56px!important;height:56px!important}
+}
+@media (min-width:1440px){
+  #sportsbook-section .market-card .mc-jersey,
+  #live-section .market-card .mc-jersey{width:58px!important;height:58px!important}
+}
+@media (prefers-reduced-motion: reduce){
+  #sportsbook-section .market-card,
+  #live-section .market-card,
+  #sportsbook-section .odds-box,
+  #live-section .odds-box,
+  #sportsbook-section .mc-props-btn{transition:none!important}
+  #sportsbook-section .market-card:hover,
+  #live-section .market-card:hover,
+  #sportsbook-section .odds-box:active,
+  #live-section .odds-box:active{transform:none!important}
+  #games-list > .pb-loading::before,
+  #live-games-list > .pb-loading::before,
+  #games-list > .pb-loading::after,
+  #live-games-list > .pb-loading::after,
+  #live-section .pb-live-board-dot,
+  .mc-live-badge-dot{animation:none!important}
+  #sportsbook-section .mc-jersey img,
+  #live-section .mc-jersey img{transform:none}
+}
+
 </style>
+
 
 <script>
 (function(){
@@ -1976,15 +2299,15 @@ function _debugClearTickets() {
 <div id="value-bets-section" style="display:none"></div>
 
 <!-- GAMES -->
-<div style="height:20px"></div>
+<div class="pb-board-spacer" aria-hidden="true"></div>
 <div id="games-list"><div class="pb-loading">Loading events…</div></div>
 </main><!-- /sportsbook-section -->
 <div id="mybets-section" style="display:none;background:#070b12;min-height:100vh;padding-bottom:100px"></div>
-<div id="live-section" style="display:none;background:#0a0a0a;min-height:100vh;padding:14px 0 100px">
-  <div style="display:flex;align-items:center;gap:8px;padding:0 16px 14px">
-    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff3d57;box-shadow:0 0 8px rgba(255,61,87,0.7);animation:pbLivePulse 1.4s ease-in-out infinite"></span>
-    <span style="font-size:1rem;font-weight:900;letter-spacing:0.3px;color:#fff">Live & In-Game</span>
-    <span id="live-count" style="margin-left:auto;font-size:0.62rem;color:#888;font-weight:700;text-transform:uppercase;letter-spacing:0.5px"></span>
+<div id="live-section" style="display:none;min-height:100vh;padding:8px 0 100px">
+  <div class="pb-live-board-hd">
+    <span class="pb-live-board-dot" aria-hidden="true"></span>
+    <span class="pb-live-board-title">Live & In-Game</span>
+    <span id="live-count" class="pb-live-board-count"></span>
   </div>
   <div id="live-games-list"><div class="pb-loading">Loading live events…</div></div>
 </div>
@@ -3256,22 +3579,26 @@ function teamAvatar(name, sport, opts) {
   if (kind === 'soccer' && opts.logoUrl) {
     var safeSoccerUrl = String(opts.logoUrl).replace(/"/g, '&quot;');
     var safeSoccerName = String(name || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    var soccerOptical = (typeof getLogoOpticalScale === 'function') ? getLogoOpticalScale(name, 'soccer') : '1.06';
     return '<div class="mc-jersey"><img src="' + safeSoccerUrl + '" alt="' + safeSoccerName +
-      '" width="52" height="52" style="width:52px;height:52px;object-fit:contain;display:block;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35))" ' +
+      '" width="56" height="56" data-logo-optical="' + soccerOptical + '" data-team-name="' + safeSoccerName + '" data-team-sport="soccer"' +
+      ' style="width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;display:block" ' +
       'referrerpolicy="no-referrer" loading="lazy" onerror="window._pbCollapseImgToText&&window._pbCollapseImgToText(this)"></div>';
   }
   if (kind === 'soccer' && typeof getSoccerTeamLogoImg === 'function') {
-    return '<div class="mc-jersey">' + getSoccerTeamLogoImg(name, 52) + '</div>';
+    return '<div class="mc-jersey">' + getSoccerTeamLogoImg(name, 56) + '</div>';
   }
   if (opts.logoUrl && (kind === 'ncaaf' || String(sport).toLowerCase().indexOf('ncaaf') >= 0)) {
     var safeUrl = String(opts.logoUrl).replace(/"/g, '&quot;');
     var safeName = String(name || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    var ncaafOptical = (typeof getLogoOpticalScale === 'function') ? getLogoOpticalScale(name, 'ncaafb') : '1.08';
     return '<div class="mc-jersey"><img src="' + safeUrl + '" alt="' + safeName +
-      '" width="52" height="52" style="width:52px;height:52px;object-fit:contain;display:block" ' +
+      '" width="56" height="56" data-logo-optical="' + ncaafOptical + '" data-team-name="' + safeName + '" data-team-sport="ncaafb"' +
+      ' style="width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;display:block" ' +
       'referrerpolicy="no-referrer" loading="lazy" onerror="window._pbCollapseImgToText&&window._pbCollapseImgToText(this)"></div>';
   }
   if (typeof getTeamLogoImg === 'function') {
-    return '<div class="mc-jersey">' + getTeamLogoImg(name, sport, 52) + '</div>';
+    return '<div class="mc-jersey">' + getTeamLogoImg(name, sport, 56) + '</div>';
   }
   var abbr = String(name || '?').split(' ').slice(-1)[0].slice(0, 3).toUpperCase();
   return '<div class="mc-jersey pb-text-fallback" title="' + String(name || '').replace(/"/g, '&quot;') + '">' +
@@ -4117,7 +4444,7 @@ async function _loadOddsComparison(sport) {
 }
 
 function _pbOddsCellHtml(g, aw, hw, sp, id, top, odds, marketType, teamPick, teamName) {
-  if (!odds) return '<div class="odds-box" style="cursor:default;pointer-events:none" aria-hidden="true"><span style="color:var(--gray)">—</span></div>';
+  if (!odds) return '<div class="odds-box odds-box--empty" style="cursor:default;pointer-events:none" aria-hidden="true"><span style="color:var(--gray)">—</span></div>';
   var isLiveMarket = _pbMarketIsLive(g);
   var c = odds > 0 ? 'odds-pos' : 'odds-neg';
   var f = (odds > 0 ? '+' : '') + odds;
@@ -4130,7 +4457,12 @@ function _pbOddsCellHtml(g, aw, hw, sp, id, top, odds, marketType, teamPick, tea
   var safePick = (pickLabel || 'Unknown Selection').replace(/"/g, '').replace(/'/g, '');
   var safeGameId = String(g.id || g.providerGameId || '').replace(/"/g, '');
   var aria = (safeGame ? safeGame + ', ' : '') + (safeMkt ? safeMkt + ', ' : '') + safePick + ', ' + f;
-  return '<div class="odds-box odds-cell" id="c-' + id + '"' +
+  var ouClass = '';
+  if (top) {
+    if (/^O\b/i.test(String(top))) ouClass = ' odds-box--over';
+    else if (/^U\b/i.test(String(top))) ouClass = ' odds-box--under';
+  }
+  return '<div class="odds-box odds-cell' + ouClass + '" id="c-' + id + '"' +
     ' role="button" tabindex="0"' +
     ' aria-label="' + aria.replace(/"/g, '&quot;') + '"' +
     ' aria-pressed="false"' +
@@ -4464,6 +4796,8 @@ function _pbUpdateOddsCellContent(cellId, top, odds, extras) {
   }
   if (extras.pick != null) cell.setAttribute('data-pick', extras.pick);
   if (extras.liveMarket != null) cell.setAttribute('data-live-market', extras.liveMarket ? 'true' : 'false');
+  cell.classList.toggle('odds-box--over', !!(top && /^O\b/i.test(String(top))));
+  cell.classList.toggle('odds-box--under', !!(top && /^U\b/i.test(String(top))));
 }
 
 function _pbUpdateGameCardInPlace(card, g) {
@@ -4474,6 +4808,8 @@ function _pbUpdateGameCardInPlace(card, g) {
   window.gamesCache[String(g.id)] = g;
   if (g.providerGameId != null) window.gamesCache[String(g.providerGameId)] = g;
   var isLive = _pbMarketIsLive(g);
+  card.classList.toggle('market-card--live', !!isLive);
+  card.classList.toggle('market-card--upcoming', !isLive);
   var aw = d.aw, hw = d.hw, gid = d.gid;
   function spreadPick(team, sp) {
     if (!sp) return null;
@@ -4661,7 +4997,6 @@ function _pbRenderGameCardHtml(g) {
     var sp = (g.sport ? g.sport.toUpperCase() : null) || 'MLB';
     var leagueLabel = (g.league || g.promotion || g.sport_title || '').trim();
     var headerSport = ((isMmaCard || isGolfCard) && leagueLabel) ? leagueLabel : sp;
-    var icon = _PB_GAME_ICONS[sp] || '🏅';
     var isLiveMarket = _pbMarketIsLive(g);
     var split = _findSplitForGame(g);
     var splitHtml = split ? _renderSplitBar(split, isGolfCard ? aw : awN, isGolfCard ? hw : hwN) : '';
@@ -4678,13 +5013,14 @@ function _pbRenderGameCardHtml(g) {
 
     var safeHome = hw.replace(/"/g, '');
     var safeAway = aw.replace(/"/g, '');
+    var statusClass = isLiveMarket ? ' market-card--live' : ' market-card--upcoming';
+    var headerHtml = '<div class="mc-header"><div class="mc-meta"><span class="mc-sport">' + headerSport + '</span><span class="mc-when">' + time + '</span></div>' +
+      (isLiveMarket ? _pbLiveBadgeHtml() : '') + '</div>';
 
     // Golf matchups: Player A vs Player B + moneyline only (no fake spread/total columns).
     if (isGolfCard) {
-      return '<div class="market-card market-card-golf" data-game-id="' + safeGameId + '" data-home="' + safeHome + '" data-away="' + safeAway + '" data-sport="golf" style="margin-bottom:14px">' +
-        '<div class="mc-header"><span style="font-size:0.9rem">' + icon + '</span><span class="mc-sport">' + headerSport + '</span>' +
-        (isLiveMarket ? _pbLiveBadgeHtml() : '') +
-        '</div>' +
+      return '<div class="market-card market-card-golf' + statusClass + '" data-game-id="' + safeGameId + '" data-home="' + safeHome + '" data-away="' + safeAway + '" data-sport="golf" style="margin-bottom:14px">' +
+        headerHtml +
         liveScoreHtml +
         splitHtml +
         '<div class="mc-vs">' + aw + ' vs ' + hw + '</div>' +
@@ -4703,10 +5039,8 @@ function _pbRenderGameCardHtml(g) {
         '</div>';
     }
 
-    return '<div class="market-card" data-game-id="' + safeGameId + '" data-home="' + safeHome + '" data-away="' + safeAway + '" style="margin-bottom:14px">' +
-      '<div class="mc-header"><span style="font-size:0.9rem">' + icon + '</span><span class="mc-sport">' + headerSport + '</span>' +
-      (isLiveMarket ? _pbLiveBadgeHtml() : '') +
-      '</div>' +
+    return '<div class="market-card' + statusClass + '" data-game-id="' + safeGameId + '" data-home="' + safeHome + '" data-away="' + safeAway + '" style="margin-bottom:14px">' +
+      headerHtml +
       liveScoreHtml +
       splitHtml +
       '<div class="mc-cols"><div></div><div class="mc-col-label">' + spreadLabel + '</div><div class="mc-col-label">Total</div><div class="mc-col-label">To Win</div></div>' +

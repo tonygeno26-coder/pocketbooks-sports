@@ -959,12 +959,54 @@
     return builder(abbrev);
   }
 
+  function _combinerFetchSize(displaySize) {
+    var d = parseInt(displaySize, 10) || 80;
+    // Request 2× CDN pixels so marks stay crisp when CSS scales the container.
+    return Math.max(128, Math.min(500, d * 2));
+  }
+
   function _combinerLogoUrl(sport, abbrev, size) {
     var direct = _directLogoUrl(sport, abbrev);
     if (!direct) return '';
     var path = direct.replace('https://a.espncdn.com', '');
-    var sz = size || 80;
+    var sz = _combinerFetchSize(size || 80);
     return 'https://a.espncdn.com/combiner/i?img=' + encodeURIComponent(path) + '&w=' + sz + '&h=' + sz;
+  }
+
+  // Optical scale overrides for marks with excess transparent padding / dark-on-dark.
+  // Values are discrete CSS selectors on the sportsbook board (1.00–1.20).
+  var LOGO_OPTICAL_SCALE = {
+    'chicago white sox': '1.16',
+    'oakland athletics': '1.12',
+    'toronto blue jays': '1.12',
+    'new york yankees': '1.08',
+    'san antonio spurs': '1.12',
+    'brooklyn nets': '1.16',
+    'minnesota timberwolves': '1.08',
+    'jacksonville jaguars': '1.08',
+    'las vegas raiders': '1.12',
+    'pittsburgh steelers': '1.08',
+    'anaheim ducks': '1.08',
+    'arizona coyotes': '1.08',
+    'utah hockey club': '1.08',
+    'michigan wolverines': '1.08',
+    'ohio state buckeyes': '1.08',
+    'alabama crimson tide': '1.06',
+    'manchester united': '1.06',
+    'arsenal': '1.06',
+    'tottenham hotspur': '1.08',
+    'inter miami': '1.08'
+  };
+
+  function getLogoOpticalScale(teamName, sport) {
+    var key = String(teamName || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    if (LOGO_OPTICAL_SCALE[key]) return LOGO_OPTICAL_SCALE[key];
+    sport = normalizeSport(sport);
+    if (sport === 'mlb') return '1.12';
+    if (sport === 'nba' || sport === 'nfl' || sport === 'nhl') return '1.10';
+    if (sport === 'ncaafb' || sport === 'ncaab') return '1.08';
+    if (sport === 'soccer') return '1.06';
+    return '1.10';
   }
 
   function getTeamLogo(teamName, sport, size) {
@@ -999,6 +1041,8 @@
     size = size || 40;
     sport = normalizeSport(sport);
     var initials = getTeamInitials(teamName);
+    var optical = getLogoOpticalScale(teamName, sport);
+    var fillStyle = 'width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;display:block';
 
     // NCAAF: numeric ESPN IDs only; missing IDs get a hydrate placeholder + search fallback.
     if (sport === 'ncaafb') {
@@ -1010,20 +1054,22 @@
           (className ? ' data-logo-class="' + esc(className) + '"' : '') + '>' +
           _fallbackHtml(teamName, sport, size, className) + '</span>';
       }
+      var fetchSz = _combinerFetchSize(size);
       var combiner = 'https://a.espncdn.com/combiner/i?img=' + encodeURIComponent('/i/teamlogos/ncaa/500/' + ncaafId + '.png') +
-        '&w=' + size + '&h=' + size;
+        '&w=' + fetchSz + '&h=' + fetchSz;
       var direct = 'https://a.espncdn.com/i/teamlogos/ncaa/500/' + ncaafId + '.png';
       return '<img' + cls +
         ' src="' + esc(combiner) + '"' +
         ' alt="' + esc(teamName || initials) + '"' +
         ' width="' + size + '" height="' + size + '"' +
         ' loading="lazy" decoding="async"' +
-        ' style="width:' + size + 'px;height:' + size + 'px;object-fit:contain;display:block"' +
+        ' style="' + fillStyle + '"' +
         ' referrerpolicy="no-referrer"' +
         ' data-logo-step="0"' +
         ' data-ncaaf-team="' + esc(teamName || '') + '"' +
         ' data-team-name="' + esc(teamName) + '"' +
         ' data-team-sport="ncaafb"' +
+        ' data-logo-optical="' + optical + '"' +
         ' data-logo-direct="' + esc(direct) + '"' +
         ' data-logo-size="' + size + '"' +
         (className ? ' data-logo-class="' + esc(className) + '"' : '') +
@@ -1040,11 +1086,12 @@
       ' alt="' + esc(teamName || initials) + '"' +
       ' width="' + size + '" height="' + size + '"' +
       ' loading="lazy" decoding="async"' +
-      ' style="width:' + size + 'px;height:' + size + 'px;object-fit:contain;display:block"' +
+      ' style="' + fillStyle + '"' +
       ' referrerpolicy="no-referrer"' +
       ' data-logo-step="0"' +
       ' data-team-name="' + esc(teamName) + '"' +
       ' data-team-sport="' + esc(sport) + '"' +
+      ' data-logo-optical="' + optical + '"' +
       ' data-logo-direct="' + esc(direct) + '"' +
       ' data-logo-size="' + size + '"' +
       (className ? ' data-logo-class="' + esc(className) + '"' : '') +
@@ -1072,8 +1119,9 @@
       if (typeof global.searchNcaafTeamId === 'function') {
         global.searchNcaafTeamId(teamName).then(function (id) {
           if (!id || !img || !img.parentNode) return;
+          var fetchSz = _combinerFetchSize(size);
           var combiner = 'https://a.espncdn.com/combiner/i?img=' +
-            encodeURIComponent('/i/teamlogos/ncaa/500/' + id + '.png') + '&w=' + size + '&h=' + size;
+            encodeURIComponent('/i/teamlogos/ncaa/500/' + id + '.png') + '&w=' + fetchSz + '&h=' + fetchSz;
           img.setAttribute('data-logo-step', '0');
           img.setAttribute('data-logo-direct', 'https://a.espncdn.com/i/teamlogos/ncaa/500/' + id + '.png');
           img.src = combiner;
@@ -1784,6 +1832,8 @@
     var url = getSoccerTeamLogo(name);
     var flag = getCountryFlagUrl(name, Math.max(24, Math.round(size * 0.55)));
     var cls = className ? ' class="' + esc(className) + '"' : '';
+    var optical = getLogoOpticalScale(name, 'soccer');
+    var fillStyle = 'width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;display:block';
 
     if (!url && !flag) {
       return '<span data-soccer-team="' + esc(name) + '" data-logo-size="' + size + '"' +
@@ -1797,11 +1847,13 @@
       ' alt="' + esc(name) + '"' +
       ' width="' + size + '" height="' + size + '"' +
       ' loading="lazy" decoding="async"' +
-      ' style="width:' + size + 'px;height:' + size + 'px;object-fit:contain;display:block"' +
+      ' style="' + fillStyle + '"' +
       ' referrerpolicy="no-referrer"' +
       ' data-soccer-step="' + (url ? '0' : '1') + '"' +
       ' data-soccer-team="' + esc(name) + '"' +
       ' data-team-name="' + esc(name) + '"' +
+      ' data-team-sport="soccer"' +
+      ' data-logo-optical="' + optical + '"' +
       ' data-logo-size="' + size + '"' +
       ' data-flag-url="' + esc(flag) + '"' +
       (className ? ' data-logo-class="' + esc(className) + '"' : '') +
@@ -2696,6 +2748,7 @@
   global.getTeamLogo = getTeamLogo;
   global.getTeamLogoDirect = getTeamLogoDirect;
   global.getTeamLogoImg = getTeamLogoImg;
+  global.getLogoOpticalScale = getLogoOpticalScale;
   global.handleTeamLogoError = handleTeamLogoError;
   global.extractTeamFromPick = extractTeamFromPick;
   global.getSoccerTeamLogo = getSoccerTeamLogo;
