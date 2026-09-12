@@ -201,6 +201,217 @@ body{
 #host-bets-list{overflow-x:hidden;max-width:100%}
 #host-bets-list *{max-width:100%;box-sizing:border-box;overflow-wrap:anywhere;word-break:break-word}
 
+/* ═══ HOST BETS / PLAYERS — Player Dashboard visual parity (presentation only) ═══ */
+@keyframes hbTicketIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes hbDetailsIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.host-summary-label{
+  padding:14px 16px 0;font-size:0.62rem;font-weight:900;letter-spacing:0.7px;
+  text-transform:uppercase;color:var(--text-muted);
+}
+.host-summary-label + .settlement,
+.host-summary-label + .stats-row{padding-top:8px}
+.hb-empty,.hp-empty,.hb-loading,.hp-loading,.hb-error,.hp-error{
+  margin:12px 16px;padding:28px 18px;text-align:center;
+  background:var(--pb-card);border:1px solid var(--pb-border);border-radius:var(--radius-sm);
+  box-shadow:var(--pb-shadow);
+}
+.hb-empty-title,.hp-empty-title{font-size:0.95rem;font-weight:900;color:var(--pb-white);margin-bottom:8px}
+.hb-empty-sub,.hp-empty-sub{font-size:0.78rem;color:var(--pb-gray);line-height:1.4}
+.hb-loading,.hp-loading{color:var(--pb-light);font-size:0.78rem;font-weight:700}
+.hb-loading::before,.hp-loading::before{
+  content:'';display:block;width:18px;height:18px;margin:0 auto 8px;border-radius:50%;
+  border:2px solid var(--pb-border);border-top-color:var(--pb-accent);
+  animation:pbSpin 0.8s linear infinite;
+}
+.hb-error,.hp-error{color:var(--pb-red);border-color:rgba(255,77,106,0.28);background:rgba(255,77,106,0.1)}
+@keyframes pbSpin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){
+  .hb-loading::before,.hp-loading::before,.rb-card,.hb-group{animation:none!important}
+}
+
+/* Premium digital ticket — mirrors Player Recent Bets / Results */
+.rb-card{
+  --rb-accent:var(--pb-accent);
+  background:var(--pb-card);border-radius:var(--pb-radius-sm,12px);
+  margin:7px 0;padding:12px 13px 10px 15px;
+  border:1px solid var(--pb-border);box-shadow:var(--pb-shadow);
+  position:relative;overflow:hidden;animation:hbTicketIn 180ms ease-out both;
+}
+.rb-card::before{
+  content:'';position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:var(--rb-accent);border-radius:3px 0 0 3px;
+}
+.rb-card--active{--rb-accent:var(--pb-accent)}
+.rb-card--won{--rb-accent:var(--pb-win)}
+.rb-card--lost{--rb-accent:var(--pb-loss)}
+.rb-card--push,.rb-card--void,.rb-card--cashed_out{--rb-accent:var(--pb-gray)}
+.rb-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.rb-card-head-main{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0;flex:1}
+.rb-status{font-size:0.62rem;font-weight:800;padding:2px 8px;border-radius:999px;border:1px solid;letter-spacing:0.3px;line-height:1.25;flex-shrink:0}
+.rb-status--active{color:var(--pb-accent);background:var(--pb-accent-soft);border-color:rgba(61,139,253,0.35)}
+.rb-status--won{color:var(--pb-win);background:var(--pb-win-dim);border-color:rgba(61,214,140,0.35)}
+.rb-status--lost{color:var(--pb-loss);background:var(--pb-red-dim);border-color:rgba(255,77,106,0.35)}
+.rb-status--push,.rb-status--void,.rb-status--muted{color:var(--pb-gray);background:rgba(122,135,153,0.12);border-color:rgba(122,135,153,0.28)}
+.rb-status--warn{color:var(--pb-gold);background:var(--pb-gold-dim);border-color:rgba(232,197,71,0.35)}
+.rb-status--cyan{color:var(--pb-cyan);background:var(--pb-cyan-dim);border-color:rgba(94,177,255,0.45)}
+.rb-type{font-size:0.9rem;font-weight:900;color:var(--pb-white);line-height:1.2;letter-spacing:-0.15px}
+.rb-sport{font-size:0.55rem;font-weight:800;letter-spacing:0.4px;color:var(--pb-accent);background:var(--pb-accent-soft);border:1px solid rgba(61,139,253,0.28);border-radius:6px;padding:1px 6px;text-transform:uppercase;flex-shrink:0}
+.rb-legs{display:flex;flex-direction:column;margin:0 0 2px}
+.rb-leg{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--pb-border-soft);align-items:flex-start}
+.rb-leg:last-child{border-bottom:none;padding-bottom:0}
+.rb-leg-body{flex:1;min-width:0}
+.rb-leg-pick{font-size:0.8rem;font-weight:800;color:var(--pb-white);line-height:1.25;word-break:break-word}
+.rb-leg-pick--won{color:var(--pb-win)}
+.rb-leg-pick--lost{color:var(--pb-loss)}
+.rb-leg-pick--push{color:var(--pb-gray)}
+.rb-leg-meta{font-size:0.64rem;color:var(--pb-gray);margin-top:2px;line-height:1.3}
+.rb-leg-odds{color:var(--pb-accent);font-weight:800}
+.rb-odds-line{font-size:0.74rem;font-weight:800;color:var(--pb-accent);margin:6px 0 8px}
+.rb-foot{display:flex;justify-content:space-between;padding-top:9px;border-top:1px solid var(--pb-border-soft);gap:8px}
+.rb-stat{text-align:center;flex:1;min-width:0}
+.rb-stat-label{font-size:0.55rem;color:var(--pb-gray);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.35px}
+.rb-stat-val{font-size:0.86rem;font-weight:900}
+.rb-stat-val--win{color:var(--pb-win)}
+.rb-stat-val--loss{color:var(--pb-loss)}
+.rb-stat-val--accent{color:var(--pb-accent)}
+.rb-stat-val--muted{color:var(--pb-gray)}
+.rb-stat-val--white{color:var(--pb-white)}
+.rb-placed{font-size:0.6rem;color:var(--pb-gray);margin-top:7px;font-weight:600}
+.hb-actions{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.hb-btn{
+  width:100%;padding:9px 10px;border-radius:10px;font-size:0.7rem;font-weight:800;
+  cursor:pointer;letter-spacing:0.3px;min-height:40px;
+  transition:border-color .15s,background .15s,opacity .15s;
+}
+.hb-btn--cashout{background:transparent;border:1px solid rgba(61,139,253,0.4);color:var(--accent-blue-bright)}
+.hb-btn--cashout:hover{background:var(--pb-accent-soft)}
+.hb-btn--cancel{background:transparent;border:1px solid rgba(255,77,106,0.4);color:var(--negative)}
+.hb-btn--cancel:hover{background:var(--pb-red-dim)}
+.hb-btn--approve{background:var(--pb-loss);border:none;color:#fff}
+.hb-btn--deny{background:var(--pb-card2);border:1px solid var(--pb-border);color:var(--pb-light)}
+.hb-del-banner{
+  margin:0 16px 10px;background:rgba(255,77,106,0.08);border:1px solid rgba(255,77,106,0.35);
+  border-radius:var(--radius-sm);padding:14px;box-shadow:var(--pb-shadow);
+}
+.hb-del-title{font-size:0.72rem;font-weight:900;color:var(--pb-loss);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px}
+.hb-del-card{background:var(--pb-card);border:1px solid rgba(255,77,106,0.22);border-radius:12px;padding:12px;margin-bottom:8px}
+.hb-group{
+  background:var(--pb-card);border:1px solid var(--pb-border);border-radius:var(--radius);
+  margin:8px 16px;overflow:hidden;box-shadow:var(--pb-shadow);
+  animation:hbTicketIn 180ms ease-out both;
+}
+.hb-group-head{
+  padding:14px;cursor:pointer;display:flex;align-items:center;gap:12px;user-select:none;
+  transition:background .15s;
+}
+.hb-group-head:hover{background:rgba(255,255,255,0.02)}
+.hb-group-body{border-top:1px solid var(--pb-border);padding:8px 14px 4px;background:rgba(0,0,0,0.22)}
+.hb-avatar,.hp-avatar{
+  width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:0.72rem;font-weight:900;flex-shrink:0;
+  background:var(--pb-accent-soft);color:var(--accent-blue-bright);
+  border:1px solid rgba(61,139,253,0.45);
+}
+.hb-chevron{font-size:0.85rem;color:var(--pb-gray);transition:transform .15s;flex-shrink:0}
+.hb-chevron.is-open{transform:rotate(90deg)}
+
+/* Host Players premium rows */
+.hp-header{padding:14px 16px 0;position:sticky;top:0;background:var(--pb-bg);z-index:10}
+.hp-title{font-size:1.1rem;font-weight:900;margin-bottom:12px;letter-spacing:-0.2px}
+.hp-lock{
+  margin-bottom:12px;background:var(--pb-card);border:1px solid var(--pb-border);border-radius:12px;
+  padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 4px 18px rgba(0,0,0,0.22);
+}
+.hp-search{
+  display:flex;align-items:center;background:var(--pb-card);border:1px solid var(--pb-border);
+  border-radius:12px;padding:10px 14px;margin-bottom:10px;gap:8px;
+}
+.hp-search input{flex:1;background:none;border:none;outline:none;color:var(--pb-white);font-size:0.85rem}
+.hp-tabs{display:flex;gap:4px;margin-bottom:0;background:var(--pb-card);border:1px solid var(--pb-border);border-radius:10px;padding:3px}
+.hp-tab{
+  flex:1;padding:8px 4px;background:transparent;color:var(--pb-gray);border:none;border-radius:8px;
+  font-size:0.78rem;font-weight:800;cursor:pointer;min-height:40px;
+}
+.hp-tab.is-active{background:var(--pb-accent);color:#041018}
+#players-tab-list.player-list{padding:10px 16px 0;gap:10px}
+.hp-row{
+  background:var(--pb-card)!important;border:1px solid var(--pb-border)!important;border-radius:var(--radius)!important;
+  box-shadow:var(--pb-shadow);overflow:hidden;transition:border-color .15s,box-shadow .15s;
+}
+.hp-row:hover{border-color:#2a3a52!important}
+.hp-row-main{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.hp-name{font-size:0.92rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--pb-white)}
+.hp-username{font-size:0.72rem;color:var(--pb-light);margin-top:1px}
+.hp-badge{font-size:0.58rem;font-weight:800;padding:2px 8px;border-radius:999px;border:1px solid;letter-spacing:0.3px;flex-shrink:0;text-transform:uppercase}
+.hp-badge--approved{color:var(--pb-win);background:var(--pb-win-dim);border-color:rgba(61,214,140,0.35)}
+.hp-badge--blocked{color:var(--pb-loss);background:var(--pb-red-dim);border-color:rgba(255,77,106,0.35)}
+.hp-badge--pending{color:var(--pb-gold);background:var(--pb-gold-dim);border-color:rgba(232,197,71,0.35)}
+.hp-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.hp-metric{
+  background:var(--pb-bg-elev);border:1px solid var(--pb-border-soft);border-radius:10px;padding:8px 10px;
+}
+.hp-metric-label{font-size:0.52rem;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;color:var(--pb-gray);margin-bottom:2px}
+.hp-metric-val{font-size:0.82rem;font-weight:900;color:var(--pb-white)}
+.hp-metric-val--accent{color:var(--accent-blue-bright)}
+.hp-metric-val--loss{color:var(--pb-loss)}
+.hp-metric-val--win{color:var(--pb-win)}
+.hp-metric-val--gold{color:var(--pb-gold)}
+.hp-section{
+  margin:0 16px 12px;padding:12px;background:var(--pb-bg-elev);border:1px solid var(--pb-border);
+  border-radius:12px;
+}
+.hp-section-title{
+  font-size:0.66rem;color:var(--pb-gray);font-weight:900;letter-spacing:.6px;text-transform:uppercase;margin-bottom:9px;
+}
+.hp-section--betting{border-color:rgba(61,139,253,0.28)}
+.hp-section--settlement{border-color:rgba(232,197,71,0.28)}
+.hp-section--settlement .hp-section-title{color:var(--pb-gold)}
+.hp-bet-line{
+  display:flex;justify-content:space-between;gap:10px;padding:8px 0;
+  border-bottom:1px solid var(--pb-border-soft);font-size:0.78rem;
+}
+.hp-bet-line:last-child{border-bottom:none}
+.hp-req-banner{
+  margin:10px 0;background:rgba(232,197,71,0.08);border:1px solid rgba(232,197,71,0.3);
+  border-radius:12px;padding:10px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;
+}
+.hp-applicant{
+  display:flex;align-items:center;gap:12px;padding:12px 4px;
+  border-bottom:1px solid var(--pb-border-soft);
+}
+.hp-applicant:last-child{border-bottom:none}
+
+@media (max-width:430px){
+  .rb-card{margin:5px 0;padding:11px 12px 9px 14px}
+  .hb-group{margin:6px 12px}
+  .host-bet-metrics,.rb-foot{gap:4px}
+  .settlement{grid-template-columns:1fr;gap:8px}
+  .stats-row{grid-template-columns:1fr 1fr}
+  #settlement-week-section{grid-template-columns:1fr 1fr}
+}
+@media (max-width:390px){
+  .rb-card{margin:4px 0;padding:10px 11px 8px 13px;border-radius:11px}
+  .rb-type{font-size:0.82rem}
+  .rb-stat-val{font-size:0.78rem}
+  .hb-group-head{padding:12px}
+  .hp-row-main{padding:12px}
+  .hp-metrics{grid-template-columns:1fr}
+  .stats-row{grid-template-columns:1fr 1fr;gap:6px}
+  .stat-val{font-size:1.05rem}
+}
+@media (min-width:768px){
+  .settlement{grid-template-columns:1fr 1fr}
+  #settlement-week-section{grid-template-columns:repeat(4,1fr)}
+  .hp-metrics{grid-template-columns:repeat(4,1fr)}
+}
+@media (min-width:1280px){
+  .hb-group{margin-left:8px;margin-right:8px}
+  #players-tab-list.player-list{padding-left:8px;padding-right:8px}
+}
+@media (min-width:1440px){
+  .host-summary-label{padding-left:20px;padding-right:20px}
+}
+
 /* Dense tables */
 table{width:100%;border-collapse:collapse}
 th,td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.04);text-align:left;vertical-align:middle}
@@ -1018,15 +1229,22 @@ button[style*="background:var(--pb-accent)"],
   color:var(--accent-blue-bright)!important;
 }
 
-/* Host bet accordion / player cards */
-#host-bets-list > div,
+/* Host bet accordion / player cards — do not override nested rb-card accents */
+#host-bets-list > .hb-group,
 #host-bets-list [data-player-accordion],
 #players-section .player-row,
-#players-tab-list .player-row{
+#players-tab-list .player-row,
+#players-tab-list .hp-row{
   background:var(--bg-card)!important;
   border:1px solid var(--border)!important;
   border-radius:var(--radius)!important;
   box-shadow:0 4px 18px rgba(0,0,0,0.28);
+}
+#host-bets-list .rb-card{
+  background:var(--pb-card)!important;
+  border:1px solid var(--pb-border)!important;
+  border-radius:var(--pb-radius-sm,12px)!important;
+  box-shadow:var(--pb-shadow)!important;
 }
 #host-bets-list input,
 #host-bets-list select,
@@ -1447,7 +1665,8 @@ function renderAdminCrypto() {
 </div>
 
 <div id="home-content">
-<!-- SETTLEMENT SUMMARY -->
+<!-- CREDIT POSITION (settlement ledger — display only; settlement execution OFF) -->
+<div class="host-summary-label">Credit Position</div>
 <div class="settlement">
   <div class="settle-card sc-green">
     <div class="sc-label">Players Owe You</div>
@@ -1479,9 +1698,8 @@ function renderAdminCrypto() {
   </div>
 </div>
 
-<!-- ACTIVE BETS STAT -->
-
-<!-- WEEKLY STATS -->
+<!-- BETTING LEDGER (volume / exposure — not settlement) -->
+<div class="host-summary-label">Betting Ledger</div>
 <div class="stats-row">
   <div class="stat-card">
     <div class="stat-val" style="color:var(--cyan)" id="stat-handle">$0</div>
@@ -3591,15 +3809,15 @@ function _wireHostBetsUi(){
 function _hostStatusBadge(status){
   var b = _hostTicketStatusBucket(status);
   var map = {
-    active: { label:'ACTIVE', color:'var(--accent-blue-bright)', bg:'var(--accent-dim)', border:'rgba(61,139,253,0.35)' },
-    won:    { label:'WON',    color:'#fff', bg:'var(--pb-win)', border:'rgba(34,197,94,0.55)' },
-    lost:   { label:'LOST',   color:'#fff', bg:'var(--pb-loss)', border:'rgba(239,68,68,0.55)' },
-    push:   { label:'PUSH',   color:'#111', bg:'#F59E0B', border:'rgba(245,158,11,0.55)' },
-    cashed_out: { label:'CASHED OUT', color:'#c4b5fd', bg:'rgba(124,58,237,0.14)', border:'rgba(196,181,253,0.35)' },
-    void:   { label:'CANCELED', color:'#9CA3AF', bg:'rgba(156,163,175,0.14)', border:'rgba(156,163,175,0.35)' }
+    active:     { label:'ACTIVE',     cls:'rb-status--active' },
+    won:        { label:'WON',        cls:'rb-status--won' },
+    lost:       { label:'LOST',       cls:'rb-status--lost' },
+    push:       { label:'PUSH',       cls:'rb-status--push' },
+    cashed_out: { label:'CASHED OUT', cls:'rb-status--cyan' },
+    void:       { label:'CANCELED',   cls:'rb-status--muted' }
   };
-  var m = map[b] || { label:String(status||'UNKNOWN').toUpperCase(), color:'var(--text-muted)', bg:'var(--bg-card)', border:'var(--border)' };
-  return '<span style="font-size:0.58rem;font-weight:900;letter-spacing:0.4px;color:'+m.color+';background:'+m.bg+';padding:3px 8px;border-radius:10px;border:1px solid '+m.border+'">'+m.label+'</span>';
+  var m = map[b] || { label:String(status||'UNKNOWN').toUpperCase(), cls:'rb-status--muted' };
+  return '<span class="rb-status '+m.cls+'">'+m.label+'</span>';
 }
 
 function _hostTicketPayoutLabel(t){
@@ -3880,28 +4098,28 @@ function renderHostBets(){
   // Delete request alert section (active tab only)
   var delSection = '';
   if (_hostBetsTab === 'active' && delReqs.length) {
-    delSection = '<div style="margin:0 16px 8px;background:#2a1000;border:1.5px solid #cc0000;border-radius:14px;padding:14px">' +
-      '<div style="font-size:0.72rem;font-weight:900;color:#cc0000;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">⚠️ '+delReqs.length+' Delete Request'+( delReqs.length>1?'s':'')+' Pending</div>' +
+    delSection = '<div class="hb-del-banner">' +
+      '<div class="hb-del-title">'+delReqs.length+' Delete Request'+( delReqs.length>1?'s':'')+' Pending</div>' +
       delReqs.map(function(t){
         var d = new Date(t.deleteRequestedAt);
         var dt = isNaN(d) ? 'Unknown time' : d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
         var pName = (t.playerUsername||t.playerName||'Player') + (t.playerRealName?' ('+t.playerRealName+')':'');
-        return '<div style="background:#1a1a1a;border:1px solid #3a1000;border-radius:10px;padding:12px;margin-bottom:8px">' +
-          '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">' +
-            '<div>' +
-              '<div style="font-size:0.82rem;font-weight:800;color:#fff">'+pName+'</div>' +
-              '<div style="font-size:0.62rem;color:#888;margin-top:2px">Ticket: '+t.id+'</div>' +
-              '<div style="font-size:0.62rem;color:#888">Requested: '+dt+'</div>' +
+        return '<div class="hb-del-card">' +
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px">' +
+            '<div style="min-width:0">' +
+              '<div style="font-size:0.82rem;font-weight:800;color:var(--pb-white)">'+pName+'</div>' +
+              '<div style="font-size:0.62rem;color:var(--pb-gray);margin-top:2px">Ticket: '+t.id+'</div>' +
+              '<div style="font-size:0.62rem;color:var(--pb-gray)">Requested: '+dt+'</div>' +
             '</div>' +
-            '<div style="text-align:right">' +
-              '<div style="font-size:0.65rem;color:#888">'+t.type+'</div>' +
-              '<div style="font-size:0.82rem;font-weight:900;color:#cc0000">Player Risk: $'+parseFloat(t.riskAmount||0).toFixed(2)+'</div>' +
-              '<div style="font-size:0.75rem;font-weight:800;color:var(--green)">Host At Risk: $'+parseFloat(t.potentialProfit||0).toFixed(2)+'</div>' +
+            '<div style="text-align:right;flex-shrink:0">' +
+              '<div style="font-size:0.65rem;color:var(--pb-gray)">'+t.type+'</div>' +
+              '<div style="font-size:0.82rem;font-weight:900;color:var(--pb-loss)">Player Risk: $'+parseFloat(t.riskAmount||0).toFixed(2)+'</div>' +
+              '<div style="font-size:0.75rem;font-weight:800;color:var(--accent-blue-bright)">Host At Risk: $'+parseFloat(t.potentialProfit||0).toFixed(2)+'</div>' +
             '</div>' +
           '</div>' +
-          '<div style="display:flex;gap:8px">' +
-            '<button data-delid="'+t.id+'" data-delaction="deny" style="flex:1;padding:10px;background:#2a2a2a;border:1px solid #555;border-radius:8px;font-size:0.78rem;font-weight:700;color:#888;cursor:pointer">Deny</button>' +
-            '<button data-delid="'+t.id+'" data-delaction="approve" style="flex:2;padding:10px;background:#cc0000;border:none;border-radius:8px;font-size:0.78rem;font-weight:900;color:#fff;cursor:pointer">✓ Approve Delete</button>' +
+          '<div class="hb-actions" style="flex-direction:row">' +
+            '<button type="button" class="hb-btn hb-btn--deny" data-delid="'+t.id+'" data-delaction="deny" style="flex:1">Deny</button>' +
+            '<button type="button" class="hb-btn hb-btn--approve" data-delid="'+t.id+'" data-delaction="approve" style="flex:2">Approve Delete</button>' +
           '</div>' +
         '</div>';
       }).join('') +
@@ -3912,7 +4130,10 @@ function renderHostBets(){
     var emptyMsg = _hostBetsTab==='settled' ? 'No settled bets in the last 7 days'
       : (_hostBetsTab==='canceled' ? 'No canceled bets'
       : (_hostBetsTab==='all' ? 'No bets found' : 'No active bets'));
-    el.innerHTML = delSection + '<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">'+emptyMsg+'</div>';
+    var emptySub = _hostBetsTab==='active'
+      ? 'Active tickets will appear here when players place bets.'
+      : 'Try another filter or tab.';
+    el.innerHTML = delSection + '<div class="hb-empty"><div class="hb-empty-title">'+emptyMsg+'</div><div class="hb-empty-sub">'+emptySub+'</div></div>';
     return;
   }
 
@@ -3969,46 +4190,34 @@ function renderHostBets(){
     var balTxt = g.balance != null ? fmt$(g.balance) : '—';
     var betsHtml = '';
     if (open) {
-      betsHtml = '<div style="border-top:1px solid var(--border);padding:8px 14px 4px;background:rgba(0,0,0,0.28)">' +
+      betsHtml = '<div class="hb-group-body">' +
         g.bets.map(function(t) {
           var d=new Date(t.placedAt);
           var dt=isNaN(d)?(t.placedAt||'') : d.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
-          var first = (t.selections && t.selections[0]) || {};
-          var game = t.game || t.matchup || first.matchup || (first.awayTeam && first.homeTeam ? first.awayTeam+' @ '+first.homeTeam : '') || '—';
-          var pick = t.pick || first.pick || ((t.selections||[]).map(function(s){return s.pick;}).filter(Boolean).join(' / ')) || '—';
+          var sels = Array.isArray(t.selections) ? t.selections : [];
+          var first = sels[0] || {};
+          var game = t.game || t.matchup || first.matchup || (first.awayTeam && first.homeTeam ? first.awayTeam+' @ '+first.homeTeam : '') || '';
+          var pick = t.pick || first.pick || (sels.map(function(s){return s.pick;}).filter(Boolean).join(' / ')) || '—';
           var oddsStr = t.odds || first.odds || '';
           if (oddsStr != null && oddsStr !== '' && !(String(oddsStr)[0]==='+'||String(oddsStr)[0]==='-')) {
             var on = parseFloat(oddsStr); oddsStr = isNaN(on) ? oddsStr : ((on>0?'+':'')+on);
           }
-          var statusBadge = t.deleteRequestStatus==='pending'
-            ? '<span style="font-size:0.55rem;font-weight:800;color:#f59e0b;background:rgba(245,158,11,0.12);padding:2px 8px;border-radius:10px;border:1px solid #f59e0b">DEL?</span>'
-            : _hostStatusBadge(t.status);
           var statusBucket = _hostTicketStatusBucket(t.status);
-          var leftBorder =
-            statusBucket === 'won' ? 'var(--pb-win)' :
-            statusBucket === 'lost' ? 'var(--pb-loss)' :
-            statusBucket === 'active' ? 'var(--pb-accent)' :
-            statusBucket === 'push' ? '#F59E0B' :
-            statusBucket === 'void' ? '#9CA3AF' :
-            'var(--border)';
-          var pickColor =
-            statusBucket === 'won' ? 'var(--pb-win)' :
-            statusBucket === 'lost' ? 'var(--pb-loss)' :
-            statusBucket === 'push' ? '#F59E0B' :
-            statusBucket === 'void' ? '#9CA3AF' :
-            'var(--white)';
-          var stakeColor =
-            statusBucket === 'lost' ? 'var(--pb-loss)' :
-            statusBucket === 'won' ? 'var(--pb-win)' :
-            statusBucket === 'push' ? '#F59E0B' :
-            statusBucket === 'void' ? '#9CA3AF' :
-            'var(--white)';
-          var canCancel = _hostTicketIsActive(t);
-          var multiHint = (t.selections||[]).length > 1
-            ? '<div style="font-size:0.58rem;color:var(--gray);margin-top:2px">'+(t.type||'Parlay')+' · '+(t.selections.length)+' legs</div>'
-            : '';
-          var payoutInfo = _hostTicketPayoutLabel(t);
+          var leftClass = (statusBucket === 'won' || statusBucket === 'lost' || statusBucket === 'push' || statusBucket === 'void' || statusBucket === 'cashed_out' || statusBucket === 'active')
+            ? statusBucket : 'active';
+          var statusBadge = t.deleteRequestStatus==='pending'
+            ? '<span class="rb-status rb-status--warn">DELETE REQUESTED</span>'
+            : _hostStatusBadge(t.status);
+          var typeLabel = (t.type || (sels.length > 1 ? 'Parlay' : 'Single'));
+          var sportRaw = (first.sport || t.sport || '').toString().toUpperCase();
+          var sportBadge = sportRaw ? '<span class="rb-sport">'+esc(sportRaw)+'</span> ' : '';
+          var pickCls =
+            statusBucket === 'won' ? ' rb-leg-pick--won' :
+            statusBucket === 'lost' ? ' rb-leg-pick--lost' :
+            (statusBucket === 'push' || statusBucket === 'void') ? ' rb-leg-pick--push' : '';
           var stakeNum = parseFloat(t.riskAmount)||0;
+          var profitNum = parseFloat(t.potentialProfit)||0;
+          var payoutInfo = _hostTicketPayoutLabel(t);
           var netPl = statusBucket === 'won' ? (parseFloat(payoutInfo.value)||0) - stakeNum
             : statusBucket === 'lost' ? -stakeNum
             : statusBucket === 'push' ? 0 : null;
@@ -4017,44 +4226,78 @@ function renderHostBets(){
             var gd = new Date(t.gradedAt);
             gradedDt = isNaN(gd) ? '' : gd.toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
           }
-          var settledMetrics = (statusBucket === 'won' || statusBucket === 'lost' || statusBucket === 'push' || statusBucket === 'void')
-            ? '<div class="host-bet-metrics" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px;border-top:1px solid var(--border);padding-top:6px">' +
-                '<div><div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px">'+esc(payoutInfo.label)+'</div><div style="font-size:0.78rem;font-weight:800;color:'+pickColor+'">'+fmt$(payoutInfo.value)+'</div></div>' +
-                '<div><div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px">Net P&L</div><div style="font-size:0.78rem;font-weight:800;color:'+(netPl!=null&&netPl>=0?'var(--pb-win)':'var(--pb-loss)')+'">'+(netPl!=null?(netPl>=0?'+':'')+fmt$(Math.abs(netPl)): '—')+'</div></div>' +
-                '<div><div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px">Graded</div><div style="font-size:0.68rem;font-weight:700;color:var(--light)">'+esc(gradedDt||'—')+'</div></div>' +
+          var stakeCls = statusBucket === 'lost' ? 'rb-stat-val--loss'
+            : statusBucket === 'won' ? 'rb-stat-val--win'
+            : (statusBucket === 'push' || statusBucket === 'void') ? 'rb-stat-val--muted'
+            : 'rb-stat-val--white';
+          var toWinCls = statusBucket === 'won' ? 'rb-stat-val--win'
+            : statusBucket === 'lost' ? 'rb-stat-val--loss'
+            : 'rb-stat-val--accent';
+          var payoutCls = statusBucket === 'won' ? 'rb-stat-val--win'
+            : statusBucket === 'lost' ? 'rb-stat-val--loss'
+            : (statusBucket === 'push' || statusBucket === 'void') ? 'rb-stat-val--muted'
+            : 'rb-stat-val--white';
+          var legsHtml = '';
+          if (sels.length > 1) {
+            legsHtml = '<div class="rb-legs">' + sels.map(function(s, idx){
+              var sp = (s && s.pick) || '—';
+              var sm = (s && (s.matchup || s.game)) || '';
+              var so = s && s.odds != null ? s.odds : '';
+              return '<div class="rb-leg">' +
+                '<div class="rb-leg-body">' +
+                  '<div class="rb-leg-pick">'+esc(sp)+'</div>' +
+                  '<div class="rb-leg-meta">'+(sm?esc(sm):('Leg '+(idx+1)))+(so?' · <span class="rb-leg-odds">'+esc(String(so))+'</span>':'')+'</div>' +
+                '</div>' +
+              '</div>';
+            }).join('') + '</div>';
+          } else {
+            legsHtml = '<div class="rb-legs"><div class="rb-leg"><div class="rb-leg-body">' +
+              '<div class="rb-leg-pick'+pickCls+'">'+esc(pick)+'</div>' +
+              (game ? '<div class="rb-leg-meta">'+esc(game)+'</div>' : '') +
+            '</div></div></div>';
+          }
+          var canCancel = _hostTicketIsActive(t);
+          var settledExtra = (statusBucket === 'won' || statusBucket === 'lost' || statusBucket === 'push' || statusBucket === 'void')
+            ? '<div class="rb-foot host-bet-metrics" style="margin-top:6px">' +
+                '<div class="rb-stat"><div class="rb-stat-label">'+esc(payoutInfo.label)+'</div><div class="rb-stat-val '+payoutCls+'">'+fmt$(payoutInfo.value)+'</div></div>' +
+                '<div class="rb-stat"><div class="rb-stat-label">Net P&L</div><div class="rb-stat-val '+(netPl!=null&&netPl>=0?'rb-stat-val--win':'rb-stat-val--loss')+'">'+(netPl!=null?(netPl>=0?'+':'')+fmt$(Math.abs(netPl)): '—')+'</div></div>' +
+                '<div class="rb-stat"><div class="rb-stat-label">Graded</div><div class="rb-stat-val rb-stat-val--muted" style="font-size:0.68rem">'+esc(gradedDt||'—')+'</div></div>' +
               '</div>'
             : '';
-          return '<div style="background:var(--card);border:1px solid var(--border);border-left:3px solid '+leftBorder+';border-radius:12px;padding:12px;margin-bottom:8px;box-shadow:0 2px 10px rgba(0,0,0,0.25)">' +
-            '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">' +
-              '<div style="min-width:0;flex:1">' +
-                '<div style="font-size:0.62rem;color:var(--gray);margin-bottom:2px">'+esc(game)+'</div>' +
-                '<div style="font-size:0.82rem;font-weight:800;color:'+pickColor+'">'+esc(pick)+'</div>' +
-                multiHint +
+          return '<div class="rb-card rb-card--'+leftClass+'">' +
+            '<div class="rb-card-head">' +
+              '<div class="rb-card-head-main">' +
+                statusBadge +
+                '<div class="rb-type">'+sportBadge+esc(typeLabel)+(sels.length>1?' · '+sels.length+' legs':'')+'</div>' +
               '</div>' +
-              statusBadge +
             '</div>' +
-            '<div class="host-bet-metrics" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:4px">' +
-              '<div><div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px">Odds</div><div style="font-size:0.78rem;font-weight:800;color:var(--accent-blue-bright)">'+esc(oddsStr||'—')+'</div></div>' +
-              '<div><div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px">Stake</div><div style="font-size:0.78rem;font-weight:800;color:'+stakeColor+'">'+fmt$(t.riskAmount)+'</div></div>' +
-              '<div><div style="font-size:0.55rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.4px">Placed</div><div style="font-size:0.68rem;font-weight:700;color:var(--light)">'+esc(dt||'—')+'</div></div>' +
+            legsHtml +
+            (oddsStr ? '<div class="rb-odds-line">Odds '+esc(String(oddsStr))+'</div>' : '') +
+            '<div class="rb-foot host-bet-metrics">' +
+              '<div class="rb-stat"><div class="rb-stat-label">Stake</div><div class="rb-stat-val '+stakeCls+'">'+fmt$(stakeNum)+'</div></div>' +
+              '<div class="rb-stat"><div class="rb-stat-label">To Win</div><div class="rb-stat-val '+toWinCls+'">'+fmt$(profitNum)+'</div></div>' +
+              '<div class="rb-stat"><div class="rb-stat-label">Est. Payout</div><div class="rb-stat-val rb-stat-val--white">'+fmt$(payoutInfo.value)+'</div></div>' +
             '</div>' +
-            settledMetrics +
-            (canCancel ? '<button data-host-cashout="'+esc(t.id)+'" data-player-id="'+esc(t.playerId||'')+'" style="width:100%;margin-top:10px;padding:8px;background:transparent;border:1px solid rgba(61,139,253,0.4);border-radius:8px;color:var(--accent-blue-bright);font-size:0.7rem;font-weight:800;cursor:pointer;letter-spacing:0.3px">Offer Cash Out</button>' : '') +
-            (canCancel ? '<button data-host-cancel="'+esc(t.id)+'" style="width:100%;margin-top:8px;padding:8px;background:transparent;border:1px solid rgba(239,68,68,0.4);border-radius:8px;color:var(--negative);font-size:0.7rem;font-weight:800;cursor:pointer;letter-spacing:0.3px">Cancel Bet</button>' : '') +
+            settledExtra +
+            '<div class="rb-placed">Placed '+esc(dt||'—')+'</div>' +
+            (canCancel ? '<div class="hb-actions">' +
+              '<button type="button" class="hb-btn hb-btn--cashout" data-host-cashout="'+esc(t.id)+'" data-player-id="'+esc(t.playerId||'')+'">Offer Cash Out</button>' +
+              '<button type="button" class="hb-btn hb-btn--cancel" data-host-cancel="'+esc(t.id)+'">Cancel Bet</button>' +
+            '</div>' : '') +
           '</div>';
         }).join('') +
       '</div>';
     }
-    return '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:16px;margin:8px 16px;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,0.28)">' +
-      '<div data-host-group="'+esc(key)+'" style="padding:14px;cursor:pointer;display:flex;align-items:center;gap:12px;user-select:none">' +
-        '<div style="width:38px;height:38px;border-radius:50%;background:var(--accent-dim);color:var(--accent-blue-bright);display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:900;border:1px solid rgba(61,139,253,0.45);flex-shrink:0">'+esc(initials)+'</div>' +
+    return '<div class="hb-group">' +
+      '<div class="hb-group-head" data-host-group="'+esc(key)+'">' +
+        '<div class="hb-avatar">'+esc(initials)+'</div>' +
         '<div style="flex:1;min-width:0">' +
-          '<div style="font-size:0.92rem;font-weight:900;margin-bottom:2px">'+esc(g.playerName)+'</div>' +
-          '<div style="font-size:0.62rem;color:var(--gray)">Balance <span style="color:var(--white);font-weight:700">'+balTxt+'</span>' +
+          '<div style="font-size:0.92rem;font-weight:900;margin-bottom:2px;color:var(--pb-white)">'+esc(g.playerName)+'</div>' +
+          '<div style="font-size:0.62rem;color:var(--pb-gray)">Balance <span style="color:var(--pb-white);font-weight:700">'+balTxt+'</span>' +
             ' · <span style="color:var(--accent-blue-bright);font-weight:700">'+g.activeCount+'</span> active' +
             ' · Open risk <span style="color:var(--negative);font-weight:700">'+fmt$(g.openRisk)+'</span></div>' +
         '</div>' +
-        '<div style="font-size:0.85rem;color:var(--gray);transition:transform 0.15s;'+(open?'transform:rotate(90deg)':'')+'">›</div>' +
+        '<div class="hb-chevron'+(open?' is-open':'')+'">›</div>' +
       '</div>' +
       betsHtml +
     '</div>';
@@ -4806,50 +5049,77 @@ function renderPlayersTab(){
   function getOpenRiskAmt(pid){
     return _hostBetsFromDbOrLocal().filter(function(b){ return String(b.playerId)===String(pid) && (b.status==='active'||b.status==='open'); }).reduce(function(s,b){return s+(Number(b.riskAmount)||0);},0);
   }
-  function avatarHtml(name, color){
-    var abbr=(name||'?').slice(0,2).toUpperCase();
-    var bg = color || '#2a2a2a';
-    return '<div style="width:40px;height:40px;border-radius:50%;background:'+bg+';display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:900;color:#fff;flex-shrink:0">'+abbr+'</div>';
+  function _hpInitials(name){
+    return String(name||'?').split(/[\s._@-]+/).map(function(w){return (w[0]||'').toUpperCase();}).filter(Boolean).slice(0,2).join('') || '?';
+  }
+  function avatarHtml(name){
+    return '<div class="hp-avatar" aria-hidden="true">'+_hpInitials(name)+'</div>';
+  }
+  function _creditPosForPlayer(pid){
+    try {
+      if (typeof getLiveCreditPosition !== 'function') return null;
+      var live = getLiveCreditPosition({});
+      var rows = (live && live.rows) || [];
+      for (var i = 0; i < rows.length; i++) {
+        if (String(rows[i].playerId) === String(pid)) return rows[i];
+      }
+    } catch(_e) {}
+    return null;
   }
   function playerBetsHtml(pid) {
     var bets = _hostBetsFromDbOrLocal().filter(function(b){
       return String(b.playerId)===String(pid) && (b.status==='active'||b.status==='open');
     });
     if (!bets.length) {
-      return '<div style="padding:4px 16px 14px 68px;font-size:0.75rem;color:#666">No active bets</div>';
+      return '<div class="hp-section hp-section--betting"><div class="hp-section-title">Betting Ledger · Active Bets</div><div style="font-size:0.75rem;color:var(--pb-gray)">No active bets</div></div>';
     }
-    return '<div style="padding:0 16px 12px 68px">' + bets.map(function(b){
+    return '<div class="hp-section hp-section--betting"><div class="hp-section-title">Betting Ledger · Active Bets</div>' + bets.map(function(b){
       var sel = (b.selections||[]).map(function(s){
         return (s && (s.pick || s.matchup || s.label)) || '';
       }).filter(Boolean).join(', ');
       var label = (b.type||'Bet') + (sel ? (' · '+sel) : '');
-      return '<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #1a1a1a">'
-        +'<div style="font-size:0.78rem;color:#ccc;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+label+'</div>'
-        +'<div style="font-size:0.78rem;font-weight:700;color:#ff3d57;flex-shrink:0">$'+(Number(b.riskAmount)||0).toFixed(2)+'</div>'
+      return '<div class="hp-bet-line">'
+        +'<div style="color:var(--pb-light);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+label+'</div>'
+        +'<div style="font-weight:800;color:var(--pb-loss);flex-shrink:0">$'+(Number(b.riskAmount)||0).toFixed(2)+'</div>'
       +'</div>';
     }).join('') + '</div>';
+  }
+  function playerSettlementHtml(pid) {
+    var row = _creditPosForPlayer(pid);
+    if (!row) return '';
+    var oweYou = Number(row.playerOwesHost)||0;
+    var youOwe = Number(row.hostOwesPlayer)||0;
+    if (Math.abs(oweYou) < 0.005 && Math.abs(youOwe) < 0.005) return '';
+    return '<div class="hp-section hp-section--settlement">'
+      +'<div class="hp-section-title">Settlement Ledger · Credit Position</div>'
+      +'<div class="hp-metrics" style="margin-top:0">'
+        +'<div class="hp-metric"><div class="hp-metric-label">Players Owe You</div><div class="hp-metric-val hp-metric-val--win">$'+oweYou.toFixed(2)+'</div></div>'
+        +'<div class="hp-metric"><div class="hp-metric-label">You Owe Player</div><div class="hp-metric-val hp-metric-val--loss">$'+youOwe.toFixed(2)+'</div></div>'
+      +'</div>'
+      +'<div style="font-size:0.62rem;color:var(--pb-gray);margin-top:8px;line-height:1.35">Display only — settlement execution remains OFF.</div>'
+    +'</div>';
   }
   function playerLimitsHtml(p) {
     var pid = String(p.playerId || '');
     var loaded = _hostPlayerLimitsById[pid];
     if (!loaded || loaded.loading) {
-      return '<div style="padding:2px 16px 14px 68px;font-size:0.74rem;color:var(--gray)">Loading player limits…</div>';
+      return '<div class="hp-section"><div class="hp-loading" style="margin:0;padding:12px;box-shadow:none">Loading player limits…</div></div>';
     }
     if (loaded.error) {
-      return '<div style="padding:2px 16px 14px 68px;font-size:0.74rem;color:var(--red)">Player limits unavailable</div>';
+      return '<div class="hp-section hp-error" style="margin:0 16px 12px">Player limits unavailable</div>';
     }
     var values = loaded.effective || loaded.values || {};
     function money(value){ return value == null ? 'Not set' : '$'+Number(value).toFixed(2); }
     var identity = _identityParts(p);
-    return '<div style="margin:0 16px 14px 68px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:12px">'
+    return '<div class="hp-section">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:9px">'
-        +'<div style="font-size:0.66rem;color:var(--gray);font-weight:900;letter-spacing:.6px">PLAYER LIMITS</div>'
-        +'<button type="button" data-pid="'+pid+'" data-name="'+String(identity.displayName).replace(/"/g,'&quot;')+'" onclick="event.stopPropagation();openLimits(this.dataset.pid,this.dataset.name)" style="background:transparent;border:1px solid var(--accent-blue);color:var(--accent-blue-bright);border-radius:8px;padding:6px 9px;font-size:0.68rem;font-weight:900;cursor:pointer">Edit Limits</button>'
+        +'<div class="hp-section-title" style="margin:0">PLAYER LIMITS</div>'
+        +'<button type="button" class="hb-btn hb-btn--cashout" style="width:auto;padding:6px 10px;min-height:36px" data-pid="'+pid+'" data-name="'+String(identity.displayName).replace(/"/g,'&quot;')+'" onclick="event.stopPropagation();openLimits(this.dataset.pid,this.dataset.name)">Edit Limits</button>'
       +'</div>'
-      +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">'
-        +'<div><div style="font-size:.6rem;color:var(--gray)">Single bet</div><div style="font-size:.78rem;font-weight:800;margin-top:2px">'+money(values.max_single_bet)+'</div></div>'
-        +'<div><div style="font-size:.6rem;color:var(--gray)">Payout</div><div style="font-size:.78rem;font-weight:800;margin-top:2px">'+money(values.max_payout)+'</div></div>'
-        +'<div><div style="font-size:.6rem;color:var(--gray)">Open risk</div><div style="font-size:.78rem;font-weight:800;margin-top:2px">'+money(values.max_open_risk)+'</div></div>'
+      +'<div class="hp-metrics" style="grid-template-columns:repeat(3,1fr);margin-top:0">'
+        +'<div class="hp-metric"><div class="hp-metric-label">Single bet</div><div class="hp-metric-val">'+money(values.max_single_bet)+'</div></div>'
+        +'<div class="hp-metric"><div class="hp-metric-label">Payout</div><div class="hp-metric-val">'+money(values.max_payout)+'</div></div>'
+        +'<div class="hp-metric"><div class="hp-metric-label">Open risk</div><div class="hp-metric-val">'+money(values.max_open_risk)+'</div></div>'
       +'</div>'
     +'</div>';
   }
@@ -4876,52 +5146,50 @@ function renderPlayersTab(){
     if (isNaN(openRisk)) openRisk = 0;
     if (isNaN(activeBets)) activeBets = 0;
     var expanded = !!_playersExpanded[String(p.playerId)];
-    var sc=p.status==='blocked'?'#ff3d57':p.status==='approved'?'#00ff88':'#f5c842';
-    return '<div data-pid="'+p.playerId+'" style="border-bottom:1px solid rgba(255,255,255,0.04)">'
-      +'<div onclick="togglePlayerExpand(this.parentNode.dataset.pid)" style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent">'
-      +avatarHtml(displayName, p.color||'#2a4a3a')
+    var st = String(p.status||'approved').toLowerCase();
+    var badgeCls = st==='blocked' ? 'hp-badge--blocked' : (st==='approved' ? 'hp-badge--approved' : 'hp-badge--pending');
+    var expandBody = '';
+    if (expanded) {
+      expandBody = playerSettlementHtml(p.playerId) + playerLimitsHtml(p) + playerBetsHtml(p.playerId);
+    }
+    return '<div class="hp-row player-row" data-pid="'+p.playerId+'">'
+      +'<div class="hp-row-main" onclick="togglePlayerExpand(this.parentNode.dataset.pid)">'
+      +avatarHtml(displayName)
       +'<div style="flex:1;min-width:0">'
         +'<div style="display:flex;align-items:center;gap:8px">'
-          +'<span style="font-size:0.88rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+displayName+'</span>'
-          +'<span style="font-size:0.6rem;font-weight:800;color:'+sc+';background:rgba(0,0,0,0.3);padding:2px 7px;border-radius:10px;border:1px solid '+sc+';flex-shrink:0">'+(p.status||'approved').toUpperCase()+'</span>'
+          +'<span class="hp-name">'+displayName+'</span>'
+          +'<span class="hp-badge '+badgeCls+'">'+(p.status||'approved').toUpperCase()+'</span>'
         +'</div>'
         +(usernameLabel && usernameLabel.toLowerCase() !== String(displayName).toLowerCase()
-          ? '<div style="font-size:0.72rem;color:var(--light);margin-top:1px">'+usernameLabel+'</div>' : '')
-        +'<div style="font-size:0.68rem;color:var(--gray);margin-top:2px">'
-          +'<span style="color:#8eb6ff">'+balTxt+'</span> bal'
-          +' · <span style="color:#ff6b6b">$'+openRisk.toFixed(2)+' open</span>'
-          +' · <span style="color:var(--gold)">'+activeBets+' active bet'+(activeBets===1?'':'s')+'</span>'
+          ? '<div class="hp-username">'+usernameLabel+'</div>' : '')
+        +'<div class="hp-metrics">'
+          +'<div class="hp-metric"><div class="hp-metric-label">Bankroll</div><div class="hp-metric-val hp-metric-val--accent">'+balTxt+'</div></div>'
+          +'<div class="hp-metric"><div class="hp-metric-label">Open Risk</div><div class="hp-metric-val hp-metric-val--loss">$'+openRisk.toFixed(2)+'</div></div>'
+          +'<div class="hp-metric"><div class="hp-metric-label">Active Bets</div><div class="hp-metric-val hp-metric-val--gold">'+activeBets+'</div></div>'
         +'</div>'
       +'</div>'
-      +'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" stroke-linecap="round" style="transform:rotate('+(expanded?90:0)+'deg);transition:transform .15s;flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>'
+      +'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--pb-gray)" stroke-width="2.5" stroke-linecap="round" style="transform:rotate('+(expanded?90:0)+'deg);transition:transform .15s;flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>'
       +'</div>'
-      +(expanded ? playerLimitsHtml(p)+playerBetsHtml(p.playerId) : '')
+      +expandBody
     +'</div>';
   }
   function requestRow(r){
     var identity = _identityParts(r);
-    return '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #1a1a1a">'
-      +avatarHtml(identity.displayName,'#3a2a0a')
-      +'<div style="flex:1">'
-        +'<div style="font-size:0.88rem;font-weight:800">'+identity.displayName+'</div>'
-        +(identity.username ? '<div style="font-size:0.68rem;color:var(--gray);margin-top:1px">@'+identity.username+'</div>' : '')
-        +'<div style="font-size:0.65rem;color:#f5c842;margin-top:2px">Wants to join</div>'
+    return '<div class="hp-applicant">'
+      +avatarHtml(identity.displayName)
+      +'<div style="flex:1;min-width:0">'
+        +'<div class="hp-name">'+identity.displayName+'</div>'
+        +(identity.username ? '<div class="hp-username">@'+identity.username+'</div>' : '')
+        +'<div style="font-size:0.65rem;color:var(--pb-gold);margin-top:2px;font-weight:700">Wants to join</div>'
       +'</div>'
       +_pendingRequestActionBtnsHtml(r)
     +'</div>';
   }
   function emptyOrLoadingHtml() {
     if (!dbReady) {
-      return '<div style="margin:16px;background:var(--bg-card);border:1px solid var(--border);border-radius:18px;padding:32px 20px;text-align:center">'
-        +'<div style="font-size:0.9rem;font-weight:800;margin-bottom:6px">Loading players…</div>'
-        +'<div style="font-size:0.8rem;color:var(--gray)">Fetching club roster</div>'
-      +'</div>';
+      return '<div class="hp-loading"><div class="hp-empty-title" style="margin-bottom:6px">Loading players…</div><div class="hp-empty-sub">Fetching club roster</div></div>';
     }
-    return '<div style="margin:16px;background:var(--bg-card);border:1px solid var(--border);border-radius:18px;padding:32px 20px;text-align:center">'
-      +'<div style="font-size:2.5rem;margin-bottom:12px">👥</div>'
-      +'<div style="font-size:1rem;font-weight:800;margin-bottom:6px">No players yet</div>'
-      +'<div style="font-size:0.8rem;color:var(--gray)">Share your club code to get join requests</div>'
-    +'</div>';
+    return '<div class="hp-empty"><div class="hp-empty-title">No players yet</div><div class="hp-empty-sub">Share your club code to get join requests</div></div>';
   }
 
   // Filter by search + tab
@@ -4939,47 +5207,42 @@ function renderPlayersTab(){
   });
 
   var html=
-    // Header
-    '<div style="padding:14px 16px 0;position:sticky;top:0;background:var(--bg);z-index:10">'
-      +'<div style="font-size:1.1rem;font-weight:900;margin-bottom:12px">Your Players</div>'
-      +'<div id="club-lock-toggle-wrap" style="margin-bottom:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px">'
+    '<div class="hp-header">'
+      +'<div class="hp-title">Your Players</div>'
+      +'<div class="hp-lock" id="club-lock-toggle-wrap">'
         +'<div style="min-width:0;flex:1">'
-          +'<div id="club-lock-status-label" style="font-size:0.82rem;font-weight:800">'+( _clubIsLocked ? '🔒 Club locked' : '🔓 Open to new members' )+'</div>'
-          +'<div style="font-size:0.65rem;color:var(--gray);margin-top:2px">'+( _clubIsLocked ? 'Join requests are blocked' : 'Anyone with your code can request to join' )+'</div>'
+          +'<div id="club-lock-status-label" style="font-size:0.82rem;font-weight:800">'+( _clubIsLocked ? 'Club locked' : 'Open to new members' )+'</div>'
+          +'<div style="font-size:0.65rem;color:var(--pb-gray);margin-top:2px">'+( _clubIsLocked ? 'Join requests are blocked' : 'Anyone with your code can request to join' )+'</div>'
         +'</div>'
-        +'<button type="button" id="club-lock-toggle-btn" onclick="toggleClubLock()" style="flex-shrink:0;padding:10px 14px;border-radius:10px;border:1px solid '+( _clubIsLocked ? 'rgba(61,139,253,0.4)' : 'rgba(239,68,68,0.4)' )+';background:'+( _clubIsLocked ? 'rgba(61,139,253,0.12)' : 'rgba(239,68,68,0.1)' )+';color:'+( _clubIsLocked ? 'var(--accent-blue-bright)' : 'var(--negative)' )+';font-size:0.72rem;font-weight:900;cursor:pointer">'+( _clubIsLocked ? 'Unlock' : 'Lock' )+'</button>'
+        +'<button type="button" id="club-lock-toggle-btn" onclick="toggleClubLock()" class="hb-btn '+( _clubIsLocked ? 'hb-btn--cashout' : 'hb-btn--cancel' )+'" style="width:auto;padding:10px 14px;flex-shrink:0">'+( _clubIsLocked ? 'Unlock' : 'Lock' )+'</button>'
       +'</div>'
-      // Search
-      +'<div style="display:flex;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin-bottom:10px;gap:8px">'
-        +'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>'
+      +'<div class="hp-search">'
+        +'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--pb-gray)" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>'
         +'<input id="player-search" type="text" placeholder="Search players..." value="'+_playersSearch+'"'
-        +' oninput="_playersSearch=this.value;renderPlayersTab()"'
-        +' style="flex:1;background:none;border:none;outline:none;color:var(--white);font-size:0.85rem">'
+        +' oninput="_playersSearch=this.value;renderPlayersTab()">'
       +'</div>'
-      // Tabs
-      +'<div style="display:flex;gap:4px;margin-bottom:0;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:3px">'
+      +'<div class="hp-tabs">'
         +['all','applicants'].map(function(t){
           var isActive=t===_playersActiveTab;
           var cnt=t==='all'?(dbReady?players.length:null):requests.length;
-          return '<button onclick="_playersActiveTab=\''+t+'\';renderPlayersTab()" style="flex:1;padding:8px 4px;background:'+(isActive?'var(--accent)':'transparent')+';color:'+(isActive?'#fff':'var(--gray)')+';border:none;border-radius:8px;font-size:0.78rem;font-weight:800;cursor:pointer">'+t.charAt(0).toUpperCase()+t.slice(1)+(cnt?' ('+cnt+')':'')+'</button>';
+          return '<button type="button" class="hp-tab'+(isActive?' is-active':'')+'" onclick="_playersActiveTab=\''+t+'\';renderPlayersTab()">'+t.charAt(0).toUpperCase()+t.slice(1)+(cnt!=null?' ('+cnt+')':'')+'</button>';
         }).join('')
       +'</div>'
     +'</div>'
-    // List — dedicated node so Home #player-list is not the Players-tab target
     +'<div id="players-tab-list" class="player-list">';
 
   var listInner = '';
   if (_playersActiveTab==='applicants') {
     if (!filteredReqs.length) {
-      listInner='<div style="text-align:center;padding:40px 20px;color:#555;font-size:0.85rem">No pending applicants</div>';
+      listInner='<div class="hp-empty"><div class="hp-empty-title">No pending applicants</div><div class="hp-empty-sub">Join requests will show up here.</div></div>';
     } else {
       listInner=filteredReqs.map(requestRow).join('');
     }
   } else {
     if (requests.length && !q) {
-      listInner+='<div onclick="_playersActiveTab=\'applicants\';renderPlayersTab()" style="margin:10px 16px;background:rgba(245,200,66,0.08);border:1px solid rgba(245,200,66,0.3);border-radius:12px;padding:10px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between">'
-        +'<span style="font-size:0.82rem;font-weight:700;color:#f5c842">'+requests.length+' pending request'+(requests.length>1?'s':'')+'</span>'
-        +'<span style="font-size:0.72rem;color:#f5c842">Review →</span>'
+      listInner+='<div class="hp-req-banner" onclick="_playersActiveTab=\'applicants\';renderPlayersTab()">'
+        +'<span style="font-size:0.82rem;font-weight:700;color:var(--pb-gold)">'+requests.length+' pending request'+(requests.length>1?'s':'')+'</span>'
+        +'<span style="font-size:0.72rem;color:var(--pb-gold);font-weight:800">Review →</span>'
       +'</div>';
     }
     if (!dbReady || !filtered.length) {
