@@ -2489,6 +2489,12 @@ function _debugClearTickets() {
 // Preview/dev params — hoisted before session gate (avoids TDZ ReferenceError on _pDev)
 var _pp = new URLSearchParams(window.location.search);
 var _pPreview = _pp.get('preview') === '1';
+function _isLocalHostName() {
+  var h = String((typeof location !== 'undefined' && location.hostname) || '');
+  return h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
+}
+// Local visual-QA only: preview/testUser flags on localhost. Never true on production hosts.
+var _pVisualQa = _isLocalHostName() && (_pPreview || !!_pp.get('testUser') || _pp.get('dev') === '1');
 var _pDev = _pp.get('dev') === '1'
          || _pPreview
          || _pp.get('from') === 'dev'
@@ -2496,6 +2502,9 @@ var _pDev = _pp.get('dev') === '1'
          || (typeof window !== 'undefined' && window.location.pathname.includes('dev.html'));
 var _devSessionReady = Promise.resolve();
 var _devSessionInstalling = false;
+function _isVisualQaPreview() {
+  return !!_pVisualQa;
+}
 
 // ══ SESSION VALIDATION GATE ══════════════════════════════════════════════════
 // Runs on load. Blocks bet placement if no valid player/club session exists.
@@ -2757,6 +2766,12 @@ function _authRedirectToLogin(msg) {
   if (_authGiveUp) return;
   // testUser preview: dev.html owns sign-in; never wipe shared localStorage from iframe
   if (_isTestUserPreview()) return;
+  // Local visual QA (?preview=1 on localhost): never bounce to Sign In / Join Club.
+  // Production hosts are excluded by _pVisualQa — auth redirects stay intact there.
+  if (_isVisualQaPreview()) {
+    console.warn('[visual-qa] suppress auth redirect:', msg || '(no msg)');
+    return;
+  }
   _authGiveUp = true;
   _clearAuthLocalStorage();
   window.location.href = 'lobby.html?screen=signin&msg=' + encodeURIComponent(msg || 'Your session expired — please sign in again');
@@ -2856,11 +2871,55 @@ function _seedTestUserLocalState(_tu, _tc, _devCid, _role) {
   localStorage.setItem('pb-balance-start:' + _tc.pid, '1000');
   try { localStorage.removeItem('pb-host'); } catch (_e) {}
 }
+function _seedVisualQaLocalState() {
+  // Read-only mock identity for localhost visual QA. Never used as production membership.
+  var _devPid = 'preview-player';
+  var _devCid = 'preview-club';
+  var _devName = 'Visual QA';
+  var _devRole = 'player';
+  var _mockPayload = {
+    sub: _devPid, actorId: _devPid, role: _devRole,
+    clubId: _devCid, exp: Math.floor(Date.now() / 1000) + 86400 * 7,
+    iat: Math.floor(Date.now() / 1000), preview: true, visualQa: true
+  };
+  var _b64u = function(s){ return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); };
+  var _mockToken = _b64u('{"alg":"HS256","typ":"JWT"}')
+    + '.' + _b64u(JSON.stringify(_mockPayload))
+    + '.preview-visual-qa';
+  try {
+    localStorage.setItem('pb-sports-token', _mockToken);
+    localStorage.setItem('pb-session-token', _mockToken);
+    localStorage.setItem('pb-token-expires', String(Date.now() + 86400 * 1000));
+    localStorage.setItem('pb-actor-role', _devRole);
+    localStorage.setItem('pb-player', JSON.stringify({
+      id: _devPid, username: _devPid, name: _devName, role: _devRole, email: 'preview@pocketbooks.local'
+    }));
+    localStorage.setItem('pb-club', JSON.stringify({
+      id: _devCid, clubId: _devCid, name: 'Preview Club (read-only)', role: _devRole, balance: 0
+    }));
+    localStorage.setItem('pb-active-club', JSON.stringify({
+      id: _devCid, clubId: _devCid, name: 'Preview Club (read-only)', role: _devRole
+    }));
+    localStorage.setItem('pb-balance-start', '0');
+    localStorage.removeItem('pb-host');
+  } catch (_e) {}
+  TOKEN = _mockToken;
+  _sessionValid = true;
+}
+
 async function _installDevSession() {
   _devSessionInstalling = true;
   var _tu     = _pp.get('testUser');
   var _tc     = _TEST_USER_CONFIGS[_tu] || {};
   var _devCid = REAL_CLUB_ID;
+
+  // Local visual QA without testUser: seed mock identity only — no production token mint,
+  // no club join, no bankroll. Real props/odds APIs remain public/read-only.
+  if (_isVisualQaPreview() && !_tu) {
+    _seedVisualQaLocalState();
+    _devSessionInstalling = false;
+    return;
+  }
 
   // Reuse token dev.html already minted (same-origin iframe shares localStorage).
   var _existing = localStorage.getItem('pb-sports-token') || localStorage.getItem('pb-session-token') || '';
@@ -2902,6 +2961,21 @@ async function _installDevSession() {
       console.warn('[devSession] token rejected:', JSON.stringify(_data));
     } catch (_err) {
       console.warn('[devSession] token fetch failed:', _err.message);
+    }
+    // Visual QA on localhost: fall back to mock identity instead of empty session / lobby bounce.
+    if (_isVisualQaPreview()) {
+      _seedVisualQaLocalState();
+      if (_tu && _tc.pid) {
+        try {
+          localStorage.setItem('pb-test-user', String(_tu));
+          localStorage.setItem('pb-player', JSON.stringify({
+            id: _tc.pid, username: _tc.pid, name: _tc.name || 'Visual QA',
+            role: 'player', email: _tc.email || 'preview@pocketbooks.local'
+          }));
+        } catch (_e2) {}
+      }
+      _devSessionInstalling = false;
+      return;
     }
     // Real test UUID configured — never fall back to mock (verify rejects .dev-bypass-sig).
     if (_tu) {
@@ -3614,7 +3688,7 @@ async function api(method,path,body,_retried){
       return data;
     }
     var hard403 = r.status === 403 && !_isExpiredAuth(r.status, data);
-    if (hard403 && !_authGiveUp && !_isTestUserPreview()) {
+    if (hard403 && !_authGiveUp && !_isTestUserPreview() && !_isVisualQaPreview()) {
       _authRedirectToLogin('Session invalid — please sign in again');
       return data;
     }
@@ -3835,6 +3909,10 @@ function _pbNavSyncUrl(opts) {
     setOrDel('mbStatus', nav.mbStatus, 'all');
     setOrDel('mbRange', nav.mbRange, 'week');
     setOrDel('mbSort', nav.mbSort, 'newest');
+    // Keep visual-QA flags sticky so owner deep-links never lose preview/testUser.
+    if (_pPreview) params.set('preview', '1');
+    if (_pp.get('testUser')) params.set('testUser', String(_pp.get('testUser')));
+    if (_pp.get('dev') === '1') params.set('dev', '1');
     var qs = params.toString();
     var url = window.location.pathname + (qs ? ('?' + qs) : '') + (window.location.hash || '');
     var state = { pbNav: nav };
@@ -7542,6 +7620,10 @@ function updPayout(){
 }
 
 async function placeBet(){
+  if (_isVisualQaPreview()) {
+    showToast('Preview mode — betting disabled', 'warning');
+    return;
+  }
   const risk=parseFloat(document.getElementById('risk-inp').value)||0;
   if(!risk||!slip.length)return;
   const btn=document.getElementById('place-btn');
@@ -8153,13 +8235,28 @@ try { revertFutureGrades(); }   catch(e) { console.error('[revertFutureGrades] s
 
 try {
   _devSessionReady.then(function(){
+    // Visual QA: skip dashboard hydrate (would 401 mock tokens and is financial-shaped).
+    if (_isVisualQaPreview()) {
+      try { applyBalanceUnavailable('preview_readonly'); } catch (_eBal) {}
+      return null;
+    }
     return _maybeAutoEnableDbPrimaryReads();
-  }).then(function(){
+  }).then(function(v){
+    if (v === null && _isVisualQaPreview()) return null;
     return loadPlayerDashboardFromDb();
   }).then(function(){
     try { renderMyBets(); } catch(_e){}
   }).catch(function(e){ console.warn('[db primary read] init error:', e.message); });
 } catch(e) { console.warn('[db primary read] sync error:', e.message); }
+
+// Local visual QA: open dedicated Props immediately when ?event= is present (no auth wait).
+if (_isVisualQaPreview() && _pbNavPendingEvent) {
+  try {
+    setTimeout(function(){
+      try { _pbNavRestoreExpandedEvent(); } catch (_eOpen) {}
+    }, 50);
+  } catch (_eBootProps) {}
+}
 
 try { renderMyBets(); } catch(e) { console.error('[PBS init] renderMyBets failed:', e.message); }
 
@@ -8191,10 +8288,20 @@ if (joinCode) {
 }
 
 // Club join functions
-function showJoinModal() { document.getElementById('modal-join-club').style.display='flex'; }
+function showJoinModal() {
+  if (_isVisualQaPreview()) {
+    showToast('Preview mode — club join disabled', 'warning');
+    return;
+  }
+  document.getElementById('modal-join-club').style.display='flex';
+}
 function hideJoinModal() { document.getElementById('modal-join-club').style.display='none'; }
 
 async function searchClub() {
+  if (_isVisualQaPreview()) {
+    showToast('Preview mode — club join disabled', 'warning');
+    return;
+  }
   const code = document.getElementById('join-code-input').value.trim().toUpperCase();
   if (!code) return;
   const el = document.getElementById('club-search-result');
@@ -8216,6 +8323,10 @@ async function searchClub() {
 }
 
 async function requestJoin(clubId, code) {
+  if (_isVisualQaPreview()) {
+    showToast('Preview mode — club join disabled', 'warning');
+    return;
+  }
   if (!TOKEN) { showToast('Sign in to join a club'); return; }
   try {
     var _joinUrl = 'https://pocketbooks-sports-backend-production.up.railway.app/api/club/request-join';
@@ -9888,6 +9999,11 @@ async function confirmBet() {
   // ══════════════════════════════════════════════════════════════════════════
   //  FULL PLACEMENT TRACE — every step logged; any throw surfaces stack+body
   // ══════════════════════════════════════════════════════════════════════════
+  if (_isVisualQaPreview()) {
+    showToast('Preview mode — betting disabled', 'warning');
+    try { closeBetConfirm(); } catch (_e) {}
+    return;
+  }
   var _cbStep = 'INIT';
   var _cbBtn  = null;  // confirm button reference (set once located)
   var _cbAbortCtrl  = null;
@@ -13386,6 +13502,19 @@ async function _pbFetch(url, opts) {
   url = _absApiUrl(url);
   var path = _pathFromUrl(url);
   var retried = !!opts._retried;
+  // Local visual QA: never hit production money / membership mutation endpoints.
+  if (_isVisualQaPreview() && (
+    (opts.method === 'POST' && _MONEY_ENDPOINTS.has(path)) ||
+    /^\/api\/bets\/(place|cancel)\b/.test(path) ||
+    /^\/api\/club\/(request-join|join-request|leave)\b/.test(path) ||
+    /^\/api\/auth\/(login|signup|logout)\b/.test(path)
+  )) {
+    console.warn('[visual-qa] blocked financial/membership call:', path);
+    return new Response(JSON.stringify({
+      ok: false, error: 'preview_readonly', code: 'PREVIEW_READONLY',
+      message: 'Visual QA preview — financial actions disabled'
+    }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+  }
   if (_authGiveUp) return new Response(JSON.stringify({ error: 'auth_give_up' }), { status: 401 });
   if (!retried && !_isAuthApiPath(path)) {
     try { await _ensureFreshToken(); } catch (_e) {}
@@ -13441,7 +13570,7 @@ async function _pbFetch(url, opts) {
     }
     if (resp.status === 403) {
       var hard403 = !(peek && (peek.error === 'expired_token' || /expired token/i.test(String(peek.error || peek.message || ''))));
-      if (hard403 && !_authGiveUp && !(typeof _isTestUserPreview === 'function' && _isTestUserPreview())) {
+      if (hard403 && !_authGiveUp && !(typeof _isTestUserPreview === 'function' && _isTestUserPreview()) && !(typeof _isVisualQaPreview === 'function' && _isVisualQaPreview())) {
         if (typeof _authRedirectToLogin === 'function') _authRedirectToLogin('Session invalid — please sign in again');
         else if (typeof _redirectToSignIn === 'function') _redirectToSignIn();
         delete _pendingIdemKeys[path];

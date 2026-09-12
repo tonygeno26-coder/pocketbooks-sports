@@ -84,5 +84,29 @@ test('search control present', function() {
   assert(html.indexOf('_pbDedicatedPropsSearch') >= 0);
 });
 
+test('local visual QA auth bypass is localhost-gated', function() {
+  assert(html.indexOf('var _pVisualQa = _isLocalHostName()') >= 0 || html.indexOf('_pVisualQa = _isLocalHostName()') >= 0);
+  assert(html.indexOf("h === 'localhost'") >= 0);
+  assert(html.indexOf('function _isVisualQaPreview') >= 0);
+  assert(html.indexOf('if (_isVisualQaPreview())') >= 0);
+  var authFn = html.slice(html.indexOf('function _authRedirectToLogin'), html.indexOf('function _authRedirectToLogin') + 900);
+  assert(authFn.indexOf('_isVisualQaPreview()') >= 0, 'auth redirect must suppress visual QA');
+  assert(authFn.indexOf("lobby.html?screen=signin") >= 0, 'production sign-in redirect retained');
+});
+
+test('visual QA disables financial placement', function() {
+  assert(html.indexOf("Preview mode — betting disabled") >= 0);
+  var confirmIdx = html.indexOf('async function confirmBet()');
+  var confirmHead = html.slice(confirmIdx, confirmIdx + 600);
+  assert(confirmHead.indexOf('_isVisualQaPreview()') >= 0, 'confirmBet must gate visual QA');
+  assert(html.indexOf('preview_readonly') >= 0 || html.indexOf('PREVIEW_READONLY') >= 0);
+  assert(html.indexOf('blocked financial/membership call') >= 0);
+});
+
+test('visual QA keeps preview flags sticky in nav URL', function() {
+  assert(html.indexOf("params.set('preview', '1')") >= 0);
+  assert(html.indexOf("params.set('testUser'") >= 0);
+});
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');
 if (fail) process.exit(1);
