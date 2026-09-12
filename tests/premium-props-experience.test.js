@@ -1,6 +1,7 @@
 /**
- * Premium dedicated Props experience — presentation rules (no financial logic).
+ * Premium dedicated Props experience — progressive disclosure + presentation rules.
  * Run: node tests/premium-props-experience.test.js
+ * No financial / settlement logic.
  */
 'use strict';
 var fs = require('fs');
@@ -9,6 +10,7 @@ var assert = require('assert');
 
 var root = path.join(__dirname, '..');
 var html = fs.readFileSync(path.join(root, 'player.html'), 'utf8');
+var docs = fs.readFileSync(path.join(root, 'docs/PROPS_CURATED_CORE_MARKETS.md'), 'utf8');
 
 var pass = 0;
 var fail = 0;
@@ -50,6 +52,15 @@ test('sport-specific category tabs documented', function() {
   assert(m.indexOf('passing') >= 0 && m.indexOf('rushing') >= 0 && m.indexOf('receiving') >= 0);
   assert(m.indexOf('batters') >= 0 && m.indexOf('pitchers') >= 0 && m.indexOf('hr_rbi') >= 0);
   assert(m.indexOf('threes') >= 0 && m.indexOf('combos') >= 0);
+  assert(m.indexOf("id: 'all'") >= 0 && m.indexOf('All Props') >= 0);
+});
+
+test('OTHER category removed; All Props present', function() {
+  var m = html.match(/var _PB_PROP_TAB_DEFS = \{[\s\S]*?\n\};/)[0];
+  assert(m.indexOf("id: 'other'") < 0, 'no other tab id in defs');
+  assert(m.indexOf("label: 'Other'") < 0, 'no Other label in defs');
+  assert(m.indexOf("id: 'all'") >= 0);
+  assert(html.indexOf("label: 'All Props'") >= 0);
 });
 
 test('Popular allowlist is deterministic core markets', function() {
@@ -59,12 +70,57 @@ test('Popular allowlist is deterministic core markets', function() {
   assert(m[0].indexOf("'Hits':1") >= 0);
   assert(m[0].indexOf("'Points':1") >= 0);
   assert(m[0].indexOf("'Strikeouts':1") >= 0);
+  assert(docs.indexOf('Passing Yards') >= 0 && docs.indexOf('Total Bases') >= 0);
 });
 
-test('alternate lines collapsible (no dump)', function() {
+test('Popular does not dump full inventory fallback', function() {
+  var fn = html.slice(html.indexOf('function _pbFilterPropsForTab'), html.indexOf('function _pbBuildVisibleTabs'));
+  assert(fn.indexOf('props.slice(0, Math.min(40') < 0, 'no slice dump fallback');
+  assert(fn.indexOf('_pbIsPopularProp') >= 0);
+});
+
+test('progressive density constants present', function() {
+  assert(html.indexOf('_PB_DPROPS_CORE_MARKETS_PER_PLAYER') >= 0);
+  assert(html.indexOf('_PB_DPROPS_POPULAR_PLAYER_CAP') >= 0);
+  assert(html.indexOf('_PB_DPROPS_TARGET_VISIBLE_SELECTIONS') >= 0);
+  assert(html.indexOf('_PB_DPROPS_ALL_PLAYER_PAGE') >= 0);
+});
+
+test('player market collapse + MORE PLAYER PROPS', function() {
+  assert(html.indexOf('_pbToggleDedicatedPlayerMore') >= 0);
+  assert(html.indexOf('MORE ') >= 0 && html.indexOf(' PROPS (') >= 0);
+  assert(html.indexOf('_pbPrioritizePlayerMarkets') >= 0);
+  assert(html.indexOf('_pbCapPlayersBySelectionBudget') >= 0);
+});
+
+test('alternate lines lazy (no dump until open)', function() {
   assert(html.indexOf('ALTERNATE LINES') >= 0);
   assert(html.indexOf('_pbToggleDedicatedAlts') >= 0);
   assert(html.indexOf('_pbPickPrimaryLineGroup') >= 0);
+  assert(html.indexOf('_pbDedicatedAltsPayload') >= 0);
+  assert(html.indexOf('data-lazy-alts') >= 0);
+  assert(html.indexOf('_pbRenderDedicatedAltRowsHtml') >= 0);
+});
+
+test('All Props organizes category → player → market', function() {
+  assert(html.indexOf('_pbCategoryDefsForAllProps') >= 0);
+  assert(html.indexOf('pb-dprops-cat') >= 0);
+  assert(html.indexOf('_pbDedicatedLoadMorePlayers') >= 0);
+});
+
+test('search scans full inventory', function() {
+  assert(html.indexOf('pb-dprops-search') >= 0);
+  assert(html.indexOf('_pbDedicatedPropsSearch') >= 0);
+  var body = html.slice(html.indexOf('function _pbRenderDedicatedPropsBodyHtml'), html.indexOf('function _pbDedicatedShowMorePlayers'));
+  assert(body.indexOf('Searching full inventory') >= 0 || body.indexOf('full game inventory') >= 0 || body.indexOf('_pbFilterPropsBySearch(props') >= 0);
+  assert(body.indexOf('_pbFilterPropsBySearch(props, searchQ)') >= 0, 'search must use full props array');
+});
+
+test('subtle available count + view all', function() {
+  assert(html.indexOf('pb-dprops-avail') >= 0);
+  assert(html.indexOf(' available') >= 0);
+  assert(html.indexOf('View all ') >= 0);
+  assert(html.indexOf('pb-dprops-view-all') >= 0);
 });
 
 test('player-grouped dedicated render', function() {
@@ -77,11 +133,6 @@ test('lazy load on open + session cache', function() {
   assert(html.indexOf('/api/props/') >= 0);
   assert(html.indexOf('90000') >= 0); // 90s session cache
   assert(html.indexOf('_pbOpenDedicatedProps') >= 0);
-});
-
-test('search control present', function() {
-  assert(html.indexOf('pb-dprops-search') >= 0);
-  assert(html.indexOf('_pbDedicatedPropsSearch') >= 0);
 });
 
 test('local visual QA auth bypass is localhost-gated', function() {
@@ -106,6 +157,20 @@ test('visual QA disables financial placement', function() {
 test('visual QA keeps preview flags sticky in nav URL', function() {
   assert(html.indexOf("params.set('preview', '1')") >= 0);
   assert(html.indexOf("params.set('testUser'") >= 0);
+});
+
+test('category classify matches substring needles in arrays', function() {
+  assert(html.indexOf('var list = Array.isArray(hay) ? hay : [hay];') >= 0);
+  // TD before pass so Passing TDs → Touchdowns
+  var fn = html.slice(html.indexOf('function _pbClassifyPropTab'), html.indexOf('function _pbPropTabDefsForSport'));
+  var tdIdx = fn.indexOf("return 'touchdowns'");
+  var passIdx = fn.indexOf("return 'passing'");
+  assert(tdIdx >= 0 && passIdx >= 0 && tdIdx < passIdx, 'touchdowns must classify before passing');
+});
+
+test('mobile density CSS for 390/430', function() {
+  assert(html.indexOf('@media (max-width:430px)') >= 0);
+  assert(html.indexOf('@media (min-width:1440px)') >= 0);
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed\n');

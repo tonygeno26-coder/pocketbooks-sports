@@ -42,7 +42,11 @@ function sectionize(props) {
 }
 
 function filterTab(props, tabId) {
-  if (tabId === 'popular') return props.slice(0, Math.min(40, props.length));
+  // Mirror curated Popular allowlist used by dedicated Props (MLB core).
+  var POPULAR = { Hits:1, 'Total Bases':1, 'Home Runs':1, RBIs:1, Strikeouts:1 };
+  if (tabId === 'popular') {
+    return props.filter(function (p) { return !!POPULAR[p.propType]; });
+  }
   if (tabId === 'all') return props;
   return props.filter(function (p) { return p.propType === tabId; });
 }

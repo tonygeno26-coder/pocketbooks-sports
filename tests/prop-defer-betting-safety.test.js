@@ -112,9 +112,9 @@ test('filter tab before/after hydration preserves full market set', function () 
   assert(all.length === 300);
   var r = bench.bench(300);
   assert(r.marketsPreserved, 'bench markets not preserved');
-  // popular tab is a view filter — must not mutate cache length
+  // popular tab is a curated view filter — must not mutate cache length
   var popular = bench.filterTab(props, 'popular');
-  assert(popular.length <= 40);
+  assert(popular.length < props.length || popular.length === 0, 'popular should be curated subset');
   assert(props.length === 300);
 });
 
