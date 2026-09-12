@@ -288,9 +288,13 @@ test('does not pin Bets tab to activeTickets[0]', function() {
   );
 });
 
-test('Bets tab expands all player groups by default', function() {
-  assert(hostHtml.indexOf('window._hostBetsExpanded[key] === undefined') !== -1, 'default-expand guard present');
-  assert(hostHtml.indexOf('_hostBetsExpanded[key] = true') !== -1, 'groups start expanded');
+test('Bets tab uses the approved single-player accordion', function() {
+  assert(hostHtml.indexOf('var _hostBetsExpandedPlayer = null') !== -1, 'groups start collapsed');
+  assert(hostHtml.indexOf('var open = _hostBetsExpandedPlayer === key') !== -1, 'only selected player opens');
+  assert(
+    hostHtml.indexOf('_hostBetsExpandedPlayer = (_hostBetsExpandedPlayer === k) ? null : k') !== -1,
+    'click toggles the selected player'
+  );
 });
 
 test('Players tab is DB-first via _hostPlayersFromDbOrLocal', function() {
@@ -298,6 +302,15 @@ test('Players tab is DB-first via _hostPlayersFromDbOrLocal', function() {
   assert(hostHtml.indexOf('var players  = _hostPlayersFromDbOrLocal()') !== -1, 'renderPlayersTab reads DB roster');
   assert(hostHtml.indexOf('id="home-content"') !== -1, 'home-content wrapper exists so Players tab can hide home');
   assert(hostHtml.indexOf("loadHostDashboardFromDb('players_tab')") !== -1, 'Players tab refetches dashboard');
+});
+
+test('Players tab preserves display name and renders username second', function() {
+  assert(
+    hostHtml.indexOf('playerName: dp.playerName || dp.displayName || dp.username') !== -1,
+    'API display name is not overwritten by username'
+  );
+  assert(hostHtml.indexOf("var usernameLabel = username ? '@'") !== -1, 'username is rendered as @username');
+  assert(hostHtml.indexOf('String(p.playerId || \'\').slice(0, 8)') !== -1, 'short ID is the last fallback');
 });
 
 test('Your Players list is filled from the same rows as the Players tab', function() {
