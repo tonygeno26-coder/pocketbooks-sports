@@ -315,12 +315,34 @@ body{
 .hb-chevron{font-size:0.85rem;color:var(--pb-gray);transition:transform .15s;flex-shrink:0}
 .hb-chevron.is-open{transform:rotate(90deg)}
 
-/* Host Players premium rows */
+/* Host Players — balance-first (host position dominates; bankroll secondary) */
 .hp-header{padding:14px 16px 0;position:sticky;top:0;background:var(--pb-bg);z-index:10}
 .hp-title{font-size:1.1rem;font-weight:900;margin-bottom:12px;letter-spacing:-0.2px}
 .hp-lock{
   margin-bottom:12px;background:var(--pb-card);border:1px solid var(--pb-border);border-radius:12px;
   padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 4px 18px rgba(0,0,0,0.22);
+}
+/* Top summary: Players Owe You / You Owe Players / Net — from getLiveCreditPosition totals only */
+.hp-pos-summary{
+  display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;
+}
+.hp-pos-card{
+  background:var(--pb-card);border:1px solid var(--pb-border);border-radius:12px;
+  padding:12px 10px;box-shadow:0 4px 18px rgba(0,0,0,0.22);min-width:0;
+}
+.hp-pos-card-label{
+  font-size:0.52rem;font-weight:800;letter-spacing:0.45px;text-transform:uppercase;
+  color:var(--pb-gray);margin-bottom:6px;line-height:1.25;
+}
+.hp-pos-card-amt{
+  font-size:1.15rem;font-weight:900;letter-spacing:-0.4px;line-height:1.1;
+  font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.hp-pos-card-amt--pos{color:var(--pb-win)}
+.hp-pos-card-amt--neg{color:var(--pb-loss)}
+.hp-pos-card-amt--zero{color:var(--pb-gray)}
+.hp-pos-sort-note{
+  font-size:0.58rem;color:#555;margin:-4px 0 10px;letter-spacing:0.2px;line-height:1.35;
 }
 .hp-search{
   display:flex;align-items:center;background:var(--pb-card);border:1px solid var(--pb-border);
@@ -339,13 +361,44 @@ body{
   box-shadow:var(--pb-shadow);overflow:hidden;transition:border-color .15s,box-shadow .15s;
 }
 .hp-row:hover{border-color:#2a3a52!important}
-.hp-row-main{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.hp-name{font-size:0.92rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--pb-white)}
-.hp-username{font-size:0.72rem;color:var(--pb-light);margin-top:1px}
-.hp-badge{font-size:0.58rem;font-weight:800;padding:2px 8px;border-radius:999px;border:1px solid;letter-spacing:0.3px;flex-shrink:0;text-transform:uppercase}
+.hp-row-main{
+  display:flex;align-items:flex-start;gap:12px;padding:14px 16px;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.hp-row-body{flex:1;min-width:0}
+.hp-row-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.hp-row-identity{min-width:0;flex:1}
+.hp-name{font-size:0.84rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--pb-light)}
+.hp-username{font-size:0.68rem;color:var(--pb-gray);margin-top:1px}
+.hp-badge{font-size:0.55rem;font-weight:800;padding:2px 7px;border-radius:999px;border:1px solid;letter-spacing:0.3px;flex-shrink:0;text-transform:uppercase}
 .hp-badge--approved{color:var(--pb-win);background:var(--pb-win-dim);border-color:rgba(61,214,140,0.35)}
 .hp-badge--blocked{color:var(--pb-loss);background:var(--pb-red-dim);border-color:rgba(255,77,106,0.35)}
 .hp-badge--pending{color:var(--pb-gold);background:var(--pb-gold-dim);border-color:rgba(232,197,71,0.35)}
+/* Large signed host position — authoritative getLiveCreditPosition weeklyNet */
+.hp-host-pos{
+  font-size:1.55rem;font-weight:900;letter-spacing:-0.6px;line-height:1.05;
+  font-variant-numeric:tabular-nums;margin-top:6px;
+}
+.hp-host-pos--pos{color:var(--pb-win)}
+.hp-host-pos--neg{color:var(--pb-loss)}
+.hp-host-pos--zero{color:var(--pb-gray)}
+.hp-rel-label{
+  font-size:0.62rem;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;
+  margin-top:4px;line-height:1.2;
+}
+.hp-rel-label--pos{color:var(--pb-win)}
+.hp-rel-label--neg{color:var(--pb-loss)}
+.hp-rel-label--zero{color:var(--pb-gray)}
+.hp-secondary{
+  display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;padding-top:10px;
+  border-top:1px solid var(--pb-border-soft);
+}
+.hp-sec-item{min-width:0}
+.hp-sec-label{
+  font-size:0.48rem;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;
+  color:var(--pb-gray);margin-bottom:1px;
+}
+.hp-sec-val{font-size:0.72rem;font-weight:700;color:var(--pb-light);font-variant-numeric:tabular-nums}
 .hp-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
 .hp-metric{
   background:var(--pb-bg-elev);border:1px solid var(--pb-border-soft);border-radius:10px;padding:8px 10px;
@@ -388,6 +441,11 @@ body{
   .settlement{grid-template-columns:1fr;gap:8px}
   .stats-row{grid-template-columns:1fr 1fr}
   #settlement-week-section{grid-template-columns:1fr 1fr}
+  .hp-pos-summary{gap:6px}
+  .hp-pos-card{padding:10px 8px}
+  .hp-pos-card-amt{font-size:1.02rem}
+  .hp-host-pos{font-size:1.45rem}
+  .hp-row-main{padding:12px 14px}
 }
 @media (max-width:390px){
   .rb-card{margin:4px 0;padding:10px 11px 8px 13px;border-radius:11px}
@@ -398,11 +456,18 @@ body{
   .hp-metrics{grid-template-columns:1fr}
   .stats-row{grid-template-columns:1fr 1fr;gap:6px}
   .stat-val{font-size:1.05rem}
+  .hp-pos-summary{grid-template-columns:1fr;gap:6px}
+  .hp-pos-card-amt{font-size:1.25rem}
+  .hp-host-pos{font-size:1.6rem;margin-top:4px}
+  .hp-name{font-size:0.8rem}
+  .hp-secondary{gap:8px 12px}
 }
 @media (min-width:768px){
   .settlement{grid-template-columns:1fr 1fr}
   #settlement-week-section{grid-template-columns:repeat(4,1fr)}
   .hp-metrics{grid-template-columns:repeat(4,1fr)}
+  .hp-host-pos{font-size:1.7rem}
+  .hp-pos-card-amt{font-size:1.25rem}
 }
 @media (min-width:1280px){
   .hb-group{margin-left:8px;margin-right:8px}
@@ -5043,6 +5108,24 @@ function renderPlayersTab(){
   var dbReady = Array.isArray(_hostDbPlayers) || !!_hostPlayersFetchDone;
   var players  = _hostPlayersFromDbOrLocal();
 
+  // Authoritative host position (same source as Credit Position / Players Owe You semantics).
+  // Field: getLiveCreditPosition().rows[].weeklyNet  (== playerOwesHost - hostOwesPlayer)
+  // Sign: + green = PLAYER OWES HOST; − red = HOST OWES PLAYER; 0 muted = EVEN.
+  // Presentation-only — no formula / accounting / settlement changes.
+  var _liveCredit = null;
+  var _creditByPid = {};
+  try {
+    if (typeof getLiveCreditPosition === 'function') {
+      _liveCredit = getLiveCreditPosition({});
+      ((_liveCredit && _liveCredit.rows) || []).forEach(function(r){
+        if (r && r.playerId != null) _creditByPid[String(r.playerId)] = r;
+      });
+    }
+  } catch(_lc) { _liveCredit = null; _creditByPid = {}; }
+  var _posTotals = (_liveCredit && _liveCredit.totals) || {
+    playerOwesHost: 0, hostOwesPlayer: 0, netPosition: 0
+  };
+
   function getActiveBetsCount(pid){
     return _hostBetsFromDbOrLocal().filter(function(b){ return String(b.playerId)===String(pid) && (b.status==='active'||b.status==='open'); }).length;
   }
@@ -5055,16 +5138,37 @@ function renderPlayersTab(){
   function avatarHtml(name){
     return '<div class="hp-avatar" aria-hidden="true">'+_hpInitials(name)+'</div>';
   }
-  function _creditPosForPlayer(pid){
-    try {
-      if (typeof getLiveCreditPosition !== 'function') return null;
-      var live = getLiveCreditPosition({});
-      var rows = (live && live.rows) || [];
-      for (var i = 0; i < rows.length; i++) {
-        if (String(rows[i].playerId) === String(pid)) return rows[i];
-      }
-    } catch(_e) {}
-    return null;
+  /** Signed host position from getLiveCreditPosition weeklyNet (authoritative). */
+  function _hostPositionForPlayer(pid){
+    var row = _creditByPid[String(pid)];
+    if (!row) return 0;
+    if (row.weeklyNet != null && !isNaN(Number(row.weeklyNet))) return Number(row.weeklyNet);
+    return (Number(row.playerOwesHost)||0) - (Number(row.hostOwesPlayer)||0);
+  }
+  function _fmtSignedHostPos(n){
+    var v = Math.round((Number(n)||0) * 100) / 100;
+    if (Math.abs(v) < 0.005) return '$0.00';
+    var abs = Math.abs(v).toFixed(2);
+    return (v > 0 ? '+' : '−') + '$' + abs;
+  }
+  function _posTone(n){
+    var v = Number(n)||0;
+    if (Math.abs(v) < 0.005) return 'zero';
+    return v > 0 ? 'pos' : 'neg';
+  }
+  function _relLabel(n){
+    var tone = _posTone(n);
+    if (tone === 'pos') return 'PLAYER OWES YOU';
+    if (tone === 'neg') return 'YOU OWE PLAYER';
+    return 'EVEN';
+  }
+  function _fmtSummaryAmt(n, toneHint){
+    var v = Math.round((Number(n)||0) * 100) / 100;
+    var abs = Math.abs(v).toFixed(2);
+    if (toneHint === 'zero' || Math.abs(v) < 0.005) return '$0.00';
+    if (toneHint === 'neg') return '−$' + abs;
+    if (toneHint === 'pos') return '+$' + abs;
+    return '$' + abs;
   }
   function playerBetsHtml(pid) {
     var bets = _hostBetsFromDbOrLocal().filter(function(b){
@@ -5085,7 +5189,7 @@ function renderPlayersTab(){
     }).join('') + '</div>';
   }
   function playerSettlementHtml(pid) {
-    var row = _creditPosForPlayer(pid);
+    var row = _creditByPid[String(pid)];
     if (!row) return '';
     var oweYou = Number(row.playerOwesHost)||0;
     var youOwe = Number(row.hostOwesPlayer)||0;
@@ -5096,7 +5200,7 @@ function renderPlayersTab(){
         +'<div class="hp-metric"><div class="hp-metric-label">Players Owe You</div><div class="hp-metric-val hp-metric-val--win">$'+oweYou.toFixed(2)+'</div></div>'
         +'<div class="hp-metric"><div class="hp-metric-label">You Owe Player</div><div class="hp-metric-val hp-metric-val--loss">$'+youOwe.toFixed(2)+'</div></div>'
       +'</div>'
-      +'<div style="font-size:0.62rem;color:var(--pb-gray);margin-top:8px;line-height:1.35">Display only — settlement execution remains OFF.</div>'
+      +'<div style="font-size:0.62rem;color:var(--pb-gray);margin-top:8px;line-height:1.35">Display only — settlement execution remains OFF. No settlement actions.</div>'
     +'</div>';
   }
   function playerLimitsHtml(p) {
@@ -5134,7 +5238,12 @@ function renderPlayersTab(){
       || p.playerName
       || (username ? '@'+String(username).replace(/^@/, '') : String(p.playerId || '').slice(0, 8));
     var usernameLabel = username ? '@'+String(username).replace(/^@/, '') : '';
-    // Authoritative bankroll — never creditLimit, never fake $0 for missing data.
+    // Authoritative HOST POSITION (large +/-). Not bankroll.
+    var hostPos = _hostPositionForPlayer(p.playerId);
+    var posTone = _posTone(hostPos);
+    var posTxt = _fmtSignedHostPos(hostPos);
+    var relTxt = _relLabel(hostPos);
+    // Secondary: betting bankroll — never creditLimit, never fake $0 for missing data.
     var avail = _resolveHostPlayerBalance(p, dbp);
     var balTxt = _fmtHostPlayerBalance(avail);
     var openRisk = (dbp && dbp.openRisk != null && !isNaN(dbp.openRisk))
@@ -5152,23 +5261,29 @@ function renderPlayersTab(){
     if (expanded) {
       expandBody = playerSettlementHtml(p.playerId) + playerLimitsHtml(p) + playerBetsHtml(p.playerId);
     }
-    return '<div class="hp-row player-row" data-pid="'+p.playerId+'">'
+    return '<div class="hp-row player-row" data-pid="'+p.playerId+'" data-host-pos="'+hostPos+'">'
       +'<div class="hp-row-main" onclick="togglePlayerExpand(this.parentNode.dataset.pid)">'
       +avatarHtml(displayName)
-      +'<div style="flex:1;min-width:0">'
-        +'<div style="display:flex;align-items:center;gap:8px">'
-          +'<span class="hp-name">'+displayName+'</span>'
-          +'<span class="hp-badge '+badgeCls+'">'+(p.status||'approved').toUpperCase()+'</span>'
+      +'<div class="hp-row-body">'
+        +'<div class="hp-row-top">'
+          +'<div class="hp-row-identity">'
+            +'<div style="display:flex;align-items:center;gap:8px;min-width:0">'
+              +'<span class="hp-name">'+displayName+'</span>'
+              +'<span class="hp-badge '+badgeCls+'">'+(p.status||'approved').toUpperCase()+'</span>'
+            +'</div>'
+            +(usernameLabel && usernameLabel.toLowerCase() !== String(displayName).toLowerCase()
+              ? '<div class="hp-username">'+usernameLabel+'</div>' : '')
+          +'</div>'
         +'</div>'
-        +(usernameLabel && usernameLabel.toLowerCase() !== String(displayName).toLowerCase()
-          ? '<div class="hp-username">'+usernameLabel+'</div>' : '')
-        +'<div class="hp-metrics">'
-          +'<div class="hp-metric"><div class="hp-metric-label">Bankroll</div><div class="hp-metric-val hp-metric-val--accent">'+balTxt+'</div></div>'
-          +'<div class="hp-metric"><div class="hp-metric-label">Open Risk</div><div class="hp-metric-val hp-metric-val--loss">$'+openRisk.toFixed(2)+'</div></div>'
-          +'<div class="hp-metric"><div class="hp-metric-label">Active Bets</div><div class="hp-metric-val hp-metric-val--gold">'+activeBets+'</div></div>'
+        +'<div class="hp-host-pos hp-host-pos--'+posTone+'" data-host-position="'+hostPos+'">'+posTxt+'</div>'
+        +'<div class="hp-rel-label hp-rel-label--'+posTone+'">'+relTxt+'</div>'
+        +'<div class="hp-secondary">'
+          +'<div class="hp-sec-item"><div class="hp-sec-label">Betting Bankroll</div><div class="hp-sec-val">'+balTxt+'</div></div>'
+          +'<div class="hp-sec-item"><div class="hp-sec-label">Open Exposure</div><div class="hp-sec-val">$'+openRisk.toFixed(2)+'</div></div>'
+          +'<div class="hp-sec-item"><div class="hp-sec-label">Active Bets</div><div class="hp-sec-val">'+activeBets+'</div></div>'
         +'</div>'
       +'</div>'
-      +'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--pb-gray)" stroke-width="2.5" stroke-linecap="round" style="transform:rotate('+(expanded?90:0)+'deg);transition:transform .15s;flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>'
+      +'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--pb-gray)" stroke-width="2.5" stroke-linecap="round" style="transform:rotate('+(expanded?90:0)+'deg);transition:transform .15s;flex-shrink:0;margin-top:4px"><polyline points="9 18 15 12 9 6"/></svg>'
       +'</div>'
       +expandBody
     +'</div>';
@@ -5201,14 +5316,47 @@ function renderPlayersTab(){
     if(_playersActiveTab==='applicants') return false;
     return true;
   });
+  // Presentation-only sort: largest absolute host position first (does not alter server data).
+  filtered = filtered.slice().sort(function(a, b){
+    var pa = Math.abs(_hostPositionForPlayer(a.playerId));
+    var pb = Math.abs(_hostPositionForPlayer(b.playerId));
+    if (pb !== pa) return pb - pa;
+    var na = String((a && (a.playerName || a.username)) || '');
+    var nb = String((b && (b.playerName || b.username)) || '');
+    return na.localeCompare(nb);
+  });
   var filteredReqs=requests.filter(function(r){
     if(q && !(r.playerName||'').toLowerCase().includes(q)) return false;
     return true;
   });
 
+  var oweYouTot = Number(_posTotals.playerOwesHost)||0;
+  var youOweTot = Number(_posTotals.hostOwesPlayer)||0;
+  var netTot = (_posTotals.netPosition != null && !isNaN(Number(_posTotals.netPosition)))
+    ? Number(_posTotals.netPosition)
+    : (oweYouTot - youOweTot);
+  var oweYouTone = Math.abs(oweYouTot) < 0.005 ? 'zero' : 'pos';
+  var youOweTone = Math.abs(youOweTot) < 0.005 ? 'zero' : 'neg';
+  var netTone = _posTone(netTot);
+
   var html=
     '<div class="hp-header">'
       +'<div class="hp-title">Your Players</div>'
+      +'<div class="hp-pos-summary" id="hp-pos-summary" aria-label="Host credit position summary">'
+        +'<div class="hp-pos-card">'
+          +'<div class="hp-pos-card-label">Players Owe You</div>'
+          +'<div class="hp-pos-card-amt hp-pos-card-amt--'+oweYouTone+'" id="hp-summary-owe-you">'+_fmtSummaryAmt(oweYouTot, oweYouTone)+'</div>'
+        +'</div>'
+        +'<div class="hp-pos-card">'
+          +'<div class="hp-pos-card-label">You Owe Players</div>'
+          +'<div class="hp-pos-card-amt hp-pos-card-amt--'+youOweTone+'" id="hp-summary-you-owe">'+_fmtSummaryAmt(youOweTot, youOweTone)+'</div>'
+        +'</div>'
+        +'<div class="hp-pos-card">'
+          +'<div class="hp-pos-card-label">Net Position</div>'
+          +'<div class="hp-pos-card-amt hp-pos-card-amt--'+netTone+'" id="hp-summary-net">'+_fmtSignedHostPos(netTot)+'</div>'
+        +'</div>'
+      +'</div>'
+      +'<div class="hp-pos-sort-note">Sorted by largest absolute host position · Credit position from getLiveCreditPosition (weeklyNet) · Settlement OFF</div>'
       +'<div class="hp-lock" id="club-lock-toggle-wrap">'
         +'<div style="min-width:0;flex:1">'
           +'<div id="club-lock-status-label" style="font-size:0.82rem;font-weight:800">'+( _clubIsLocked ? 'Club locked' : 'Open to new members' )+'</div>'

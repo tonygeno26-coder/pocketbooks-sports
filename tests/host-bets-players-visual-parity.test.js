@@ -3,6 +3,7 @@
 /**
  * Host Bets / Host Players visual parity — source gate.
  * Presentation-only markers; must not imply API / settlement / accounting changes.
+ * Balance-first Host Players: large +/- from getLiveCreditPosition weeklyNet.
  */
 
 const fs = require('fs');
@@ -64,7 +65,26 @@ test('Host Players premium rows + initials avatar', function () {
   assertIncludes(html, 'hp-avatar', 'avatar');
   assertIncludes(html, '_hpInitials', 'initials helper');
   assertIncludes(html, 'hp-badge--approved', 'status badge text');
-  assertIncludes(html, 'Bankroll', 'bankroll label');
+  assertIncludes(html, 'Betting Bankroll', 'bankroll secondary label');
+});
+
+test('balance-first hierarchy uses authoritative getLiveCreditPosition weeklyNet', function () {
+  assertIncludes(html, 'hp-host-pos', 'large host position class');
+  assertIncludes(html, 'hp-rel-label', 'relationship label');
+  assertIncludes(html, 'PLAYER OWES YOU', 'positive rel label');
+  assertIncludes(html, 'YOU OWE PLAYER', 'negative rel label');
+  assertIncludes(html, "return 'EVEN'", 'zero rel label');
+  assertIncludes(html, 'getLiveCreditPosition', 'reuses existing credit position');
+  assertIncludes(html, 'weeklyNet', 'authoritative signed field');
+  assertIncludes(html, '_hostPositionForPlayer', 'position helper');
+  assertIncludes(html, 'hp-pos-summary', 'top summary strip');
+  assertIncludes(html, 'Players Owe You', 'owe you summary');
+  assertIncludes(html, 'You Owe Players', 'you owe summary');
+  assertIncludes(html, 'Net Position', 'net position summary');
+  assertIncludes(html, 'largest absolute host position', 'sort documentation');
+  assertIncludes(html, 'Math.abs(_hostPositionForPlayer', 'abs sort');
+  // Bankroll must not dominate as blue accent primary metric
+  assertNotIncludes(html, 'hp-metric-val--accent">\'+balTxt', 'bankroll not blue primary');
 });
 
 test('separates betting vs settlement ledger visually without new formulas', function () {
@@ -72,8 +92,8 @@ test('separates betting vs settlement ledger visually without new formulas', fun
   assertIncludes(html, 'Betting Ledger', 'home betting section');
   assertIncludes(html, 'hp-section--betting', 'players betting section');
   assertIncludes(html, 'hp-section--settlement', 'players settlement section');
-  assertIncludes(html, 'getLiveCreditPosition', 'reuses existing credit position');
   assertIncludes(html, 'settlement execution remains OFF', 'settlement still off notice');
+  assertIncludes(html, 'No settlement actions', 'no settlement actions copy');
 });
 
 test('money semantics markers unchanged (green owe you / red you owe)', function () {
@@ -83,6 +103,9 @@ test('money semantics markers unchanged (green owe you / red you owe)', function
   assertIncludes(html, 'sc-red', 'red credit card');
   assertIncludes(html, "_dirColor(playersOwe, 'in')", 'income color direction');
   assertIncludes(html, "_dirColor(hostOwes, 'out')", 'outflow color direction');
+  assertIncludes(html, 'hp-host-pos--pos', 'positive green class');
+  assertIncludes(html, 'hp-host-pos--neg', 'negative red class');
+  assertIncludes(html, 'hp-host-pos--zero', 'zero muted class');
 });
 
 test('dark-native empty / loading states', function () {
