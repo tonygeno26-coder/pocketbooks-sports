@@ -1528,12 +1528,13 @@ function renderAdminCrypto() {
 
 <!-- PLAYER LIMITS MODAL -->
 <div id="modal-limits" role="dialog" aria-modal="true" aria-labelledby="limits-title" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:300;align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeLimitsModal()">
-  <div style="background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:430px;padding:24px">
+  <div style="background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:430px;padding:24px;max-height:92vh;overflow:auto">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-      <span id="limits-title" style="font-size:1.1rem;font-weight:900">Edit Limits</span>
+      <span id="limits-title" style="font-size:1.1rem;font-weight:900">Player Settings</span>
       <button type="button" aria-label="Close limits" onclick="closeLimitsModal()" style="background:none;border:none;color:var(--gray);font-size:1.3rem;cursor:pointer">✕</button>
     </div>
     <div id="limits-player-name" style="font-size:0.78rem;color:var(--cyan);margin-bottom:16px"></div>
+    <div style="font-size:0.66rem;color:var(--gray);font-weight:900;letter-spacing:.6px;margin-bottom:8px">BETTING LIMITS</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div>
         <label for="lim-maxbet" style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;display:block">Max Single Bet</label>
@@ -1548,6 +1549,14 @@ function renderAdminCrypto() {
         <input id="lim-openrisk" type="number" min="0" step="0.01" inputmode="decimal" placeholder="No player-specific cap" style="width:100%;padding:12px 14px;background:var(--card2);border:1.5px solid var(--border);border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
       </div>
     </div>
+    <div style="font-size:0.66rem;color:var(--gray);font-weight:900;letter-spacing:.6px;margin:16px 0 8px">SPORTS ACCESS</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <button type="button" onclick="_setAllSportAccess('lim',true)" style="min-height:40px;flex:1;background:transparent;border:1px solid var(--pb-border);border-radius:9px;color:var(--white);font-weight:800">Enable All</button>
+      <button type="button" onclick="_setAllSportAccess('lim',false)" style="min-height:40px;flex:1;background:transparent;border:1px solid var(--pb-border);border-radius:9px;color:var(--white);font-weight:800">Disable All</button>
+    </div>
+    <div id="lim-sports-access" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px"></div>
+    <label for="lim-host-notes" style="font-size:0.66rem;color:var(--gray);font-weight:900;letter-spacing:.6px;margin:16px 0 8px;display:block">HOST NOTES</label>
+    <textarea id="lim-host-notes" maxlength="2000" rows="3" placeholder="Private notes — Host only" style="width:100%;resize:vertical;padding:12px 14px;background:var(--card2);border:1.5px solid var(--border);border-radius:10px;color:var(--white);font-size:0.9rem;outline:none"></textarea>
     <div id="limits-error" role="alert" style="display:none;color:var(--red);font-size:0.72rem;margin:10px 0"></div>
     <div style="display:flex;gap:10px;margin-top:12px">
       <button type="button" onclick="closeLimitsModal()" style="flex:1;padding:14px;background:transparent;color:var(--white);border:1px solid var(--border);border-radius:12px;font-size:0.9rem;font-weight:800;cursor:pointer">Cancel</button>
@@ -1568,7 +1577,7 @@ function renderAdminCrypto() {
 
 <!-- APPROVE PLAYER MODAL — must live OUTSIDE #home-content (hidden on Players tab) -->
 <div id="modal-approve-player" role="dialog" aria-modal="true" aria-labelledby="approve-player-title" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:320;align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeApprovePlayerModal()">
-  <div style="background:var(--pb-card);border:1px solid var(--pb-border);border-radius:20px 20px 0 0;width:100%;max-width:430px;padding:24px;padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 40px rgba(0,0,0,0.55)">
+  <div style="background:var(--pb-card);border:1px solid var(--pb-border);border-radius:20px 20px 0 0;width:100%;max-width:430px;padding:24px;padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 40px rgba(0,0,0,0.55);max-height:92vh;overflow:auto">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <span id="approve-player-title" style="font-size:1.1rem;font-weight:900">Approve Player</span>
       <button type="button" aria-label="Close approval" onclick="closeApprovePlayerModal()" style="background:none;border:none;color:var(--gray);font-size:1.3rem;cursor:pointer">✕</button>
@@ -1599,6 +1608,14 @@ function renderAdminCrypto() {
         <input id="appr-openrisk" type="number" min="0" step="0.01" inputmode="decimal" placeholder="No player-specific cap" style="width:100%;padding:12px 14px;background:var(--bg-recessed,#0a101a);border:1.5px solid var(--pb-border);border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
       </div>
     </div>
+    <div style="font-size:0.66rem;color:var(--gray);font-weight:900;text-transform:uppercase;letter-spacing:0.7px;margin:16px 0 8px">Sports Access</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <button type="button" onclick="_setAllSportAccess('appr',true)" style="min-height:40px;flex:1;background:transparent;border:1px solid var(--pb-border);border-radius:9px;color:var(--white);font-weight:800">Enable All</button>
+      <button type="button" onclick="_setAllSportAccess('appr',false)" style="min-height:40px;flex:1;background:transparent;border:1px solid var(--pb-border);border-radius:9px;color:var(--white);font-weight:800">Disable All</button>
+    </div>
+    <div id="appr-sports-access" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px"></div>
+    <label for="appr-host-notes" style="font-size:0.66rem;color:var(--gray);font-weight:900;letter-spacing:.6px;margin:16px 0 8px;display:block">HOST NOTES</label>
+    <textarea id="appr-host-notes" maxlength="2000" rows="3" placeholder="Private notes — Host only" style="width:100%;resize:vertical;padding:12px 14px;background:var(--bg-recessed,#0a101a);border:1.5px solid var(--pb-border);border-radius:10px;color:var(--white);font-size:0.9rem;outline:none"></textarea>
     <div id="appr-error" role="alert" style="display:none;color:var(--red);font-size:0.72rem;margin:10px 0"></div>
     <div style="display:flex;gap:10px;margin-top:8px">
       <button type="button" onclick="closeApprovePlayerModal()" style="flex:1;padding:14px;background:transparent;color:var(--white);border:1.5px solid var(--pb-border);border-radius:12px;font-size:0.9rem;font-weight:900;cursor:pointer">Cancel</button>
@@ -1689,6 +1706,7 @@ function renderAdminCrypto() {
   </div>
 </div>
 
+<script src="sport-registry.js"></script>
 <script src="team-logos.js"></script>
 <script>
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
@@ -4370,6 +4388,48 @@ var pendingRequests = [];
 var editingLimitsFor = null;
 var _approvalLimitsReady = false;
 var _hostPlayerLimitsById = Object.create(null);
+var _sportAccessState = { appr:Object.create(null), lim:Object.create(null) };
+
+function _sportRegistry(){
+  return Array.isArray(window.PB_SPORTSBOOK_REGISTRY) ? window.PB_SPORTSBOOK_REGISTRY : [];
+}
+
+function _renderSportAccess(prefix, disabledSports){
+  var disabled = Object.create(null);
+  (disabledSports || []).forEach(function(id){ disabled[String(id).toLowerCase()] = true; });
+  _sportAccessState[prefix] = disabled;
+  var root = document.getElementById(prefix+'-sports-access');
+  if (!root) return;
+  root.innerHTML = _sportRegistry().map(function(entry){
+    var on = !disabled[entry.id];
+    return '<button type="button" data-sport-access="'+entry.id+'" aria-pressed="'+(on?'true':'false')+'"'
+      +' onclick="_toggleSportAccess(\''+prefix+'\',\''+entry.id+'\')"'
+      +' style="min-height:44px;padding:9px 10px;border-radius:9px;border:1px solid '+(on?'var(--accent-blue)':'var(--pb-border)')
+      +';background:'+(on?'rgba(61,139,253,.14)':'var(--bg-recessed,#0a101a)')
+      +';color:'+(on?'var(--white)':'var(--gray)')+';font-size:.75rem;font-weight:900;text-align:left">'
+      +entry.label+' <span style="float:right">'+(on?'ON':'OFF')+'</span></button>';
+  }).join('');
+}
+
+function _toggleSportAccess(prefix, sportId){
+  var state = _sportAccessState[prefix] || Object.create(null);
+  if (state[sportId]) delete state[sportId]; else state[sportId] = true;
+  _renderSportAccess(prefix, Object.keys(state));
+}
+
+function _setAllSportAccess(prefix, enabled){
+  _renderSportAccess(prefix, enabled ? [] : _sportRegistry().map(function(entry){ return entry.id; }));
+}
+
+function _disabledSportsFor(prefix){
+  return Object.keys(_sportAccessState[prefix] || {});
+}
+
+function _hostText(value){
+  return String(value == null ? '' : value).replace(/[&<>"']/g, function(ch){
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[ch];
+  });
+}
 
 function _setInlineError(id, message){
   var el = document.getElementById(id);
@@ -4425,11 +4485,14 @@ async function openApprovePlayerModal(req){
   var mb = document.getElementById('appr-maxbet');
   var mp = document.getElementById('appr-payout');
   var mo = document.getElementById('appr-openrisk');
+  var notes = document.getElementById('appr-host-notes');
   var submit = document.getElementById('appr-submit');
   if (bal) bal.value = '1000';
   if (mb) mb.value = '';
   if (mp) mp.value = '';
   if (mo) mo.value = '';
+  if (notes) notes.value = '';
+  _renderSportAccess('appr', []);
   if (submit) { submit.disabled = true; submit.textContent = 'Loading Limits…'; }
   _setInlineError('appr-error', '');
   var modal = document.getElementById('modal-approve-player');
@@ -4455,6 +4518,9 @@ async function openApprovePlayerModal(req){
     if (mb) mb.value = effective.max_single_bet != null ? effective.max_single_bet : '';
     if (mp) mp.value = effective.max_payout != null ? effective.max_payout : '';
     if (mo) mo.value = effective.max_open_risk != null ? effective.max_open_risk : '';
+    var settings = loaded.settings || {};
+    _renderSportAccess('appr', settings.disabledSports || []);
+    if (notes) notes.value = settings.hostNotes || '';
     if (effective.max_single_bet == null || effective.max_payout == null)
       throw new Error('Club limit defaults are unavailable');
     _approvalLimitsReady = true;
@@ -4482,7 +4548,9 @@ async function confirmApprovePlayerModal(){
   var maxBet = _validLimitInput('appr-maxbet', true);
   var maxPayout = _validLimitInput('appr-payout', true);
   var maxOpen = _validLimitInput('appr-openrisk', false);
+  var hostNotes = String((document.getElementById('appr-host-notes') || {}).value || '');
   var invalid = balance.error || maxBet.error || maxPayout.error || maxOpen.error;
+  if (hostNotes.length > 2000) invalid = 'Host notes must be 2,000 characters or fewer';
   if (invalid) { _setInlineError('appr-error', invalid); return; }
   if (!TOKEN || !clubId || !pid) {
     _setInlineError('appr-error', 'Authenticated club context required');
@@ -4498,11 +4566,13 @@ async function confirmApprovePlayerModal(){
       playerId:String(pid),
       balanceStart:balance.value,
       max_single_bet:maxBet.value,
-      max_payout:maxPayout.value
+      max_payout:maxPayout.value,
+      disabledSports:_disabledSportsFor('appr'),
+      hostNotes:hostNotes
     };
     if (maxOpen.value != null) body.max_open_risk = maxOpen.value;
     var result = await apiCall('POST', '/api/club/members/approve', body);
-    if (!result || result.ok !== true || result.status !== 'approved' || !result.limits)
+    if (!result || result.ok !== true || result.status !== 'approved' || !result.limits || !result.settings)
       throw new Error((result && result.error) || 'Approval was not verified');
     pendingRequests = pendingRequests.filter(function(r){ return String(r.playerId)!==String(pid); });
     await Promise.all([loadRequests(), loadHostDashboardFromDb('player_approved')]);
@@ -4839,18 +4909,23 @@ function renderPlayersTab(){
       return '<div style="padding:2px 16px 14px 68px;font-size:0.74rem;color:var(--red)">Player limits unavailable</div>';
     }
     var values = loaded.effective || loaded.values || {};
+    var settings = loaded.settings || {};
+    var disabled = settings.disabledSports || [];
+    var notes = settings.hostNotes || '';
     function money(value){ return value == null ? 'Not set' : '$'+Number(value).toFixed(2); }
     var identity = _identityParts(p);
     return '<div style="margin:0 16px 14px 68px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:12px">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:9px">'
-        +'<div style="font-size:0.66rem;color:var(--gray);font-weight:900;letter-spacing:.6px">PLAYER LIMITS</div>'
-        +'<button type="button" data-pid="'+pid+'" data-name="'+String(identity.displayName).replace(/"/g,'&quot;')+'" onclick="event.stopPropagation();openLimits(this.dataset.pid,this.dataset.name)" style="background:transparent;border:1px solid var(--accent-blue);color:var(--accent-blue-bright);border-radius:8px;padding:6px 9px;font-size:0.68rem;font-weight:900;cursor:pointer">Edit Limits</button>'
+        +'<div style="font-size:0.66rem;color:var(--gray);font-weight:900;letter-spacing:.6px">PLAYER SETTINGS</div>'
+        +'<button type="button" data-pid="'+pid+'" data-name="'+String(identity.displayName).replace(/"/g,'&quot;')+'" onclick="event.stopPropagation();openLimits(this.dataset.pid,this.dataset.name)" style="background:transparent;border:1px solid var(--accent-blue);color:var(--accent-blue-bright);border-radius:8px;padding:6px 9px;font-size:0.68rem;font-weight:900;cursor:pointer">Edit Settings</button>'
       +'</div>'
       +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">'
         +'<div><div style="font-size:.6rem;color:var(--gray)">Single bet</div><div style="font-size:.78rem;font-weight:800;margin-top:2px">'+money(values.max_single_bet)+'</div></div>'
         +'<div><div style="font-size:.6rem;color:var(--gray)">Payout</div><div style="font-size:.78rem;font-weight:800;margin-top:2px">'+money(values.max_payout)+'</div></div>'
         +'<div><div style="font-size:.6rem;color:var(--gray)">Open risk</div><div style="font-size:.78rem;font-weight:800;margin-top:2px">'+money(values.max_open_risk)+'</div></div>'
       +'</div>'
+      +'<div style="font-size:.65rem;color:var(--gray);margin-top:10px">Sports access: <span style="color:var(--white)">'+(disabled.length ? 'Disabled '+disabled.map(function(id){ return id.toUpperCase(); }).join(', ') : 'All enabled')+'</span></div>'
+      +'<div style="font-size:.65rem;color:var(--gray);margin-top:6px">Host notes: <span style="color:var(--white);white-space:pre-wrap">'+(notes ? _hostText(notes) : 'None')+'</span></div>'
     +'</div>';
   }
   function playerRow(p){
@@ -5139,6 +5214,8 @@ async function openLimits(playerId, playerName) {
   document.getElementById('lim-maxbet').value = '';
   document.getElementById('lim-payout').value = '';
   document.getElementById('lim-openrisk').value = '';
+  document.getElementById('lim-host-notes').value = '';
+  _renderSportAccess('lim', []);
   _setInlineError('limits-error', '');
   var save = document.getElementById('limits-save-btn');
   if (save) { save.disabled = true; save.textContent = 'Loading…'; }
@@ -5150,6 +5227,9 @@ async function openLimits(playerId, playerName) {
     document.getElementById('lim-maxbet').value = effective.max_single_bet != null ? effective.max_single_bet : '';
     document.getElementById('lim-payout').value = effective.max_payout != null ? effective.max_payout : '';
     document.getElementById('lim-openrisk').value = effective.max_open_risk != null ? effective.max_open_risk : '';
+    var settings = loaded.settings || {};
+    _renderSportAccess('lim', settings.disabledSports || []);
+    document.getElementById('lim-host-notes').value = settings.hostNotes || '';
     if (save) { save.disabled = false; save.textContent = 'Save Changes'; }
     document.getElementById('lim-maxbet').focus();
   } catch(e) {
@@ -5172,13 +5252,17 @@ async function saveLimits() {
   var maxBet = _validLimitInput('lim-maxbet', true);
   var maxPayout = _validLimitInput('lim-payout', true);
   var maxOpen = _validLimitInput('lim-openrisk', false);
+  var hostNotes = String((document.getElementById('lim-host-notes') || {}).value || '');
   var invalid = maxBet.error || maxPayout.error || maxOpen.error;
+  if (hostNotes.length > 2000) invalid = 'Host notes must be 2,000 characters or fewer';
   if (invalid) { _setInlineError('limits-error', invalid); return false; }
   var data = {
     clubId:clubId,
     playerId:editingLimitsFor,
     max_single_bet:maxBet.value,
-    max_payout:maxPayout.value
+    max_payout:maxPayout.value,
+    disabledSports:_disabledSportsFor('lim'),
+    hostNotes:hostNotes
   };
   if (maxOpen.value != null) data.max_open_risk = maxOpen.value;
   var save = document.getElementById('limits-save-btn');
@@ -5186,14 +5270,14 @@ async function saveLimits() {
   _setInlineError('limits-error', '');
   try {
     var result = await apiCall('POST', '/api/club/player-limits', data);
-    if (!result || result.ok !== true || !result.limits)
+    if (!result || result.ok !== true || !result.limits || !result.settings)
       throw new Error((result && result.error) || 'Limit save failed');
     var playerId = editingLimitsFor;
     var confirmed = await _loadServerPlayerLimits(clubId, playerId);
     if (!confirmed || !confirmed.ok) throw new Error('Limit verification failed');
     closeLimitsModal();
     renderPlayersTab();
-    showToastHost('✅ Limits saved');
+    showToastHost('✅ Player settings saved');
     return true;
   } catch(e) {
     _setInlineError('limits-error', e.message || 'Limit save failed');

@@ -73,13 +73,15 @@ test('approval has no optimistic or local success path', function() {
   assert(!confirm.includes('(local)'));
 });
 
-test('approved canonical player detail renders server player limits', function() {
+test('approved canonical player detail renders private server settings', function() {
   const render = functionSlice('renderPlayersTab', 'renderRequests');
-  assert(render.includes('PLAYER LIMITS'));
-  assert(render.includes('Edit Limits'));
+  assert(render.includes('PLAYER SETTINGS'));
+  assert(render.includes('Edit Settings'));
   assert(render.includes('values.max_single_bet'));
   assert(render.includes('values.max_payout'));
   assert(render.includes('values.max_open_risk'));
+  assert(render.includes('settings.disabledSports'));
+  assert(render.includes('settings.hostNotes'));
 });
 
 test('editing saves, refetches, then displays server-confirmed values', function() {
@@ -93,6 +95,27 @@ test('editing saves, refetches, then displays server-confirmed values', function
 test('client rejects negative and non-finite limit values', function() {
   const validator = functionSlice('_validLimitInput', '_loadServerPlayerLimits');
   assert(validator.includes('!Number.isFinite(value) || value < 0'));
+});
+
+test('approval and approved settings include sports access and Host notes', function() {
+  assert(html.includes('id="appr-sports-access"'));
+  assert(html.includes('id="appr-host-notes" maxlength="2000"'));
+  assert(html.includes('id="lim-sports-access"'));
+  assert(html.includes('id="lim-host-notes" maxlength="2000"'));
+  const confirm = functionSlice('confirmApprovePlayerModal', 'denyApprovePlayerModal');
+  const save = functionSlice('saveLimits', 'loadClubs');
+  [confirm, save].forEach(function(body) {
+    assert(body.includes('disabledSports:'));
+    assert(body.includes('hostNotes:hostNotes'));
+  });
+});
+
+test('Enable All and Disable All edit only canonical registry form state', function() {
+  const all = functionSlice('_setAllSportAccess', '_disabledSportsFor');
+  assert(all.includes("_renderSportAccess(prefix, enabled ? []"));
+  assert(all.includes('_sportRegistry().map'));
+  assert(html.includes("onclick=\"_setAllSportAccess('appr',true)\""));
+  assert(html.includes("onclick=\"_setAllSportAccess('lim',false)\""));
 });
 
 test('authenticated request refresh cannot revive stale local applicants', function() {
