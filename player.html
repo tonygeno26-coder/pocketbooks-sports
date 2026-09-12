@@ -3932,9 +3932,12 @@ function _pbNavSyncUrl(opts) {
     setOrDel('mbRange', nav.mbRange, 'week');
     setOrDel('mbSort', nav.mbSort, 'newest');
     // Keep visual-QA flags sticky so owner deep-links never lose preview/testUser.
-    if (_pPreview) params.set('preview', '1');
-    if (_pp.get('testUser')) params.set('testUser', String(_pp.get('testUser')));
-    if (_pp.get('dev') === '1') params.set('dev', '1');
+    // Guard globals — unit sandboxes and early boot must still replaceState.
+    if (typeof _pPreview !== 'undefined' && _pPreview) params.set('preview', '1');
+    if (typeof _pp !== 'undefined' && _pp && typeof _pp.get === 'function') {
+      if (_pp.get('testUser')) params.set('testUser', String(_pp.get('testUser')));
+      if (_pp.get('dev') === '1') params.set('dev', '1');
+    }
     var qs = params.toString();
     var url = window.location.pathname + (qs ? ('?' + qs) : '') + (window.location.hash || '');
     var state = { pbNav: nav };
