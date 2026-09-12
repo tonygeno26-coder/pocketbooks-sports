@@ -1870,11 +1870,11 @@ button:disabled,.odds-box[aria-disabled="true"]{opacity:0.45;cursor:not-allowed}
   width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important;
   object-fit:contain!important;display:block;
   background:transparent!important;border:none!important;box-shadow:none!important;
-  /* Optical fill + soft edge separation on dark cards (no white box / no glow) */
+  /* Optical fill + soft edge separation on dark cards (no white box / no glow / no recolor) */
   --pb-logo-optical:1.1;
   transform:scale(var(--pb-logo-optical));
   transform-origin:center center;
-  filter:drop-shadow(0 1px 2px rgba(0,0,0,0.55)) drop-shadow(0 0 0.6px rgba(255,255,255,0.22));
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,0.55)) drop-shadow(0 0 0.7px rgba(255,255,255,0.28));
 }
 #sportsbook-section .mc-jersey img[data-logo-optical="1.00"],
 #live-section .mc-jersey img[data-logo-optical="1.00"]{--pb-logo-optical:1}
@@ -1888,6 +1888,22 @@ button:disabled,.odds-box[aria-disabled="true"]{opacity:0.45;cursor:not-allowed}
 #live-section .mc-jersey img[data-logo-optical="1.16"]{--pb-logo-optical:1.16}
 #sportsbook-section .mc-jersey img[data-logo-optical="1.20"],
 #live-section .mc-jersey img[data-logo-optical="1.20"]{--pb-logo-optical:1.20}
+/* Dark-logo outliers: stronger transparent edge rim only (preserve official colors + aspect) */
+#sportsbook-section .mc-jersey img[data-logo-contrast="soft"],
+#live-section .mc-jersey img[data-logo-contrast="soft"]{
+  filter:
+    drop-shadow(0 1px 2px rgba(0,0,0,0.5))
+    drop-shadow(0 0 0.8px rgba(255,255,255,0.4))
+    drop-shadow(0 0 1.4px rgba(255,255,255,0.18));
+}
+#sportsbook-section .mc-jersey img[data-logo-contrast="strong"],
+#live-section .mc-jersey img[data-logo-contrast="strong"]{
+  filter:
+    drop-shadow(0 1px 2px rgba(0,0,0,0.45))
+    drop-shadow(0 0 0.95px rgba(255,255,255,0.52))
+    drop-shadow(0 0 1.7px rgba(255,255,255,0.24))
+    drop-shadow(0 0 2.6px rgba(255,255,255,0.1));
+}
 #sportsbook-section .mc-jersey.mc-jersey-headshot img,
 #live-section .mc-jersey.mc-jersey-headshot img{
   transform:none;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));object-fit:cover!important;
@@ -3580,8 +3596,11 @@ function teamAvatar(name, sport, opts) {
     var safeSoccerUrl = String(opts.logoUrl).replace(/"/g, '&quot;');
     var safeSoccerName = String(name || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     var soccerOptical = (typeof getLogoOpticalScale === 'function') ? getLogoOpticalScale(name, 'soccer') : '1.06';
+    var soccerContrast = (typeof getLogoContrastTier === 'function') ? getLogoContrastTier(name, 'soccer') : '';
+    var soccerContrastAttr = soccerContrast ? ' data-logo-contrast="' + soccerContrast + '"' : '';
     return '<div class="mc-jersey"><img src="' + safeSoccerUrl + '" alt="' + safeSoccerName +
-      '" width="56" height="56" data-logo-optical="' + soccerOptical + '" data-team-name="' + safeSoccerName + '" data-team-sport="soccer"' +
+      '" width="56" height="56" data-logo-optical="' + soccerOptical + '"' + soccerContrastAttr +
+      ' data-team-name="' + safeSoccerName + '" data-team-sport="soccer"' +
       ' style="width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;display:block" ' +
       'referrerpolicy="no-referrer" loading="lazy" onerror="window._pbCollapseImgToText&&window._pbCollapseImgToText(this)"></div>';
   }
@@ -3592,8 +3611,11 @@ function teamAvatar(name, sport, opts) {
     var safeUrl = String(opts.logoUrl).replace(/"/g, '&quot;');
     var safeName = String(name || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     var ncaafOptical = (typeof getLogoOpticalScale === 'function') ? getLogoOpticalScale(name, 'ncaafb') : '1.08';
+    var ncaafContrast = (typeof getLogoContrastTier === 'function') ? getLogoContrastTier(name, 'ncaafb') : '';
+    var ncaafContrastAttr = ncaafContrast ? ' data-logo-contrast="' + ncaafContrast + '"' : '';
     return '<div class="mc-jersey"><img src="' + safeUrl + '" alt="' + safeName +
-      '" width="56" height="56" data-logo-optical="' + ncaafOptical + '" data-team-name="' + safeName + '" data-team-sport="ncaafb"' +
+      '" width="56" height="56" data-logo-optical="' + ncaafOptical + '"' + ncaafContrastAttr +
+      ' data-team-name="' + safeName + '" data-team-sport="ncaafb"' +
       ' style="width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;display:block" ' +
       'referrerpolicy="no-referrer" loading="lazy" onerror="window._pbCollapseImgToText&&window._pbCollapseImgToText(this)"></div>';
   }

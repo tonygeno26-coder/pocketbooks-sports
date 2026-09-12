@@ -1,30 +1,23 @@
-# Sportsbook board + logo presence gate
+# Sportsbook dark-logo contrast (follow-up)
 
-**Branch:** `cursor/sportsbook-board-logo-gate`  
-**Base:** `main` @ `852479c`  
-**Source visual intent:** `cursor/superdesign-sportsbook-board` @ `6ea1274` (ported, not merged as-is)
+**Branch:** `cursor/sportsbook-dark-logo-contrast`  
+**Base:** `main` @ `d1b5925` (sportsbook board merged)
 
-## Why 6ea1274 was SAFE MERGE: NO
+## Scope
 
-Documented blocker (STATUS on that branch): **hold for owner / visual QA** — not a financial or settlement defect.
+Visual-only edge separation for dark official marks on PocketBooks dark cards.
 
-Additional technical reason it stayed unsafe to merge as-is: branch tip was **stale vs main** (auth/lobby/odds UX/host commits landed after `43689c5`), and `player.html` **conflicts on direct merge**. Content itself was presentation-scoped (CSS + markup classes for board hierarchy).
+- No logo recolor
+- No white boxes / circles
+- Transparent background preserved
+- Aspect ratio preserved (`object-fit: contain`)
+- Subtle drop-shadow rim tiers: default / `soft` / `strong`
+- Team-specific overrides only for known dark outliers (Yankees, Rockies, White Sox, Nets, Raiders, …)
+- No betting / accounting / API / settlement changes
 
-## This candidate
+## Owner review
 
-- Fresh branch from current FE main
-- Ported sportsbook board hierarchy CSS + safe presentation classes (`mc-meta` / `market-card--live` / O-U line color classes)
-- Preserved all newer production fixes on main
-- Logo presence: larger board containers, 2× CDN fetch, CSS-fill imgs, restrained optical scale + dark-card edge separation
-- DEV-ONLY gallery: `docs/visual-qa/logo-presence-gallery.html` (not in production nav)
+DEV gallery: `docs/visual-qa/logo-presence-gallery.html`  
+Fixture: `docs/visual-qa/sportsbook-card-fixture.html`
 
-## Untouched
-
-- Betting / grading / bankroll / settlement
-- Odds math / parlay correlation
-- API contracts / global nav IA
-- Bet Slip and Recent Bets / Results ticket logic
-
-## Safe merge
-
-**Owner visual review required before merge.** Do not merge without owner approval.
+**Do not merge without owner visual PASS.**

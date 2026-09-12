@@ -35,10 +35,11 @@
     }
     .mc-jersey img{
       width:100%;height:100%;object-fit:contain;display:block;
+      background:transparent;border:none;box-shadow:none;
       --pb-logo-optical:1.1;
       transform:scale(var(--pb-logo-optical));
       transform-origin:center center;
-      filter:drop-shadow(0 1px 2px rgba(0,0,0,0.55)) drop-shadow(0 0 0.6px rgba(255,255,255,0.22));
+      filter:drop-shadow(0 1px 2px rgba(0,0,0,0.55)) drop-shadow(0 0 0.7px rgba(255,255,255,0.28));
     }
     .mc-jersey img[data-logo-optical="1.00"]{--pb-logo-optical:1}
     .mc-jersey img[data-logo-optical="1.06"]{--pb-logo-optical:1.06}
@@ -46,6 +47,19 @@
     .mc-jersey img[data-logo-optical="1.12"]{--pb-logo-optical:1.12}
     .mc-jersey img[data-logo-optical="1.16"]{--pb-logo-optical:1.16}
     .mc-jersey img[data-logo-optical="1.20"]{--pb-logo-optical:1.20}
+    .mc-jersey img[data-logo-contrast="soft"]{
+      filter:
+        drop-shadow(0 1px 2px rgba(0,0,0,0.5))
+        drop-shadow(0 0 0.8px rgba(255,255,255,0.4))
+        drop-shadow(0 0 1.4px rgba(255,255,255,0.18));
+    }
+    .mc-jersey img[data-logo-contrast="strong"]{
+      filter:
+        drop-shadow(0 1px 2px rgba(0,0,0,0.45))
+        drop-shadow(0 0 0.95px rgba(255,255,255,0.52))
+        drop-shadow(0 0 1.7px rgba(255,255,255,0.24))
+        drop-shadow(0 0 2.6px rgba(255,255,255,0.1));
+    }
     .meta{min-width:0}
     .city{font-size:0.58rem;color:var(--pb-gray);letter-spacing:0.04em;text-transform:uppercase}
     .name{font-size:0.95rem;font-weight:800;letter-spacing:-0.02em}
@@ -60,14 +74,45 @@
   </style>
 </head>
 <body>
-  <div class="banner">DEV ONLY — not linked from production nav. Optical-size QA for sportsbook team marks on real PocketBooks dark card surfaces.</div>
+  <div class="banner">DEV ONLY — not linked from production nav. Optical-size + dark-logo edge QA on real PocketBooks dark card surfaces. No recolor / no white boxes.</div>
   <h1>Logo Presence Gallery</h1>
-  <p class="lead">Representative verified logos across NFL / NBA / MLB / NHL / NCAAF / NCAAB / Soccer. Text-only if unverified. Compare optical fill on dark cards; look for padding outliers, dark marks, and crest detail.</p>
+  <p class="lead">Representative verified logos across NFL / NBA / MLB / NHL / NCAAF / NCAAB / Soccer. Text-only if unverified. Compare optical fill and dark-mark edge separation (soft/strong tiers).</p>
 
   <div id="gallery"></div>
 
   <script src="../../team-logos.js"></script>
   <script>
+    var DARK_OUTLIERS = [
+      { sport:'mlb', teams:[
+        ['New York Yankees','strong — navy letter'],
+        ['Colorado Rockies','strong — purple/black'],
+        ['Chicago White Sox','strong — black'],
+        ['Seattle Mariners','soft — navy'],
+        ['Cleveland Guardians','soft — navy'],
+        ['Pittsburgh Pirates','soft — black'],
+        ['Tampa Bay Rays','soft — navy'],
+        ['Toronto Blue Jays','soft — navy']
+      ]},
+      { sport:'nba', teams:[
+        ['Brooklyn Nets','strong — black'],
+        ['San Antonio Spurs','soft — black/silver'],
+        ['Minnesota Timberwolves','soft — dark']
+      ]},
+      { sport:'nfl', teams:[
+        ['Las Vegas Raiders','strong — black/silver'],
+        ['Baltimore Ravens','soft — purple/black'],
+        ['Carolina Panthers','soft — black/blue'],
+        ['Pittsburgh Steelers','soft — black'],
+        ['Jacksonville Jaguars','soft — dark'],
+        ['New York Giants','soft — navy']
+      ]},
+      { sport:'nhl', teams:[
+        ['Anaheim Ducks','soft — black'],
+        ['Los Angeles Kings','soft — black/silver'],
+        ['Boston Bruins','soft — black/gold']
+      ]}
+    ];
+
     var SAMPLES = [
       { sport:'nfl', teams:[
         ['Kansas City Chiefs','wide'],
@@ -85,6 +130,7 @@
       ]},
       { sport:'mlb', teams:[
         ['New York Yankees','letter'],
+        ['Colorado Rockies','dark crest'],
         ['Chicago White Sox','dark / white-heavy'],
         ['Oakland Athletics','tall'],
         ['Boston Red Sox','classic'],
@@ -126,28 +172,41 @@
       return { city: parts.slice(0, -1).join(' '), name: parts[parts.length - 1] };
     }
 
+    function cardHtml(team, sport, note) {
+      var parts = splitName(team);
+      var img = '';
+      if (sport === 'soccer' && typeof getSoccerTeamLogoImg === 'function') {
+        img = getSoccerTeamLogoImg(team, 56);
+      } else if (typeof getTeamLogoImg === 'function') {
+        img = getTeamLogoImg(team, sport, 56);
+      }
+      if (!img || img.indexOf('<img') < 0) {
+        img = '<span style="font-size:0.7rem;font-weight:800;color:var(--pb-light)">TEXT</span>';
+      }
+      var tier = (typeof getLogoContrastTier === 'function') ? (getLogoContrastTier(team, sport) || 'default') : 'default';
+      return '<div class="card">' +
+        '<div class="mc-jersey">' + img + '</div>' +
+        '<div class="meta"><div class="city">' + parts.city + '</div>' +
+        '<div class="name">' + parts.name + '</div>' +
+        '<div class="tag">' + note + ' · contrast=' + tier + '</div></div></div>';
+    }
+
     function render() {
       var root = document.getElementById('gallery');
       var html = '';
+
+      html += '<h2>Dark-logo outliers (owner focus)</h2><div class="grid">';
+      DARK_OUTLIERS.forEach(function(group) {
+        group.teams.forEach(function(row) {
+          html += cardHtml(row[0], group.sport, row[1]);
+        });
+      });
+      html += '</div>';
+
       SAMPLES.forEach(function(group) {
         html += '<h2>' + group.sport.toUpperCase() + '</h2><div class="grid">';
         group.teams.forEach(function(row) {
-          var team = row[0], note = row[1];
-          var parts = splitName(team);
-          var img = '';
-          if (group.sport === 'soccer' && typeof getSoccerTeamLogoImg === 'function') {
-            img = getSoccerTeamLogoImg(team, 56);
-          } else if (typeof getTeamLogoImg === 'function') {
-            img = getTeamLogoImg(team, group.sport, 56);
-          }
-          if (!img || img.indexOf('<img') < 0) {
-            img = '<span style="font-size:0.7rem;font-weight:800;color:var(--pb-light)">TEXT</span>';
-          }
-          html += '<div class="card">' +
-            '<div class="mc-jersey">' + img + '</div>' +
-            '<div class="meta"><div class="city">' + parts.city + '</div>' +
-            '<div class="name">' + parts.name + '</div>' +
-            '<div class="tag">' + note + '</div></div></div>';
+          html += cardHtml(row[0], group.sport, row[1]);
         });
         html += '</div>';
       });

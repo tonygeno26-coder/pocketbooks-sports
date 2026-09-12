@@ -998,6 +998,31 @@
     'inter miami': '1.08'
   };
 
+  // Dark-on-dark board contrast: subtle edge separation only (no recolor, no white boxes).
+  // soft = light rim; strong = extra rim for navy/black lettermarks that disappear on PocketBooks bg.
+  var LOGO_DARK_CONTRAST = {
+    'new york yankees': 'strong',
+    'colorado rockies': 'strong',
+    'chicago white sox': 'strong',
+    'brooklyn nets': 'strong',
+    'las vegas raiders': 'strong',
+    'san antonio spurs': 'soft',
+    'minnesota timberwolves': 'soft',
+    'anaheim ducks': 'soft',
+    'los angeles kings': 'soft',
+    'seattle mariners': 'soft',
+    'cleveland guardians': 'soft',
+    'pittsburgh pirates': 'soft',
+    'baltimore ravens': 'soft',
+    'carolina panthers': 'soft',
+    'pittsburgh steelers': 'soft',
+    'boston bruins': 'soft',
+    'jacksonville jaguars': 'soft',
+    'tampa bay rays': 'soft',
+    'toronto blue jays': 'soft',
+    'new york giants': 'soft'
+  };
+
   function getLogoOpticalScale(teamName, sport) {
     var key = String(teamName || '').toLowerCase().replace(/\s+/g, ' ').trim();
     if (LOGO_OPTICAL_SCALE[key]) return LOGO_OPTICAL_SCALE[key];
@@ -1007,6 +1032,18 @@
     if (sport === 'ncaafb' || sport === 'ncaab') return '1.08';
     if (sport === 'soccer') return '1.06';
     return '1.10';
+  }
+
+  function getLogoContrastTier(teamName, sport) {
+    var key = String(teamName || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    if (LOGO_DARK_CONTRAST[key]) return LOGO_DARK_CONTRAST[key];
+    // Resolved aliases (e.g. "Yankees" → "New York Yankees")
+    var resolved = resolveTeamName(teamName, sport);
+    if (resolved) {
+      var rkey = String(resolved).toLowerCase().replace(/\s+/g, ' ').trim();
+      if (LOGO_DARK_CONTRAST[rkey]) return LOGO_DARK_CONTRAST[rkey];
+    }
+    return '';
   }
 
   function getTeamLogo(teamName, sport, size) {
@@ -1042,6 +1079,8 @@
     sport = normalizeSport(sport);
     var initials = getTeamInitials(teamName);
     var optical = getLogoOpticalScale(teamName, sport);
+    var contrast = getLogoContrastTier(teamName, sport);
+    var contrastAttr = contrast ? ' data-logo-contrast="' + contrast + '"' : '';
     var fillStyle = 'width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;display:block';
 
     // NCAAF: numeric ESPN IDs only; missing IDs get a hydrate placeholder + search fallback.
@@ -1070,6 +1109,7 @@
         ' data-team-name="' + esc(teamName) + '"' +
         ' data-team-sport="ncaafb"' +
         ' data-logo-optical="' + optical + '"' +
+        contrastAttr +
         ' data-logo-direct="' + esc(direct) + '"' +
         ' data-logo-size="' + size + '"' +
         (className ? ' data-logo-class="' + esc(className) + '"' : '') +
@@ -1092,6 +1132,7 @@
       ' data-team-name="' + esc(teamName) + '"' +
       ' data-team-sport="' + esc(sport) + '"' +
       ' data-logo-optical="' + optical + '"' +
+      contrastAttr +
       ' data-logo-direct="' + esc(direct) + '"' +
       ' data-logo-size="' + size + '"' +
       (className ? ' data-logo-class="' + esc(className) + '"' : '') +
@@ -1833,6 +1874,8 @@
     var flag = getCountryFlagUrl(name, Math.max(24, Math.round(size * 0.55)));
     var cls = className ? ' class="' + esc(className) + '"' : '';
     var optical = getLogoOpticalScale(name, 'soccer');
+    var contrast = getLogoContrastTier(name, 'soccer');
+    var contrastAttr = contrast ? ' data-logo-contrast="' + contrast + '"' : '';
     var fillStyle = 'width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;display:block';
 
     if (!url && !flag) {
@@ -1854,6 +1897,7 @@
       ' data-team-name="' + esc(name) + '"' +
       ' data-team-sport="soccer"' +
       ' data-logo-optical="' + optical + '"' +
+      contrastAttr +
       ' data-logo-size="' + size + '"' +
       ' data-flag-url="' + esc(flag) + '"' +
       (className ? ' data-logo-class="' + esc(className) + '"' : '') +
@@ -2749,6 +2793,7 @@
   global.getTeamLogoDirect = getTeamLogoDirect;
   global.getTeamLogoImg = getTeamLogoImg;
   global.getLogoOpticalScale = getLogoOpticalScale;
+  global.getLogoContrastTier = getLogoContrastTier;
   global.handleTeamLogoError = handleTeamLogoError;
   global.extractTeamFromPick = extractTeamFromPick;
   global.getSoccerTeamLogo = getSoccerTeamLogo;
