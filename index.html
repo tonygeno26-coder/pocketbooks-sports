@@ -322,14 +322,18 @@ body{
   margin-bottom:12px;background:var(--pb-card);border:1px solid var(--pb-border);border-radius:12px;
   padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 4px 18px rgba(0,0,0,0.22);
 }
-/* Top summary: Players Owe You / You Owe Players / Net — from getLiveCreditPosition totals only */
+/* Top summary: position row (dominant) + ops row (Hold % / Active Bets — secondary) */
 .hp-pos-summary{
-  display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;
+  display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;
+}
+.hp-ops-summary{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;
 }
 .hp-pos-card{
   background:var(--pb-card);border:1px solid var(--pb-border);border-radius:12px;
   padding:12px 10px;box-shadow:0 4px 18px rgba(0,0,0,0.22);min-width:0;
 }
+.hp-pos-card--ops{padding:10px}
 .hp-pos-card-label{
   font-size:0.52rem;font-weight:800;letter-spacing:0.45px;text-transform:uppercase;
   color:var(--pb-gray);margin-bottom:6px;line-height:1.25;
@@ -338,6 +342,7 @@ body{
   font-size:1.15rem;font-weight:900;letter-spacing:-0.4px;line-height:1.1;
   font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
+.hp-pos-card--ops .hp-pos-card-amt{font-size:0.98rem}
 .hp-pos-card-amt--pos{color:var(--pb-win)}
 .hp-pos-card-amt--neg{color:var(--pb-loss)}
 .hp-pos-card-amt--zero{color:var(--pb-gray)}
@@ -389,6 +394,22 @@ body{
 .hp-rel-label--pos{color:var(--pb-win)}
 .hp-rel-label--neg{color:var(--pb-loss)}
 .hp-rel-label--zero{color:var(--pb-gray)}
+/* Secondary ops under +/- : Hold % · Active Bets · Active Exposure · Betting Bankroll (2×2) */
+.hp-ops-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;padding-top:10px;
+  border-top:1px solid var(--pb-border-soft);
+}
+.hp-ops-cell{
+  background:var(--pb-bg-elev);border:1px solid var(--pb-border-soft);border-radius:10px;padding:8px 10px;min-width:0;
+}
+.hp-ops-label{
+  font-size:0.48rem;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;
+  color:var(--pb-gray);margin-bottom:2px;
+}
+.hp-ops-val{font-size:0.78rem;font-weight:800;color:var(--pb-light);font-variant-numeric:tabular-nums;line-height:1.15}
+.hp-ops-val--win{color:var(--pb-win)}
+.hp-ops-val--loss{color:var(--pb-loss)}
+.hp-ops-val--muted{color:var(--pb-gray)}
 .hp-secondary{
   display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;padding-top:10px;
   border-top:1px solid var(--pb-border-soft);
@@ -442,10 +463,14 @@ body{
   .stats-row{grid-template-columns:1fr 1fr}
   #settlement-week-section{grid-template-columns:1fr 1fr}
   .hp-pos-summary{gap:6px}
+  .hp-ops-summary{gap:6px}
   .hp-pos-card{padding:10px 8px}
   .hp-pos-card-amt{font-size:1.02rem}
+  .hp-pos-card--ops .hp-pos-card-amt{font-size:0.92rem}
   .hp-host-pos{font-size:1.45rem}
   .hp-row-main{padding:12px 14px}
+  /* Keep ops metrics 2×2 on phone widths */
+  .hp-ops-grid{grid-template-columns:1fr 1fr;gap:6px}
 }
 @media (max-width:390px){
   .rb-card{margin:4px 0;padding:10px 11px 8px 13px;border-radius:11px}
@@ -457,15 +482,20 @@ body{
   .stats-row{grid-template-columns:1fr 1fr;gap:6px}
   .stat-val{font-size:1.05rem}
   .hp-pos-summary{grid-template-columns:1fr;gap:6px}
+  .hp-ops-summary{grid-template-columns:1fr 1fr;gap:6px}
   .hp-pos-card-amt{font-size:1.25rem}
   .hp-host-pos{font-size:1.6rem;margin-top:4px}
   .hp-name{font-size:0.8rem}
+  .hp-ops-grid{grid-template-columns:1fr 1fr;gap:6px}
+  .hp-ops-cell{padding:7px 8px}
+  .hp-ops-val{font-size:0.74rem}
   .hp-secondary{gap:8px 12px}
 }
 @media (min-width:768px){
   .settlement{grid-template-columns:1fr 1fr}
   #settlement-week-section{grid-template-columns:repeat(4,1fr)}
   .hp-metrics{grid-template-columns:repeat(4,1fr)}
+  .hp-ops-grid{grid-template-columns:1fr 1fr;gap:8px}
   .hp-host-pos{font-size:1.7rem}
   .hp-pos-card-amt{font-size:1.25rem}
 }
@@ -5127,10 +5157,66 @@ function renderPlayersTab(){
   };
 
   function getActiveBetsCount(pid){
-    return _hostBetsFromDbOrLocal().filter(function(b){ return String(b.playerId)===String(pid) && (b.status==='active'||b.status==='open'); }).length;
+    // Open ticket count only (active|open). No settled/void. No status-machine changes.
+    return _hostBetsFromDbOrLocal().filter(function(b){
+      var s = String(b.status||'').toLowerCase();
+      return String(b.playerId)===String(pid) && (s==='active'||s==='open');
+    }).length;
   }
-  function getOpenRiskAmt(pid){
-    return _hostBetsFromDbOrLocal().filter(function(b){ return String(b.playerId)===String(pid) && (b.status==='active'||b.status==='open'); }).reduce(function(s,b){return s+(Number(b.riskAmount)||0);},0);
+  /**
+   * Settled Hold % — SAME formula as calcHostStats / refreshHostDashboardStats / dashboard Settled Hold %:
+   *   holdPct = hostProfit / settledHandle * 100  (settled won|lost|push only; null if no settled handle)
+   * Presentation-only reuse — does not invent a new financial metric.
+   */
+  function _holdPctFromTickets(tickets){
+    var settledHandle = 0, hostProfit = 0;
+    (tickets || []).forEach(function(t){
+      var s = String(t.status || '').toLowerCase();
+      var risk = parseFloat(t.riskAmount) || 0;
+      var profit = parseFloat(t.potentialProfit) || 0;
+      if (s === 'canceled' || s === 'voided' || s === 'deleted' || s === 'cancelled') return;
+      if (s === 'won') { settledHandle += risk; hostProfit -= profit; }
+      else if (s === 'lost') { settledHandle += risk; hostProfit += risk; }
+      else if (s === 'push' || s === 'pushed') { settledHandle += risk; }
+    });
+    return settledHandle > 0 ? (hostProfit / settledHandle * 100) : null;
+  }
+  function _playerHoldPct(pid){
+    var bets = _hostBetsFromDbOrLocal().filter(function(b){ return String(b.playerId)===String(pid); });
+    return _holdPctFromTickets(bets);
+  }
+  /** Club-level Hold %: prefer /api/host/dashboard cache; else same calcHostStats formula. */
+  function _clubHoldPct(){
+    if (_hostDbStatsCache && _hostDbStatsCache.holdPct != null && !isNaN(Number(_hostDbStatsCache.holdPct))) {
+      return Number(_hostDbStatsCache.holdPct);
+    }
+    try {
+      if (typeof calcHostStats === 'function') {
+        var s = calcHostStats();
+        if (s && s.holdPct != null && !isNaN(Number(s.holdPct))) return Number(s.holdPct);
+      }
+    } catch(_h) {}
+    return null;
+  }
+  /** Club-level active open-ticket count: prefer dashboard cache; else count open tickets. */
+  function _clubActiveBets(){
+    if (_hostDbStatsCache && _hostDbStatsCache.activeBetCount != null && !isNaN(Number(_hostDbStatsCache.activeBetCount))) {
+      return Number(_hostDbStatsCache.activeBetCount);
+    }
+    return _hostBetsFromDbOrLocal().filter(function(b){
+      var s = String(b.status||'').toLowerCase();
+      return s==='active'||s==='open';
+    }).length;
+  }
+  function _fmtHoldPct(v){
+    if (v == null || isNaN(Number(v))) return '—';
+    return Number(v).toFixed(1) + '%';
+  }
+  function _holdTone(v){
+    if (v == null || isNaN(Number(v))) return 'muted';
+    var n = Number(v);
+    if (Math.abs(n) < 0.005) return 'muted';
+    return n > 0 ? 'win' : 'loss';
   }
   function _hpInitials(name){
     return String(name||'?').split(/[\s._@-]+/).map(function(w){return (w[0]||'').toUpperCase();}).filter(Boolean).slice(0,2).join('') || '?';
@@ -5238,22 +5324,25 @@ function renderPlayersTab(){
       || p.playerName
       || (username ? '@'+String(username).replace(/^@/, '') : String(p.playerId || '').slice(0, 8));
     var usernameLabel = username ? '@'+String(username).replace(/^@/, '') : '';
-    // Authoritative HOST POSITION (large +/-). Not bankroll.
+    // PRIMARY: authoritative HOST POSITION (large +/-). Not bankroll.
     var hostPos = _hostPositionForPlayer(p.playerId);
     var posTone = _posTone(hostPos);
     var posTxt = _fmtSignedHostPos(hostPos);
     var relTxt = _relLabel(hostPos);
-    // Secondary: betting bankroll — never creditLimit, never fake $0 for missing data.
-    var avail = _resolveHostPlayerBalance(p, dbp);
-    var balTxt = _fmtHostPlayerBalance(avail);
-    var openRisk = (dbp && dbp.openRisk != null && !isNaN(dbp.openRisk))
-      ? Number(dbp.openRisk)
-      : (p.openRisk != null && !isNaN(p.openRisk) ? Number(p.openRisk) : getOpenRiskAmt(p.playerId));
+    // SECONDARY ops (under +/-): Hold % · Active Bets · Active Exposure (if auth) · Betting Bankroll
+    var holdPct = _playerHoldPct(p.playerId);
+    var holdTxt = _fmtHoldPct(holdPct);
+    var holdTone = _holdTone(holdPct);
     var activeBets = (dbp && dbp.activeBetCount != null)
       ? Number(dbp.activeBetCount)
       : (p.activeBetCount != null ? Number(p.activeBetCount) : getActiveBetsCount(p.playerId));
-    if (isNaN(openRisk)) openRisk = 0;
     if (isNaN(activeBets)) activeBets = 0;
+    // Active Exposure: ONLY /api/host/dashboard players[].openRisk (authoritative). No FE stake/odds derivation.
+    var openRiskAuth = null;
+    if (dbp && dbp.openRisk != null && !isNaN(Number(dbp.openRisk))) openRiskAuth = Number(dbp.openRisk);
+    else if (p.openRisk != null && !isNaN(Number(p.openRisk))) openRiskAuth = Number(p.openRisk);
+    var avail = _resolveHostPlayerBalance(p, dbp);
+    var balTxt = _fmtHostPlayerBalance(avail);
     var expanded = !!_playersExpanded[String(p.playerId)];
     var st = String(p.status||'approved').toLowerCase();
     var badgeCls = st==='blocked' ? 'hp-badge--blocked' : (st==='approved' ? 'hp-badge--approved' : 'hp-badge--pending');
@@ -5261,6 +5350,14 @@ function renderPlayersTab(){
     if (expanded) {
       expandBody = playerSettlementHtml(p.playerId) + playerLimitsHtml(p) + playerBetsHtml(p.playerId);
     }
+    var opsHtml = '<div class="hp-ops-grid" aria-label="Player operational metrics">'
+      +'<div class="hp-ops-cell"><div class="hp-ops-label">Hold %</div><div class="hp-ops-val hp-ops-val--'+holdTone+'">'+holdTxt+'</div></div>'
+      +'<div class="hp-ops-cell"><div class="hp-ops-label">Active Bets</div><div class="hp-ops-val">'+activeBets+'</div></div>'
+      +(openRiskAuth != null
+        ? '<div class="hp-ops-cell"><div class="hp-ops-label">Active Exposure</div><div class="hp-ops-val">$'+openRiskAuth.toFixed(2)+'</div></div>'
+        : '')
+      +'<div class="hp-ops-cell"><div class="hp-ops-label">Betting Bankroll</div><div class="hp-ops-val">'+balTxt+'</div></div>'
+    +'</div>';
     return '<div class="hp-row player-row" data-pid="'+p.playerId+'" data-host-pos="'+hostPos+'">'
       +'<div class="hp-row-main" onclick="togglePlayerExpand(this.parentNode.dataset.pid)">'
       +avatarHtml(displayName)
@@ -5277,11 +5374,7 @@ function renderPlayersTab(){
         +'</div>'
         +'<div class="hp-host-pos hp-host-pos--'+posTone+'" data-host-position="'+hostPos+'">'+posTxt+'</div>'
         +'<div class="hp-rel-label hp-rel-label--'+posTone+'">'+relTxt+'</div>'
-        +'<div class="hp-secondary">'
-          +'<div class="hp-sec-item"><div class="hp-sec-label">Betting Bankroll</div><div class="hp-sec-val">'+balTxt+'</div></div>'
-          +'<div class="hp-sec-item"><div class="hp-sec-label">Open Exposure</div><div class="hp-sec-val">$'+openRisk.toFixed(2)+'</div></div>'
-          +'<div class="hp-sec-item"><div class="hp-sec-label">Active Bets</div><div class="hp-sec-val">'+activeBets+'</div></div>'
-        +'</div>'
+        +opsHtml
       +'</div>'
       +'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--pb-gray)" stroke-width="2.5" stroke-linecap="round" style="transform:rotate('+(expanded?90:0)+'deg);transition:transform .15s;flex-shrink:0;margin-top:4px"><polyline points="9 18 15 12 9 6"/></svg>'
       +'</div>'
@@ -5338,6 +5431,9 @@ function renderPlayersTab(){
   var oweYouTone = Math.abs(oweYouTot) < 0.005 ? 'zero' : 'pos';
   var youOweTone = Math.abs(youOweTot) < 0.005 ? 'zero' : 'neg';
   var netTone = _posTone(netTot);
+  var clubHold = _clubHoldPct();
+  var clubHoldTone = _holdTone(clubHold);
+  var clubActive = _clubActiveBets();
 
   var html=
     '<div class="hp-header">'
@@ -5356,7 +5452,17 @@ function renderPlayersTab(){
           +'<div class="hp-pos-card-amt hp-pos-card-amt--'+netTone+'" id="hp-summary-net">'+_fmtSignedHostPos(netTot)+'</div>'
         +'</div>'
       +'</div>'
-      +'<div class="hp-pos-sort-note">Sorted by largest absolute host position · Credit position from getLiveCreditPosition (weeklyNet) · Settlement OFF</div>'
+      +'<div class="hp-ops-summary" id="hp-ops-summary" aria-label="Host operational metrics summary">'
+        +'<div class="hp-pos-card hp-pos-card--ops">'
+          +'<div class="hp-pos-card-label">Active Bets</div>'
+          +'<div class="hp-pos-card-amt" id="hp-summary-active-bets">'+clubActive+'</div>'
+        +'</div>'
+        +'<div class="hp-pos-card hp-pos-card--ops">'
+          +'<div class="hp-pos-card-label">Hold %</div>'
+          +'<div class="hp-pos-card-amt hp-pos-card-amt--'+(clubHoldTone==='win'?'pos':(clubHoldTone==='loss'?'neg':'zero'))+'" id="hp-summary-hold">'+_fmtHoldPct(clubHold)+'</div>'
+        +'</div>'
+      +'</div>'
+      +'<div class="hp-pos-sort-note">Sorted by largest absolute host position · Credit position from getLiveCreditPosition (weeklyNet) · Hold % = Settled Hold (same as Home) · Settlement OFF</div>'
       +'<div class="hp-lock" id="club-lock-toggle-wrap">'
         +'<div style="min-width:0;flex:1">'
           +'<div id="club-lock-status-label" style="font-size:0.82rem;font-weight:800">'+( _clubIsLocked ? 'Club locked' : 'Open to new members' )+'</div>'

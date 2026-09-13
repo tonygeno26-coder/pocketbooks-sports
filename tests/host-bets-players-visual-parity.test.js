@@ -87,6 +87,25 @@ test('balance-first hierarchy uses authoritative getLiveCreditPosition weeklyNet
   assertNotIncludes(html, 'hp-metric-val--accent">\'+balTxt', 'bankroll not blue primary');
 });
 
+test('secondary ops metrics: Hold % / Active Bets / Active Exposure / Bankroll under +/-', function () {
+  assertIncludes(html, 'hp-ops-grid', '2x2 ops grid');
+  assertIncludes(html, 'Hold %', 'hold label');
+  assertIncludes(html, 'Active Bets', 'active bets label');
+  assertIncludes(html, 'Active Exposure', 'exposure label');
+  assertIncludes(html, 'Betting Bankroll', 'bankroll in ops');
+  assertIncludes(html, '_holdPctFromTickets', 'reuses Settled Hold formula');
+  assertIncludes(html, '_playerHoldPct', 'per-player hold helper');
+  assertIncludes(html, '_clubHoldPct', 'club hold from dashboard cache');
+  assertIncludes(html, '_clubActiveBets', 'club active bets helper');
+  assertIncludes(html, 'hp-ops-summary', 'top ops summary');
+  assertIncludes(html, 'hp-summary-active-bets', 'summary active bets id');
+  assertIncludes(html, 'hp-summary-hold', 'summary hold id');
+  // Exposure only from authoritative openRisk — no FE stake sum for card
+  assertIncludes(html, 'openRiskAuth', 'authoritative exposure gate');
+  assertNotIncludes(html, 'getOpenRiskAmt(p.playerId)', 'no FE open-risk derivation in playerRow');
+  assertIncludes(html, "return '—'", 'hold em-dash when unavailable');
+});
+
 test('separates betting vs settlement ledger visually without new formulas', function () {
   assertIncludes(html, 'Credit Position', 'home credit section');
   assertIncludes(html, 'Betting Ledger', 'home betting section');
