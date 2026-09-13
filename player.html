@@ -52,21 +52,33 @@ body{font-family:'SF Pro Display',-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .icon-btn:hover{color:var(--green)}
 .buy-diamonds-nav-btn{background:transparent;border:1.5px solid rgba(0,255,136,0.45);color:#00ff88;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.05rem;cursor:pointer;padding:0;line-height:1;box-shadow:0 0 10px rgba(0,255,136,0.18)}
 .buy-diamonds-nav-btn:hover{border-color:#00ff88;background:rgba(0,255,136,0.08)}
-.notif-wrap{position:relative}
-.notif-bell{position:relative;background:none;border:none;padding:0;font-size:1.2rem;cursor:pointer;color:#888;line-height:1}
-.notif-bell:hover{color:var(--green)}
-.notif-badge{position:absolute;top:-4px;right:-6px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--red);color:#fff;font-size:0.58rem;font-weight:800;display:none;align-items:center;justify-content:center;line-height:1}
+/* Notifications — base (dark-native reconcile block wins later) */
+.notif-wrap{position:relative;z-index:210;flex-shrink:0}
+.notif-bell{position:relative;background:none;border:none;padding:0;font-size:1.05rem;cursor:pointer;color:var(--pb-light,#a8b3c4);line-height:1}
+.notif-bell:hover{color:var(--pb-white,#f4f7fb)}
+.notif-bell svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;display:block}
+.notif-badge{position:absolute;top:-3px;right:-4px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--pb-red,#ff4d6a);color:#fff;font-size:0.55rem;font-weight:900;display:none;align-items:center;justify-content:center;line-height:1;border:2px solid var(--pb-bg,#070b12);box-shadow:0 0 0 1px rgba(255,77,106,0.25);z-index:2;pointer-events:none}
 .notif-badge.show{display:inline-flex}
-.notif-dd{display:none;position:absolute;right:0;top:calc(100% + 10px);width:300px;max-height:360px;overflow:auto;background:#161616;border:1px solid #2a2a2a;border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,0.55);z-index:200}
-.notif-dd.open{display:block}
-.notif-dd-hd{padding:12px 14px 8px;font-size:0.72rem;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.4px;border-bottom:1px solid #222}
-.notif-item{padding:12px 14px;border-bottom:1px solid #1e1e1e}
+.notif-dd{display:none;position:absolute;right:0;top:calc(100% + 10px);width:min(340px,calc(100vw - 24px));max-height:min(420px,72vh);overflow:hidden;background:var(--pb-card,#121a27);border:1px solid var(--pb-border,#1e2a3c);border-radius:16px;box-shadow:var(--pb-shadow,0 8px 28px rgba(0,0,0,0.35));z-index:220;flex-direction:column}
+.notif-dd.open{display:flex}
+.notif-dd-hd{padding:13px 14px 11px;font-size:0.68rem;font-weight:800;color:var(--pb-gray,#7a8799);text-transform:uppercase;letter-spacing:0.55px;border-bottom:1px solid var(--pb-border-soft,rgba(255,255,255,0.06));background:linear-gradient(180deg,var(--pb-card2,#162032),var(--pb-card,#121a27));flex-shrink:0}
+.notif-list{overflow:auto;-webkit-overflow-scrolling:touch;flex:1;min-height:0}
+.notif-item{position:relative;padding:12px 14px 12px 16px;border-bottom:1px solid var(--pb-border-soft,rgba(255,255,255,0.06));background:transparent;animation:notifItemIn 160ms ease-out both}
 .notif-item:last-child{border-bottom:none}
-.notif-item.unread{background:rgba(0,255,135,0.05)}
-.notif-item-title{font-size:0.82rem;font-weight:800;color:#fff;margin-bottom:4px}
-.notif-item-msg{font-size:0.72rem;color:#aaa;line-height:1.35}
-.notif-item-time{font-size:0.62rem;color:#555;margin-top:6px}
-.notif-empty{padding:24px 14px;text-align:center;color:#666;font-size:0.78rem}
+.notif-item.unread{background:linear-gradient(90deg,var(--pb-accent-soft,rgba(61,139,253,0.16)),transparent 78%)}
+.notif-item.unread::before{content:'';position:absolute;left:0;top:11px;bottom:11px;width:3px;border-radius:0 2px 2px 0;background:var(--pb-accent,#3d8bfd)}
+.notif-item-ctx{font-size:0.55rem;font-weight:800;letter-spacing:0.45px;text-transform:uppercase;color:var(--pb-accent,#3d8bfd);margin-bottom:4px;opacity:0.92}
+.notif-item-title{font-size:0.84rem;font-weight:800;color:var(--pb-white,#f4f7fb);margin-bottom:4px;letter-spacing:-0.15px;line-height:1.25}
+.notif-item-msg{font-size:0.72rem;color:var(--pb-light,#a8b3c4);line-height:1.4}
+.notif-item-time{font-size:0.6rem;color:var(--pb-gray,#7a8799);margin-top:8px;font-weight:600;letter-spacing:0.15px}
+.notif-empty{padding:28px 16px;text-align:center;color:var(--pb-gray,#7a8799);font-size:0.78rem;line-height:1.4}
+.notif-empty-title{font-size:0.88rem;font-weight:900;color:var(--pb-white,#f4f7fb);margin-bottom:6px}
+.notif-empty-sub{font-size:0.72rem;color:var(--pb-gray,#7a8799);font-weight:600;line-height:1.4}
+.notif-empty.notif-error .notif-empty-title{color:#fecaca}
+.notif-empty.notif-error .notif-empty-sub{color:#fca5a5}
+.notif-empty.notif-error{background:rgba(255,77,106,0.06);border-radius:0}
+@keyframes notifItemIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.notif-item{animation:none!important}}
 
 /* TOP TABS */
 .top-tabs{display:flex;gap:0;padding:4px 16px 0;border-bottom:1px solid var(--border)}
@@ -449,10 +461,14 @@ body.pb-dprops-open .header,body.pb-dprops-open .bottom-nav,body.pb-dprops-open 
   .rb-card,.rb-details.is-open{animation:none!important}
   .rb-view-results,.rb-details-btn,.rb-legs-toggle{transition:none!important}
 }
-.notif-item-actions{display:flex;gap:8px;margin-top:8px}
-.notif-act{flex:1;padding:7px 8px;border-radius:8px;font-size:0.68rem;font-weight:800;cursor:pointer;border:none}
-.notif-act.accept{background:#00c853;color:#fff}
-.notif-act.decline{background:#f0f0f0;color:#555}
+.notif-item-actions{display:flex;gap:8px;margin-top:10px}
+.notif-act{flex:1;padding:8px 10px;border-radius:10px;font-size:0.7rem;font-weight:800;cursor:pointer;border:1px solid transparent;transition:border-color .15s,background .15s,opacity .15s;letter-spacing:0.1px}
+.notif-act:active{opacity:0.88}
+.notif-act.accept{background:var(--pb-win,#3dd68c);color:#041018;border-color:rgba(61,214,140,0.45)}
+.notif-act.decline{background:var(--pb-card2,#162032);color:var(--pb-light,#a8b3c4);border-color:var(--pb-border,#1e2a3c)}
+.notif-act.decline:hover{border-color:rgba(255,255,255,0.14);color:var(--pb-white,#f4f7fb)}
+.notif-act.accept:hover{filter:brightness(1.05)}
+.notif-act:focus-visible{outline:2px solid var(--pb-accent,#3d8bfd);outline-offset:2px}
 .parlay-insure{display:none;margin:0 0 10px;padding:10px 12px;background:#f8f5ff;border:1.5px solid #ddd6fe;border-radius:10px}
 .parlay-insure label{display:flex;align-items:center;gap:8px;font-size:0.78rem;font-weight:800;color:#111;cursor:pointer}
 .parlay-insure small{display:block;margin-top:4px;font-size:0.62rem;color:var(--pb-cyan);font-weight:600;line-height:1.35}
@@ -577,7 +593,7 @@ body.theme-light .stake-input{background:#fff;border:1px solid #d8dee8;color:#11
 .pb-error .pb-empty-title{color:#fecaca;margin-bottom:4px}
 .pb-error .pb-empty-body{color:#fca5a5}
 .mc-props-loading,.mc-props-empty{padding:12px 0;text-align:center;font-size:0.72rem;color:#64748B}
-.notif-empty{padding:16px 12px;text-align:center;color:#64748B;font-size:0.72rem;line-height:1.4}
+.notif-empty{padding:28px 16px;text-align:center;color:var(--pb-gray,#7a8799);font-size:0.78rem;line-height:1.4}
 @media (prefers-reduced-motion: reduce){
   .pb-loading::before{animation:none!important;border-top-color:var(--light,#94a3b8)}
 }
@@ -1102,12 +1118,16 @@ body{
   width:36px;height:36px;border-radius:12px;background:var(--card);border:1px solid var(--border);
   display:inline-flex;align-items:center;justify-content:center;font-size:1rem;color:var(--light);cursor:pointer;
 }
-.icon-btn:hover,.notif-bell:hover{color:#fff;border-color:var(--accent)}
+.icon-btn:hover,.notif-bell:hover{color:#fff;border-color:var(--accent);background:var(--pb-card2,#162032)}
 .notif-bell{background:var(--card);border:1px solid var(--border);padding:0}
-.notif-dd{background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow)}
-.notif-dd-hd{color:var(--gray);border-bottom:1px solid var(--border)}
-.notif-item{border-bottom:1px solid rgba(255,255,255,0.04)}
-.notif-item.unread{background:var(--accent-soft)}
+.notif-dd{
+  background:linear-gradient(180deg,var(--pb-card2,#162032) 0%,var(--pb-card,#121a27) 48%);
+  border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow),0 0 0 1px rgba(255,255,255,0.02);
+}
+.notif-dd-hd{color:var(--gray);border-bottom:1px solid var(--border-soft,var(--border))}
+.notif-item{border-bottom:1px solid var(--pb-border-soft,rgba(255,255,255,0.06))}
+.notif-item.unread{background:linear-gradient(90deg,var(--accent-soft),transparent 78%)}
+.notif-list .pb-loading{margin:14px 12px;padding:16px 10px}
 
 /* MAIN NAV / FILTER PILLS */
 .top-tabs{display:flex;gap:0;padding:2px 14px 0;border-bottom:1px solid var(--border);background:transparent}
@@ -1469,7 +1489,11 @@ body:has(.dkslip.open) ._pbs-toast{animation:_pbsToastInSlip 0.22s cubic-bezier(
   .market-card{margin:0 8px 10px;max-width:calc(100vw - 16px)}
   .h-right{gap:5px;flex-shrink:1}
   .h-left{gap:6px}
-  .notif-dd{width:min(300px,calc(100vw - 20px));right:-8px}
+  .notif-dd{width:min(320px,calc(100vw - 16px));right:-6px;max-height:min(400px,68vh)}
+  .notif-item{padding:11px 12px 11px 14px}
+  .notif-item-title{font-size:0.8rem}
+  .notif-item-msg{font-size:0.7rem}
+  .notif-act{padding:7px 8px;font-size:0.66rem}
 }
 @media (max-width:390px){
   .sport-grid{
@@ -1558,6 +1582,7 @@ body:has(.dkslip.open) ._pbs-toast{animation:_pbsToastInSlip 0.22s cubic-bezier(
   .slip-bar,.bs-bar{max-width:728px;width:calc(100% - 32px)}
   .dkslip,.bs-drawer,.modal,.numpad{max-width:760px}
   .header{padding:14px 20px}
+  .notif-dd{width:min(360px,calc(100vw - 40px));max-height:min(460px,70vh)}
   .sport-grid{
     grid-template-columns:repeat(6,minmax(0,1fr));
     padding:18px 16px 16px;gap:16px 12px;
@@ -1658,6 +1683,8 @@ body:has(.dkslip.open) ._pbs-toast{animation:_pbsToastInSlip 0.22s cubic-bezier(
     padding:0 16px;gap:8px
   }
   .market-card .mc-jersey{width:52px;height:52px;padding:0;background:transparent;border:none;box-shadow:none}
+  .notif-dd{width:360px;max-height:min(480px,70vh)}
+}
   .market-card .mc-name{font-size:0.95rem}
 }
 @media (min-width:1440px){
@@ -1819,7 +1846,8 @@ button:disabled,.odds-box[aria-disabled="true"]{opacity:0.45;cursor:not-allowed}
 /* ═══ GLOBAL THEME RECONCILE — neutralize legacy neon interactive hardcodes ═══ */
 .deposit-btn,.buy-diamonds-nav-btn{border-color:var(--pb-border)!important;color:var(--pb-cyan)!important;box-shadow:none!important;background:var(--pb-card)!important;border-radius:12px!important}
 .buy-diamonds-nav-btn:hover,.deposit-btn:hover{border-color:rgba(94,177,255,0.55)!important;background:var(--pb-cyan-dim)!important}
-.notif-item.unread{background:var(--pb-accent-soft)!important}
+.notif-item.unread{background:linear-gradient(90deg,var(--pb-accent-soft),transparent 78%)!important}
+.notif-item.unread::before{background:var(--pb-accent)!important}
 .sport-tab-count{background:var(--pb-accent-soft)!important;color:var(--pb-accent)!important}
 .sport-tab-avail-dot{background:var(--pb-accent)!important;box-shadow:0 0 4px var(--pb-accent-glow)!important}
 .value-bet-ev{color:var(--pb-accent)!important;background:var(--pb-accent-soft)!important;border-color:rgba(61,139,253,0.35)!important}
@@ -1831,7 +1859,8 @@ button:disabled,.odds-box[aria-disabled="true"]{opacity:0.45;cursor:not-allowed}
 #live-odds-refresh-status{background:var(--pb-accent-dim)!important;border-color:rgba(61,139,253,0.35)!important;color:var(--pb-light)!important}
 .odds-b.sel{border-color:var(--pb-accent)!important;background:var(--pb-accent-soft)!important;box-shadow:0 0 10px rgba(61,139,253,0.25)!important}
 .more-btn{color:var(--pb-accent)!important}
-.notif-act.accept{background:var(--pb-win)!important;color:#041018!important}
+.notif-act.accept{background:var(--pb-win)!important;color:#041018!important;border-color:rgba(61,214,140,0.45)!important}
+.notif-act.decline{background:var(--pb-card2)!important;color:var(--pb-light)!important;border:1px solid var(--pb-border)!important}
 .bs-odds-val{color:var(--pb-slip-cta)!important}
 .pb-state-empty,.empty-state,.mybets-empty,.rb-empty{color:var(--pb-gray)!important}
 .pb-state-error,.error-state{color:var(--pb-red)!important}
@@ -2369,11 +2398,13 @@ function _debugClearTickets() {
     </div>
     <button type="button" class="buy-diamonds-nav-btn" id="buy-diamonds-btn" onclick="openBuyDiamondsModal()" aria-label="Buy Diamonds" title="Buy Diamonds"><span aria-hidden="true">💎</span><span class="hdr-diamond-lbl">Buy</span></button>
     <div class="notif-wrap" id="notif-wrap">
-      <button type="button" class="notif-bell" id="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications" title="Notifications" aria-haspopup="true" aria-expanded="false">🔔</button>
+      <button type="button" class="notif-bell" id="notif-bell" onclick="toggleNotifDropdown(event)" aria-label="Notifications" title="Notifications" aria-haspopup="true" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      </button>
       <span class="notif-badge" id="notif-badge"></span>
       <div class="notif-dd" id="notif-dd" role="region" aria-label="Notifications">
         <div class="notif-dd-hd">Notifications</div>
-        <div id="notif-list"><div class="pb-loading" style="margin:8px">Loading notifications…</div></div>
+        <div class="notif-list" id="notif-list"><div class="pb-loading">Loading notifications…</div></div>
       </div>
     </div>
     <span class="icon-btn" id="open-profile-btn" style="cursor:pointer" onclick="showPlayerSettings()" role="button" tabindex="0" aria-label="Account settings">👤</span>
@@ -18289,6 +18320,21 @@ function _notifFmtTime(iso) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+/** Presentation labels for existing notification types only — no new types. */
+function _notifTypeLabel(type) {
+  var t = String(type || '').toLowerCase();
+  if (t === 'cashout_offer') return 'Cash out';
+  if (t === 'survivor_wed_reminder') return 'Survivor';
+  if (t === 'survivor_join_approved') return 'Survivor';
+  if (t === 'survivor_pick_submitted') return 'Survivor';
+  if (t === 'survivor_grade') return 'Survivor';
+  if (t === 'club_approved') return 'Club';
+  if (t === 'club_denied') return 'Club';
+  if (t === 'general') return '';
+  if (!t) return '';
+  return t.replace(/_/g, ' ');
+}
+
 function _notifUpdateBadge(count) {
   var badge = document.getElementById('notif-badge');
   if (!badge) return;
@@ -18317,14 +18363,21 @@ function _notifCashoutMeta(n) {
   return { ticketId: ticketId, amount: amount, notificationId: n && n.id };
 }
 
+function _notifEmptyHtml(title, sub, isError) {
+  return '<div class="notif-empty' + (isError ? ' notif-error' : '') + '">' +
+    '<div class="notif-empty-title">' + _notifEscHtml(title) + '</div>' +
+    '<div class="notif-empty-sub">' + _notifEscHtml(sub) + '</div>' +
+    '</div>';
+}
+
 function _notifRenderList(list) {
   var el = document.getElementById('notif-list');
   if (!el) return;
   if (!list || !list.length) {
-    el.innerHTML = '<div class="notif-empty">No notifications<br><span style="opacity:.85">You’re all caught up</span></div>';
+    el.innerHTML = _notifEmptyHtml('No notifications', 'You’re all caught up');
     return;
   }
-  el.innerHTML = list.map(function(n) {
+  el.innerHTML = list.map(function(n, idx) {
     var cls = n.read ? 'notif-item' : 'notif-item unread';
     var isCash = String(n.type || '').toLowerCase() === 'cashout_offer' || /cash out offer/i.test(n.message || '');
     var meta = isCash ? _notifCashoutMeta(n) : null;
@@ -18334,7 +18387,13 @@ function _notifRenderList(list) {
           '<button type="button" class="notif-act decline" data-cashout-decline="'+_notifEscHtml(meta.ticketId)+'" data-notif-id="'+_notifEscHtml(n.id||'')+'">Decline</button>' +
         '</div>'
       : '';
-    return '<div class="' + cls + '">' +
+    var ctxLabel = _notifTypeLabel(n.type);
+    var ctx = ctxLabel
+      ? '<div class="notif-item-ctx">' + _notifEscHtml(ctxLabel) + '</div>'
+      : '';
+    var delay = Math.min(idx, 5) * 35;
+    return '<div class="' + cls + '" style="animation-delay:' + delay + 'ms">' +
+      ctx +
       '<div class="notif-item-title">' + _notifEscHtml(n.title || '') + '</div>' +
       '<div class="notif-item-msg">' + _notifEscHtml(String(n.message || '').replace(/\s*\[ticket:[^\]]+\]\s*$/, '')) + '</div>' +
       actions +
@@ -18380,13 +18439,65 @@ async function _playerRespondCashout(action, ticketId, notificationId) {
   }
 }
 
+/** LOCAL-ONLY visual samples when ?preview=1&notif=1 — never shipped as production data. */
+function _notifPreviewSamples() {
+  var now = Date.now();
+  return [
+    {
+      id: 'preview-cashout',
+      type: 'cashout_offer',
+      title: 'Cash-out offer',
+      message: 'Host offered $42.00 to close your Lakers ML bet — accept or decline',
+      read: false,
+      created_at: new Date(now - 4 * 60000).toISOString(),
+      metadata: { ticketId: 'preview-ticket', amount: 42 }
+    },
+    {
+      id: 'preview-survivor',
+      type: 'survivor_wed_reminder',
+      title: 'Survivor pick reminder',
+      message: 'Week 3 picks are due soon for your survivor pool. Lock in your team.',
+      read: false,
+      created_at: new Date(now - 2 * 3600000).toISOString()
+    },
+    {
+      id: 'preview-club',
+      type: 'club_approved',
+      title: 'You’re in',
+      message: 'Your request to join the club was approved. You can place bets now.',
+      read: true,
+      created_at: new Date(now - 26 * 3600000).toISOString()
+    },
+    {
+      id: 'preview-grade',
+      type: 'survivor_grade',
+      title: 'Survivor result',
+      message: 'Week 2 graded — your pick survived. You’re still alive.',
+      read: true,
+      created_at: new Date(now - 3 * 86400000).toISOString()
+    }
+  ];
+}
+
+function _notifWantsPreviewDemo() {
+  try {
+    return !!(typeof _pPreview !== 'undefined' && _pPreview && _pp && _pp.get('notif') === '1');
+  } catch (_e) { return false; }
+}
+
 async function _loadNotifications() {
   var listEl = document.getElementById('notif-list');
   try {
+    if (_notifWantsPreviewDemo()) {
+      var samples = _notifPreviewSamples();
+      _notifUpdateBadge(samples.filter(function(n){ return !n.read; }).length);
+      if (_notifOpen) _notifRenderList(samples);
+      return;
+    }
     if (_notifOpen && listEl && /Loading/.test(listEl.textContent || '')) {
       /* keep loading chrome while open */
     } else if (_notifOpen && listEl && !(listEl.querySelector('.notif-item'))) {
-      listEl.innerHTML = '<div class="pb-loading" style="margin:8px">Loading notifications…</div>';
+      listEl.innerHTML = '<div class="pb-loading">Loading notifications…</div>';
     }
     var resp = await (typeof _pbFetch === 'function'
       ? _pbFetch(API + '/api/notifications')
@@ -18394,7 +18505,7 @@ async function _loadNotifications() {
     var d = await resp.json();
     if (!d || !d.ok) {
       if (_notifOpen && listEl) {
-        listEl.innerHTML = '<div class="notif-empty">Notifications unavailable<br><span style="opacity:.85">Pull to reopen and retry</span></div>';
+        listEl.innerHTML = _notifEmptyHtml('Notifications unavailable', 'Pull to reopen and retry', true);
       }
       return;
     }
@@ -18402,12 +18513,17 @@ async function _loadNotifications() {
     if (_notifOpen) _notifRenderList(d.notifications || []);
   } catch (_e) {
     if (_notifOpen && listEl) {
-      listEl.innerHTML = '<div class="notif-empty">Couldn’t load notifications<br><span style="opacity:.85">Check connection and reopen</span></div>';
+      listEl.innerHTML = _notifEmptyHtml('Couldn’t load notifications', 'Check connection and reopen', true);
     }
   }
 }
 
 async function _markNotificationsRead() {
+  if (_notifWantsPreviewDemo()) {
+    _notifUpdateBadge(0);
+    document.querySelectorAll('.notif-item.unread').forEach(function(el) { el.classList.remove('unread'); });
+    return;
+  }
   try {
     var resp = await (typeof _pbFetch === 'function'
       ? _pbFetch(API + '/api/notifications/read', { method: 'POST', body: {} })
@@ -18420,6 +18536,11 @@ async function _markNotificationsRead() {
   } catch (_e) {}
 }
 
+function _notifSetExpanded(open) {
+  var bell = document.getElementById('notif-bell');
+  if (bell) bell.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
 function toggleNotifDropdown(ev) {
   if (ev) ev.stopPropagation();
   var dd = document.getElementById('notif-dd');
@@ -18427,9 +18548,13 @@ function toggleNotifDropdown(ev) {
   _notifOpen = !_notifOpen;
   if (_notifOpen) {
     dd.classList.add('open');
-    _loadNotifications().then(function() { _markNotificationsRead(); });
+    _notifSetExpanded(true);
+    _loadNotifications().then(function() {
+      if (!_notifWantsPreviewDemo()) _markNotificationsRead();
+    });
   } else {
     dd.classList.remove('open');
+    _notifSetExpanded(false);
   }
 }
 
@@ -18440,10 +18565,22 @@ function _initNotifications() {
       _notifOpen = false;
       var dd = document.getElementById('notif-dd');
       if (dd) dd.classList.remove('open');
+      _notifSetExpanded(false);
     }
   });
   _loadNotifications();
   setInterval(_loadNotifications, 60000);
+  // LOCAL-ONLY: auto-open dropdown for owner visual review (?preview=1&notif=1)
+  if (_notifWantsPreviewDemo()) {
+    setTimeout(function() {
+      var dd = document.getElementById('notif-dd');
+      if (!dd || _notifOpen) return;
+      _notifOpen = true;
+      dd.classList.add('open');
+      _notifSetExpanded(true);
+      _loadNotifications();
+    }, 350);
+  }
 }
 window.toggleNotifDropdown = toggleNotifDropdown;
 
