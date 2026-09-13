@@ -21,7 +21,13 @@ function assertEq(a, b, m) {
 
 const ROOT = path.join(__dirname, '..');
 const playerHtml = fs.readFileSync(path.join(ROOT, 'player.html'), 'utf8');
-const BE = path.join(process.env.HOME || '', '.openclaw/workspace/pocketbooks-sports-backend/index.js');
+const BE = [
+  process.env.PBS_BACKEND_ROOT && path.join(process.env.PBS_BACKEND_ROOT, 'index.js'),
+  path.join(ROOT, '..', 'pocketbooks-sports-backend', 'index.js'),
+  path.join(process.env.HOME || '', '.openclaw/workspace/pocketbooks-sports-backend/index.js')
+].filter(Boolean).find(function (candidate) {
+  return fs.existsSync(candidate);
+}) || '';
 const beSrc = fs.existsSync(BE) ? fs.readFileSync(BE, 'utf8') : '';
 
 const ROLE_RANK = {
