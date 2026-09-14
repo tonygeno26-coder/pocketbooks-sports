@@ -1,68 +1,111 @@
 # PocketBooks Beta Feature Truth
 
-**Audited:** 2026-09-13  
-**Frontend baseline:** `b57b52b8618f3bb6cc25eff078f70f52add83318`  
-**Backend baseline:** `00bc0cede9bec6e7100c3ad8973e926e255d10bb`
+**Audited:** 2026-09-13
+**Production frontend:** `066a511c05b2503c74b0b584eef1fa6f955ab9a2`
+**Production backend:** `d3c3a34ad09104733308821783265a62e9aa631a`
 
-This is the public-beta truth source. It distinguishes what is live from what is
-only present in code, preview-only, incomplete, or intentionally disabled.
+This distinguishes production behavior from automated verification,
+owner-review branches, and live-mutation gates.
 
 ## Live and supported
 
-- Public signup and sign-in
-- Public player betting beta
-- Private club membership and host/player role routing
-- Singles, parlays, teasers, and round-robin placement through server-authoritative paths
-- Ticket grading (environment-controlled; currently reported ON by the release state)
-- Bankroll accounting
+- Public signup/sign-in and bounded public player betting beta
+- Private club membership with host/player role routing
+- Server-authoritative singles, parlays, teasers, and round-robin placement
+- Ticket grading and bankroll accounting
 - Premium player props with curated discovery and stable selection identity
-- Host bets and player management
-- Player notifications
-- NFL Survivor pools: create, request access, approve/deny, per-entry weekly picks,
-  standings, hidden pre-deadline picks, and runner grading
+- Host bets, player management, and notifications
+- NFL Survivor create/join/request/approve/pick/standings/runner workflows
 
 ## Live with bounded or partial coverage
 
-- Live score overlays: strongest for major US leagues; soccer and tennis are
-  identity-matched and fail closed when uncertain.
-- Sports feeds: NFL, MLB, NBA, NHL, NCAAF, soccer, tennis, golf, and MMA have
-  usable current inventory. NCAAB is seasonal. Boxing is empty. Rugby inventory
-  is thin and lacks a safe score/grading path. NASCAR currently exposes futures,
-  which the frontend suppresses rather than presenting as gradeable matchups.
-- Images: verified mappings render images. Unknown or ambiguous entities render
-  text-only fallbacks. Current live-map gaps are concentrated in soccer, rugby,
-  NFL/MLB props, golf, tennis, and NASCAR futures.
-- Survivor uses ESPN schedule fallback when the odds cache is empty. Server
-  authorization remains authoritative for all pool mutations.
+- Scores are strongest for major US leagues; uncertain identity matching fails
+  closed.
+- Current read-only feed sample: NFL, MLB, NBA, NHL, NCAAF, Soccer, Tennis,
+  Golf, and MMA have usable or bounded inventory. NCAAB and Boxing are empty.
+  Rugby is empty and has no safe grading path. NASCAR inventory is unsupported
+  outright/futures and is suppressed.
+- Golf value-bets can return `502 owls_ev_http_error`; the UI must treat that as
+  unavailable rather than invent value.
+- Images render only verified mappings; unknown entities use text fallback.
 
 ## Explicitly off
 
-- Same-game parlay pricing: **OFF**. Correlated same-event combinations fail
-  closed; no synthetic correlation multiplier is used.
-- Host settlement recording: **OFF**. No settlement bootstrap, migration, or
-  activation was performed in this audit.
-- Automatic settlement closeout / payout: **OFF**.
+- Same-game parlay pricing: **OFF**. Correlated or unknown same-event
+  combinations fail closed.
+- Host settlement recording: **OFF**.
+- Automatic settlement closeout/payout: **OFF**.
+- Browser ticket and ledger mirror writes: **OFF**.
+
+Ticket grading is not host settlement. Legacy health fields named
+`settlementEnabled`, `workerSettlementEnabled`, and `manualSettlementEnabled`
+are aliases for ticket grading; `hostSettlementRecordingEnabled` is the
+authoritative host-settlement flag.
+
+## Automated verified
+
+- Backend two-player/two-club attack matrix: 44/44 on
+  `cursor/beta-test-hardening` at `8ae1dfd`.
+- Existing backend authz/IDOR, multi-club, and red-team gates pass.
+- Local place → ACTIVE → WON/LOST/PUSH and authoritative balance model passes.
+- Fail-closed odds, idempotency, phantom-ledger, unsupported-sport, props,
+  accessibility, auth, and mobile suites pass in the scoped runs documented in
+  `BETA_READINESS_REPORT.md`.
+
+## Production read-only verified
+
+- Backend production SHA is `d3c3a34`; DB, odds, and result health report good.
+- Ticket grading is on; host settlement recording is off.
+- NCAAB, Boxing, and Rugby are empty; NASCAR is futures-only.
+- Historical designated identities exist in frontend preview configuration:
+  TestPlayer1 `2a3e6819-be2f-4df3-8112-54ce19d0929e`,
+  TestRR `12bb68f1-bcca-4e63-8ae4-7065dbb19172`, and
+  TestEdge `bc767309-6fc7-4585-9077-3de7b898df13`.
+  Their suitability as uncontaminated cross-club A/B contexts is **not
+  established** without owner-approved authenticated read-only inventory.
+
+## Not yet live-mutation verified
+
+- Two independent production A/B club contexts with allow/deny placement,
+  cross-ticket, balance, and phantom-membership checks
+- Exact current-SHA place → grade → Recent Bets → Results lifecycle
+- Dev Join Request approve/decline after the `updated_at` fix
+
+These remain owner-gated because they mutate memberships, tickets, grades, or
+bankroll.
 
 ## Preview or owner-review only
 
-- Survivor premium visual pass:
-  `cursor/survivor-premium-visual` (`a95df8010da71dffc71c82ba0e08b245c16a3791`).
-  It is not merged to `main`.
-- Major visual redesigns remain owner-review work and are not beta truth until merged.
+- Survivor premium visual:
+  `cursor/survivor-premium-visual` at `ffc4ec8`, rebased and unmerged.
+  Preview:
+  `https://pocketbooks-sports-adb463sxd-tonygeno26-coders-projects.vercel.app/survivor.html`
+- Backend test-gate and cross-club matrix:
+  `cursor/beta-test-hardening` at `8ae1dfd`
+- 700+ props stress coverage:
+  `cursor/beta-props-stress` at `d025d6e`
+- Grade-status security redaction:
+  `cursor/security-grade-status-redaction` at `845f908`
+- Frontend bearerless token retry removal:
+  `cursor/security-token-mint-client` (owner-review branch)
 
-## Not claimed
+## Known release stop
 
-- Guaranteed logo/headshot coverage for every live entity
-- Gradeable boxing, rugby, or NASCAR wagering
-- SGP pricing
-- Production settlement
-- A completed live cross-club financial mutation test during this audit
-- A real-money end-to-end wager placed by the overnight worker
+Production `POST /api/auth/token` currently mints a club-scoped session from
+`actorId` + `clubId` without proving possession of a valid login/session
+credential. Production `GET /api/grade/status` also exposes recent cross-club
+ticket/player identifiers and grade payloads without authentication. Backend
+fixes are together on `cursor/security-grade-status-redaction`; the companion
+frontend retry removal is separate. They are deliberately unmerged pending
+owner security review.
 
 ## Safety invariants
 
 - Client state is not authoritative for bankroll, tickets, club scope, grading,
   or settlement.
+- Missing membership never creates a phantom bankroll.
 - Unknown image identity falls back to text.
-- Unsupported correlation and unsupported grading identity fail closed.
-- Settlement remains independently gated from ticket grading.
+- Unsupported odds, correlation, and grading identity fail closed.
+- Host settlement recording remains independently gated from ticket grading.
+- Preview/dev mocks may run only in local development and must never authorize
+  production financial or membership actions.
