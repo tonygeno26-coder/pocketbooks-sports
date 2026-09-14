@@ -69,6 +69,8 @@ server.listen(PORT, () => {
   console.log('  ─────────────────────────────────────');
   console.log(`  player:   http://localhost:${PORT}/player.html`);
   console.log(`  host:     http://localhost:${PORT}/index.html`);
+  console.log(`  survivor: http://localhost:${PORT}/survivor.html?preview=1`);
+  console.log(`  survgate: http://localhost:${PORT}/_survivor-visual-gate.html`);
   console.log(`  dev:      http://localhost:${PORT}/dev.html`);
   console.log(`  grading:  http://localhost:${PORT}/grading-test.html`);
   console.log(`  admin:    http://localhost:${PORT}/admin.html?preview=1`);

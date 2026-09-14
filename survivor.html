@@ -407,6 +407,16 @@ body{background:radial-gradient(1000px 500px at 50% -100px,rgba(61,139,253,0.08)
 <script>
 const API = 'https://pocketbooks-sports-backend-production.up.railway.app';
 let TOKEN = localStorage.getItem('pb-sports-token') || '';
+// Local visual-QA only. ?preview=1 / ?testUser never bypass auth on production hosts.
+var _sp = new URLSearchParams(window.location.search);
+function _isLocalHostName() {
+  var h = String((typeof location !== 'undefined' && location.hostname) || '').toLowerCase();
+  return h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
+}
+var _sPreviewFlag = _sp.get('preview') === '1';
+var _sTestUserFlag = !!_sp.get('testUser');
+var _sPreview = _isLocalHostName() && _sPreviewFlag;
+var _sPreviewState = String(_sp.get('state') || 'active').toLowerCase();
 var _TOKEN_SKEW_MS = 5 * 60 * 1000;
 var _tokenRefreshInFlight = null;
 var _AUTH_MAX_RETRIES = 3;
@@ -425,6 +435,8 @@ function _clearAuthLocalStorage() {
   TOKEN = '';
 }
 function _authRedirectToLogin(msg) {
+  // Fixture preview is not an auth session — never bounce to lobby/sign-in.
+  if (_sPreview) return;
   if (_authGiveUp) return;
   _authGiveUp = true;
   _clearAuthLocalStorage();
@@ -648,7 +660,145 @@ function esc(s){
   });
 }
 
+function _previewFixtureGames() {
+  var kick = new Date();
+  kick.setUTCHours(kick.getUTCHours() + 30);
+  var iso = kick.toISOString();
+  return [
+    { id: 'fx-1', home: 'Kansas City Chiefs', away: 'Baltimore Ravens', time: iso, homeRecord: '2-0', awayRecord: '1-1',
+      moneyline: [{ team: 'Kansas City Chiefs', odds: -165 }, { team: 'Baltimore Ravens', odds: 140 }] },
+    { id: 'fx-2', home: 'Buffalo Bills', away: 'New York Jets', time: iso, homeRecord: '2-0', awayRecord: '0-2',
+      moneyline: [{ team: 'Buffalo Bills', odds: -280 }, { team: 'New York Jets', odds: 230 }] },
+    { id: 'fx-3', home: 'Philadelphia Eagles', away: 'Dallas Cowboys', time: iso, homeRecord: '1-1', awayRecord: '1-1',
+      moneyline: [{ team: 'Philadelphia Eagles', odds: -140 }, { team: 'Dallas Cowboys', odds: 120 }] }
+  ];
+}
+function _previewFixtureResponse(method, path, body) {
+  var m = String(method || 'GET').toUpperCase();
+  if (m !== 'GET') {
+    return {
+      ok: false, error: 'preview_readonly', code: 'PREVIEW_READONLY',
+      message: 'Visual QA preview — writes disabled', _status: 403
+    };
+  }
+  if (_sPreviewState === 'error') {
+    return { error: 'preview_fixture_error', message: 'Could not load pools.', _status: 503 };
+  }
+  if (path === '/api/odds/nfl' || path === '/api/scores/nfl') {
+    return { ok: true, _status: 200, games: _previewFixtureGames() };
+  }
+  if (path === '/api/survivor/my-pools') {
+    if (_sPreviewState === 'empty') return { ok: true, pools: [], _status: 200 };
+    return {
+      ok: true, _status: 200,
+      pools: [
+        {
+          poolId: 'preview-active', name: "Tony's Survivor", season: 2026, currentWeek: 3,
+          status: 'active', isHost: true, joinCode: 'ABC123', pendingRequestCount: 1,
+          entries: [
+            { entryNumber: 1, status: 'alive' },
+            { entryNumber: 2, status: 'alive' },
+            { entryNumber: 3, status: 'eliminated', eliminatedWeek: 2 }
+          ]
+        },
+        {
+          poolId: 'preview-friends', name: 'Friends League', season: 2026, currentWeek: 3,
+          status: 'active', isHost: false, myStatus: 'eliminated', eliminatedWeek: 2,
+          entries: [{ entryNumber: 1, status: 'eliminated', eliminatedWeek: 2 }]
+        },
+        {
+          poolId: 'preview-office', name: 'Office Pool', season: 2026, currentWeek: 3,
+          status: 'active', isHost: false, myStatus: 'alive',
+          entries: [{ entryNumber: 1, status: 'alive' }]
+        }
+      ]
+    };
+  }
+  var detailMatch = path.match(/^\/api\/survivor\/([^/]+)$/);
+  if (detailMatch) {
+    var pid = decodeURIComponent(detailMatch[1]);
+    var locked = _sPreviewState === 'locked' || _sPreviewState === 'deadline';
+    var elimFocus = _sPreviewState === 'eliminated' || _sPreviewState === 'elim';
+    var selected = _sPreviewState === 'selected' || _sPreviewState === 'survived' || _sPreviewState === 'pick';
+    var weekPickTeam = locked ? 'Buffalo Bills' : (selected || _sPreviewState === 'active' ? 'Kansas City Chiefs' : null);
+    if (_sPreviewState === 'pick' || _sPreviewState === 'team') weekPickTeam = null;
+    var myPicks = [
+      { week: 1, team: 'Detroit Lions', result: 'won', entryNumber: 1 },
+      { week: 2, team: 'San Francisco 49ers', result: 'won', entryNumber: 1 }
+    ];
+    if (weekPickTeam) {
+      myPicks.push({
+        week: 3, team: weekPickTeam, entryNumber: 1,
+        result: _sPreviewState === 'survived' ? 'won' : null,
+        locked: !!locked
+      });
+    }
+    var deadline = new Date();
+    deadline.setUTCHours(deadline.getUTCHours() + (locked ? -2 : 28));
+    return {
+      ok: true, _status: 200, isHost: pid === 'preview-active',
+      pool: {
+        poolId: pid, name: pid === 'preview-friends' ? 'Friends League' : (pid === 'preview-office' ? 'Office Pool' : "Tony's Survivor"),
+        season: 2026, currentWeek: 3, status: 'active', joinCode: 'ABC123',
+        pickDeadline: deadline.toISOString()
+      },
+      deadlinePassed: !!locked,
+      pickDeadline: deadline.toISOString(),
+      myPicks: myPicks,
+      myEntries: [
+        { entryNumber: 1, status: elimFocus ? 'eliminated' : 'alive', eliminatedWeek: elimFocus ? 2 : null },
+        { entryNumber: 2, status: 'alive' },
+        { entryNumber: 3, status: 'eliminated', eliminatedWeek: 2 }
+      ],
+      myEntry: { entryNumber: 1, status: elimFocus ? 'eliminated' : 'alive', eliminatedWeek: elimFocus ? 2 : null },
+      usedTeams: [
+        { team: 'Detroit Lions', week: 1, entryNumber: 1 },
+        { team: 'San Francisco 49ers', week: 2, entryNumber: 1 }
+      ],
+      usedTeamsByEntry: {
+        1: [{ team: 'Detroit Lions', week: 1 }, { team: 'San Francisco 49ers', week: 2 }],
+        2: [{ team: 'Green Bay Packers', week: 1 }],
+        3: [{ team: 'Miami Dolphins', week: 1 }, { team: 'Chicago Bears', week: 2 }]
+      },
+      pendingRequestCount: 1
+    };
+  }
+  var standingsMatch = path.match(/^\/api\/survivor\/([^/]+)\/standings$/);
+  if (standingsMatch) {
+    return {
+      ok: true, _status: 200, picksVisible: true,
+      alive: [
+        { playerUsername: 'Visual QA', entryLabel: 'Visual QA · Entry #1', entryNumber: 1, status: 'alive' },
+        { playerUsername: 'Visual QA', entryLabel: 'Visual QA · Entry #2', entryNumber: 2, status: 'alive' },
+        { playerUsername: 'Alex', entryLabel: 'Alex', entryNumber: 1, status: 'alive' },
+        { playerUsername: 'Jordan', entryLabel: 'Jordan', entryNumber: 1, status: 'alive' }
+      ],
+      eliminated: [
+        { playerUsername: 'Visual QA', entryLabel: 'Visual QA · Entry #3', entryNumber: 3, status: 'eliminated', eliminatedWeek: 2 },
+        { playerUsername: 'Sam', entryLabel: 'Sam', entryNumber: 1, status: 'eliminated', eliminatedWeek: 1 }
+      ],
+      thisWeekPicks: [
+        { playerUsername: 'Alex', entryLabel: 'Alex', team: 'Philadelphia Eagles', result: null },
+        { playerUsername: 'Jordan', entryLabel: 'Jordan', team: 'Buffalo Bills', result: null }
+      ]
+    };
+  }
+  var reqMatch = path.match(/^\/api\/survivor\/([^/]+)\/requests$/);
+  if (reqMatch) {
+    return {
+      ok: true, _status: 200,
+      requests: [{ id: 'req-1', playerUsername: 'Casey', requestedAt: new Date().toISOString(), entriesRequested: 1 }]
+    };
+  }
+  if (path.indexOf('/api/survivor/') === 0 && path.indexOf('/odds') >= 0) {
+    return { ok: true, _status: 200, games: _previewFixtureGames(), picksOpen: true };
+  }
+  // Non-mutating GETs outside survivor fixture surface: empty ok (never hit production).
+  return { ok: true, _status: 200, games: [], pools: [], requests: [] };
+}
+
 async function api(method, path, body, _retried){
+  if (_sPreview) return _previewFixtureResponse(method, path, body);
   if (_authGiveUp) return { error: 'auth_give_up', _status: 401 };
   if (!_retried && !_isAuthApiPath(path)) {
     try { await _ensureFreshToken(); } catch (_e) {}
@@ -997,6 +1147,7 @@ async function fetchEspnWeek(week){
 async function ensureWeek1OpenLabel(){
   if (week1OpenLabel) return week1OpenLabel;
   week1OpenLabel = NFL_2026_WEEK1_OPEN;
+  if (_sPreview) return week1OpenLabel;
   try {
     var w1 = await fetchEspnWeek(1);
     var first = (w1.games || [])[0];
@@ -1028,6 +1179,12 @@ function isPreseasonTestMode(){
   return !oddsGames.length;
 }
 async function loadBrowseWeekGames(){
+  if (_sPreview) {
+    nflGames = _previewFixtureGames();
+    scheduleLocked = _sPreviewState === 'locked' || _sPreviewState === 'deadline';
+    picksOpen = !scheduleLocked;
+    return;
+  }
   var poolWeek = currentDetail && currentDetail.pool && currentDetail.pool.currentWeek;
   var espn = { games: [] };
   try { espn = await fetchEspnWeek(browseWeek); } catch(_e){ espn = { games: [] }; }
@@ -1591,6 +1748,8 @@ async function gradeWeek(){
 }
 
 function _sessionPlayer() {
+  // Fixture display identity only — never an auth session / JWT substitute.
+  if (_sPreview) return { id: 'preview-player', username: 'Visual QA', name: 'Visual QA', role: 'player' };
   try { return JSON.parse(localStorage.getItem('pb-player') || 'null') || {}; } catch (_e) { return {}; }
 }
 function _isSurvivorHostRole(r) {
@@ -1688,6 +1847,31 @@ function signOut() {
 window.signOut = signOut;
 
 (function init(){
+  if (_sPreview) {
+    // Localhost fixture mode only — zero production auth, zero writes.
+    try {
+      var banner = document.createElement('div');
+      banner.id = 'pb-survivor-preview-banner';
+      banner.textContent = 'Visual QA preview — local fixture · production writes disabled';
+      banner.style.cssText = 'position:sticky;top:0;z-index:50;background:rgba(232,197,71,0.12);border-bottom:1px solid rgba(232,197,71,0.35);color:#e8c547;font-size:0.68rem;font-weight:800;text-align:center;padding:8px 12px;letter-spacing:0.2px';
+      document.body.insertBefore(banner, document.body.firstChild);
+    } catch (_e) {}
+    setupSurvivorNav();
+    if (_sPreviewState === 'loading') {
+      document.getElementById('my-pools').innerHTML = '<div class="empty">Loading…</div>';
+      return;
+    }
+    var q = _sp.get('pool') || ((_sPreviewState === 'empty' || _sPreviewState === 'error') ? '' : 'preview-active');
+    if (_sPreviewState === 'empty' || _sPreviewState === 'error') {
+      loadMyPools().catch(function () {});
+      return;
+    }
+    loadMyPools().then(function () {
+      if (q) openPool(q);
+    }).catch(function () {});
+    return;
+  }
+  // Production / non-local: preview=1 and testUser never skip auth.
   if (!TOKEN) { window.location.href = 'lobby.html'; return; }
   var _tokParts = String(TOKEN).split('.');
   if (_tokParts.length !== 3) {
@@ -1701,9 +1885,9 @@ window.signOut = signOut;
   }
   setupSurvivorNav();
   try { JSON.parse(localStorage.getItem('pb-club') || 'null'); } catch(_e){}
-  var q = new URLSearchParams(window.location.search).get('pool');
+  var qPool = new URLSearchParams(window.location.search).get('pool');
   loadMyPools().then(function(){
-    if (q) openPool(q);
+    if (qPool) openPool(qPool);
   }).catch(function (e) {
     var status = e && (e.status || e._status);
     var err = String((e && (e.error || e.message)) || '');

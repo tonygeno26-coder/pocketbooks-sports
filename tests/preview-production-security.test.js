@@ -8,6 +8,7 @@ const root = path.join(__dirname, '..');
 const lobby = fs.readFileSync(path.join(root, 'lobby.html'), 'utf8');
 const host = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const player = fs.readFileSync(path.join(root, 'player.html'), 'utf8');
+const survivor = fs.readFileSync(path.join(root, 'survivor.html'), 'utf8');
 const dev = fs.readFileSync(path.join(root, 'dev.html'), 'utf8');
 
 assert.ok(lobby.includes("const _preview = _previewLocal && _params.get('preview') === '1'"),
@@ -28,6 +29,23 @@ assert.ok(player.includes("return h === 'localhost' || h === '127.0.0.1' || h ==
   'player preview host helper must accept loopback only');
 assert.ok(player.includes('Visual QA preview — financial actions disabled'),
   'player local preview must remain read-only');
+
+assert.ok(survivor.includes('var _sPreview = _isLocalHostName() && _sPreviewFlag'),
+  'survivor preview must be localhost-gated');
+assert.ok(survivor.includes("h === 'localhost' || h === '127.0.0.1' || h === '[::1]'"),
+  'survivor host helper must accept loopback only');
+assert.ok(survivor.includes("error: 'preview_readonly'"),
+  'survivor preview must refuse writes');
+assert.ok(survivor.includes('PREVIEW_READONLY'),
+  'survivor preview write block must be explicit');
+assert.ok(survivor.includes('if (_sPreview)'),
+  'survivor init must branch on gated preview');
+assert.ok(!/_sPreview\s*=\s*_sPreviewFlag\s*;/.test(survivor),
+  'survivor preview must never arm from query flag alone');
+assert.ok(survivor.includes('_sTestUserFlag'),
+  'survivor must acknowledge testUser flag without production bypass');
+assert.ok(!survivor.includes('_sPreview = _isLocalHostName() && (_sPreviewFlag || _sTestUserFlag)'),
+  'testUser must not grant survivor fixture preview');
 
 assert.ok(dev.includes('DEV_PREVIEW_LOCAL_ONLY'), 'dev preview needs a local-only gate');
 assert.ok(dev.includes("throw new Error('dev_preview_local_only')"),

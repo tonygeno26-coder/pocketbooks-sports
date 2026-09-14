@@ -87,4 +87,28 @@ test('deadline and lock messaging remain in pick render path', function () {
   assert(script.includes('function picksAreLocked(detail)'));
 });
 
+test('localhost preview fixture is gated and write-blocked', function () {
+  assert(html.includes('var _sPreview = _isLocalHostName() && _sPreviewFlag'));
+  assert(html.includes("h === 'localhost' || h === '127.0.0.1' || h === '[::1]'"));
+  assert(html.includes("error: 'preview_readonly'"));
+  assert(html.includes('PREVIEW_READONLY'));
+  assert(html.includes('_previewFixtureResponse'));
+  assert(/Tony.?s Survivor/.test(html));
+  assert(html.includes('if (_sPreview) return _previewFixtureResponse'));
+  assert(html.includes('Visual QA preview — local fixture'));
+  assert(!/_sPreview\s*=\s*_sPreviewFlag\s*;/.test(html), 'preview must not arm from flag alone');
+});
+
+test('production hosts still require auth even with preview or testUser query', function () {
+  // Gate decision requires localhost; init still bounces without TOKEN when not preview.
+  assert(html.includes("if (!TOKEN) { window.location.href = 'lobby.html'; return; }"));
+  assert(html.includes('_sTestUserFlag'));
+  assert(!html.includes('_sPreview = _isLocalHostName() && (_sPreviewFlag || _sTestUserFlag)'));
+  const initStart = script.indexOf('(function init(){');
+  assert(initStart >= 0);
+  const init = script.slice(initStart, initStart + 1800);
+  assert(init.includes('if (_sPreview)'));
+  assert(init.indexOf('if (_sPreview)') < init.indexOf("if (!TOKEN)"));
+});
+
 console.log('\nSurvivor regression tests: ' + pass + ' passed');
