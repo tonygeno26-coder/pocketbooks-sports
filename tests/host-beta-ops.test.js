@@ -95,9 +95,21 @@ test('local preview fixture is production-blocked', function () {
   assert.ok(ops.includes("get('preview') === '1'"));
   assert.ok(ops.includes('_previewFixture') || ops.includes('LOCAL-ONLY'));
   assert.ok(ops.includes("h === 'localhost'") || ops.includes("=== 'localhost'"));
-  // Must not arm preview from query flag alone without local host check
-  assert.ok(!/preview.*===.*'1'[\s\S]{0,40}_previewFixture\(\)/.test(ops.replace(/\s+/g, ' '))
-    || ops.includes('_isLocalPreview()'));
+  assert.ok(ops.includes('_isLocalPreview()'));
+  assert.ok(ops.includes('requests:') && ops.includes('testers:'));
+  assert.ok(ops.includes('opsState') || ops.includes('_previewOpsState'));
+  // Status updates in preview must not hit production
+  assert.ok(ops.includes('Local preview: mutate fixture only')
+    || (ops.includes('_isLocalPreview()') && ops.includes('never call production')));
+});
+
+test('visual gate page is localhost-gated', function () {
+  const gate = fs.readFileSync(path.join(root, '_host-beta-ops-visual-gate.html'), 'utf8');
+  assert.ok(gate.includes('__HBO_GATE_LOCAL'));
+  assert.ok(gate.includes("h === 'localhost'") || gate.includes("=== 'localhost'"));
+  assert.ok(gate.includes('Visual gate unavailable') || gate.includes('restricted to localhost'));
+  assert.ok(gate.includes('index.html?preview=1&tab=ops'));
+  assert.ok(gate.includes('opsState=empty') && gate.includes('opsState=loading') && gate.includes('opsState=error'));
 });
 
 test('empty / loading / error states exist', function () {

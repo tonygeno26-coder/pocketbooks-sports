@@ -4607,8 +4607,13 @@ function setBN(el,tab){
     if (window.PbHostBetaOps) {
       try { PbHostBetaOps.render(); PbHostBetaOps.reload(); } catch(_ops) {}
     }
-    loadHostDashboardFromDb('beta_ops');
-    try { loadRequests(); } catch(_lr) {}
+    // Localhost ?preview=1 uses fixture data only — no live membership/dashboard writes.
+    var _opsPrev = !!(window.PbHostBetaOps && typeof PbHostBetaOps.isLocalPreview === 'function'
+      && PbHostBetaOps.isLocalPreview());
+    if (!_opsPrev) {
+      loadHostDashboardFromDb('beta_ops');
+      try { loadRequests(); } catch(_lr) {}
+    }
   } else if(tab==='crypto'){
     var s=document.getElementById('crypto-section');
     if(s)s.style.display='block';

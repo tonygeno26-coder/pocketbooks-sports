@@ -36,9 +36,75 @@
     }
   }
 
-  /** LOCAL-ONLY visual fixture — never used on production hosts. */
+  function _previewOpsState() {
+    if (!_isLocalPreview()) return 'full';
+    try {
+      var st = String(new URLSearchParams(location.search).get('opsState')
+        || new URLSearchParams(location.search).get('state') || 'full').toLowerCase();
+      if (st === 'empty' || st === 'loading' || st === 'error' || st === 'full') return st;
+    } catch (_e) {}
+    return 'full';
+  }
+
+  function _previewPanelBoot() {
+    if (!_isLocalPreview()) return null;
+    try {
+      var p = String(new URLSearchParams(location.search).get('panel') || '').toLowerCase();
+      if (p === 'overview' || p === 'requests' || p === 'testers' || p === 'feedback') return p;
+    } catch (_e) {}
+    return null;
+  }
+
+  /** LOCAL-ONLY visual fixture — never authoritative; never used on production hosts. */
   function _previewFixture() {
     return {
+      requests: [
+        {
+          playerId: 'preview-applicant-1',
+          playerName: 'Sam Applicant',
+          display_name: 'Sam Applicant',
+          username: 'sam_a',
+          membershipId: 'prev-mem-1',
+          requestedAt: new Date(Date.now() - 5400000).toISOString()
+        },
+        {
+          playerId: 'preview-applicant-2',
+          playerName: 'Riley Join',
+          display_name: 'Riley Join',
+          username: 'rileyj',
+          membershipId: 'prev-mem-2',
+          requestedAt: new Date(Date.now() - 18000000).toISOString()
+        }
+      ],
+      testers: [
+        {
+          playerId: 'preview-player-1',
+          playerName: 'Alex Tester',
+          username: 'alex',
+          status: 'approved',
+          availableBalance: 100,
+          startingBalance: 100,
+          activeBetCount: 1
+        },
+        {
+          playerId: 'preview-player-2',
+          playerName: 'Jordan Beta',
+          username: 'jordan',
+          status: 'approved',
+          availableBalance: 50,
+          startingBalance: 50,
+          activeBetCount: 0
+        },
+        {
+          playerId: 'preview-player-3',
+          playerName: 'Casey Night',
+          username: 'casey',
+          status: 'approved',
+          availableBalance: 25.5,
+          startingBalance: 75,
+          activeBetCount: 2
+        }
+      ],
       items: [
         {
           id: 'prev-fb-1',
@@ -88,9 +154,22 @@
           createdAt: new Date(Date.now() - 172800000).toISOString(),
           isBetIssue: false,
           ticket: null
+        },
+        {
+          id: 'prev-fb-4',
+          playerId: 'preview-player-3',
+          playerLabel: 'Casey Night',
+          category: 'odds',
+          message: 'Live odds jumped mid-tap on NFL moneyline.',
+          ticketId: null,
+          page: 'player.html',
+          status: 'new',
+          createdAt: new Date(Date.now() - 7200000).toISOString(),
+          isBetIssue: false,
+          ticket: null
         }
       ],
-      counts: { all: 3, new: 1, reviewed: 1, resolved: 1, betIssues: 1 }
+      counts: { all: 4, new: 2, reviewed: 1, resolved: 1, betIssues: 1 }
     };
   }
 
@@ -102,6 +181,11 @@
   }
 
   function _pendingRequests() {
+    if (_isLocalPreview()) {
+      var st = _previewOpsState();
+      if (st === 'empty') return [];
+      return (_previewFixture().requests || []).slice();
+    }
     try {
       if (global.pendingRequests && global.pendingRequests.length) return global.pendingRequests.slice();
       if (typeof global.loadJoinRequests === 'function') return global.loadJoinRequests() || [];
@@ -110,6 +194,11 @@
   }
 
   function _activeTesters() {
+    if (_isLocalPreview()) {
+      var st = _previewOpsState();
+      if (st === 'empty') return [];
+      return (_previewFixture().testers || []).slice();
+    }
     var list = [];
     try {
       if (typeof global._hostPlayersFromDbOrLocal === 'function') {
@@ -118,30 +207,7 @@
         list = global._hostDbPlayers.slice();
       }
     } catch (_e) { list = []; }
-    if (list.length) return list;
-    if (_isLocalPreview()) {
-      return [
-        {
-          playerId: 'preview-player-1',
-          playerName: 'Alex Tester',
-          username: 'alex',
-          status: 'approved',
-          availableBalance: 100,
-          startingBalance: 100,
-          activeBetCount: 1
-        },
-        {
-          playerId: 'preview-player-2',
-          playerName: 'Jordan Beta',
-          username: 'jordan',
-          status: 'approved',
-          availableBalance: 50,
-          startingBalance: 50,
-          activeBetCount: 0
-        }
-      ];
-    }
-    return [];
+    return list;
   }
 
   function _fmtMoney(n) {
@@ -182,6 +248,28 @@
     if (!opts.silent) renderBetaOps();
 
     function applyPreviewFixture() {
+      var opsState = _previewOpsState();
+      if (opsState === 'loading') {
+        _fbItems = [];
+        _fbCounts = { all: 0, new: 0, reviewed: 0, resolved: 0, betIssues: 0 };
+        _fbLoading = true;
+        _fbError = null;
+        return;
+      }
+      if (opsState === 'error') {
+        _fbItems = [];
+        _fbCounts = { all: 0, new: 0, reviewed: 0, resolved: 0, betIssues: 0 };
+        _fbLoading = false;
+        _fbError = 'preview_error_fixture';
+        return;
+      }
+      if (opsState === 'empty') {
+        _fbItems = [];
+        _fbCounts = { all: 0, new: 0, reviewed: 0, resolved: 0, betIssues: 0 };
+        _fbLoading = false;
+        _fbError = null;
+        return;
+      }
       var fix = _previewFixture();
       _fbItems = fix.items.filter(function (it) {
         if (_fbStatus !== 'all' && String(it.status) !== _fbStatus) return false;
@@ -256,15 +344,17 @@
     var body = { status: status };
     if (clubId) body.clubId = clubId;
     try {
-      if (_isLocalPreview() && String(id).indexOf('prev-') === 0) {
+      // Local preview: mutate fixture only — never call production APIs.
+      if (_isLocalPreview()) {
         _fbItems = _fbItems.map(function (it) {
           if (String(it.id) !== String(id)) return it;
           return Object.assign({}, it, { status: status });
         });
         var c = { all: 0, new: 0, reviewed: 0, resolved: 0, betIssues: 0 };
-        _previewFixture().items.forEach(function () {});
-        // Recompute counts from current working set + status change
         var all = _previewFixture().items.map(function (it) {
+          var hit = _fbItems.find(function (x) { return String(x.id) === String(it.id); });
+          return hit || it;
+        }).map(function (it) {
           return String(it.id) === String(id) ? Object.assign({}, it, { status: status }) : it;
         });
         all.forEach(function (it) {
@@ -468,7 +558,9 @@
     }
     if (_fbError) {
       return '<div class="hbo-empty hbo-empty--error"><div class="hbo-empty-title">Couldn’t load feedback</div>'
-        + '<div class="hbo-empty-sub">' + _esc(_fbError) + '</div>'
+        + '<div class="hbo-empty-sub">' + _esc(_fbError === 'preview_error_fixture'
+          ? 'Fixture error state for visual QA (localhost only).'
+          : _fbError) + '</div>'
         + '<button type="button" class="hbo-btn hbo-btn--ghost" onclick="PbHostBetaOps.reload()">Retry</button></div>';
     }
     if (!_fbItems.length) {
@@ -572,7 +664,7 @@
     }
     renderBetaOps();
     loadFeedbackInbox({ silent: true });
-    if (typeof global.loadRequests === 'function') {
+    if (!_isLocalPreview() && typeof global.loadRequests === 'function') {
       global.loadRequests().then(function () { renderBetaOps(); }).catch(function () {});
     }
   }
@@ -581,7 +673,7 @@
     _opsPanel = panel || 'overview';
     renderBetaOps();
     if (_opsPanel === 'feedback') loadFeedbackInbox({ silent: true });
-    if (_opsPanel === 'requests' && typeof global.loadRequests === 'function') {
+    if (_opsPanel === 'requests' && !_isLocalPreview() && typeof global.loadRequests === 'function') {
       global.loadRequests().then(function () { renderBetaOps(); }).catch(function () {});
     }
   }
@@ -602,6 +694,15 @@
     _fbSearch = String(val || '');
     if (_opsSearchTimer) clearTimeout(_opsSearchTimer);
     _opsSearchTimer = setTimeout(function () { loadFeedbackInbox(); }, 220);
+  }
+
+  function _seedPreviewGlobals() {
+    if (!_isLocalPreview()) return;
+    var fix = _previewFixture();
+    var st = _previewOpsState();
+    try {
+      global.pendingRequests = st === 'empty' ? [] : (fix.requests || []).slice();
+    } catch (_e) {}
   }
 
   function mountHomeCard() {
@@ -628,11 +729,29 @@
     }
   }
 
+  function bootPreview() {
+    if (!_isLocalPreview()) return;
+    _seedPreviewGlobals();
+    var panel = _previewPanelBoot();
+    if (panel) _opsPanel = panel;
+    var fix = _previewFixture();
+    if (_previewOpsState() === 'full') {
+      _fbItems = fix.items.slice();
+      _fbCounts = fix.counts;
+    }
+    _paintOpsBadge();
+  }
+
   var api = {
     open: openBetaOps,
     render: renderBetaOps,
     reload: function () {
       loadFeedbackInbox();
+      if (_isLocalPreview()) {
+        _seedPreviewGlobals();
+        renderBetaOps();
+        return;
+      }
       if (typeof global.loadRequests === 'function') {
         global.loadRequests().then(function () { renderBetaOps(); }).catch(function () {});
       }
@@ -648,22 +767,20 @@
     setStatus: updateFeedbackStatus,
     mountHomeCard: mountHomeCard,
     isLocalPreview: _isLocalPreview,
-    _paintOpsBadge: _paintOpsBadge
+    _paintOpsBadge: _paintOpsBadge,
+    bootPreview: bootPreview
   };
 
   global.PbHostBetaOps = api;
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () {
-      mountHomeCard();
-      if (_isLocalPreview()) {
-        var fix = _previewFixture();
-        _fbItems = fix.items;
-        _fbCounts = fix.counts;
-        _paintOpsBadge();
-      }
-    });
-  } else {
+  function _onReady() {
     mountHomeCard();
+    bootPreview();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _onReady);
+  } else {
+    _onReady();
   }
 })(typeof window !== 'undefined' ? window : globalThis);

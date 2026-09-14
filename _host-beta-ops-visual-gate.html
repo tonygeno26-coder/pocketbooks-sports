@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Host Beta Ops — Visual Gate</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'SF Pro Display',BlinkMacSystemFont,sans-serif;background:#070b12;color:#f4f7fb;padding:20px 16px 48px}
+.gate-lbl{font-size:.62rem;font-weight:900;letter-spacing:.8px;text-transform:uppercase;color:#7a8799;margin:0 0 8px}
+.gate-note{font-size:.78rem;color:#a8b3c4;line-height:1.45;margin:0 0 18px;max-width:920px}
+.gate-note a{color:#5eb1ff;font-weight:700;text-decoration:none}
+.gate-warn{display:inline-block;margin:0 0 16px;padding:8px 12px;border-radius:10px;border:1px solid rgba(232,197,71,.35);background:rgba(232,197,71,.1);color:#e8c547;font-size:.72rem;font-weight:800}
+.desk{display:grid;gap:22px;grid-template-columns:1fr}
+@media (min-width:900px){.desk{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:1400px){.desk{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.frame-wrap{background:#0c121c;border:1px solid #1e2a3c;border-radius:16px;overflow:hidden;box-shadow:0 10px 28px rgba(0,0,0,.35)}
+.frame-lbl{padding:10px 12px;border-bottom:1px solid #1e2a3c;font-size:.68rem;font-weight:800;color:#a8b3c4;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.frame-lbl a{color:#3d8bfd;font-size:.62rem;text-decoration:none;font-weight:800}
+iframe{width:100%;height:720px;border:0;background:#070b12;display:block}
+.blocked{padding:28px 16px;text-align:center;color:#7a8799;font-size:.85rem;line-height:1.5}
+.blocked strong{color:#ff4d6a;display:block;margin-bottom:8px}
+</style>
+<script>
+(function(){
+  try {
+    var h = String(location.hostname || '').toLowerCase();
+    var local = h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || /\.local$/.test(h);
+    window.__HBO_GATE_LOCAL = local;
+  } catch (e) { window.__HBO_GATE_LOCAL = false; }
+})();
+</script>
+</head>
+<body>
+<p class="gate-lbl">Host Beta Ops visual gate</p>
+<p class="gate-note">
+  Interactive localhost fixture (preferred):
+  <a href="index.html?preview=1&amp;tab=ops">index.html?preview=1&amp;tab=ops</a>
+  · feedback <a href="index.html?preview=1&amp;tab=ops&amp;panel=feedback">panel=feedback</a>
+  · requests <a href="index.html?preview=1&amp;tab=ops&amp;panel=requests">panel=requests</a>
+  · testers <a href="index.html?preview=1&amp;tab=ops&amp;panel=testers">panel=testers</a>
+  · empty <a href="index.html?preview=1&amp;tab=ops&amp;opsState=empty">opsState=empty</a>
+  · loading <a href="index.html?preview=1&amp;tab=ops&amp;opsState=loading&amp;panel=feedback">opsState=loading</a>
+  · error <a href="index.html?preview=1&amp;tab=ops&amp;opsState=error&amp;panel=feedback">opsState=error</a>
+</p>
+<div class="gate-warn">LOCALHOST ONLY — deployed domains must keep Developer Preview blocked. No session minting. No membership / financial writes.</div>
+<div class="desk" id="desk"></div>
+<script>
+(function () {
+  var desk = document.getElementById('desk');
+  if (!window.__HBO_GATE_LOCAL) {
+    desk.innerHTML = '<div class="frame-wrap"><div class="blocked"><strong>Visual gate unavailable</strong>This collage is restricted to localhost / 127.0.0.1. Deployed preview remains blocked.</div></div>';
+    return;
+  }
+  var frames = [
+    { label: 'Overview (full fixture)', src: 'index.html?preview=1&tab=ops&panel=overview' },
+    { label: 'Join requests', src: 'index.html?preview=1&tab=ops&panel=requests' },
+    { label: 'Active testers', src: 'index.html?preview=1&tab=ops&panel=testers' },
+    { label: 'Feedback inbox + bet issue', src: 'index.html?preview=1&tab=ops&panel=feedback' },
+    { label: 'Empty states', src: 'index.html?preview=1&tab=ops&opsState=empty&panel=feedback' },
+    { label: 'Loading state', src: 'index.html?preview=1&tab=ops&opsState=loading&panel=feedback' },
+    { label: 'Error state', src: 'index.html?preview=1&tab=ops&opsState=error&panel=feedback' }
+  ];
+  desk.innerHTML = frames.map(function (f) {
+    return '<section class="frame-wrap">'
+      + '<div class="frame-lbl"><span>' + f.label + '</span><a href="' + f.src + '" target="_blank" rel="noopener">Open →</a></div>'
+      + '<iframe title="' + f.label + '" src="' + f.src + '" loading="lazy"></iframe>'
+      + '</section>';
+  }).join('');
+})();
+</script>
+</body>
+</html>
