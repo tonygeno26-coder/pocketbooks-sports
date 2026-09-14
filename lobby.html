@@ -402,7 +402,12 @@ body.theme-light [style*="color:var(--pb-accent)"]{color:#00875a!important}
     document.write('<style id="pb-hide-auth">#auth-screen{display:none!important;visibility:hidden!important;pointer-events:none!important;position:absolute!important;z-index:-9999!important}</style>');
     
   }
-  if (location.search.includes('preview=1')) {
+  var _earlyPreviewHost = String(location.hostname || '').toLowerCase();
+  var _earlyPreviewLocal = _earlyPreviewHost === 'localhost'
+    || _earlyPreviewHost === '127.0.0.1'
+    || _earlyPreviewHost === '[::1]'
+    || /\.local$/.test(_earlyPreviewHost);
+  if (_earlyPreviewLocal && location.search.includes('preview=1')) {
     document.write(`<style>#auth-screen{display:none!important;visibility:hidden!important;pointer-events:none!important;position:absolute!important;z-index:-9999!important}
 /* Auth — Player Dashboard language */
 .auth-screen{background:radial-gradient(1200px 600px at 50% -80px,rgba(61,139,253,0.10),transparent 55%),var(--pb-bg)!important}
@@ -1236,7 +1241,12 @@ function checkAuthGate() {
 
 // PREVIEW MODE — must run before auth gate
 const _params = new URLSearchParams(window.location.search);
-const _preview = _params.get('preview') === '1';
+const _previewHost = String(window.location.hostname || '').toLowerCase();
+const _previewLocal = _previewHost === 'localhost'
+  || _previewHost === '127.0.0.1'
+  || _previewHost === '[::1]'
+  || /\.local$/.test(_previewHost);
+const _preview = _previewLocal && _params.get('preview') === '1';
 const _screen = _params.get('screen') || 'home';
 const _state = _params.get('state') || 'active';
 const _theme = _params.get('theme') || 'dark';
@@ -1961,17 +1971,6 @@ async function _acquireClubToken(playerId, clubId) {
       body: _tokenBody
     });
     var verdict = _authHandleResponse(tok.status, tok.data);
-    if (verdict === 'fatal' && TOKEN) {
-      // Legacy login JWTs are not required for /api/auth/token and may be
-      // rejected by the club-session route. Retry once with actor+club only;
-      // the backend still derives role/status from the authoritative DB row.
-      tok = await _authFetchOnce(API + '/api/auth/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: _tokenBody
-      });
-      verdict = _authHandleResponse(tok.status, tok.data);
-    }
     if (verdict === 'fatal') return { ok:false, error:'session_invalid' };
     if (verdict === 'rate_limited') {
       return { ok:false, error:'too_many_requests', message:'Too many requests — wait a minute and try again' };
@@ -2512,7 +2511,7 @@ const urlCode = new URLSearchParams(window.location.search).get('join');
 if (urlCode) { document.getElementById('join-code').value = urlCode.toUpperCase(); setTimeout(()=>openModal('modal-join'),500); }
 
 // Init
-const isPreview = new URLSearchParams(window.location.search).get('preview') === '1';
+const isPreview = _preview;
 const _isAuthScreen = (_screen === 'signin' || _screen === 'signup');
 if (isPreview && !_isAuthScreen) {
   // DevPreview mode (non-auth): force hide auth, render preview, never run auth gate.

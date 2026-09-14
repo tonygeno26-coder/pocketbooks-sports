@@ -14,7 +14,12 @@
     // Visual QA / design-system parity: ?preview=1 must not bounce to lobby
     // (host already has preview helpers later; top-of-file redirect was the escape gap).
     var _hPrev = false;
-    try { _hPrev = new URLSearchParams(location.search).get('preview') === '1'; } catch(_e){}
+    try {
+      var _hPrevHost = String(location.hostname || '').toLowerCase();
+      var _hPrevLocal = _hPrevHost === 'localhost' || _hPrevHost === '127.0.0.1'
+        || _hPrevHost === '[::1]' || /\.local$/.test(_hPrevHost);
+      _hPrev = _hPrevLocal && new URLSearchParams(location.search).get('preview') === '1';
+    } catch(_e){}
     if (_hPrev) return;
     var _bootTok = localStorage.getItem('pb-sports-token') || localStorage.getItem('pb-session-token') || '';
     if (!_bootTok) {
@@ -2028,7 +2033,10 @@ function _clearAuthLocalStorage() {
 function _authRedirectToLogin(msg) {
   // Visual QA: ?preview=1 must stay on host shell (no lobby bounce / token wipe).
   try {
-    if (new URLSearchParams(location.search).get('preview') === '1') return;
+    var _redirectHost = String(location.hostname || '').toLowerCase();
+    var _redirectLocal = _redirectHost === 'localhost' || _redirectHost === '127.0.0.1'
+      || _redirectHost === '[::1]' || /\.local$/.test(_redirectHost);
+    if (_redirectLocal && new URLSearchParams(location.search).get('preview') === '1') return;
   } catch (_e) {}
   if (_authGiveUp) return;
   _authGiveUp = true;
@@ -5896,7 +5904,12 @@ function switchClub(id) {
     _renderActiveClubIdentity();
     // Preview mode — standardized params
 const _hp = new URLSearchParams(window.location.search);
-const _hPreview = _hp.get('preview') === '1';
+const _hPreviewHost = String(window.location.hostname || '').toLowerCase();
+const _hPreviewLocal = _hPreviewHost === 'localhost'
+  || _hPreviewHost === '127.0.0.1'
+  || _hPreviewHost === '[::1]'
+  || /\.local$/.test(_hPreviewHost);
+const _hPreview = _hPreviewLocal && _hp.get('preview') === '1';
 const _hRole = _hp.get('role') || 'host';
 const _hState = _hp.get('state') || 'balanced';
 const _hTheme = _hp.get('theme') || 'dark';
