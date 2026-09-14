@@ -1,6 +1,6 @@
 /**
  * Prop defer ≥100 — betting identity / selection / filter safety.
- * Covers 99 / 100 / 101 / 300 / 500 (eager vs deferred thresholds).
+ * Covers 99 / 100 / 101 / 300 / 500 / 700+ (eager vs deferred thresholds).
  * Run: node tests/prop-defer-betting-safety.test.js
  */
 'use strict';
@@ -77,7 +77,7 @@ test('player.html has defer + resync + stable cellId', function () {
   assert(html.indexOf('PbA11y.announce') < 0 || html.indexOf('_pbExpandDeferredPropSection') >= 0);
 });
 
-[99, 100, 101, 300, 500].forEach(function (n) {
+[99, 100, 101, 300, 500, 700, 701].forEach(function (n) {
   test(n + '-prop fixture market IDs stable across hydrate', function () {
     var before = simulateDefer(n);
     var afterHtml = hydrateTemplate(before.html);
