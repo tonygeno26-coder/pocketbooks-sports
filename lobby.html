@@ -348,12 +348,27 @@ body.theme-light [style*="color:var(--pb-accent)"]{color:#00875a!important}
 .beta-status.active{color:#22C55E;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.35)}
 .beta-join{width:100%;min-height:48px;margin-top:14px;padding:14px 16px;background:#1677FF;color:#fff;border:none;border-radius:14px;font-size:0.95rem;font-weight:900;cursor:pointer}
 .beta-join:disabled{opacity:0.72;cursor:default}
+.beta-pending-guide{display:none;margin-top:12px;padding:12px;border-radius:12px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.28);text-align:left}
+.beta-pending-guide.is-on{display:block}
+.beta-pending-title{font-size:0.82rem;font-weight:900;color:#F5F7FA;margin-bottom:4px}
+.beta-pending-sub{font-size:0.72rem;color:#94A3B8;line-height:1.45;margin-bottom:10px}
+.beta-pending-actions{display:flex;gap:8px;flex-wrap:wrap}
+.beta-pending-actions button{flex:1;min-height:40px;min-width:120px;padding:8px 12px;border-radius:10px;font-size:0.75rem;font-weight:800;cursor:pointer}
+.beta-check-btn{background:transparent;border:1px solid rgba(234,179,8,0.45);color:#EAB308}
+.beta-feedback-btn{background:transparent;border:1px solid #2a3d5c;color:#9ec5ff}
 .beta-note{margin-top:12px;font-size:0.72rem;color:#64748B;line-height:1.45;text-align:center}
 .create-club-btn,.modal-create,#modal-create{display:none!important}
 @media (max-width:430px){
   .beta-lobby{padding:6px 12px 16px}
   .beta-title{font-size:1.2rem}
   .beta-card{padding:14px}
+}
+@media (min-width:768px){
+  .beta-lobby{max-width:560px}
+  .beta-pending-actions button{flex:0 1 auto;min-width:140px}
+}
+@media (min-width:1100px){
+  .beta-lobby{max-width:640px}
 }
 @media (max-width:390px){
   .auth-content{padding:24px 12px 20px}
@@ -496,6 +511,14 @@ try {
       </div>
       <div class="beta-status open" id="beta-status">Loading club…</div>
       <button type="button" class="beta-join" id="beta-join-btn" onclick="joinBetaClub()">Join club</button>
+      <div class="beta-pending-guide" id="beta-pending-guide" aria-live="polite">
+        <div class="beta-pending-title" id="beta-pending-title">Request sent</div>
+        <div class="beta-pending-sub" id="beta-pending-sub">Your host still needs to approve you. You can’t place bets until you’re in.</div>
+        <div class="beta-pending-actions">
+          <button type="button" class="beta-check-btn" id="beta-check-status" onclick="loadBetaClub()">Check status</button>
+          <button type="button" class="beta-feedback-btn" id="beta-send-feedback" onclick="typeof PbBetaUx!=='undefined'&&PbBetaUx.openFeedbackModal({source:'lobby_pending',category:'ux'})">Send feedback</button>
+        </div>
+      </div>
     </div>
     <div class="beta-note" id="beta-note">Club creation is coming later.</div>
   </div>
@@ -697,11 +720,11 @@ try {
       <div class="pending-badge">Pending Approval</div>
       <div class="pending-icon">⏳</div>
       <div class="pending-title">Request Sent!</div>
-      <div class="pending-sub">Your request to join <strong id="pending-club-name" style="color:var(--text-primary)"></strong> has been sent.<br>You'll be notified once the host approves you.</div>
+      <div class="pending-sub">Your request to join <strong id="pending-club-name" style="color:var(--text-primary)"></strong> has been sent.<br>You’ll be notified once the host approves you.</div>
       <div class="pending-code" id="pending-club-code"></div>
-      <div style="font-size:0.72rem;color:var(--text-muted);margin-top:12px">You cannot place bets until approved</div>
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-top:12px;line-height:1.45">You can’t place bets until approved. Stay on this lobby and tap <strong>Check status</strong> after your host reviews the request.</div>
     </div>
-    <button onclick="closeModal('modal-pending')" class="btn-secondary">Back to Lobby</button>
+    <button onclick="closeModal('modal-pending');loadBetaClub()" class="btn-secondary">Back to Lobby</button>
   </div>
 </div>
 
@@ -1756,6 +1779,9 @@ function paintBetaCard(club, membership) {
   var statusEl = document.getElementById('beta-status');
   var btn = document.getElementById('beta-join-btn');
   var note = document.getElementById('beta-note');
+  var guide = document.getElementById('beta-pending-guide');
+  var guideTitle = document.getElementById('beta-pending-title');
+  var guideSub = document.getElementById('beta-pending-sub');
   if (nameEl) nameEl.textContent = (club && club.name) || 'PocketBooks Beta';
   if (descEl) descEl.textContent = (club && club.description) || 'Private club for the PocketBooks player beta.';
   var status = _membershipStatus(membership);
@@ -1764,37 +1790,53 @@ function paintBetaCard(club, membership) {
   if (!statusEl || !btn) return;
   statusEl.className = 'beta-status';
   btn.disabled = false;
+  if (guide) guide.classList.remove('is-on');
   if (!club) {
     statusEl.className += ' open';
     statusEl.textContent = 'Club unavailable right now';
     btn.disabled = true;
     btn.textContent = 'Try again';
+    if (note) note.textContent = 'Pull to refresh or try again in a moment.';
     return;
   }
   if (_membershipActive(membership)) {
     statusEl.className += ' active';
     statusEl.textContent = hostRole ? 'Host access' : 'You’re in';
     btn.textContent = hostRole ? 'Open host tools' : 'Enter club';
+    if (note) note.textContent = 'Club creation is coming later.';
   } else if (status === 'pending') {
     statusEl.className += ' pending';
     statusEl.textContent = 'Request pending';
     btn.disabled = true;
-    btn.textContent = 'Request pending';
+    btn.textContent = 'Waiting for host…';
+    if (guide) {
+      guide.classList.add('is-on');
+      if (guideTitle) guideTitle.textContent = 'Almost there';
+      if (guideSub) guideSub.textContent = 'Your join request is with the host. You’ll enter the sportsbook as soon as they approve — betting stays locked until then.';
+    }
+    if (note) note.textContent = 'Tip: tap Check status after your host approves you.';
   } else if (status === 'rejected' || status === 'denied') {
     statusEl.className += ' pending';
     statusEl.textContent = 'Request not approved';
     btn.disabled = true;
     btn.textContent = 'Not approved';
+    if (guide) {
+      guide.classList.add('is-on');
+      if (guideTitle) guideTitle.textContent = 'Not approved yet';
+      if (guideSub) guideSub.textContent = 'The host didn’t approve this request. Send feedback if you think this is a mistake.';
+    }
+    if (note) note.textContent = 'Contact your host outside the app if you still need access.';
   } else if (locked) {
     statusEl.className += ' pending';
     statusEl.textContent = 'Host approval required';
     btn.textContent = 'Request access';
+    if (note) note.textContent = 'You’ll wait for host approval before you can bet.';
   } else {
     statusEl.className += ' open';
     statusEl.textContent = 'Open to join';
     btn.textContent = 'Join club';
+    if (note) note.textContent = 'Club creation is coming later.';
   }
-  if (note) note.textContent = 'Club creation is coming later.';
 }
 
 async function loadBetaClub() {
@@ -1857,6 +1899,13 @@ async function joinBetaClub() {
         status: next === 'active' ? 'active' : 'approved'
       }, 'player');
       enterActiveClub(isHostRole(activeClub.role) ? 'host' : 'player');
+    } else if (next === 'pending') {
+      var pendingName = document.getElementById('pending-club-name');
+      var pendingCode = document.getElementById('pending-club-code');
+      if (pendingName) pendingName.textContent = (_betaClub && _betaClub.name) || 'PocketBooks Beta';
+      if (pendingCode) pendingCode.textContent = '';
+      try { openModal('modal-pending'); } catch (_e) {}
+      showToast('Request sent — waiting for host approval.');
     }
   } catch (e) {
     showToast('Could not join right now.');
@@ -2373,6 +2422,11 @@ function showPlayerSettings() {
         '<button type="button" id="ps-telegram-link" style="width:100%;padding:12px;background:var(--bg-recessed,#0a101a);border:1px solid var(--pb-accent);color:var(--accent-blue-bright,#5eb1ff);border-radius:10px;font-size:0.85rem;font-weight:800;cursor:pointer">Link Telegram</button>' +
         '<div id="ps-telegram-help" style="font-size:0.62rem;color:var(--pb-gray);margin-top:8px;line-height:1.45">Message <b style="color:var(--pb-light)">@pocketbookssports_bot</b> on Telegram, then send <b style="color:var(--pb-light)">/start YourUsername</b> for reminders.</div>' +
       '</div>' +
+      '<div style="background:var(--pb-card);border:1px solid var(--pb-border);border-radius:12px;padding:14px;margin-bottom:12px">' +
+        '<div style="font-size:0.62rem;color:var(--pb-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Support</div>' +
+        '<button type="button" id="ps-feedback" style="width:100%;padding:12px;background:var(--bg-recessed,#0a101a);border:1px solid var(--pb-accent);color:var(--accent-blue-bright,#5eb1ff);border-radius:10px;font-size:0.85rem;font-weight:800;cursor:pointer">Send Feedback</button>' +
+        '<div style="font-size:0.62rem;color:var(--pb-gray);margin-top:8px;line-height:1.45">Bugs, confusion, or market issues — safe diagnostics only, no tokens.</div>' +
+      '</div>' +
       '<button id="ps-signout" style="width:100%;padding:13px;background:transparent;color:var(--pb-loss);border:1.5px solid var(--pb-loss);border-radius:12px;font-size:0.85rem;font-weight:900;cursor:pointer;margin-top:4px">Sign Out</button>' +
     '</div>' +
     '<div style="padding:12px 16px 18px;border-top:1px solid var(--pb-border)">' +
@@ -2385,6 +2439,14 @@ function showPlayerSettings() {
   
   ov.addEventListener('click', function(e){ if (e.target===ov) ov.remove(); });
   ov.querySelector('#ps-close').addEventListener('click', function(){ ov.remove(); });
+  var fbBtn = ov.querySelector('#ps-feedback');
+  if (fbBtn) {
+    fbBtn.addEventListener('click', function() {
+      if (typeof PbBetaUx !== 'undefined' && PbBetaUx.openFeedbackModal) {
+        PbBetaUx.openFeedbackModal({ source: 'lobby_settings', category: 'bug' });
+      }
+    });
+  }
   Array.prototype.forEach.call(ov.querySelectorAll('[data-pset-theme]'), function(b){
     b.addEventListener('click', function() { s.theme = b.dataset.psetTheme; savePlayerSettings(s); applyPlayerTheme(); showPlayerSettings(); });
   });
@@ -2623,6 +2685,7 @@ if (activeClub) setActiveClub(activeClub);
 </script>
 <script src="team-logos.js"></script>
 <script src="pb-a11y.js"></script>
+<script src="pb-beta-ux.js"></script>
 <script src="diamonds.js"></script>
 </body>
 </html>

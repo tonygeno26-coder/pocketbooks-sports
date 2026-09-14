@@ -116,7 +116,7 @@ test('header copy and empty state present', function() {
   assertIncludes(src, 'Recent Bets', 'title');
   assertIncludes(src, 'Bets placed in the last 12 hours', 'subtitle');
   assertIncludes(src, 'No recent bets', 'empty title');
-  assertIncludes(src, 'Bets you place will appear here for 12 hours.', 'empty sub');
+  assertIncludes(src, 'Bets you place will appear here for 12 hours', 'empty sub');
   assertIncludes(src, 'View Results', 'view results');
   assertIncludes(src, 'Est. Win Chance', 'exact EWC label');
 });

@@ -2534,6 +2534,7 @@ function _debugClearTickets() {
 </nav>
 
 <script src="pb-a11y.js"></script>
+<script src="pb-beta-ux.js"></script>
 <script src="player-photos.js"></script>
 <script src="team-logos.js"></script>
 <script src="parlay-correlation.js"></script>
@@ -2652,12 +2653,11 @@ function _showSessionExpiredModal(result) {
     '<div style="background:#1a1a1a;border:1.5px solid #ef4444;border-radius:20px;padding:32px 24px;max-width:320px;width:90%;text-align:center;box-shadow:0 0 40px rgba(239,68,68,0.25)">',
       '<div style="font-size:2rem;margin-bottom:12px">&#128274;</div>',
       '<div style="font-weight:800;font-size:1.1rem;color:#fff;margin-bottom:10px">' +
-        (reason === 'too_many_requests' ? 'Too Many Requests' : 'Session Expired') + '</div>',
+        (reason === 'too_many_requests' ? 'Slow down' : 'Session expired') + '</div>',
       '<div style="color:#aaa;font-size:0.85rem;line-height:1.5;margin-bottom:24px">',
         (reason === 'too_many_requests'
-          ? 'Please wait a minute, then return to the lobby and sign in again.'
-          : 'Your session is no longer valid.<br>Return to the lobby and re-enter your club to continue.'),
-        (reason && reason !== 'too_many_requests' ? '<br><span style="font-size:0.75rem;color:#666;margin-top:6px;display:block">Reason: '+reason+'</span>' : ''),
+          ? 'Too many requests. Wait a minute, then return to the lobby and sign in again.'
+          : 'Sign in again from the lobby to keep betting securely.'),
       '</div>',
       '<button id="session-lobby-btn" style="width:100%;padding:14px;background:#00ff87;border:none;border-radius:12px;color:#000;font-weight:800;font-size:1rem;cursor:pointer">',
         '&#8592; Return to Lobby',
@@ -3510,6 +3510,15 @@ try {
     } else { applyPlayerTheme(); }
   }
 } catch(_e) {}
+try {
+  if (typeof document !== 'undefined') {
+    function _bootBetaOnboarding() {
+      if (window.PbBetaUx && PbBetaUx.initPlayerOnboarding) PbBetaUx.initPlayerOnboarding();
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _bootBetaOnboarding);
+    else _bootBetaOnboarding();
+  }
+} catch(_eOnb) {}
 // ═══════════════════════════════════════════════════════════════════════════════
 function fmtBalance(){
   if (!_hasAuthoritativeBalance()) {
@@ -3571,6 +3580,11 @@ function showPlayerSettings() {
         '<button type="button" id="ps-telegram-link" style="width:100%;padding:12px;background:#1c1c1c;border:1px solid #00c2ff;color:#00c2ff;border-radius:10px;font-size:0.85rem;font-weight:800;cursor:pointer">Link Telegram</button>' +
         '<div id="ps-telegram-help" style="font-size:0.62rem;color:#666;margin-top:8px;line-height:1.45">Message <b style="color:#bbb">@pocketbookssports_bot</b> on Telegram, then send <b style="color:#bbb">/start YourUsername</b> to get survivor pick reminders and results.</div>' +
       '</div>' +
+      '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;margin-bottom:12px">' +
+        '<div style="font-size:0.62rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Support</div>' +
+        '<button type="button" id="ps-feedback" style="width:100%;padding:12px;background:#1c1c1c;border:1px solid #00c2ff;color:#00c2ff;border-radius:10px;font-size:0.85rem;font-weight:800;cursor:pointer">Send Feedback</button>' +
+        '<div style="font-size:0.62rem;color:#666;margin-top:8px;line-height:1.45">Report bugs or confusion. We attach page/club context only — never tokens.</div>' +
+      '</div>' +
     '</div>' +
     '<div style="padding:12px 16px 18px;border-top:1px solid #252525">' +
       '<button id="ps-save" style="width:100%;padding:14px;background:#00c2ff;border:none;color:#000;border-radius:12px;font-size:0.92rem;font-weight:900;cursor:pointer">Save</button>' +
@@ -3582,6 +3596,14 @@ function showPlayerSettings() {
   ov.setAttribute('aria-label', 'Player settings');
   ov.addEventListener('click', function(e){ if (e.target===ov) { if (window.PbA11y) PbA11y.deactivate(ov); ov.remove(); } });
   ov.querySelector('#ps-close').addEventListener('click', function(){ if (window.PbA11y) PbA11y.deactivate(ov); ov.remove(); });
+  var _psFb = ov.querySelector('#ps-feedback');
+  if (_psFb) {
+    _psFb.addEventListener('click', function() {
+      if (window.PbBetaUx && PbBetaUx.openFeedbackModal) {
+        PbBetaUx.openFeedbackModal({ source: 'player_settings', category: 'bug' });
+      }
+    });
+  }
   if (window.PbA11y) {
     PbA11y.activate(ov, {
       onEscape: function(){ if (window.PbA11y) PbA11y.deactivate(ov); ov.remove(); },
@@ -4516,11 +4538,18 @@ function _pbStateHtml(opts) {
 }
 
 function _pbNoEventsHtml() {
-  return _pbStateHtml({ title: 'No events scheduled', body: 'Check back soon or try another sport.' });
+  return _pbStateHtml({
+    title: 'No events available',
+    body: 'Nothing scheduled for this sport right now. Try another tab or check back later.',
+    actionHtml: '<button type="button" class="pb-retry-btn" onclick="typeof PbBetaUx!==\'undefined\'&&PbBetaUx.openFeedbackModal({source:\'sportsbook_empty\',category:\'odds\'})">Send feedback</button>'
+  });
 }
 
 function _pbNoMarketsHtml() {
-  return _pbStateHtml({ title: 'No markets posted', body: 'Lines will appear when this slate opens.' });
+  return _pbStateHtml({
+    title: 'No markets posted',
+    body: 'Lines will appear when this slate opens. Pull to refresh or try another sport.'
+  });
 }
 
 function _pbGamesHaveMarkets(games) {
@@ -7355,7 +7384,7 @@ async function _pbLoadGameProps(gameId, sport, panel, card) {
     var data = await res.json();
     if (_pbExpandedPropsGameId !== String(gameId)) return;
     if (!res.ok || !data.props || !data.props.length) {
-      panel.innerHTML = '<div class="mc-props-empty">No props for this game</div>';
+      panel.innerHTML = '<div class="mc-props-empty">No props for this game yet. Check back closer to tip-off.</div>';
       return;
     }
     var meta = data.props[0] || {};
@@ -7378,7 +7407,7 @@ async function _pbLoadGameProps(gameId, sport, panel, card) {
     await _pbHydratePropHeadshots(panel, data.props, s);
   } catch (_e) {
     if (_pbExpandedPropsGameId === String(gameId)) {
-      panel.innerHTML = '<div class="mc-props-empty">Props unavailable — retry</div>';
+      panel.innerHTML = '<div class="mc-props-empty">Props unavailable — check your connection and retry.</div>';
     }
   }
 }
@@ -7738,7 +7767,7 @@ async function loadGames(sport, opts){
     el.innerHTML = _pbStateHtml({
       kind: 'error',
       title: 'Couldn’t load events',
-      body: 'Check your connection, then retry.',
+      body: (window.PbBetaUx && PbBetaUx.ERROR_COPY.network.body) || 'Check your connection, then retry.',
       actionHtml: '<button type="button" class="pb-retry-btn" onclick="loadGames(\'' + retrySport + '\')">Retry</button>'
     });
   }
@@ -8692,7 +8721,7 @@ async function requestJoin(clubId, code) {
       '<div style="font-weight:800;color:var(--green);margin-bottom:4px">Request Sent!</div>' +
       '<div style="font-size:0.78rem;color:#555">Waiting for host approval. You can bet once approved.</div></div>';
     setTimeout(hideJoinModal, 3000);
-  } catch(e) { showToast('❌ Network error'); }
+  } catch(e) { showToast((window.PbBetaUx && PbBetaUx.ERROR_COPY.network.body) || 'Connection issue — check your network and retry.', 'error'); }
 }
 
 // ===== GAME MARKETS =====
@@ -10829,7 +10858,7 @@ async function confirmBet() {
           _pendingPlaceIdemKey = null;
           try { bsRenderLegs(); } catch(_renderErr) {}
           try { bsSyncPlaceBtn(); } catch(_syncErr) {}
-          showToast(_changed ? 'Slip updated with current odds. Review and place again.' : 'Review the current market before placing.', 'info');
+.showToast(_changed ? ((window.PbBetaUx && PbBetaUx.ERROR_COPY.stale_odds.body) || 'Slip updated with current odds. Review and place again.') : 'Review the current market before placing.', 'info');
         };
         return;
 
@@ -10856,7 +10885,12 @@ async function confirmBet() {
           return;
         }
         var _rejMsg;
-        if (_dbData.userMessage) {
+        if (window.PbBetaUx && PbBetaUx.mapBetRejectMessage) {
+          _rejMsg = PbBetaUx.mapBetRejectMessage(
+            _dbData.code || _dbData.error,
+            _dbData.userMessage || null
+          );
+        } else if (_dbData.userMessage) {
           _rejMsg = String(_dbData.userMessage);
         } else if (Array.isArray(_dbData.errors) && _dbData.errors.length) {
           _rejMsg='Bet rejected: '+_dbData.errors.join(', ').replace(/_/g,' ');
@@ -10865,7 +10899,7 @@ async function confirmBet() {
         } else if (_dbData.error) {
           _rejMsg='Bet rejected: '+String(_dbData.error).replace(/_/g,' ');
         } else {
-          _rejMsg='Bet rejected by server (HTTP '+_cbRespStatus+')';
+          _rejMsg='Bet not placed. Nothing was charged — adjust the slip and try again.';
         }
         showToast(_rejMsg, 'error');
         var _hardBlock=String(_dbData.code||_dbData.error||'');
@@ -11196,6 +11230,25 @@ function closeAllBetMenus(exceptId) {
 
 // Request delete button delegation (player) — useCapture:true fires before stopPropagation
 document.addEventListener('click', function(e) {
+  var reportBtn = e.target.closest ? e.target.closest('[data-report-bet]') : null;
+  if (reportBtn) {
+    e.stopPropagation();
+    closeAllBetMenus();
+    var tid = reportBtn.getAttribute('data-report-bet');
+    var ticket = null;
+    try {
+      if (typeof betTickets !== 'undefined' && Array.isArray(betTickets)) {
+        for (var i = 0; i < betTickets.length; i++) {
+          if (betTickets[i] && String(betTickets[i].id) === String(tid)) { ticket = betTickets[i]; break; }
+        }
+      }
+    } catch (_e) {}
+    if (!ticket) ticket = { id: tid, status: 'unknown' };
+    if (window.PbBetaUx && PbBetaUx.openReportBetIssue) {
+      PbBetaUx.openReportBetIssue(ticket);
+    }
+    return;
+  }
   var btn = e.target.closest ? e.target.closest('[data-reqdelete]') : null;
   if (!btn) return;
   e.stopPropagation();
@@ -12833,7 +12886,7 @@ async function checkOpenTickets() {
       }
     } catch (e) {
       console.warn('[checkOpenTickets] server grade failed:', e && e.message);
-      showToast('Could not check results right now. Your tickets were not changed locally.', 'error');
+      showToast((window.PbBetaUx && PbBetaUx.ERROR_COPY.results_unavailable.body) || 'Could not check results right now. Your tickets were not changed locally.', 'error');
     } finally {
       if (btnSrv) { btnSrv.textContent = 'Check Results'; btnSrv.disabled = false; }
     }
@@ -13951,6 +14004,8 @@ async function _acquireSessionToken(actorId, clubId, roleHintDevOnly) {
     } else {
       console.warn('[auth] token acquisition denied:', data.error);
       if (data.error === 'membership_not_found' || data.error === 'membership_inactive') {
+        showToast((window.PbBetaUx && PbBetaUx.ERROR_COPY.membership_pending.body) || 'Your membership isn’t active yet. Wait for host approval.', 'warning');
+      } else {
         showToast('Club access denied: '+data.error.replace(/_/g,' '), 'error');
       }
     }
@@ -14639,14 +14694,17 @@ function renderMyBets() {
         : isDeleteDenied
           ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06);font-size:0.72rem;color:#cc0000;font-weight:700;text-align:center">❌ Delete request denied</div>'
           : '';
-    var showBetMenu = (displayStatus==='active'||displayStatus==='open') && !isVoided;
+    var showBetMenu = true;
     var overflowMenu = showBetMenu
       ? '<div class="bet-menu-wrap" id="bet-menu-'+t.id+'">' +
           '<button type="button" class="bet-menu-btn" data-bet-menu="'+t.id+'" aria-label="Bet options" aria-haspopup="true">⋯</button>' +
           '<div class="bet-menu-dropdown" role="menu">' +
-            (cancelDisabledByGame
-              ? '<button type="button" class="bet-menu-item" role="menuitem" disabled style="opacity:0.45;cursor:not-allowed" title="Once a game starts, the ticket is no longer eligible for Request Cancel.">Cancel Bet</button>'
-              : '<button type="button" class="bet-menu-item" role="menuitem" data-reqdelete="'+t.id+'">Cancel Bet</button>') +
+            ((displayStatus==='active'||displayStatus==='open') && !isVoided
+              ? (cancelDisabledByGame
+                ? '<button type="button" class="bet-menu-item" role="menuitem" disabled style="opacity:0.45;cursor:not-allowed" title="Once a game starts, the ticket is no longer eligible for Request Cancel.">Cancel Bet</button>'
+                : '<button type="button" class="bet-menu-item" role="menuitem" data-reqdelete="'+t.id+'">Cancel Bet</button>')
+              : '') +
+            '<button type="button" class="bet-menu-item bet-menu-item--report" role="menuitem" data-report-bet="'+t.id+'">Report issue</button>' +
           '</div>' +
         '</div>'
       : '';
@@ -14778,7 +14836,9 @@ function renderMyBets() {
       ewcHtml +
       '<div class="rb-placed">'+dateStr+'</div>' +
       '<button type="button" class="rb-details-btn" data-rb-details="'+t.id+'">View Details</button>' +
-      '<div class="rb-details" id="rb-details-'+t.id+'">'+detailsInner+'</div>' +
+      '<div class="rb-details" id="rb-details-'+t.id+'">'+detailsInner+
+        '<button type="button" class="pb-report-bet-btn" data-report-bet="'+t.id+'">Report a bet issue</button>' +
+      '</div>' +
       deleteBtn +
     '</div>';
   }
@@ -14815,7 +14875,7 @@ function renderMyBets() {
   if (!recent.length) {
     html += '<div class="rb-empty">' +
       '<div class="rb-empty-title">No recent bets</div>' +
-      '<div class="rb-empty-sub">Bets you place will appear here for 12 hours.</div>' +
+      '<div class="rb-empty-sub">Bets you place will appear here for 12 hours. Open the sportsbook to get started.</div>' +
       '<button type="button" class="rb-view-results" data-rb-goto-results="1">View Results</button>' +
     '</div>';
   } else {
@@ -16232,6 +16292,7 @@ function _renderResultsTicketCard(t){
     '</div>' +
     '<div class="rb-ewc"><div class="rb-ewc-label">Est. Win Chance</div><div class="rb-ewc-val">'+ewcTxt+'</div></div>' +
     '<div class="rb-placed">'+dateStr+(t.id ? ' · '+String(t.id) : '')+'</div>' +
+    '<button type="button" class="pb-report-bet-btn" data-report-bet="'+String(t.id||'')+'">Report a bet issue</button>' +
   '</div>';
 }
 // Seed mock tickets for current week if no tickets exist (acceptance criterion).
@@ -16572,6 +16633,15 @@ function renderPlayerResults(){
   }
   dailyHtml += '</div>';
 
+  var weekEmptyHtml = '';
+  if (!agg.totalBets) {
+    weekEmptyHtml =
+      '<div class="pb-results-empty" role="status">' +
+        '<div class="pb-results-empty-title">No results yet</div>' +
+        '<div class="pb-results-empty-sub">Settled tickets for this week will show here. Place a bet from the sportsbook, then check back after games finish.</div>' +
+      '</div>';
+  }
+
   // Weekly History — host-style cards, up to 8 prior weeks with activity.
   var historyHtml = '<div style="padding:8px 16px 24px">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:8px">' +
@@ -16609,11 +16679,11 @@ function renderPlayerResults(){
     '</button>';
   }
   if (!anyHistory) {
-    historyHtml += '<div style="padding:24px;text-align:center;color:var(--gray);font-size:0.78rem;background:var(--card);border:1px solid var(--border);border-radius:14px">No betting history yet</div>';
+    historyHtml += '<div style="padding:24px;text-align:center;color:var(--gray);font-size:0.78rem;background:var(--card);border:1px solid var(--border);border-radius:14px">No betting history yet — graded tickets will stack here by week.</div>';
   }
   historyHtml += '</div>';
 
-  el.innerHTML = topHtml + dailyHtml + historyHtml;
+  el.innerHTML = topHtml + weekEmptyHtml + dailyHtml + historyHtml;
   _wireResultsButtons(el);
 }
 function _wireResultsButtons(el){
@@ -18374,7 +18444,7 @@ function _notifRenderList(list) {
   var el = document.getElementById('notif-list');
   if (!el) return;
   if (!list || !list.length) {
-    el.innerHTML = _notifEmptyHtml('No notifications', 'You’re all caught up');
+    el.innerHTML = _notifEmptyHtml('No notifications', 'You’re all caught up — settlement and club alerts will show here.');
     return;
   }
   el.innerHTML = list.map(function(n, idx) {
@@ -18505,7 +18575,7 @@ async function _loadNotifications() {
     var d = await resp.json();
     if (!d || !d.ok) {
       if (_notifOpen && listEl) {
-        listEl.innerHTML = _notifEmptyHtml('Notifications unavailable', 'Pull to reopen and retry', true);
+        listEl.innerHTML = _notifEmptyHtml('Notifications unavailable', 'Check your connection, then reopen the bell to retry.', true);
       }
       return;
     }
@@ -18513,7 +18583,7 @@ async function _loadNotifications() {
     if (_notifOpen) _notifRenderList(d.notifications || []);
   } catch (_e) {
     if (_notifOpen && listEl) {
-      listEl.innerHTML = _notifEmptyHtml('Couldn’t load notifications', 'Check connection and reopen', true);
+      listEl.innerHTML = _notifEmptyHtml('Couldn’t load notifications', 'Network issue — reopen when you’re back online.', true);
     }
   }
 }
