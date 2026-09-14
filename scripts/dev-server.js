@@ -69,8 +69,7 @@ server.listen(PORT, () => {
   console.log('  ─────────────────────────────────────');
   console.log(`  player:   http://localhost:${PORT}/player.html`);
   console.log(`  host:     http://localhost:${PORT}/index.html`);
-  console.log(`  host ops: http://localhost:${PORT}/index.html?preview=1&tab=ops`);
-  console.log(`  ops gate: http://localhost:${PORT}/_host-beta-ops-visual-gate.html`);
+  console.log(`  host ops: http://localhost:${PORT}/index.html (auth required · real Beta Ops data)`);
   console.log(`  survivor: http://localhost:${PORT}/survivor.html?preview=1`);
   console.log(`  survgate: http://localhost:${PORT}/_survivor-visual-gate.html`);
   console.log(`  dev:      http://localhost:${PORT}/dev.html`);

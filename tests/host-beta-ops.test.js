@@ -2,7 +2,7 @@
 
 /**
  * Host Beta Ops — FE contract gates (source slicing).
- * No financial mutation paths; preview fixture must be localhost-only.
+ * No financial mutation paths; runtime fixtures forbidden — real / empty / error only.
  */
 
 const fs = require('fs');
@@ -90,41 +90,47 @@ test('bet issue ticket context is read-only', function () {
   assert.ok(!ops.includes('/api/host/offer-cashout'));
 });
 
-test('local preview fixture is production-blocked', function () {
-  assert.ok(ops.includes('_isLocalPreview') || ops.includes('localhost'));
-  assert.ok(ops.includes("get('preview') === '1'"));
-  assert.ok(ops.includes('_previewFixture') || ops.includes('LOCAL-ONLY'));
-  assert.ok(ops.includes("h === 'localhost'") || ops.includes("=== 'localhost'"));
-  assert.ok(ops.includes('_isLocalPreview()'));
-  assert.ok(ops.includes('requests:') && ops.includes('testers:'));
-  assert.ok(ops.includes('opsState') || ops.includes('_previewOpsState'));
-  // Status updates in preview must not hit production
-  assert.ok(ops.includes('Local preview: mutate fixture only')
-    || (ops.includes('_isLocalPreview()') && ops.includes('never call production')));
+test('no runtime Host Beta Ops fixtures or preview fake data', function () {
+  assert.ok(!ops.includes('_previewFixture'), 'no preview fixture fn');
+  assert.ok(!ops.includes('applyPreviewFixture'), 'no apply fixture');
+  assert.ok(!ops.includes('bootPreview'), 'no bootPreview seed');
+  assert.ok(!ops.includes('T_PREVIEW_DEMO'), 'no demo tickets');
+  assert.ok(!ops.includes('Sam Applicant') && !ops.includes('Alex Tester'), 'no demo people');
+  assert.ok(!ops.includes('preview_error_fixture'), 'no fixture error state');
+  assert.ok(!ops.includes('opsState'), 'no opsState fixture switches');
+  assert.ok(!ops.includes('Local preview: mutate fixture only'));
+  assert.ok(ops.includes('Authoritative backend') || ops.includes('No runtime fixtures')
+    || ops.includes('real, empty, or error'));
 });
 
-test('visual gate page is localhost-gated', function () {
-  const gate = fs.readFileSync(path.join(root, '_host-beta-ops-visual-gate.html'), 'utf8');
-  assert.ok(gate.includes('__HBO_GATE_LOCAL'));
-  assert.ok(gate.includes("h === 'localhost'") || gate.includes("=== 'localhost'"));
-  assert.ok(gate.includes('Visual gate unavailable') || gate.includes('restricted to localhost'));
-  assert.ok(gate.includes('index.html?preview=1&tab=ops'));
-  assert.ok(gate.includes('opsState=empty') && gate.includes('opsState=loading') && gate.includes('opsState=error'));
+test('Host Beta Ops visual gate page removed', function () {
+  assert.ok(!fs.existsSync(path.join(root, '_host-beta-ops-visual-gate.html')),
+    'visual gate file must be deleted');
 });
 
-test('empty / loading / error states exist', function () {
+test('empty / loading / error states exist (fail closed)', function () {
   assert.ok(ops.includes('Loading feedback'));
-  assert.ok(ops.includes('Couldn’t load feedback') || ops.includes("Couldn't load feedback")
-    || ops.includes('Unable to load feedback'));
+  assert.ok(ops.includes('Unable to load feedback'));
+  assert.ok(ops.includes('Retry'));
   assert.ok(ops.includes('No feedback yet'));
   assert.ok(ops.includes('No pending join requests'));
   assert.ok(ops.includes('No active testers'));
+  // Fail closed: API catch must not fall back to fixtures
+  assert.ok(ops.includes("_fbError = (e && e.message) || 'Unable to load feedback'")
+    || (ops.includes('_fbError =') && ops.includes('Unable to load feedback')));
 });
 
 test('non-financial overview metrics only', function () {
   assert.ok(ops.includes('Join requests') && ops.includes('Active testers'));
   assert.ok(ops.includes('New feedback') && ops.includes('Bet issues'));
   assert.ok(!ops.includes('stat-profit') && !ops.includes('Credit Position'));
+});
+
+test('ops tab always loads live dashboard / requests', function () {
+  assert.ok(html.includes("loadHostDashboardFromDb('beta_ops')"));
+  assert.ok(html.includes('Always authoritative backend')
+    || !html.includes('uses fixture data only'));
+  assert.ok(!html.includes('PbHostBetaOps.isLocalPreview'));
 });
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

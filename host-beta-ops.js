@@ -1,6 +1,7 @@
 /**
  * Host Beta Ops — testers, join requests, feedback inbox.
  * Presentation + host-scoped API only. No bankroll / grade / settle mutations.
+ * Authoritative backend data only — real, empty, or error. No runtime fixtures.
  * Loaded by index.html (Host Dashboard).
  */
 (function (global) {
@@ -26,151 +27,13 @@
       .replace(/"/g, '&quot;');
   }
 
-  function _isLocalPreview() {
-    try {
-      var h = String(location.hostname || '').toLowerCase();
-      var local = h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || /\.local$/.test(h);
-      return local && new URLSearchParams(location.search).get('preview') === '1';
-    } catch (_e) {
-      return false;
-    }
-  }
-
-  function _previewOpsState() {
-    if (!_isLocalPreview()) return 'full';
-    try {
-      var st = String(new URLSearchParams(location.search).get('opsState')
-        || new URLSearchParams(location.search).get('state') || 'full').toLowerCase();
-      if (st === 'empty' || st === 'loading' || st === 'error' || st === 'full') return st;
-    } catch (_e) {}
-    return 'full';
-  }
-
-  function _previewPanelBoot() {
-    if (!_isLocalPreview()) return null;
+  /** Deep-link panel from ?panel= (no data injection). */
+  function _panelBoot() {
     try {
       var p = String(new URLSearchParams(location.search).get('panel') || '').toLowerCase();
       if (p === 'overview' || p === 'requests' || p === 'testers' || p === 'feedback') return p;
     } catch (_e) {}
     return null;
-  }
-
-  /** LOCAL-ONLY visual fixture — never authoritative; never used on production hosts. */
-  function _previewFixture() {
-    return {
-      requests: [
-        {
-          playerId: 'preview-applicant-1',
-          playerName: 'Sam Applicant',
-          display_name: 'Sam Applicant',
-          username: 'sam_a',
-          membershipId: 'prev-mem-1',
-          requestedAt: new Date(Date.now() - 5400000).toISOString()
-        },
-        {
-          playerId: 'preview-applicant-2',
-          playerName: 'Riley Join',
-          display_name: 'Riley Join',
-          username: 'rileyj',
-          membershipId: 'prev-mem-2',
-          requestedAt: new Date(Date.now() - 18000000).toISOString()
-        }
-      ],
-      testers: [
-        {
-          playerId: 'preview-player-1',
-          playerName: 'Alex Tester',
-          username: 'alex',
-          status: 'approved',
-          availableBalance: 100,
-          startingBalance: 100,
-          activeBetCount: 1
-        },
-        {
-          playerId: 'preview-player-2',
-          playerName: 'Jordan Beta',
-          username: 'jordan',
-          status: 'approved',
-          availableBalance: 50,
-          startingBalance: 50,
-          activeBetCount: 0
-        },
-        {
-          playerId: 'preview-player-3',
-          playerName: 'Casey Night',
-          username: 'casey',
-          status: 'approved',
-          availableBalance: 25.5,
-          startingBalance: 75,
-          activeBetCount: 2
-        }
-      ],
-      items: [
-        {
-          id: 'prev-fb-1',
-          playerId: 'preview-player-1',
-          playerLabel: 'Alex Tester',
-          category: 'ticket',
-          message: 'Ticket looks stuck after place — please check grading.',
-          ticketId: 'T_PREVIEW_DEMO_001',
-          page: 'player.html',
-          status: 'new',
-          createdAt: new Date(Date.now() - 3600000).toISOString(),
-          isBetIssue: true,
-          ticket: {
-            id: 'T_PREVIEW_DEMO_001',
-            status: 'open',
-            type: 'straight',
-            odds: -110,
-            riskAmount: 10,
-            potentialProfit: 9.09,
-            playerId: 'preview-player-1',
-            playerUsername: 'Alex Tester',
-            placedAt: new Date(Date.now() - 7200000).toISOString()
-          }
-        },
-        {
-          id: 'prev-fb-2',
-          playerId: 'preview-player-2',
-          playerLabel: 'Jordan Beta',
-          category: 'ux',
-          message: 'Hard to find my open bets on mobile.',
-          ticketId: null,
-          page: 'player.html',
-          status: 'reviewed',
-          createdAt: new Date(Date.now() - 86400000).toISOString(),
-          isBetIssue: false,
-          ticket: null
-        },
-        {
-          id: 'prev-fb-3',
-          playerId: 'preview-player-1',
-          playerLabel: 'Alex Tester',
-          category: 'bug',
-          message: 'Lines flicker when switching sports.',
-          ticketId: null,
-          page: 'player.html',
-          status: 'resolved',
-          createdAt: new Date(Date.now() - 172800000).toISOString(),
-          isBetIssue: false,
-          ticket: null
-        },
-        {
-          id: 'prev-fb-4',
-          playerId: 'preview-player-3',
-          playerLabel: 'Casey Night',
-          category: 'odds',
-          message: 'Live odds jumped mid-tap on NFL moneyline.',
-          ticketId: null,
-          page: 'player.html',
-          status: 'new',
-          createdAt: new Date(Date.now() - 7200000).toISOString(),
-          isBetIssue: false,
-          ticket: null
-        }
-      ],
-      counts: { all: 4, new: 2, reviewed: 1, resolved: 1, betIssues: 1 }
-    };
   }
 
   function _clubId() {
@@ -181,11 +44,6 @@
   }
 
   function _pendingRequests() {
-    if (_isLocalPreview()) {
-      var st = _previewOpsState();
-      if (st === 'empty') return [];
-      return (_previewFixture().requests || []).slice();
-    }
     try {
       if (global.pendingRequests && global.pendingRequests.length) return global.pendingRequests.slice();
       if (typeof global.loadJoinRequests === 'function') return global.loadJoinRequests() || [];
@@ -194,11 +52,6 @@
   }
 
   function _activeTesters() {
-    if (_isLocalPreview()) {
-      var st = _previewOpsState();
-      if (st === 'empty') return [];
-      return (_previewFixture().testers || []).slice();
-    }
     var list = [];
     try {
       if (typeof global._hostPlayersFromDbOrLocal === 'function') {
@@ -247,54 +100,6 @@
     _fbError = null;
     if (!opts.silent) renderBetaOps();
 
-    function applyPreviewFixture() {
-      var opsState = _previewOpsState();
-      if (opsState === 'loading') {
-        _fbItems = [];
-        _fbCounts = { all: 0, new: 0, reviewed: 0, resolved: 0, betIssues: 0 };
-        _fbLoading = true;
-        _fbError = null;
-        return;
-      }
-      if (opsState === 'error') {
-        _fbItems = [];
-        _fbCounts = { all: 0, new: 0, reviewed: 0, resolved: 0, betIssues: 0 };
-        _fbLoading = false;
-        _fbError = 'preview_error_fixture';
-        return;
-      }
-      if (opsState === 'empty') {
-        _fbItems = [];
-        _fbCounts = { all: 0, new: 0, reviewed: 0, resolved: 0, betIssues: 0 };
-        _fbLoading = false;
-        _fbError = null;
-        return;
-      }
-      var fix = _previewFixture();
-      _fbItems = fix.items.filter(function (it) {
-        if (_fbStatus !== 'all' && String(it.status) !== _fbStatus) return false;
-        if (_fbCategory !== 'all' && String(it.category) !== _fbCategory) return false;
-        if (_fbBetIssuesOnly && !it.isBetIssue) return false;
-        if (_fbSearch) {
-          var hay = [it.playerLabel, it.playerId, it.ticketId, it.message, it.id]
-            .join(' ').toLowerCase();
-          if (hay.indexOf(String(_fbSearch).toLowerCase()) === -1) return false;
-        }
-        return true;
-      });
-      _fbCounts = fix.counts;
-      _fbLoading = false;
-      _fbError = null;
-    }
-
-    // Local visual QA: fixture only (production hosts never arm preview).
-    if (_isLocalPreview() && opts.forceLive !== true) {
-      applyPreviewFixture();
-      renderBetaOps();
-      _paintOpsBadge();
-      return;
-    }
-
     var clubId = _clubId();
     var params = [];
     if (clubId) params.push('clubId=' + encodeURIComponent(clubId));
@@ -319,17 +124,14 @@
         throw new Error((data && data.error) || 'feedback_unavailable');
       }
       _fbItems = Array.isArray(data.items) ? data.items : [];
-      _fbCounts = data.counts || _fbCounts;
+      _fbCounts = data.counts || { all: 0, new: 0, reviewed: 0, resolved: 0, betIssues: 0 };
       _fbLoading = false;
       _fbError = null;
     } catch (e) {
-      if (_isLocalPreview()) {
-        applyPreviewFixture();
-      } else {
-        _fbItems = [];
-        _fbLoading = false;
-        _fbError = (e && e.message) || 'Unable to load feedback';
-      }
+      _fbItems = [];
+      _fbCounts = { all: 0, new: 0, reviewed: 0, resolved: 0, betIssues: 0 };
+      _fbLoading = false;
+      _fbError = (e && e.message) || 'Unable to load feedback';
     }
     renderBetaOps();
     _paintOpsBadge();
@@ -344,28 +146,7 @@
     var body = { status: status };
     if (clubId) body.clubId = clubId;
     try {
-      // Local preview: mutate fixture only — never call production APIs.
-      if (_isLocalPreview()) {
-        _fbItems = _fbItems.map(function (it) {
-          if (String(it.id) !== String(id)) return it;
-          return Object.assign({}, it, { status: status });
-        });
-        var c = { all: 0, new: 0, reviewed: 0, resolved: 0, betIssues: 0 };
-        var all = _previewFixture().items.map(function (it) {
-          var hit = _fbItems.find(function (x) { return String(x.id) === String(it.id); });
-          return hit || it;
-        }).map(function (it) {
-          return String(it.id) === String(id) ? Object.assign({}, it, { status: status }) : it;
-        });
-        all.forEach(function (it) {
-          c.all++;
-          if (it.status === 'new') c.new++;
-          else if (it.status === 'reviewed') c.reviewed++;
-          else if (it.status === 'resolved') c.resolved++;
-          if (it.isBetIssue) c.betIssues++;
-        });
-        _fbCounts = c;
-      } else if (typeof global.apiCall === 'function') {
+      if (typeof global.apiCall === 'function') {
         var resp = await global.apiCall('PATCH', '/api/host/feedback/' + encodeURIComponent(id), body);
         if (!resp || resp.ok === false) {
           throw new Error((resp && resp.error) || 'update_failed');
@@ -557,10 +338,8 @@
       return '<div class="hbo-empty"><div class="hbo-empty-title">Loading feedback…</div></div>';
     }
     if (_fbError) {
-      return '<div class="hbo-empty hbo-empty--error"><div class="hbo-empty-title">Couldn’t load feedback</div>'
-        + '<div class="hbo-empty-sub">' + _esc(_fbError === 'preview_error_fixture'
-          ? 'Fixture error state for visual QA (localhost only).'
-          : _fbError) + '</div>'
+      return '<div class="hbo-empty hbo-empty--error"><div class="hbo-empty-title">Unable to load feedback</div>'
+        + '<div class="hbo-empty-sub">' + _esc(_fbError) + '</div>'
         + '<button type="button" class="hbo-btn hbo-btn--ghost" onclick="PbHostBetaOps.reload()">Retry</button></div>';
     }
     if (!_fbItems.length) {
@@ -664,7 +443,7 @@
     }
     renderBetaOps();
     loadFeedbackInbox({ silent: true });
-    if (!_isLocalPreview() && typeof global.loadRequests === 'function') {
+    if (typeof global.loadRequests === 'function') {
       global.loadRequests().then(function () { renderBetaOps(); }).catch(function () {});
     }
   }
@@ -673,7 +452,7 @@
     _opsPanel = panel || 'overview';
     renderBetaOps();
     if (_opsPanel === 'feedback') loadFeedbackInbox({ silent: true });
-    if (_opsPanel === 'requests' && !_isLocalPreview() && typeof global.loadRequests === 'function') {
+    if (_opsPanel === 'requests' && typeof global.loadRequests === 'function') {
       global.loadRequests().then(function () { renderBetaOps(); }).catch(function () {});
     }
   }
@@ -694,15 +473,6 @@
     _fbSearch = String(val || '');
     if (_opsSearchTimer) clearTimeout(_opsSearchTimer);
     _opsSearchTimer = setTimeout(function () { loadFeedbackInbox(); }, 220);
-  }
-
-  function _seedPreviewGlobals() {
-    if (!_isLocalPreview()) return;
-    var fix = _previewFixture();
-    var st = _previewOpsState();
-    try {
-      global.pendingRequests = st === 'empty' ? [] : (fix.requests || []).slice();
-    } catch (_e) {}
   }
 
   function mountHomeCard() {
@@ -729,17 +499,9 @@
     }
   }
 
-  function bootPreview() {
-    if (!_isLocalPreview()) return;
-    _seedPreviewGlobals();
-    var panel = _previewPanelBoot();
+  function boot() {
+    var panel = _panelBoot();
     if (panel) _opsPanel = panel;
-    var fix = _previewFixture();
-    if (_previewOpsState() === 'full') {
-      _fbItems = fix.items.slice();
-      _fbCounts = fix.counts;
-    }
-    _paintOpsBadge();
   }
 
   var api = {
@@ -747,11 +509,6 @@
     render: renderBetaOps,
     reload: function () {
       loadFeedbackInbox();
-      if (_isLocalPreview()) {
-        _seedPreviewGlobals();
-        renderBetaOps();
-        return;
-      }
       if (typeof global.loadRequests === 'function') {
         global.loadRequests().then(function () { renderBetaOps(); }).catch(function () {});
       }
@@ -766,16 +523,14 @@
     onSearch: onSearch,
     setStatus: updateFeedbackStatus,
     mountHomeCard: mountHomeCard,
-    isLocalPreview: _isLocalPreview,
-    _paintOpsBadge: _paintOpsBadge,
-    bootPreview: bootPreview
+    _paintOpsBadge: _paintOpsBadge
   };
 
   global.PbHostBetaOps = api;
 
   function _onReady() {
     mountHomeCard();
-    bootPreview();
+    boot();
   }
 
   if (document.readyState === 'loading') {

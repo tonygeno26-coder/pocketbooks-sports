@@ -26,20 +26,13 @@ assert.ok(host.includes("_redirectLocal && new URLSearchParams(location.search).
   'host auth redirect bypass must be localhost-gated');
 
 const hostOps = fs.readFileSync(path.join(root, 'host-beta-ops.js'), 'utf8');
-assert.ok(hostOps.includes('_isLocalPreview'), 'beta ops preview must be localhost-gated');
-assert.ok(hostOps.includes("h === 'localhost'") || hostOps.includes("=== 'localhost'"),
-  'beta ops preview host helper must accept loopback only');
-assert.ok(hostOps.includes('_previewFixture') || hostOps.includes('LOCAL-ONLY'),
-  'beta ops local fixture must be explicit');
-assert.ok(hostOps.includes('_isLocalPreview()'),
-  'beta ops fixture must never arm from query flag alone');
-
-const hostOpsGate = fs.readFileSync(path.join(root, '_host-beta-ops-visual-gate.html'), 'utf8');
-assert.ok(hostOpsGate.includes('__HBO_GATE_LOCAL'), 'ops visual gate must gate on localhost');
-assert.ok(hostOpsGate.includes('Visual gate unavailable') || hostOpsGate.includes('restricted to localhost'),
-  'ops visual gate must block deployed hosts');
-assert.ok(!hostOpsGate.includes('mint') || hostOpsGate.includes('No session minting'),
-  'ops visual gate must not enable session minting');
+assert.ok(hostOps.includes('/api/host/feedback'), 'beta ops must call host feedback API');
+assert.ok(!hostOps.includes('_previewFixture'), 'beta ops must not ship runtime fixtures');
+assert.ok(!hostOps.includes('T_PREVIEW_DEMO'), 'beta ops must not ship demo tickets');
+assert.ok(!hostOps.includes('applyPreviewFixture'), 'beta ops must not apply preview fixtures');
+assert.ok(hostOps.includes('Unable to load feedback'), 'beta ops must fail closed on API error');
+assert.ok(!fs.existsSync(path.join(root, '_host-beta-ops-visual-gate.html')),
+  'Host Beta Ops visual gate (fixture collage) must be removed');
 
 assert.ok(player.includes("return h === 'localhost' || h === '127.0.0.1' || h === '[::1]'"),
   'player preview host helper must accept loopback only');
