@@ -69,4 +69,22 @@ test('mobile controls keep 44px targets and single-column actions', function () 
   assert(html.includes('min-height:44px'));
 });
 
+test('premium language covers pick selected locked eliminated and desktop widths', function () {
+  assert(html.includes('.mu-team.sel{border-color:var(--pb-accent)'));
+  assert(html.includes('.pick-banner.locked'));
+  assert(html.includes('.entry-tab.elim'));
+  assert(html.includes('.pill-alive'));
+  assert(html.includes('.pill-elim'));
+  assert(/@media \(min-width:768px\)[\s\S]*?max-width:560px/.test(html));
+  assert(/@media \(min-width:1280px\)[\s\S]*?max-width:600px/.test(html));
+});
+
+test('deadline and lock messaging remain in pick render path', function () {
+  const body = extract('pickBannerHtml', 'renderPick');
+  assert(body.includes('Pick deadline: Sunday 1:00 PM ET'));
+  assert(body.includes('Picks are locked — waiting for games to finish'));
+  assert(body.includes('picksAreLocked(currentDetail)'));
+  assert(script.includes('function picksAreLocked(detail)'));
+});
+
 console.log('\nSurvivor regression tests: ' + pass + ' passed');
