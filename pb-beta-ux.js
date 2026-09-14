@@ -1,7 +1,7 @@
 /**
- * PocketBooks beta onboarding + feedback UX (frontend-only).
+ * PocketBooks beta onboarding + feedback UX.
  * Safe context only — never attach JWTs, tokens, passwords, or secrets.
- * Persistence: queues locally until a feedback API exists.
+ * Persistence: POST /api/feedback; success only after server confirmation.
  */
 (function (global) {
   'use strict';
@@ -10,6 +10,7 @@
   var STORAGE_FEEDBACK_Q = 'pb-beta-feedback-queue';
   var MAX_QUEUE = 25;
   var MAX_MSG = 1200;
+  var FEEDBACK_PATH = '/api/feedback';
 
   var FEEDBACK_CATEGORIES = [
     { id: 'bug', label: 'Bug' },
@@ -131,6 +132,97 @@
     return entry;
   }
 
+  function getAuthToken() {
+    try {
+      return localStorage.getItem('pb-sports-token')
+        || localStorage.getItem('pb-session-token')
+        || '';
+    } catch (_e) {
+      return '';
+    }
+  }
+
+  function getApiBase() {
+    try {
+      if (typeof global.API === 'string' && global.API) return global.API.replace(/\/$/, '');
+    } catch (_e) {}
+    try {
+      if (typeof global.window !== 'undefined' && typeof global.window.API === 'string' && global.window.API) {
+        return global.window.API.replace(/\/$/, '');
+      }
+    } catch (_e2) {}
+    return '';
+  }
+
+  /** Submit feedback to server. Never puts tokens/secrets in the body. */
+  function submitFeedback(entry) {
+    var token = getAuthToken();
+    if (!token) {
+      return Promise.resolve({
+        ok: false,
+        error: 'unauthenticated',
+        retryable: true,
+        message: 'Sign in again, then retry sending feedback.'
+      });
+    }
+    var base = getApiBase();
+    var url = (base || '') + FEEDBACK_PATH;
+    var body = {
+      category: entry.category,
+      message: entry.message,
+      context: sanitizeContext(entry.context || {})
+    };
+    // Never mirror auth material into the JSON body.
+    delete body.token;
+    delete body.jwt;
+    delete body.authorization;
+    delete body.password;
+
+    var headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
+    try {
+      var clubId = body.context && body.context.clubId;
+      if (clubId) headers['X-Club-Id'] = String(clubId);
+    } catch (_eHdr) {}
+
+    return fetch(url, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(body)
+    }).then(function (resp) {
+      return resp.json().catch(function () { return {}; }).then(function (data) {
+        if (resp.status === 429) {
+          return {
+            ok: false,
+            error: 'rate_limited',
+            retryable: true,
+            message: 'Too many reports. Wait a bit, then try again.'
+          };
+        }
+        if (!resp.ok || !data || data.ok !== true || !data.id) {
+          var err = (data && data.error) || ('http_' + resp.status);
+          var msg = 'Couldn’t send feedback. Check your connection and try again.';
+          if (err === 'unauthenticated' || err === 'invalid_token' || err === 'session_revoked'
+              || err === 'expired_token' || err === 'legacy_token_missing_jti') {
+            msg = 'Session expired. Sign in again, then retry.';
+          } else if (err === 'ticket_not_allowed') {
+            msg = 'That ticket can’t be reported from this account.';
+          } else if (err === 'invalid_category' || err === 'message_required' || err === 'message_too_long') {
+            msg = 'Check your message and try again.';
+          }
+          return { ok: false, error: err, retryable: true, message: msg };
+        }
+        return { ok: true, id: String(data.id) };
+      });
+    }).catch(function () {
+      return {
+        ok: false,
+        error: 'network',
+        retryable: true,
+        message: 'Connection issue. Feedback was not sent — try again.'
+      };
+    });
+  }
+
   function closeOverlay(id) {
     var el = document.getElementById(id);
     if (!el) return;
@@ -246,6 +338,7 @@
     var submit = ov.querySelector('#pb-fb-submit');
     if (submit) {
       submit.addEventListener('click', function () {
+        if (submit.getAttribute('data-busy') === '1') return;
         var ta = ov.querySelector('#pb-fb-msg');
         var msg = ta ? String(ta.value || '').trim() : '';
         if (!msg) {
@@ -254,16 +347,35 @@
         }
         if (msg.length > MAX_MSG) msg = msg.slice(0, MAX_MSG);
         var entry = {
-          id: 'fb_' + Date.now().toString(36),
           category: category,
           message: msg,
           context: buildSafeContext(Object.assign({ source: source, category: category }, contextExtra)),
-          createdAt: new Date().toISOString(),
-          status: 'queued_local'
+          createdAt: new Date().toISOString()
         };
-        queueFeedback(entry);
-        closeOverlay('pb-feedback-overlay');
-        toast('Thanks — feedback saved on this device. We’ll wire cloud delivery next.', 'success');
+        submit.setAttribute('data-busy', '1');
+        submit.textContent = 'Sending…';
+        submit.style.opacity = '0.75';
+        submitFeedback(entry).then(function (result) {
+          submit.removeAttribute('data-busy');
+          submit.textContent = 'Send Feedback';
+          submit.style.opacity = '1';
+          if (!result || !result.ok) {
+            toast((result && result.message) || 'Couldn’t send feedback. Try again.', 'warning');
+            return;
+          }
+          // Keep a local receipt only after server confirmation (not a fake success queue).
+          queueFeedback({
+            id: result.id,
+            category: entry.category,
+            message: entry.message,
+            context: entry.context,
+            createdAt: entry.createdAt,
+            status: 'sent',
+            serverId: result.id
+          });
+          closeOverlay('pb-feedback-overlay');
+          toast('Thanks — feedback sent.', 'success');
+        });
       });
     }
   }
@@ -408,16 +520,16 @@
     buildSafeContext: buildSafeContext,
     sanitizeContext: sanitizeContext,
     queueFeedback: queueFeedback,
+    submitFeedback: submitFeedback,
     getFeedbackQueue: function () { return readJson(STORAGE_FEEDBACK_Q, []); },
     friendlyError: friendlyError,
     mapBetRejectMessage: mapBetRejectMessage,
     ERROR_COPY: ERROR_COPY,
     FEEDBACK_CATEGORIES: FEEDBACK_CATEGORIES,
     STORAGE_FEEDBACK_Q: STORAGE_FEEDBACK_Q,
-    /** Contract hint for future API — no network calls from this helper. */
     API_CONTRACT: {
       method: 'POST',
-      path: '/api/feedback',
+      path: FEEDBACK_PATH,
       body: {
         category: 'bug|ux|odds|ticket|other',
         message: 'string<=1200',
@@ -431,7 +543,7 @@
           ts: 'iso'
         }
       },
-      notes: 'Reject Authorization secrets in body. Auth via existing session cookie/header only. Rate-limit per actor.'
+      notes: 'Auth via Bearer session header only — never put tokens in body. Success only after server {ok,id}. Rate-limit per actor.'
     }
   };
 

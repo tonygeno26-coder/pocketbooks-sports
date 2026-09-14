@@ -137,10 +137,102 @@ test('mobile/desktop tip CSS present', function () {
 test('no financial/auth mutation hooks added', function () {
   assert(uxSrc.indexOf('/api/bets') === -1, 'no bet API');
   assert(uxSrc.indexOf('confirmBet') === -1, 'no confirmBet');
-  assert(uxSrc.indexOf('pb-sports-token') !== -1, 'mentions token only to strip');
+  assert(uxSrc.indexOf('pb-sports-token') !== -1, 'mentions token only to read/strip');
   assert(uxSrc.indexOf('localStorage.setItem(\'pb-sports-token\'') === -1, 'never writes token');
-  assert(uxSrc.indexOf('fetch(') === -1, 'no network from helper');
+  assert(uxSrc.indexOf('/api/feedback') !== -1, 'posts feedback API');
+  assert(uxSrc.indexOf('Thanks — feedback sent.') !== -1, 'server success copy');
+  assert(uxSrc.indexOf('queued_local') === -1, 'no fake local success status');
+  assert(uxSrc.indexOf('saved on this device') === -1, 'no local-queue success toast');
+  assert(uxSrc.indexOf('submitFeedback') !== -1, 'submit helper');
+  assert(uxSrc.indexOf("'Authorization': 'Bearer '") !== -1, 'bearer header');
 });
 
-console.log('\n' + pass + ' passed, ' + fail + ' failed');
-if (fail) process.exit(1);
+function runSubmitFeedbackAsyncTest() {
+  return new Promise(function (resolve, reject) {
+    try {
+      var store = {};
+      var fetchCalls = [];
+      var sandbox = {
+        window: {},
+        globalThis: {},
+        API: 'https://example.test',
+        fetch: function (url, opts) {
+          fetchCalls.push({ url: url, opts: opts });
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: function () { return Promise.resolve({ ok: true, id: 'rep-1' }); }
+          });
+        },
+        document: { title: 'Player', createElement: function () { return { style: {}, setAttribute: function () {}, addEventListener: function () {}, querySelector: function () { return null; }, querySelectorAll: function () { return []; }, appendChild: function () {}, remove: function () {}, children: [] }; }, head: { appendChild: function () {} }, body: {}, documentElement: {}, getElementById: function () { return null; }, readyState: 'complete', addEventListener: function () {} },
+        localStorage: {
+          getItem: function (k) { return store[k] || null; },
+          setItem: function (k, v) { store[k] = String(v); },
+          removeItem: function (k) { delete store[k]; }
+        },
+        location: { pathname: '/player.html' },
+        navigator: { userAgent: 'test-agent' },
+        console: console,
+        Date: Date,
+        Object: Object,
+        Array: Array,
+        String: String,
+        Math: Math,
+        JSON: JSON,
+        Promise: Promise,
+        setTimeout: function (fn) { return fn(); }
+      };
+      sandbox.window = sandbox;
+      sandbox.globalThis = sandbox;
+      vm.runInNewContext(uxSrc, sandbox);
+      var PbBetaUx = sandbox.PbBetaUx || sandbox.window.PbBetaUx;
+      assert(PbBetaUx.submitFeedback, 'submitFeedback exported');
+
+      PbBetaUx.submitFeedback({
+        category: 'bug',
+        message: 'broken odds',
+        context: { path: 'player.html', token: 'SHOULD_STRIP', jwt: 'x' }
+      }).then(function (noAuth) {
+        assert(noAuth.ok === false, 'unauth denied');
+        store['pb-sports-token'] = 'tok_test';
+        return PbBetaUx.submitFeedback({
+          category: 'bug',
+          message: 'broken odds',
+          context: PbBetaUx.sanitizeContext({
+            path: 'player.html',
+            ticketId: 'T_1',
+            token: 'SHOULD_STRIP',
+            password: 'nope'
+          })
+        });
+      }).then(function (okRes) {
+        assert(okRes.ok === true, 'auth allow');
+        assert(okRes.id === 'rep-1', 'server id');
+        assert(fetchCalls.length === 1, 'one fetch');
+        assert(fetchCalls[0].url.indexOf('/api/feedback') !== -1, 'feedback path');
+        var body = JSON.parse(fetchCalls[0].opts.body);
+        assert(body.token == null, 'no token in body');
+        assert(body.password == null, 'no password in body');
+        assert(body.context.token == null, 'no token in context');
+        assert(body.message === 'broken odds', 'message kept');
+        assert(fetchCalls[0].opts.headers.Authorization === 'Bearer tok_test', 'auth header');
+        console.log('  OK submitFeedback requires auth and strips secrets from body');
+        pass++;
+        resolve();
+      }).catch(function (e) {
+        console.error('  FAIL submitFeedback requires auth and strips secrets from body\n     ' + e.message);
+        fail++;
+        resolve();
+      });
+    } catch (e) {
+      console.error('  FAIL submitFeedback requires auth and strips secrets from body\n     ' + e.message);
+      fail++;
+      resolve();
+    }
+  });
+}
+
+runSubmitFeedbackAsyncTest().then(function () {
+  console.log('\n' + pass + ' passed, ' + fail + ' failed');
+  if (fail) process.exit(1);
+});
