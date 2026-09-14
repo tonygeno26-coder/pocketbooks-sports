@@ -25,6 +25,16 @@ assert.ok(host.includes('_hPrev = _hPrevLocal && new URLSearchParams(location.se
 assert.ok(host.includes("_redirectLocal && new URLSearchParams(location.search).get('preview') === '1'"),
   'host auth redirect bypass must be localhost-gated');
 
+const hostOps = fs.readFileSync(path.join(root, 'host-beta-ops.js'), 'utf8');
+assert.ok(hostOps.includes('_isLocalPreview'), 'beta ops preview must be localhost-gated');
+assert.ok(hostOps.includes("h === 'localhost'") || hostOps.includes("=== 'localhost'"),
+  'beta ops preview host helper must accept loopback only');
+assert.ok(hostOps.includes('_previewFixture') || hostOps.includes('LOCAL-ONLY'),
+  'beta ops local fixture must be explicit');
+assert.ok(!/preview\s*=\s*.*get\('preview'\)[\s\S]{0,80}_previewFixture/i.test(hostOps)
+  || hostOps.includes('_isLocalPreview()'),
+  'beta ops fixture must never arm from query flag alone');
+
 assert.ok(player.includes("return h === 'localhost' || h === '127.0.0.1' || h === '[::1]'"),
   'player preview host helper must accept loopback only');
 assert.ok(player.includes('Visual QA preview — financial actions disabled'),
