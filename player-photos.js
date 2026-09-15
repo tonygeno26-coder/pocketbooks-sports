@@ -269,6 +269,7 @@
     'Beatriz Haddad Maia': 2028,
     'Belinda Bencic': 2183,
     'Benjamin Bonzi': 2355,
+    'Bernard Tomic': 1317,
     'Bianca Andreescu': 2979,
     'Borna Coric': 2202,
     'Botic Van De Zandschulp': 3310,
@@ -283,6 +284,7 @@
     'Cristian Garin': 2228,
     'Damir Dzumhur': 1842,
     'Daniel Altmaier': 3203,
+    'Daniel Elahi Galan': 3009,
     'Danielle Collins': 3262,
     'Daniil Medvedev': 2383,
     'Daria Kasatkina': 2191,
@@ -291,6 +293,7 @@
     'Denis Shapovalov': 2860,
     'Diego Schwartzman': 2324,
     'Donna Vekic': 2040,
+    'Dusan Lajovic': 1769,
     'Ekaterina Alexandrova': 3182,
     'Elena Rybakina': 3126,
     'Elina Svitolina': 1797,
@@ -798,8 +801,9 @@
       if (!dn || !want) continue;
       var score = 0;
       // Strict matching only — never promote weak / fuzzy substring guesses.
+      // Tennis/MMA: exact normalized identity only (wrong face worse than missing).
       if (dn === want) score = 100;
-      else if (normalizeSport(sport) === 'mma') continue;
+      else if (normalizeSport(sport) === 'mma' || normalizeSport(sport) === 'tennis') continue;
       else if (dn.indexOf(want) >= 0 || want.indexOf(dn) >= 0) {
         // Require substantial overlap (avoid "Lee" matching "Lee Westwood" from "Lee").
         var shorter = dn.length < want.length ? dn.length : want.length;
