@@ -1970,14 +1970,15 @@ function renderAdminCrypto() {
     </div>
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
       <div id="appr-avatar" style="width:44px;height:44px;border-radius:50%;background:rgba(61,139,253,0.18);border:1px solid var(--pb-border);color:var(--accent-blue-bright,#5eb1ff);display:flex;align-items:center;justify-content:center;font-size:0.78rem;font-weight:900;flex-shrink:0"></div>
-      <div>
-        <div id="appr-display-name" style="font-size:0.95rem;font-weight:900;color:var(--white)"></div>
+      <div style="min-width:0">
+        <div id="appr-display-name" style="font-size:1.05rem;font-weight:900;color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
         <div id="appr-username" style="font-size:0.72rem;color:var(--gray);margin-top:2px"></div>
       </div>
     </div>
     <div style="margin-bottom:12px">
-      <div style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Starting Balance / Credit</div>
-      <input id="appr-balance" type="number" placeholder="1000" value="1000" style="width:100%;padding:12px 14px;background:var(--bg-recessed,#0a101a);border:1.5px solid var(--pb-border);border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
+      <label for="appr-balance" style="font-size:0.62rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;display:block">Starting Betting Balance</label>
+      <input id="appr-balance" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Enter amount" value="" required style="width:100%;padding:12px 14px;background:var(--bg-recessed,#0a101a);border:1.5px solid var(--pb-border);border-radius:10px;color:var(--white);font-size:0.95rem;outline:none">
+      <div style="font-size:0.62rem;color:var(--gray);margin-top:6px;line-height:1.35">Required. No default — enter the player's starting betting bankroll (explicit $0 allowed).</div>
     </div>
     <div style="font-size:0.66rem;color:var(--gray);font-weight:900;text-transform:uppercase;letter-spacing:0.7px;margin:0 0 10px">Betting Limits</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
@@ -4332,11 +4333,18 @@ function renderHostBets(){
   list.forEach(function(t) {
     var pid = String(t.playerId || t.playerUsername || t.playerName || 'unknown');
     var dbp = (_hostDbPlayersById && t.playerId && _hostDbPlayersById[String(t.playerId)]) || null;
-    var resolvedName = (dbp && (dbp.username || dbp.playerName)) || t.playerUsername || t.playerName || 'Player';
-    if (resolvedName === t.playerId) resolvedName = (dbp && dbp.username) || 'Player';
+    var identity = _identityParts({
+      username: (dbp && dbp.username) || t.playerUsername || t.username || '',
+      playerId: t.playerId || pid,
+      playerIdLabel: (dbp && dbp.playerIdLabel) || t.playerIdLabel,
+      playerName: (dbp && dbp.playerName) || t.playerName
+    });
+    var resolvedName = identity.primary;
     if (!groups[pid]) {
       groups[pid] = {
         playerId:    String(t.playerId || ''),
+        username:    identity.username || null,
+        playerIdLabel: identity.playerIdLabel || null,
         playerName:  resolvedName,
         playerReal:  t.playerRealName || '',
         bets:        [],
@@ -4346,6 +4354,11 @@ function renderHostBets(){
       };
     }
     var g = groups[pid];
+    if (identity.username && !g.username) {
+      g.username = identity.username;
+      g.playerName = identity.username;
+      g.playerIdLabel = identity.playerIdLabel;
+    }
     if (g.playerName === 'Player' && resolvedName !== 'Player') g.playerName = resolvedName;
     if (g.balance == null) {
       var bal2 = _resolveHostPlayerBalance(null, dbp);
@@ -4376,7 +4389,15 @@ function renderHostBets(){
   var groupsHtml = groupArr.map(function(g) {
     var key = String(g.playerId || g.playerName);
     var open = _hostBetsExpandedPlayer === key;
-    var initials = (g.playerName||'?').split(/[\s._-]+/).map(function(w){return (w[0]||'').toUpperCase();}).filter(Boolean).slice(0,2).join('') || '?';
+    var identity = _identityParts({
+      username: g.username || g.playerUsername || '',
+      playerId: g.playerId,
+      playerIdLabel: g.playerIdLabel,
+      playerName: g.playerName
+    });
+    var primaryName = identity.primary;
+    var idSecondary = identity.username && identity.playerIdLabel ? identity.playerIdLabel : '';
+    var initials = (primaryName||'?').split(/[\s._-]+/).map(function(w){return (w[0]||'').toUpperCase();}).filter(Boolean).slice(0,2).join('') || '?';
     var balTxt = g.balance != null ? fmt$(g.balance) : '—';
     var betsHtml = '';
     if (open) {
@@ -4482,8 +4503,8 @@ function renderHostBets(){
       '<div class="hb-group-head" data-host-group="'+esc(key)+'">' +
         '<div class="hb-avatar">'+esc(initials)+'</div>' +
         '<div style="flex:1;min-width:0">' +
-          '<div style="font-size:0.92rem;font-weight:900;margin-bottom:2px;color:var(--pb-white)">'+esc(g.playerName)+'</div>' +
-          '<div style="font-size:0.62rem;color:var(--pb-gray)">Balance <span style="color:var(--pb-white);font-weight:700">'+balTxt+'</span>' +
+          '<div style="font-size:0.92rem;font-weight:900;margin-bottom:2px;color:var(--pb-white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(primaryName)+'</div>' +
+          '<div style="font-size:0.62rem;color:var(--pb-gray)">'+(idSecondary ? esc(idSecondary)+' · ' : '')+'Balance <span style="color:var(--pb-white);font-weight:700">'+balTxt+'</span>' +
             ' · <span style="color:var(--accent-blue-bright);font-weight:700">'+g.activeCount+'</span> active' +
             ' · Open risk <span style="color:var(--negative);font-weight:700">'+fmt$(g.openRisk)+'</span></div>' +
         '</div>' +
@@ -4822,14 +4843,24 @@ function _setInlineError(id, message){
 
 function _identityParts(row){
   row = row || {};
-  var username = String(row.username || '').replace(/^@/, '');
-  var displayName = row.display_name || row.displayName || row.playerName || row.name || '';
-  if (!displayName && username) displayName = '@' + username;
-  if (!displayName) {
-    var id = row.playerId || row.player_id || row.actor_id || '';
-    displayName = id ? String(id).slice(0, 8) : 'Player';
-  }
-  return { displayName:displayName, username:username };
+  var pid = row.playerId != null ? row.playerId
+    : (row.player_id != null ? row.player_id
+      : (row.actor_id != null ? row.actor_id : row.id));
+  var username = String(row.username || '').replace(/^@/, '').trim();
+  // Host standard: username primary. Never invent from email/localStorage/raw id.
+  var idLabel = row.playerIdLabel || (pid != null && String(pid) !== '' ? ('Player #' + String(pid)) : '');
+  var primary = username || idLabel || 'Player';
+  return {
+    username: username,
+    playerId: pid != null ? String(pid) : '',
+    playerIdLabel: idLabel,
+    displayName: primary,
+    primary: primary
+  };
+}
+
+function _hostPlayerPrimaryLabel(row){
+  return _identityParts(row).primary;
 }
 
 function _validLimitInput(elId, required){
@@ -4856,11 +4887,13 @@ async function openApprovePlayerModal(req){
   var identity = _identityParts(req);
   var displayEl = document.getElementById('appr-display-name');
   var usernameEl = document.getElementById('appr-username');
-  if (displayEl) displayEl.textContent = identity.displayName;
-  if (usernameEl) usernameEl.textContent = identity.username ? '@'+identity.username : '';
+  if (displayEl) displayEl.textContent = identity.primary;
+  if (usernameEl) usernameEl.textContent = identity.username
+    ? (identity.playerIdLabel || '')
+    : (identity.playerIdLabel || '');
   var av = document.getElementById('appr-avatar');
   if (av) {
-    var abbr = String(identity.displayName || '?').replace(/[^a-zA-Z0-9]/g,'').slice(0,2).toUpperCase() || '?';
+    var abbr = String(identity.username || identity.primary || '?').replace(/[^a-zA-Z0-9]/g,'').slice(0,2).toUpperCase() || '?';
     av.textContent = abbr;
   }
   var bal = document.getElementById('appr-balance');
@@ -4868,7 +4901,7 @@ async function openApprovePlayerModal(req){
   var mp = document.getElementById('appr-payout');
   var mo = document.getElementById('appr-openrisk');
   var submit = document.getElementById('appr-submit');
-  if (bal) bal.value = '1000';
+  if (bal) bal.value = '';
   if (mb) mb.value = '';
   if (mp) mp.value = '';
   if (mo) mo.value = '';
@@ -4918,14 +4951,18 @@ async function confirmApprovePlayerModal(){
   var req = _pendingApproveReq;
   if (!req || !_approvalLimitsReady) return;
   var pid = req.playerId || req.actor_id || req.player_id || req.user_id;
-  var pname = _identityParts(req).displayName;
   var clubId = (req.clubId || req.club_id || (currentClub && currentClub.id) || null);
   var balance = _validLimitInput('appr-balance', true);
   var maxBet = _validLimitInput('appr-maxbet', true);
   var maxPayout = _validLimitInput('appr-payout', true);
   var maxOpen = _validLimitInput('appr-openrisk', false);
   var invalid = balance.error || maxBet.error || maxPayout.error || maxOpen.error;
-  if (invalid) { _setInlineError('appr-error', invalid); return; }
+  if (invalid) {
+    _setInlineError('appr-error', balance.error === 'Required limit missing'
+      ? 'Starting Betting Balance is required'
+      : invalid);
+    return;
+  }
   if (!TOKEN || !clubId || !pid) {
     _setInlineError('appr-error', 'Authenticated club context required');
     return;
@@ -4950,7 +4987,8 @@ async function confirmApprovePlayerModal(){
     await Promise.all([loadRequests(), loadHostDashboardFromDb('player_approved')]);
     closeApprovePlayerModal();
     renderPlayersTab();
-    showToastHost('✅ '+pname+' approved');
+    var approvedName = (result.username || _identityParts(req).primary || 'Player');
+    showToastHost('✅ '+approvedName+' approved');
   } catch(e) {
     _setInlineError('appr-error', e.message || 'Approval failed');
     if (submit) { submit.disabled = false; submit.textContent = 'Approve Player'; }
@@ -5028,15 +5066,19 @@ async function loadRequests(){
   }
   if (remoteLoaded) {
     pendingRequests = reqs.map(function(r){
+      var pid = r.playerId || r.player_id || r.actor_id || r.user_id;
+      var uname = String(r.username || '').replace(/^@/, '').trim();
+      var idLabel = r.playerIdLabel || (pid != null ? ('Player #' + String(pid)) : '');
       return {
-        playerId: r.playerId || r.player_id || r.actor_id || r.user_id,
-        playerName: r.playerName || r.display_name || r.name || r.username || r.email || 'Player',
-        display_name: r.display_name || r.playerName || r.name || '',
-        username: r.username || '',
+        playerId: pid,
+        username: uname,
+        playerIdLabel: idLabel,
+        playerName: uname || idLabel || 'Player',
+        display_name: uname || idLabel || 'Player',
+        displayName: uname || idLabel || 'Player',
         clubId: clubId,
         clubName: (currentClub && currentClub.name) || '',
         membershipId: r.id || r.membership_id || r.membershipId,
-        email: r.email || '',
         joined_at: r.joined_at || r.joinedAt || r.requestedAt,
         requestedAt: r.joined_at || r.joinedAt || r.requestedAt || new Date().toISOString()
       };
@@ -5056,8 +5098,10 @@ async function loadRequests(){
         list.innerHTML = pendingRequests.map(function(r){
           var identity = _identityParts(r);
           return '<div style="background:var(--card);border:1px solid rgba(255,61,87,0.2);border-radius:14px;padding:13px 15px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">'
-            +'<div><div style="font-size:0.9rem;font-weight:800">'+identity.displayName+'</div>'
-            +(identity.username?'<div style="font-size:0.7rem;color:var(--gray);margin-top:1px">@'+identity.username+'</div>':'')
+            +'<div style="min-width:0"><div style="font-size:0.9rem;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+identity.primary+'</div>'
+            +(identity.username && identity.playerIdLabel
+              ? '<div style="font-size:0.7rem;color:var(--gray);margin-top:1px">'+identity.playerIdLabel+'</div>'
+              : '')
             +'<div style="font-size:0.7rem;color:var(--gray);margin-top:2px">Wants to join</div></div>'
             +_pendingRequestActionBtnsHtml(r, 'home')
             +'</div>';
@@ -5408,7 +5452,7 @@ function renderPlayersTab(){
     return '<div class="hp-section">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:9px">'
         +'<div class="hp-section-title" style="margin:0">PLAYER LIMITS</div>'
-        +'<button type="button" class="hb-btn hb-btn--cashout" style="width:auto;padding:6px 10px;min-height:36px" data-pid="'+pid+'" data-name="'+String(identity.displayName).replace(/"/g,'&quot;')+'" onclick="event.stopPropagation();openLimits(this.dataset.pid,this.dataset.name)">Edit Limits</button>'
+        +'<button type="button" class="hb-btn hb-btn--cashout" style="width:auto;padding:6px 10px;min-height:36px" data-pid="'+pid+'" data-name="'+String(identity.primary).replace(/"/g,'&quot;')+'" onclick="event.stopPropagation();openLimits(this.dataset.pid,this.dataset.name)">Edit Limits</button>'
       +'</div>'
       +'<div class="hp-metrics" style="grid-template-columns:repeat(3,1fr);margin-top:0">'
         +'<div class="hp-metric"><div class="hp-metric-label">Single bet</div><div class="hp-metric-val">'+money(values.max_single_bet)+'</div></div>'
@@ -5424,10 +5468,14 @@ function renderPlayersTab(){
       if (alias) dbp = _hostDbPlayersById[alias] || null;
     }
     var username = (dbp && dbp.username) ? dbp.username : (p.username || '');
-    var displayName = (dbp && (dbp.playerName || dbp.displayName))
-      || p.playerName
-      || (username ? '@'+String(username).replace(/^@/, '') : String(p.playerId || '').slice(0, 8));
-    var usernameLabel = username ? '@'+String(username).replace(/^@/, '') : '';
+    var identity = _identityParts({
+      username: username,
+      playerId: p.playerId,
+      playerIdLabel: (dbp && dbp.playerIdLabel) || p.playerIdLabel,
+      playerName: (dbp && (dbp.playerName || dbp.displayName)) || p.playerName
+    });
+    var displayName = identity.primary;
+    var idSecondary = identity.username && identity.playerIdLabel ? identity.playerIdLabel : '';
     // PRIMARY: authoritative HOST POSITION (large +/-). Not bankroll.
     var hostPos = _hostPositionForPlayer(p.playerId);
     var posTone = _posTone(hostPos);
@@ -5472,8 +5520,8 @@ function renderPlayersTab(){
               +'<span class="hp-name">'+displayName+'</span>'
               +'<span class="hp-badge '+badgeCls+'">'+(p.status||'approved').toUpperCase()+'</span>'
             +'</div>'
-            +(usernameLabel && usernameLabel.toLowerCase() !== String(displayName).toLowerCase()
-              ? '<div class="hp-username">'+usernameLabel+'</div>' : '')
+            +(idSecondary
+              ? '<div class="hp-username">'+idSecondary+'</div>' : '')
           +'</div>'
         +'</div>'
         +'<div class="hp-host-pos hp-host-pos--'+posTone+'" data-host-position="'+hostPos+'">'+posTxt+'</div>'
@@ -5488,10 +5536,12 @@ function renderPlayersTab(){
   function requestRow(r){
     var identity = _identityParts(r);
     return '<div class="hp-applicant">'
-      +avatarHtml(identity.displayName)
+      +avatarHtml(identity.primary)
       +'<div style="flex:1;min-width:0">'
-        +'<div class="hp-name">'+identity.displayName+'</div>'
-        +(identity.username ? '<div class="hp-username">@'+identity.username+'</div>' : '')
+        +'<div class="hp-name">'+identity.primary+'</div>'
+        +(identity.username && identity.playerIdLabel
+          ? '<div class="hp-username">'+identity.playerIdLabel+'</div>'
+          : '')
         +'<div style="font-size:0.65rem;color:var(--pb-gold);margin-top:2px;font-weight:700">Wants to join</div>'
       +'</div>'
       +_pendingRequestActionBtnsHtml(r)
@@ -6145,6 +6195,8 @@ window.closeApprovePlayerModal = closeApprovePlayerModal;
 window.confirmApprovePlayerModal = confirmApprovePlayerModal;
 window.denyApprovePlayerModal = denyApprovePlayerModal;
 window.declineRequest = declineRequest;
+window._identityParts = _identityParts;
+window._hostPlayerPrimaryLabel = _hostPlayerPrimaryLabel;
 
 // ═══ HOST DIAMOND PILL (display) ════════════════════════════════════════════════════════════
 // Header pill prefers /api/host/diamond-usage. localStorage is cache/fallback only.
@@ -7707,7 +7759,7 @@ try { _startHostEventPoller(); } catch(_e){}
 
 <!-- BUILD INFO (debug panel only with ?debug=1 / pb-debug=1) -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;padding:2px 10px;display:none;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span id="build-info-label" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px">🔍 main · 42d23c2 · Sep 14, 04:57 PM</span>
+  <span id="build-info-label" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px">🔍 main · f30255f · Sep 14, 09:53 PM</span>
 </div>
 <script>
 (function(){

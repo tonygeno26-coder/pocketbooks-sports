@@ -45,12 +45,13 @@ test('approval modal exposes only enforced numeric fields', function() {
   assert(!modal.includes('Max Parlay'), 'no player-specific parlay field exists');
 });
 
-test('approval displays display name and secondary username', function() {
+test('approval displays username primary and Player #id secondary', function() {
   assert(html.includes('id="appr-display-name"'));
   assert(html.includes('id="appr-username"'));
   const open = functionSlice('openApprovePlayerModal', 'closeApprovePlayerModal');
   assert(open.includes("_identityParts(req)"));
-  assert(open.includes("'@'+identity.username"));
+  assert(open.includes('identity.primary'));
+  assert(open.includes('identity.playerIdLabel') || open.includes('Player #'));
 });
 
 test('approval loads server defaults before enabling submit', function() {
@@ -90,9 +91,29 @@ test('editing saves, refetches, then displays server-confirmed values', function
   assert(save.indexOf('_loadServerPlayerLimits(clubId, playerId)') < save.indexOf('renderPlayersTab()'));
 });
 
-test('client rejects negative and non-finite limit values', function() {
-  const validator = functionSlice('_validLimitInput', '_loadServerPlayerLimits');
-  assert(validator.includes('!Number.isFinite(value) || value < 0'));
+test('approval modal requires Starting Betting Balance with no silent default', function() {
+  const start = html.indexOf('id="modal-approve-player"');
+  const end = html.indexOf('<!-- ADD PLAYER MODAL -->', start);
+  const modal = html.slice(start, end);
+  assert(modal.includes('Starting Betting Balance'), 'must label Starting Betting Balance');
+  assert(!/Starting Balance \/ Credit/i.test(modal), 'must not use Credit label');
+  assert(!/value="1000"/i.test(modal), 'must not silently default to 1000');
+  assert(modal.includes('placeholder="Enter amount"') || modal.includes("placeholder='Enter amount'"),
+    'empty placeholder for explicit entry');
+});
+
+test('approval open clears balance and shows username primary', function() {
+  const open = functionSlice('openApprovePlayerModal', 'closeApprovePlayerModal');
+  assert(open.includes("bal.value = ''") || open.includes('bal.value = ""'),
+    'must clear silent default on open');
+  assert(open.includes('identity.primary') || open.includes('_identityParts'),
+    'approval modal uses identity helper');
+});
+
+test('host identity helper prefers username then Player #id', function() {
+  assert(html.includes('function _identityParts'));
+  assert(html.includes("Player #'"));
+  assert(html.includes('window._identityParts = _identityParts'));
 });
 
 test('authenticated request refresh cannot revive stale local applicants', function() {

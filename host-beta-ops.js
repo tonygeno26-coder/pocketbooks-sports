@@ -222,14 +222,23 @@
         + '<div class="hbo-empty-sub">New applicants appear here for Approve / Decline.</div></div>';
     }
     return reqs.map(function (r) {
-      var name = r.playerName || r.display_name || r.username || 'Player';
+      var identity = (typeof global._identityParts === 'function')
+        ? global._identityParts(r)
+        : {
+            primary: r.username || r.playerName || r.display_name || (r.playerId ? ('Player #' + r.playerId) : 'Player'),
+            username: r.username || '',
+            playerIdLabel: r.playerIdLabel || (r.playerId ? ('Player #' + r.playerId) : '')
+          };
+      var name = identity.primary || identity.displayName || 'Player';
+      var secondary = identity.username && identity.playerIdLabel ? identity.playerIdLabel : '';
       var pid = String(r.playerId || r.player_id || '').replace(/"/g, '');
       var mid = String(r.membershipId || r.id || '').replace(/"/g, '');
       var when = _fmtWhen(r.requestedAt || r.joined_at);
       return '<div class="hbo-card hbo-req">'
         + '<div class="hbo-card-main">'
         +   '<div class="hbo-card-title">' + _esc(name) + '</div>'
-        +   '<div class="hbo-card-meta">' + (when ? _esc(when) : 'Pending review') + '</div>'
+        +   '<div class="hbo-card-meta">' + (secondary ? (_esc(secondary) + ' · ') : '')
+        +     (when ? _esc(when) : 'Pending review') + '</div>'
         + '</div>'
         + '<div class="hbo-card-actions">'
         +   '<button type="button" class="hbo-btn hbo-btn--ghost" data-pid="' + _esc(pid) + '"'
@@ -250,8 +259,15 @@
         + '<div class="hbo-empty-sub">Approved players in this club show up here. Bankroll is display-only.</div></div>';
     }
     return players.map(function (p) {
-      var name = p.playerName || p.displayName || p.username || p.playerId || 'Player';
-      var uname = p.username && p.username !== name ? '@' + p.username : '';
+      var identity = (typeof global._identityParts === 'function')
+        ? global._identityParts(p)
+        : {
+            primary: p.username || p.playerName || p.displayName || (p.playerId ? ('Player #' + p.playerId) : 'Player'),
+            username: p.username || '',
+            playerIdLabel: p.playerIdLabel || (p.playerId ? ('Player #' + p.playerId) : '')
+          };
+      var name = identity.primary || 'Player';
+      var secondary = identity.username && identity.playerIdLabel ? identity.playerIdLabel : '';
       var bal = p.availableBalance != null ? p.availableBalance
         : (p.available_balance != null ? p.available_balance : null);
       var start = p.startingBalance != null ? p.startingBalance
@@ -261,8 +277,8 @@
       return '<div class="hbo-card hbo-tester">'
         + '<div class="hbo-card-main">'
         +   '<div class="hbo-card-title">' + _esc(name) + '</div>'
-        +   '<div class="hbo-card-meta">' + _esc(uname || String(p.playerId || '').slice(0, 10))
-        +     ' · ' + _esc(st)
+        +   '<div class="hbo-card-meta">' + _esc(secondary || st)
+        +     (secondary ? (' · ' + _esc(st)) : '')
         +     (openBets ? (' · ' + openBets + ' open') : '')
         +   '</div>'
         + '</div>'
@@ -364,8 +380,12 @@
       return '<article class="hbo-card hbo-fb' + (it.isBetIssue ? ' hbo-fb--issue' : '') + '">'
         + '<div class="hbo-fb-top">'
         +   '<div class="hbo-fb-who">'
-        +     '<div class="hbo-card-title">' + _esc(it.playerLabel || it.playerId || 'Player') + '</div>'
-        +     '<div class="hbo-card-meta">' + _esc(_fmtWhen(it.createdAt))
+        +     '<div class="hbo-card-title">' + _esc(it.username || it.playerLabel || (it.playerIdLabel || (it.playerId ? ('Player #' + it.playerId) : 'Player'))) + '</div>'
+        +     '<div class="hbo-card-meta">'
+        +       (it.username && (it.playerIdLabel || it.playerId)
+          ? (_esc(it.playerIdLabel || ('Player #' + it.playerId)) + ' · ')
+          : '')
+        +       _esc(_fmtWhen(it.createdAt))
         +       (it.page ? (' · ' + _esc(it.page)) : '')
         +     '</div>'
         +   '</div>'
