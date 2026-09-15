@@ -3112,6 +3112,32 @@ function _isExpiredAuth(status, data) {
   var err = String((data && (data.error || data.message)) || '');
   return status === 403 && (err === 'expired_token' || /expired token/i.test(err));
 }
+// Business / bet-validation denials must NEVER clear auth or redirect to sign-in.
+// Place-bet returns these as 400/422 (or historically 403 for player_suspended).
+function _bettingDenialCode(data) {
+  if (!data || typeof data !== 'object') return '';
+  return String(data.code || data.error || data.message || '').toLowerCase();
+}
+function _isBettingBusinessDenial(status, data) {
+  var code = _bettingDenialCode(data);
+  if (!code) return false;
+  // Explicit balance / risk / membership / preview denials — stay logged in.
+  if (code === 'insufficient_balance' || code.indexOf('insufficient_balance') !== -1) return true;
+  if (code === 'no_club_member_balance_found') return true;
+  if (code === 'preview_readonly') return true;
+  if (code === 'player_suspended') return true;
+  if (code === 'host_betting_disabled') return true;
+  if (code === 'permission_denied') return true;
+  if (code.indexOf('membership_') === 0) return true;
+  if (code.indexOf('stake_') === 0 || code.indexOf('payout_') === 0) return true;
+  if (code.indexOf('live_') === 0 || code.indexOf('sport_') === 0 || code.indexOf('market_') === 0) return true;
+  if (code.indexOf('_exceeded') !== -1 || code.indexOf('_disabled') !== -1) return true;
+  if (code === 'parlays_disabled' || code === 'teasers_disabled' || code === 'round_robins_disabled') return true;
+  if (code === 'too_many_parlay_legs' || code === 'risk_limits_unavailable' || code === 'risk_check_unavailable') return true;
+  // Non-auth HTTP classes used by place-bet validation
+  if (status === 400 || status === 402 || status === 409 || status === 422 || status === 503) return true;
+  return false;
+}
 async function _doRefreshAuthToken() {
   if (!_authCanAttempt()) return false;
   var tu = '';
@@ -3762,6 +3788,10 @@ async function api(method,path,body,_retried){
   if (r.status === 401 || r.status === 403) {
     if (_isAuthApiPath(path)) {
       _authRedirectToLogin('Session invalid — please sign in again');
+      return data;
+    }
+    // Bet/business denials (incl. insufficient_balance, player_suspended) are not session failures.
+    if (typeof _isBettingBusinessDenial === 'function' && _isBettingBusinessDenial(r.status, data)) {
       return data;
     }
     var hard403 = r.status === 403 && !_isExpiredAuth(r.status, data);
@@ -10533,7 +10563,7 @@ async function confirmBet() {
     return;
   }
   if (!(typeof _avail === 'number') || isNaN(_avail) || _avail < riskAmount) {
-    showToast('Insufficient balance \xb7 have '+fmtBalance(), 'error');
+    showToast('Insufficient balance · have '+fmtBalance(), 'error');
     _cbErr('CONFIRM_BET_ERROR', null, 'reason=insufficient_balance avail='+_avail+' risk='+riskAmount);
     return;
   }
@@ -10704,16 +10734,8 @@ async function confirmBet() {
       if (_cbAbortTimer) { clearTimeout(_cbAbortTimer); _cbAbortTimer = null; }
       _cbRespStatus = _dbResp.status;
       _cbLog('CONFIRM_BET_FETCH_RESOLVED', 'status='+_cbRespStatus);
-      // ── Hard auth error at HTTP level: re-check scope + wipe if invalid ─────────
-      if (_cbRespStatus === 401 || _cbRespStatus === 403) {
-        var _httpScope = _checkSessionScope();
-        if (!_httpScope.valid) {
-          _handleScopeFailure(_httpScope, 'confirmBet_http_'+_cbRespStatus);
-          return;
-        }
-      }
 
-      // ── Safe JSON parse: surface HTML/non-JSON responses explicitly ───────
+      // ── Safe JSON parse first (needed to classify business vs auth denials) ──
       _cbStep = 'JSON_PARSE';
       _cbRespText = null;
       var _dbData;
@@ -10729,6 +10751,18 @@ async function confirmBet() {
         return;
       }
       _cbLog('CONFIRM_BET_JSON_PARSED', 'ok='+_dbData.ok+' code='+(_dbData.code||'none'));
+
+      // ── Hard auth error at HTTP level: wipe only when scope is invalid AND
+      //    the body is not a bet-validation / business denial (e.g. insufficient_balance).
+      if (_cbRespStatus === 401 || _cbRespStatus === 403) {
+        if (!(typeof _isBettingBusinessDenial === 'function' && _isBettingBusinessDenial(_cbRespStatus, _dbData))) {
+          var _httpScope = _checkSessionScope();
+          if (!_httpScope.valid) {
+            _handleScopeFailure(_httpScope, 'confirmBet_http_'+_cbRespStatus);
+            return;
+          }
+        }
+      }
 
       // ── Success ───────────────────────────────────────────────────────────
       if (_dbData.ok) {
@@ -10876,6 +10910,7 @@ async function confirmBet() {
         _cbErr('CONFIRM_BET_ERROR', null,
           'status='+_cbRespStatus+' code='+(_dbData.code||'none')+' body='+String(_rejBody).slice(0,300));
         // ── Backend scope rejection: wipe session + show modal ──────────────────────
+        // insufficient_balance and other bet-validation denials never reach here as scope mismatch.
         if (_dbData.code === 'club_scope_mismatch' || _dbData.error === 'club_scope_mismatch') {
           _handleScopeFailure({
             reason:'club_scope_mismatch',
@@ -10884,8 +10919,25 @@ async function confirmBet() {
           }, 'confirmBet_backend_403');
           return;
         }
+        // Sync displayed balance from server when rejection includes spendable available.
+        var _rejCode = String(_dbData.code || _dbData.error || '');
+        if ((_rejCode === 'insufficient_balance' || _rejCode.indexOf('insufficient_balance') !== -1)
+            && _dbData.available != null && !isNaN(Number(_dbData.available))) {
+          try {
+            applyDisplayedBalance(Number(_dbData.available));
+            _balanceFromServer = true;
+          } catch(_balSyncErr) {}
+        }
         var _rejMsg;
-        if (window.PbBetaUx && PbBetaUx.mapBetRejectMessage) {
+        if (_rejCode === 'insufficient_balance' || _rejCode.indexOf('insufficient_balance') !== -1) {
+          var _availShown = (_dbData.available != null && !isNaN(Number(_dbData.available)))
+            ? Number(_dbData.available) : _liveAvailableBalance();
+          _rejMsg = (typeof _availShown === 'number' && !isNaN(_availShown))
+            ? ('Insufficient balance · have $'+_availShown.toFixed(2))
+            : ((window.PbBetaUx && PbBetaUx.mapBetRejectMessage)
+              ? PbBetaUx.mapBetRejectMessage('insufficient_balance', _dbData.userMessage || null)
+              : 'Insufficient balance');
+        } else if (window.PbBetaUx && PbBetaUx.mapBetRejectMessage) {
           _rejMsg = PbBetaUx.mapBetRejectMessage(
             _dbData.code || _dbData.error,
             _dbData.userMessage || null
@@ -13962,6 +14014,11 @@ async function _pbFetch(url, opts) {
       return resp;
     }
     if (resp.status === 403) {
+      // Business denials on money/betting routes must not wipe the session.
+      if (peek && typeof _isBettingBusinessDenial === 'function' && _isBettingBusinessDenial(403, peek)) {
+        delete _pendingIdemKeys[path];
+        return resp;
+      }
       var hard403 = !(peek && (peek.error === 'expired_token' || /expired token/i.test(String(peek.error || peek.message || ''))));
       if (hard403 && !_authGiveUp && !(typeof _isTestUserPreview === 'function' && _isTestUserPreview()) && !(typeof _isVisualQaPreview === 'function' && _isVisualQaPreview())) {
         if (typeof _authRedirectToLogin === 'function') _authRedirectToLogin('Session invalid — please sign in again');
@@ -13970,6 +14027,11 @@ async function _pbFetch(url, opts) {
         return resp;
       }
     } else if (resp.status === 401 && !_authCanAttempt() && !_authGiveUp) {
+      // insufficient_balance / business codes must never arrive as 401; if they do, keep session.
+      if (peek && typeof _isBettingBusinessDenial === 'function' && _isBettingBusinessDenial(401, peek)) {
+        delete _pendingIdemKeys[path];
+        return resp;
+      }
       if (typeof _authRedirectToLogin === 'function') _authRedirectToLogin('Session invalid — please sign in again');
       else if (typeof _redirectToSignIn === 'function') _redirectToSignIn();
       delete _pendingIdemKeys[path];

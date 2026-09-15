@@ -492,7 +492,7 @@
     if (userMessage) return String(userMessage);
     var c = String(code || '').toLowerCase();
     var map = {
-      insufficient_balance: 'Not enough balance for this stake.',
+      insufficient_balance: 'Insufficient balance for this stake.',
       market_closed: 'This market is closed.',
       game_started: 'This game has already started.',
       line_changed: 'The line moved — review and place again.',
