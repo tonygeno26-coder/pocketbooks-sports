@@ -2770,8 +2770,8 @@ function _showSessionExpiredModal(result) {
 })();
 // ══════════════════════════════════════════════════════════════════════════════
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'dcfe6fd';
-window.PBS_BUILD_DATE = '2026-09-15T05:55:52.826Z';
+window.PBS_BUILD_SHA = '916a6a5';
+window.PBS_BUILD_DATE = '2026-09-15T06:22:20.075Z';
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 try { window.API = API; } catch (_eApi) {}
 // ESPN league logos for sport grid (verified working CDN paths; ncaa/soccer/atp/pga/boxing/rugby preferred slugs 404)
@@ -3508,10 +3508,18 @@ document.addEventListener('DOMContentLoaded', function(){
 var CURRENCY_RATES = { USD:1, EUR:0.92, GBP:0.79, CAD:1.36, AUD:1.51, MXN:17.20 };
 var CURRENCY_SYMBOLS = { USD:'$', EUR:'€', GBP:'£', CAD:'CA$', AUD:'A$', MXN:'MX$' };
 function loadPlayerSettings() {
-  try { return Object.assign({theme:'dark',currency:'USD',signalContact:''}, JSON.parse(localStorage.getItem('pb-player-settings')||'{}')); }
-  catch(_e) { return { theme:'dark', currency:'USD', signalContact:'' }; }
+  try { return Object.assign({theme:'dark',currency:'USD',signalContact:'',oddsChangePolicy:'ask'}, JSON.parse(localStorage.getItem('pb-player-settings')||'{}')); }
+  catch(_e) { return { theme:'dark', currency:'USD', signalContact:'', oddsChangePolicy:'ask' }; }
 }
 function savePlayerSettings(s) { localStorage.setItem('pb-player-settings', JSON.stringify(s||{})); }
+function _pbOddsChangePolicy() {
+  try {
+    var p = String((loadPlayerSettings().oddsChangePolicy) || 'ask').toLowerCase().replace(/[\s-]+/g, '_');
+    if (p === 'accept_better' || p === 'better') return 'accept_better';
+    if (p === 'accept_all' || p === 'accept_any' || p === 'accept_any_with_confirm') return 'accept_all';
+  } catch(_e) {}
+  return 'ask';
+}
 function _curr() { return loadPlayerSettings().currency || 'USD'; }
 function _convertUsd(usd) { var c=_curr(); var r=CURRENCY_RATES[c]||1; return (parseFloat(usd)||0)*r; }
 function _fmtCurrency(usd) {
@@ -3599,6 +3607,17 @@ function showPlayerSettings() {
         '</div>' +
         '<div style="font-size:0.62rem;color:#666;margin-top:8px">Bets/balances stored in USD. Display only.</div>' +
       '</div>' +
+      // Sportsbook — Odds Changes (Ask Me default)
+      '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px;margin-bottom:12px">' +
+        '<div style="font-size:0.62rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Sportsbook</div>' +
+        '<div style="font-size:0.82rem;font-weight:800;margin-bottom:8px">Odds Changes</div>' +
+        '<div style="display:flex;flex-direction:column;gap:6px">' +
+          chip('odds', 'ask', 'Ask Me', s.oddsChangePolicy||'ask') +
+          chip('odds', 'accept_better', 'Accept Better Odds', s.oddsChangePolicy||'ask') +
+          chip('odds', 'accept_all', 'Accept All Odds Changes', s.oddsChangePolicy||'ask') +
+        '</div>' +
+        '<div style="font-size:0.62rem;color:#666;margin-top:8px;line-height:1.45">Ask Me is default. Line changes always need your OK — never silent.</div>' +
+      '</div>' +
       // Telegram
       '<div style="background:#141414;border:1px solid #252525;border-radius:12px;padding:14px" id="ps-telegram-box">' +
         '<div style="font-size:0.62rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Telegram</div>' +
@@ -3642,6 +3661,13 @@ function showPlayerSettings() {
   });
   Array.prototype.forEach.call(ov.querySelectorAll('[data-pset-currency]'), function(b){
     b.addEventListener('click', function() { s.currency = b.dataset.psetCurrency; savePlayerSettings(s); showPlayerSettings(); });
+  });
+  Array.prototype.forEach.call(ov.querySelectorAll('[data-pset-odds]'), function(b){
+    b.addEventListener('click', function() {
+      s.oddsChangePolicy = b.dataset.psetOdds || 'ask';
+      savePlayerSettings(s);
+      showPlayerSettings();
+    });
   });
   (function wireTelegramLink() {
     var statusEl = ov.querySelector('#ps-telegram-status');
@@ -9037,6 +9063,16 @@ function calcPayout(stake, legs, type) {
   return legs.reduce(function(s,b){ return s + stake * amToDecimal(b.odds); }, 0);
 }
 function fmtOdds(o){ var n=parseInt(String(o).replace('+','')); return isNaN(n)?'--':(n>0?'+':'')+n; }
+function _slipOddsHtml(b) {
+  var cur = fmtOdds(b && b.odds);
+  var from = b && b._oddsMovedFrom;
+  if (from == null || !Number.isFinite(Number(from)) || Number(from) === Number(b.odds)) {
+    return '<span class="dkslip-leg-odds">'+cur+'</span>';
+  }
+  return '<span class="dkslip-leg-odds" title="Odds moved">'+
+    '<span style="color:#888;text-decoration:line-through;font-size:0.72em;margin-right:4px">'+fmtOdds(from)+'</span>'+
+    '<span style="color:#00c853">'+cur+'</span></span>';
+}
 function fmtDollar(n){ var v=parseFloat(n); if(isNaN(v)) return '--'; return _fmtCurrency(v); }
 
 function bsSetType(t) {
@@ -9681,7 +9717,7 @@ function bsRenderLegs() {
               '<div class="dkslip-leg-mkt">'+pm+'</div>' +
             '</div>' +
             '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
-              '<span class="dkslip-leg-odds">'+fmtOdds(b.odds)+'</span>' +
+              _slipOddsHtml(b) +
               '<button class="dkslip-leg-rm" onclick="event.stopPropagation();bsRemove(\''+b.cellId+'\')">✕</button>' +
             '</div></div>';
         }).join('') +
@@ -9731,7 +9767,7 @@ function bsRenderLegs() {
               '<div class="dkslip-leg-mkt">'+pm+'</div>' +
             '</div>' +
             '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
-              '<span class="dkslip-leg-odds">'+fmtOdds(b.odds)+'</span>' +
+              _slipOddsHtml(b) +
               '<button class="dkslip-leg-rm" onclick="event.stopPropagation();bsRemove(\''+b.cellId+'\')">✕</button>' +
             '</div></div>';
         }).join('') +
@@ -9772,7 +9808,7 @@ function bsRenderLegs() {
             '</div>' +
             '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">' +
               '<button class="dkslip-leg-rm" onclick="event.stopPropagation();bsRemove(\''+b.cellId+'\')">✕</button>' +
-              '<span class="dkslip-leg-odds">'+fmtOdds(b.odds)+'</span>' +
+              _slipOddsHtml(b) +
             '</div>' +
           '</div>' +
           '<div class="single-card-footer">' +
@@ -10502,22 +10538,102 @@ async function confirmBet() {
   function _showLineChangedReview(data) {
     closeBetConfirm();
     var d = data || {};
+    var oldLine = d.submittedPointLine != null ? d.submittedPointLine : 'your slip';
+    var newLine = d.serverPointLine != null ? d.serverPointLine : 'current market';
+    var acceptLabel = 'Accept New Line & Place Bet';
     var modal = document.createElement('div');
     modal.id = 'line-changed-modal';
     modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center';
     modal.innerHTML=[
       '<div style="background:#1a1a1a;border:1.5px solid #ea580c;border-radius:18px;padding:28px 24px;max-width:340px;width:90%;text-align:center">',
-        '<div style="font-size:1.5rem;margin-bottom:8px">\u26a0\ufe0f Line Moved</div>',
+        '<div style="font-size:1.5rem;margin-bottom:8px">\u26a0\ufe0f Line Changed</div>',
         '<div style="font-weight:700;font-size:1rem;margin-bottom:6px">'+(d.leg||'Selection')+'</div>',
-        '<div style="color:#aaa;font-size:0.9rem;margin-bottom:16px">Line changed from <b style="color:#fff">'+(d.submittedPointLine!=null?d.submittedPointLine:'your slip')+'</b> to <b style="color:#00ff87">'+(d.serverPointLine!=null?d.serverPointLine:'current market')+'</b>. Review the updated market before placing.</div>',
-        '<button id="line-review-btn" style="width:100%;padding:12px;background:#00ff87;border:none;border-radius:10px;color:#000;font-weight:800;font-size:0.9rem">Review Slip</button>',
+        '<div style="color:#aaa;font-size:0.9rem;margin-bottom:8px">You selected:</div>',
+        '<div style="color:#fff;font-weight:800;margin-bottom:10px">'+String(oldLine)+
+          (d.submittedOdds!=null?' ('+_fmtAmOdds(d.submittedOdds)+')':'')+'</div>',
+        '<div style="color:#aaa;font-size:0.9rem;margin-bottom:8px">Current market:</div>',
+        '<div style="color:#00ff87;font-weight:800;margin-bottom:16px">'+String(newLine)+
+          (d.serverOdds!=null?' ('+_fmtAmOdds(d.serverOdds)+')':'')+'</div>',
+        '<div style="display:flex;gap:10px;justify-content:center">',
+          '<button id="line-reject-btn" style="flex:1;padding:12px;background:#222;border:1px solid #444;border-radius:10px;color:#fff;font-weight:700;font-size:0.85rem">Cancel</button>',
+          '<button id="line-accept-btn" style="flex:1;padding:12px;background:#00ff87;border:none;border-radius:10px;color:#000;font-weight:800;font-size:0.85rem">'+acceptLabel+'</button>',
+        '</div>',
       '</div>'
     ].join('');
     document.body.appendChild(modal);
-    document.getElementById('line-review-btn').onclick=function(){
+    document.getElementById('line-reject-btn').onclick=function(){
       modal.remove();
-      showToast('Review the updated line before placing.', 'info');
+      showToast('Bet canceled — line changed','info');
     };
+    document.getElementById('line-accept-btn').onclick=function(){
+      modal.remove();
+      _applyServerRepriceToSlip(d);
+      _acceptRepriceAndPlace();
+    };
+  }
+  function _fmtAmOdds(n) {
+    var v = Number(n);
+    if (!Number.isFinite(v)) return String(n == null ? '' : n);
+    return (v > 0 ? '+' : '') + v;
+  }
+  function _applyServerRepriceToSlip(data) {
+    var d = data || {};
+    var updates = (Array.isArray(d.updatedLegs) && d.updatedLegs.length)
+      ? d.updatedLegs
+      : [{
+          legIndex: d.legIndex,
+          pick: d.leg,
+          serverOdds: d.serverOdds,
+          submittedOdds: d.submittedOdds,
+          serverPointLine: d.serverPointLine,
+          submittedPointLine: d.submittedPointLine,
+          code: d.code
+        }];
+    betSlip = betSlip.map(function(l, i) {
+      var hit = null;
+      for (var u = 0; u < updates.length; u++) {
+        var up = updates[u];
+        if (typeof up.legIndex === 'number' && up.legIndex === i) { hit = up; break; }
+        if (up.pick && String(l.pick || '') === String(up.pick)) { hit = up; break; }
+      }
+      if (!hit && d.leg && String(l.pick || '') === String(d.leg) && updates.length === 1) {
+        hit = updates[0];
+      }
+      if (!hit) return l;
+      var next = Object.assign({}, l);
+      if (hit.submittedOdds != null) next._oddsMovedFrom = hit.submittedOdds;
+      else if (hit.serverOdds != null && Number(l.odds) !== Number(hit.serverOdds)) {
+        next._oddsMovedFrom = l.odds;
+      }
+      if (hit.serverOdds != null) next.odds = hit.serverOdds;
+      if (hit.serverPointLine != null) {
+        next.line = hit.serverPointLine;
+        next.pointLine = hit.serverPointLine;
+        var pickStr = String(next.pick || '');
+        if (/\b(over|under)\s+[+-]?\d/i.test(pickStr)) {
+          next.pick = pickStr.replace(/\b((?:over|under)\s+)[+-]?\d+(?:\.\d+)?/i, function(_m, pfx) {
+            return pfx + hit.serverPointLine;
+          });
+        } else if (/[+-]?\d+(?:\.\d+)?/.test(pickStr)) {
+          next.pick = pickStr.replace(/([+-]?\d+(?:\.\d+)?)/, String(hit.serverPointLine));
+        }
+      }
+      return next;
+    });
+    // New accepted market = new intent. Clear sticky key so confirmation cannot
+    // replay a failed 409 under the old idempotency record.
+    _pendingPlaceIdemKey = null;
+    try { bsRenderLegs(); } catch (_renderErr) {}
+    try { bsSyncPlaceBtn(); } catch (_syncErr) {}
+  }
+  function _acceptRepriceAndPlace() {
+    _confirmBetInFlight = false;
+    try { openBetConfirm(); } catch (_openErr) {}
+    setTimeout(function() {
+      try { confirmBet(); } catch (_placeErr) {
+        try { showToast('Could not re-submit. Review slip and place again.', 'warning'); } catch (_t) {}
+      }
+    }, 40);
   }
 
   // ── Locate + disable confirm button (spinner) ─────────────────────────────
@@ -10756,6 +10872,7 @@ async function confirmBet() {
       betType: snap.type==='straight'?'Single':snap.type==='parlay'?'Parlay':snap.type==='rr'?'RoundRobin':snap.type==='sgp'?'SGP':'Teaser',
       stake:snap.risk, payout:snap.payout, potentialProfit:snap.profit,
       idempotencyKey:_iKey,
+      oddsChangePolicy: _pbOddsChangePolicy(),
       // RR: include rrStakes so the backend can expand combos server-side.
       // undefined for Single/Parlay/Teaser so it is omitted from the JSON body.
       rrStakes: snap.type === 'rr' ? snap.rrStakes : undefined,
@@ -10926,42 +11043,30 @@ async function confirmBet() {
           +' old='+_dbData.submittedOdds+' new='+_dbData.serverOdds);
         closeBetConfirm();
         var _od = _dbData;
+        var _acceptOddsLabel = 'Accept ' + _fmtAmOdds(_od.serverOdds) + ' & Place Bet';
         var _odModal = document.createElement('div');
         _odModal.id = 'odds-changed-modal';
         _odModal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center';
         _odModal.innerHTML=[
           '<div style="background:#1a1a1a;border:1.5px solid #ea580c;border-radius:18px;padding:28px 24px;max-width:340px;width:90%;text-align:center">',
-            '<div style="font-size:1.5rem;margin-bottom:8px">\u26a0\ufe0f Line Moved</div>',
+            '<div style="font-size:1.5rem;margin-bottom:8px">\u26a0\ufe0f Odds Changed</div>',
             '<div style="font-weight:700;font-size:1rem;margin-bottom:6px">'+(_od.leg||'Selection')+'</div>',
-            '<div style="color:#aaa;font-size:0.9rem;margin-bottom:16px">Line changed from <b style="color:#fff">'+_od.submittedOdds+'</b> to <b style="color:#00ff87">'+_od.serverOdds+'</b></div>',
+            '<div style="color:#aaa;font-size:0.9rem;margin-bottom:16px"><b style="color:#fff">'+_fmtAmOdds(_od.submittedOdds)+'</b> \u2192 <b style="color:#00ff87">'+_fmtAmOdds(_od.serverOdds)+'</b></div>',
             '<div style="display:flex;gap:10px;justify-content:center">',
-              '<button id="odds-reject-btn" style="flex:1;padding:12px;background:#222;border:1px solid #444;border-radius:10px;color:#fff;font-weight:700;font-size:0.9rem">Cancel Bet</button>',
-              '<button id="odds-accept-btn" style="flex:1;padding:12px;background:#00ff87;border:none;border-radius:10px;color:#000;font-weight:700;font-size:0.9rem">Update Slip</button>',
+              '<button id="odds-reject-btn" style="flex:1;padding:12px;background:#222;border:1px solid #444;border-radius:10px;color:#fff;font-weight:700;font-size:0.85rem">Cancel Bet</button>',
+              '<button id="odds-accept-btn" style="flex:1;padding:12px;background:#00ff87;border:none;border-radius:10px;color:#000;font-weight:800;font-size:0.82rem">'+_acceptOddsLabel+'</button>',
             '</div>',
           '</div>'
         ].join('');
         document.body.appendChild(_odModal);
-        document.getElementById('odds-reject-btn').onclick=function(){ _odModal.remove(); showToast('Bet canceled \u2014 line moved','info'); };
+        document.getElementById('odds-reject-btn').onclick=function(){ _odModal.remove(); showToast('Bet canceled \u2014 odds changed','info'); };
         document.getElementById('odds-accept-btn').onclick=function(){
           _odModal.remove();
-          var _changed = false;
-          betSlip = betSlip.map(function(l,i){
-            var _match = (typeof _od.legIndex==='number' && i===_od.legIndex)
-              || (l && _od.leg && String(l.pick||'') === String(_od.leg))
-              || (l && _dbPayload.legs && _dbPayload.legs[i]
-                && String(l.canonicalGameKey||'') === String(_dbPayload.legs[i].canonicalGameKey||'')
-                && String(l.market||'') === String(_dbPayload.legs[i].market||'')
-                && String(l.pick||'') === String(_dbPayload.legs[i].pick||''));
-            if (!_match) return l;
-            _changed = true;
-            return Object.assign({}, l, { odds:_od.serverOdds });
-          });
-          // New odds = new intent. Clear the sticky key, update the slip, and
-          // require the player to press Place Bet again; never auto-submit.
-          _pendingPlaceIdemKey = null;
-          try { bsRenderLegs(); } catch(_renderErr) {}
-          try { bsSyncPlaceBtn(); } catch(_syncErr) {}
-          showToast(_changed ? ((window.PbBetaUx && PbBetaUx.ERROR_COPY.stale_odds.body) || 'Slip updated with current odds. Review and place again.') : 'Review the current market before placing.', 'info');
+          // Patch slip to current authoritative prices, mint a NEW idempotency
+          // key, and re-submit. Server still re-resolves — stale confirmation
+          // of an old price cannot force placement.
+          _applyServerRepriceToSlip(_od);
+          _acceptRepriceAndPlace();
         };
         return;
 
@@ -10970,6 +11075,12 @@ async function confirmBet() {
         _cbErr('CONFIRM_BET_ERROR', null, 'code=line_changed leg='+_dbData.leg
           +' old='+_dbData.submittedPointLine+' new='+_dbData.serverPointLine);
         _showLineChangedReview(_dbData);
+        return;
+
+      } else if (_dbData.code === 'market_suspended' || (_dbData.code === 'market_unavailable' && _dbData.reason === 'suspended')) {
+        _cbStep = 'MARKET_SUSPENDED';
+        closeBetConfirm();
+        showToast((_dbData.userMessage) || 'Market temporarily unavailable', 'warning');
         return;
 
       // ── Backend rejection ─────────────────────────────────────────────────
@@ -18167,7 +18278,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO (debug panel only with ?debug=1 / pb-debug=1) -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;padding:2px 10px;display:none;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span id="build-info-label" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px">🔍 main · dcfe6fd · Sep 14, 10:55 PM</span>
+  <span id="build-info-label" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px">🔍 main · 916a6a5 · Sep 14, 11:22 PM</span>
 </div>
 <script>
 (function(){

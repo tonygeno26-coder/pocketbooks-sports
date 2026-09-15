@@ -207,17 +207,38 @@ test('confirmBet / _makeSelection / click / bsToggle emit all contract fields', 
     'bsToggle must stamp contract fields via _buildContractPlaceLeg');
 });
 
-test('odds_changed review updates slip and does not auto-submit', function() {
+test('odds_changed accept clears idempotency and re-places via server re-resolve', function() {
   var start = html.indexOf("document.getElementById('odds-accept-btn').onclick=function()");
   assert(start !== -1, 'odds changed accept handler missing');
-  var end = html.indexOf('};', start);
+  var end = html.indexOf('return;', start);
   var handler = html.slice(start, end);
-  assert(handler.indexOf("_pbFetch('/api/bets/place'") === -1,
-    'odds changed accept handler must not auto-submit a second placement');
-  assert(handler.indexOf('_pendingPlaceIdemKey = null') !== -1,
-    'new odds must clear sticky idempotency key before the next manual placement');
-  assert(handler.indexOf('bsRenderLegs') !== -1,
-    'new odds should refresh the visible slip');
+  assert(handler.indexOf('_pendingPlaceIdemKey = null') !== -1
+      || html.indexOf('function _applyServerRepriceToSlip') !== -1,
+    'new odds must clear sticky idempotency key before re-place');
+  assert(html.indexOf('function _acceptRepriceAndPlace') !== -1,
+    'must re-submit after accept via _acceptRepriceAndPlace');
+  assert(html.indexOf('Accept ') !== -1 && html.indexOf('& Place Bet') !== -1,
+    'accept CTA must be Accept … & Place Bet');
+  assert(html.indexOf('oddsChangePolicy: _pbOddsChangePolicy()') !== -1,
+    'place payload must send player oddsChangePolicy');
+  assert(html.indexOf("oddsChangePolicy:'ask'") !== -1 || html.indexOf('oddsChangePolicy:\'ask\'') !== -1
+      || html.indexOf("oddsChangePolicy:'ask'") !== -1,
+    'Ask Me must be the default player setting');
+});
+
+test('line_changed requires explicit accept of new line', function() {
+  assert(html.indexOf('Accept New Line & Place Bet') !== -1);
+  assert(html.indexOf('function _showLineChangedReview') !== -1);
+  assert(html.indexOf("code === 'line_changed'") !== -1 || html.indexOf('code === \'line_changed\'') !== -1
+    || html.indexOf("_dbData.code === 'line_changed'") !== -1);
+});
+
+test('sportsbook odds-change settings persist Ask Me / Better / All', function() {
+  assert(html.indexOf('Odds Changes') !== -1);
+  assert(html.indexOf('Accept Better Odds') !== -1);
+  assert(html.indexOf('Accept All Odds Changes') !== -1);
+  assert(html.indexOf("data-pset-odds") !== -1 || html.indexOf('data-pset-odds') !== -1);
+  assert(html.indexOf('function _pbOddsChangePolicy') !== -1);
 });
 
 test('market normalizer emits lowercase moneyline/total/spread', function() {
