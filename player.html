@@ -2770,8 +2770,8 @@ function _showSessionExpiredModal(result) {
 })();
 // ══════════════════════════════════════════════════════════════════════════════
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = 'f30255f';
-window.PBS_BUILD_DATE = '2026-09-15T04:53:03.338Z';
+window.PBS_BUILD_SHA = '38d24d4';
+window.PBS_BUILD_DATE = '2026-09-15T05:55:21.663Z';
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 try { window.API = API; } catch (_eApi) {}
 // ESPN league logos for sport grid (verified working CDN paths; ncaa/soccer/atp/pga/boxing/rugby preferred slugs 404)
@@ -5294,6 +5294,8 @@ function _pbRenderGameCardHtml(g) {
     var splitHtml = split ? _renderSplitBar(split, isGolfCard ? aw : awN, isGolfCard ? hw : hwN) : '';
     var liveScoreHtml = isLiveMarket ? _pbLiveScoreboardHtml(g) : '';
     var safeGameId = String(g.id || g.providerGameId || '').replace(/"/g, '');
+    var safeEventId = String(g.eventId || g.owlsEventId || '').replace(/"/g, '');
+    var safeCanonical = String(g.canonicalGameKey || '').replace(/"/g, '');
     var sportRoute = _ODDS_ROUTE_KEY[sp.toLowerCase()] || sp.toLowerCase();
     var showPropsBtn = _pbSportHasProps(sportRoute);
     var showAltBtn = _pbGameHasAltLines(g);
@@ -5308,10 +5310,12 @@ function _pbRenderGameCardHtml(g) {
     var statusClass = isLiveMarket ? ' market-card--live' : ' market-card--upcoming';
     var headerHtml = '<div class="mc-header"><div class="mc-meta"><span class="mc-sport">' + headerSport + '</span><span class="mc-when">' + time + '</span></div>' +
       (isLiveMarket ? _pbLiveBadgeHtml() : '') + '</div>';
+    var cardIdentityAttrs = 'data-game-id="' + safeGameId + '" data-event-id="' + safeEventId +
+      '" data-canonical-key="' + safeCanonical + '" data-home="' + safeHome + '" data-away="' + safeAway + '"';
 
     // Golf matchups: Player A vs Player B + moneyline only (no fake spread/total columns).
     if (isGolfCard) {
-      return '<div class="market-card market-card-golf' + statusClass + '" data-game-id="' + safeGameId + '" data-home="' + safeHome + '" data-away="' + safeAway + '" data-sport="golf" style="margin-bottom:14px">' +
+      return '<div class="market-card market-card-golf' + statusClass + '" ' + cardIdentityAttrs + ' data-sport="golf" style="margin-bottom:14px">' +
         headerHtml +
         liveScoreHtml +
         splitHtml +
@@ -5331,7 +5335,7 @@ function _pbRenderGameCardHtml(g) {
         '</div>';
     }
 
-    return '<div class="market-card' + statusClass + '" data-game-id="' + safeGameId + '" data-home="' + safeHome + '" data-away="' + safeAway + '" style="margin-bottom:14px">' +
+    return '<div class="market-card' + statusClass + '" ' + cardIdentityAttrs + ' style="margin-bottom:14px">' +
       headerHtml +
       liveScoreHtml +
       splitHtml +
@@ -5526,26 +5530,61 @@ function _pbSportSupportsProps(sport) {
   return _PB_PROPS_SUPPORTED_SPORTS.indexOf(String(sport || '').toLowerCase()) >= 0;
 }
 
-/** Sport-level hasProps from /api/sports (lightweight). Never invent inventory. */
-function _pbSportHasProps(sport) {
+/** Sport-level props discovery from /api/sports. Cache is never sole truth. */
+var _PB_PROPS_UI = Object.freeze({
+  UNKNOWN: 'UNKNOWN',
+  LOADING: 'LOADING',
+  AVAILABLE: 'AVAILABLE',
+  UNAVAILABLE: 'UNAVAILABLE',
+  ERROR: 'ERROR'
+});
+
+function _pbSportCatalogEntry(sport) {
   var s = _pbNormalizePropSport(sport);
-  if (!_pbSportSupportsProps(s)) return false;
   var catalog = window._sportsCatalog;
-  var knownLive = (s === 'nfl' || s === 'mlb' || s === 'ncaaf' || s === 'nba' || s === 'wnba');
-  if (!catalog || !Array.isArray(catalog.sports)) {
-    // Catalog not loaded yet — allow known live props sports; hide empty-prone (nhl/ncaab).
-    return knownLive;
-  }
-  var entry = null;
+  if (!catalog || !Array.isArray(catalog.sports)) return null;
   for (var i = 0; i < catalog.sports.length; i++) {
     var row = catalog.sports[i];
-    if (row && _pbNormalizePropSport(row.key) === s) { entry = row; break; }
+    if (row && _pbNormalizePropSport(row.key) === s) return row;
   }
-  // WNBA (and similar) may be absent from /api/sports while Owls still publishes props.
-  if (!entry) return knownLive;
-  if (entry.hasProps === true) return true;
-  if (entry.hasProps === false) return false;
-  return (Number(entry.propsCount) || 0) > 0;
+  return null;
+}
+
+/**
+ * Three-state (+ error/loading) discovery status.
+ * UNKNOWN stays discoverable so cold /api/sports never hard-hides PLAYER PROPS.
+ */
+function _pbSportPropsStatus(sport) {
+  var s = _pbNormalizePropSport(sport);
+  if (!_pbSportSupportsProps(s)) return _PB_PROPS_UI.UNAVAILABLE;
+  var knownLive = (s === 'nfl' || s === 'mlb' || s === 'ncaaf' || s === 'nba' || s === 'wnba');
+  var entry = _pbSportCatalogEntry(s);
+  if (!entry) {
+    // Catalog missing or sport absent (e.g. WNBA) — stay discoverable for known live sports.
+    return knownLive ? _PB_PROPS_UI.UNKNOWN : _PB_PROPS_UI.UNAVAILABLE;
+  }
+  var st = String(entry.propsStatus || '').toLowerCase();
+  if (st === 'available' || st === 'live') return _PB_PROPS_UI.AVAILABLE;
+  if (st === 'unknown') return _PB_PROPS_UI.UNKNOWN;
+  if (st === 'unavailable' || st === 'unsupported') return _PB_PROPS_UI.UNAVAILABLE;
+  // Legacy "empty" was emitted for cold AND warm-empty — treat as UNKNOWN so
+  // the cold-cache deadlock cannot hide PLAYER PROPS before on-demand fetch.
+  if (st === 'empty' && entry.propsCapable !== false) return _PB_PROPS_UI.UNKNOWN;
+  if (entry.hasProps === true) return _PB_PROPS_UI.AVAILABLE;
+  if (entry.hasProps === false && entry.propsCapable === true) {
+    // Legacy false+capable: do not hard-hide (cold cache used to lie).
+    return _PB_PROPS_UI.UNKNOWN;
+  }
+  if (entry.hasProps === false) return _PB_PROPS_UI.UNAVAILABLE;
+  if (entry.hasProps == null && entry.propsCapable === true) return _PB_PROPS_UI.UNKNOWN;
+  if ((Number(entry.propsCount) || 0) > 0) return _PB_PROPS_UI.AVAILABLE;
+  return knownLive ? _PB_PROPS_UI.UNKNOWN : _PB_PROPS_UI.UNAVAILABLE;
+}
+
+/** True when PLAYER PROPS entry should remain visible / fetchable. */
+function _pbSportHasProps(sport) {
+  var st = _pbSportPropsStatus(sport);
+  return st === _PB_PROPS_UI.AVAILABLE || st === _PB_PROPS_UI.UNKNOWN || st === _PB_PROPS_UI.LOADING;
 }
 
 function _pbSpreadMarketLabel(sport) {
@@ -7129,6 +7168,11 @@ function _pbCloseDedicatedProps() {
 async function _pbOpenDedicatedProps(btn, gameId, sport) {
   var card = btn && btn.closest ? btn.closest('.market-card') : null;
   var gid = String(gameId);
+  if (!card) {
+    try {
+      card = document.querySelector('.market-card[data-game-id="' + gid.replace(/"/g, '\\"') + '"]');
+    } catch (_q) { card = null; }
+  }
   var s = _pbNormalizePropSport(sport || _currentSport || 'mlb');
   _pbCollapseAllGameAlts();
   _pbCollapseAllGameProps();
@@ -7157,10 +7201,22 @@ async function _pbOpenDedicatedProps(btn, gameId, sport) {
   }
   try {
     var res = await fetch(API + '/api/props/' + encodeURIComponent(s) + '?' + _pbPropsQueryString(gid, card), { cache: 'no-store' });
-    var data = await res.json();
+    var data = null;
+    try { data = await res.json(); } catch (_parseErr) { data = null; }
     if (_pbExpandedPropsGameId !== gid) return;
-    if (!res.ok || !data.props || !data.props.length) {
-      scroll.innerHTML = '<div class="pb-dprops-empty">No props for this game</div>';
+    if (!res.ok) {
+      // Never map transport/API failure to empty-inventory copy.
+      scroll.innerHTML = '<div class="pb-dprops-empty pb-dprops-error">Unable to load props — <button type="button" class="pb-dprops-retry" onclick="_pbOpenDedicatedProps(null,\'' +
+        String(gid).replace(/'/g, '') + '\',\'' + s + '\')">Retry</button></div>';
+      return;
+    }
+    if (!data || !data.props || !data.props.length) {
+      var denied = data && data.deniedReason;
+      scroll.innerHTML = '<div class="pb-dprops-empty">' +
+        (denied === 'ambiguous_home_away'
+          ? 'Props unavailable for this matchup'
+          : 'No props for this game') +
+        '</div>';
       return;
     }
     var meta = data.props[0] || {};
@@ -7193,7 +7249,8 @@ async function _pbOpenDedicatedProps(btn, gameId, sport) {
     _pbRerenderDedicatedProps(gid);
   } catch (_e) {
     if (_pbExpandedPropsGameId === gid) {
-      scroll.innerHTML = '<div class="pb-dprops-empty">Props unavailable — retry</div>';
+      scroll.innerHTML = '<div class="pb-dprops-empty pb-dprops-error">Unable to load props — <button type="button" class="pb-dprops-retry" onclick="_pbOpenDedicatedProps(null,\'' +
+        String(gid).replace(/'/g, '') + '\',\'' + s + '\')">Retry</button></div>';
     }
   }
 }
@@ -7397,7 +7454,14 @@ function _pbCollapseAllGameAlts() {
 }
 
 function _pbPropsQueryString(gameId, card) {
-  var params = 'gameId=' + encodeURIComponent(gameId);
+  // Prefer provider-native eventId for props matching; numeric board ids alone miss inventory.
+  var eventId = card && card.getAttribute('data-event-id');
+  var canonical = card && card.getAttribute('data-canonical-key');
+  var gid = (eventId && String(eventId).trim()) ? String(eventId).trim() : String(gameId || '');
+  var params = 'gameId=' + encodeURIComponent(gid);
+  if (canonical && String(canonical).trim()) {
+    params += '&canonicalGameKey=' + encodeURIComponent(String(canonical).trim());
+  }
   if (card) {
     var home = card.getAttribute('data-home');
     var away = card.getAttribute('data-away');
@@ -7411,9 +7475,14 @@ async function _pbLoadGameProps(gameId, sport, panel, card) {
   var s = _pbNormalizePropSport(sport || _currentSport || 'mlb');
   try {
     var res = await fetch(API + '/api/props/' + encodeURIComponent(s) + '?' + _pbPropsQueryString(gameId, card), { cache: 'no-store' });
-    var data = await res.json();
+    var data = null;
+    try { data = await res.json(); } catch (_parseErr) { data = null; }
     if (_pbExpandedPropsGameId !== String(gameId)) return;
-    if (!res.ok || !data.props || !data.props.length) {
+    if (!res.ok) {
+      panel.innerHTML = '<div class="mc-props-empty mc-props-error">Unable to load props — retry</div>';
+      return;
+    }
+    if (!data || !data.props || !data.props.length) {
       panel.innerHTML = '<div class="mc-props-empty">No props for this game yet. Check back closer to tip-off.</div>';
       return;
     }
@@ -18098,7 +18167,7 @@ window.openGradingConsole = openGradingConsole;
 
 <!-- BUILD INFO (debug panel only with ?debug=1 / pb-debug=1) -->
 <div id="build-info" style="position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;padding:2px 10px;display:none;align-items:center;justify-content:flex-end;z-index:99998;pointer-events:none">
-  <span id="build-info-label" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px">🔍 main · f30255f · Sep 14, 09:53 PM</span>
+  <span id="build-info-label" style="font-size:9px;color:#444;font-family:monospace;letter-spacing:0.3px">🔍 main · 38d24d4 · Sep 14, 10:55 PM</span>
 </div>
 <script>
 (function(){
