@@ -296,6 +296,7 @@
     'Dusan Lajovic': 1769,
     'Ekaterina Alexandrova': 3182,
     'Elena Rybakina': 3126,
+    'Elias Ymer': 2229,
     'Elina Svitolina': 1797,
     'Elise Mertens': 2221,
     'Fabio Fognini': 669,
@@ -319,20 +320,25 @@
     'Katerina Siniakova': 2248,
     'Katie Boulter': 2054,
     'Kei Nishikori': 1035,
+    'Laslo Djere': 2365,
     'Lloyd Harris': 2863,
     'Lorenzo Musetti': 3764,
     'Lorenzo Sonego': 3052,
     'Mackenzie McDonald': 2206,
     'Madison Keys': 1556,
     'Magda Linette': 1649,
+    'Marco Cecchinato': 1840,
     'Marcos Giron': 1993,
     'Maria Sakkari': 3018,
     'Marin Cilic': 464,
     'Marketa Vondrousova': 2735,
     'Marton Fucsovics': 1862,
     'Matteo Berrettini': 2622,
+    'Michael Mmoh': 2625,
     'Milos Raonic': 1333,
     'Miomir Kecmanovic': 2874,
+    'Mitchell Krueger': 1876,
+    'Mona Barthel': 1913,
     'Naomi Osaka': 2789,
     'Nick Kyrgios': 1984,
     'Nicolas Jarry': 2377,
@@ -356,15 +362,19 @@
     'Soonwoo Kwon': 2872,
     'Sorana Cirstea': 1774,
     'Stan Wawrinka': 264,
+    'Stefan Kozlov': 2238,
+    'Stefano Napolitano': 2242,
     'Stefano Travaglia': 2682,
     'Stefanos Tsitsipas': 2869,
     'Tallon Griekspoor': 3319,
     'Tatjana Maria': 2346,
     'Taylor Fritz': 2946,
+    'Thiago Monteiro': 2025,
     'Tommy Paul': 2964,
     'Ugo Humbert': 3085,
     'Venus Williams': 403,
     'Victoria Azarenka': 421,
+    'Viktoria Hruncakova': 2736,
     'Yulia Putintseva': 1802,
     'Zhang Shuai': 707
   },
@@ -769,11 +779,12 @@
   function tennisSearchQueries(playerName) {
     var parts = String(playerName || '').trim().split(/\s+/).filter(Boolean);
     var firstLast = parts.length >= 2 ? (parts[0] + ' ' + parts[parts.length - 1]) : String(playerName || '').trim();
-    var queries = [];
-    if (firstLast) queries.push(firstLast + ' tennis');
-    if (firstLast && queries.indexOf(firstLast) < 0) queries.push(firstLast);
     var full = String(playerName || '').trim();
-    if (full && queries.indexOf(full) < 0) queries.push(full);
+    var queries = [];
+    // Full Owls identity first — exact match only downstream (wrong face worse than missing).
+    if (full) queries.push(full);
+    if (firstLast && queries.indexOf(firstLast) < 0) queries.push(firstLast);
+    if (firstLast) queries.push(firstLast + ' tennis');
     return queries;
   }
 
@@ -898,18 +909,26 @@
           var q = queries[qi];
           if (!q) continue;
           var limit = (sport === 'tennis' || sport === 'mma') ? 5 : 8;
-          // ESPN returns empty items when `sport=` is set for some individual
-          // sports — query by name + type=player, then filter in pickSearchResult.
-          var url = 'https://site.api.espn.com/apis/common/v3/search?query=' +
-            encodeURIComponent(q) +
-            ((sport === 'tennis' || sport === 'mma')
-              ? ''
-              : ('&sport=' + encodeURIComponent(searchSport))) +
-            '&type=player&limit=' + limit;
-          var res = await fetch(url, { cache: 'force-cache' });
-          if (!res.ok) continue;
-          var data = await res.json();
-          pick = pickSearchResult(data.items || [], playerName, sport, team);
+          // Prefer site.web — site.api frequently 403s. Skip sport= for tennis/mma
+          // (ESPN returns empty items when sport= is set for some individual sports).
+          var hosts = (sport === 'tennis' || sport === 'mma')
+            ? [
+                'https://site.web.api.espn.com/apis/common/v3/search',
+                'https://site.api.espn.com/apis/common/v3/search'
+              ]
+            : ['https://site.api.espn.com/apis/common/v3/search'];
+          for (var hi = 0; hi < hosts.length && !pick; hi++) {
+            var url = hosts[hi] + '?query=' +
+              encodeURIComponent(q) +
+              ((sport === 'tennis' || sport === 'mma')
+                ? ''
+                : ('&sport=' + encodeURIComponent(searchSport))) +
+              '&type=player&limit=' + limit;
+            var res = await fetch(url, { cache: 'force-cache' });
+            if (!res.ok) continue;
+            var data = await res.json();
+            pick = pickSearchResult(data.items || [], playerName, sport, team);
+          }
         }
         if (!pick || !pick.id) {
           var miss1 = { miss: true };
@@ -918,6 +937,23 @@
           return miss1;
         }
         var headshotUrl = getPlayerHeadshotUrl(playerName, sport, pick.id);
+        // Tennis/MMA: never cache an ID without a loadable headshot (CDN often 404s).
+        if (sport === 'tennis' || sport === 'mma') {
+          try {
+            var probe = await fetch(headshotUrl, { method: 'HEAD', cache: 'no-store' });
+            if (!probe.ok) {
+              var missHs = { miss: true, reason: 'no_headshot' };
+              _memCache[key] = missHs;
+              writePersistentCache(key, { miss: true });
+              return missHs;
+            }
+          } catch (_hsE) {
+            var missHs2 = { miss: true, reason: 'no_headshot' };
+            _memCache[key] = missHs2;
+            writePersistentCache(key, { miss: true });
+            return missHs2;
+          }
+        }
         var ok = { id: String(pick.id), headshotUrl: headshotUrl };
         _memCache[key] = ok;
         writePersistentCache(key, { espnId: ok.id, headshotUrl: headshotUrl });
