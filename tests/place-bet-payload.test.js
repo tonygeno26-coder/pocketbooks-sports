@@ -226,6 +226,24 @@ test('odds_changed accept clears idempotency and re-places via server re-resolve
     'Ask Me must be the default player setting');
 });
 
+test('odds_changed accept stashes server confirmationQuote for atomic commit', function() {
+  assert(html.indexOf('function _stashConfirmationQuote') !== -1,
+    'must stash confirmationQuote from odds_changed response');
+  assert(html.indexOf('function _clearConfirmationQuote') !== -1,
+    'must clear confirmationQuote on success/cancel');
+  assert(html.indexOf('confirmationQuote: _pendingConfirmationQuote') !== -1,
+    'place payload must send confirmationQuote when accepting reprice');
+  var start = html.indexOf("document.getElementById('odds-accept-btn').onclick=function()");
+  assert(start !== -1);
+  var end = html.indexOf('return;', start);
+  var handler = html.slice(start, end + 20);
+  assert(handler.indexOf('_stashConfirmationQuote') !== -1,
+    'odds accept must stash confirmationQuote before re-place');
+  assert(html.indexOf("_stashConfirmationQuote(d)") !== -1
+      || html.indexOf('_stashConfirmationQuote(d)') !== -1,
+    'line accept must also stash confirmationQuote');
+});
+
 test('line_changed requires explicit accept of new line', function() {
   assert(html.indexOf('Accept New Line & Place Bet') !== -1);
   assert(html.indexOf('function _showLineChangedReview') !== -1);

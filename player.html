@@ -10563,10 +10563,12 @@ async function confirmBet() {
     document.body.appendChild(modal);
     document.getElementById('line-reject-btn').onclick=function(){
       modal.remove();
+      _clearConfirmationQuote();
       showToast('Bet canceled — line changed','info');
     };
     document.getElementById('line-accept-btn').onclick=function(){
       modal.remove();
+      _stashConfirmationQuote(d);
       _applyServerRepriceToSlip(d);
       _acceptRepriceAndPlace();
     };
@@ -10634,6 +10636,18 @@ async function confirmBet() {
         try { showToast('Could not re-submit. Review slip and place again.', 'warning'); } catch (_t) {}
       }
     }, 40);
+  }
+
+  // Short-TTL server confirmation quote from odds_changed / line_changed.
+  // Cleared on successful place, cancel, or expired re-resolve.
+  var _pendingConfirmationQuote = null;
+  function _stashConfirmationQuote(data) {
+    _pendingConfirmationQuote = (data && data.confirmationQuote)
+      ? String(data.confirmationQuote)
+      : null;
+  }
+  function _clearConfirmationQuote() {
+    _pendingConfirmationQuote = null;
   }
 
   // ── Locate + disable confirm button (spinner) ─────────────────────────────
@@ -10877,6 +10891,8 @@ async function confirmBet() {
       // undefined for Single/Parlay/Teaser so it is omitted from the JSON body.
       rrStakes: snap.type === 'rr' ? snap.rrStakes : undefined,
       insuranceEnabled: snap.type==='parlay' && ((_t0.selections||snap.legs||[]).length >= 3) && !!(document.getElementById('parlay-insure-chk')||{}).checked,
+      // Server-minted quote from prior odds_changed / line_changed accept.
+      confirmationQuote: _pendingConfirmationQuote || undefined,
       legs:(_t0.selections||snap.legs||[]).map(function(leg){
         var _c = _buildContractPlaceLeg(leg);
         return {
@@ -10952,6 +10968,7 @@ async function confirmBet() {
 
       // ── Success ───────────────────────────────────────────────────────────
       if (_dbData.ok) {
+        _clearConfirmationQuote();
         _cbStep = 'SUCCESS';
         _pendingPlaceIdemKey = null;
         _dbPlacementAttempted = true;
@@ -11059,12 +11076,14 @@ async function confirmBet() {
           '</div>'
         ].join('');
         document.body.appendChild(_odModal);
-        document.getElementById('odds-reject-btn').onclick=function(){ _odModal.remove(); showToast('Bet canceled \u2014 odds changed','info'); };
+        document.getElementById('odds-reject-btn').onclick=function(){ _odModal.remove(); _clearConfirmationQuote(); showToast('Bet canceled \u2014 odds changed','info'); };
         document.getElementById('odds-accept-btn').onclick=function(){
           _odModal.remove();
           // Patch slip to current authoritative prices, mint a NEW idempotency
-          // key, and re-submit. Server still re-resolves — stale confirmation
-          // of an old price cannot force placement.
+          // key, and re-submit WITH the server confirmation quote so BE can
+          // commit the accepted price without an unbound second provider tick
+          // re-opening the odds_changed loop.
+          _stashConfirmationQuote(_od);
           _applyServerRepriceToSlip(_od);
           _acceptRepriceAndPlace();
         };
