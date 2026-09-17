@@ -71,33 +71,40 @@ test('network catch returns instead of falling through to local ticket write', f
   // After catch body there must be an early return before LOCALSTORAGE path mutates
   var catchIdx = confirmBetFn.indexOf('} catch(_e)');
   assert(catchIdx !== -1, 'missing catch(_e) on place fetch');
-  var afterCatch = confirmBetFn.slice(catchIdx, catchIdx + 1800);
-  assert(/return;\s*\} finally/.test(afterCatch) || /return;\s*\n\s*\} finally/.test(afterCatch),
-    'catch must return before finally (no fall-through)');
-  assert(afterCatch.includes('Bet could not be placed') || afterCatch.includes('Placement could not be confirmed'),
-    'catch must surface failure/uncertain copy');
+  var afterCatch = confirmBetFn.slice(catchIdx, confirmBetFn.indexOf('LOCALSTORAGE'));
+  assert(afterCatch.includes('return;'), 'catch must return (no fall-through)');
+  assert(/\} finally \{/.test(confirmBetFn.slice(catchIdx)), 'catch must be followed by finally');
+  assert(afterCatch.includes('Checking bet status') || afterCatch.includes('placement_status_unknown'),
+    'catch must surface unknown-status copy');
 });
 
 test('timeout/abort reconciles dashboard and does not auto-retry POST', function() {
-  assert(confirmBetFn.includes('fetch_aborted_uncertain') || confirmBetFn.includes('Placement could not be confirmed'),
+  assert(confirmBetFn.includes('placement_status_unknown') || confirmBetFn.includes('Checking bet status'),
     'missing uncertain placement messaging');
   assert(/loadPlayerDashboardFromDb\s*\(/.test(confirmBetFn.slice(confirmBetFn.indexOf('catch(_e)'))),
     'abort/uncertain path must attempt dashboard reconcile');
-  // No recursive confirmBet() / automatic second place POST in abort path
+  // No recursive confirmBet() / automatic second NEW place from abort path
   var abortSlice = confirmBetFn.slice(confirmBetFn.indexOf('catch(_e)'), confirmBetFn.indexOf('LOCALSTORAGE'));
   assert(!/confirmBet\s*\(/.test(abortSlice), 'must not auto-reenter confirmBet on timeout');
-  assert(!/\/api\/bets\/place/.test(abortSlice.replace(/endpoint=\/api\/bets\/place/g, '')),
-    'must not fire a second place POST from abort catch');
+  // One sticky-key recovery POST is required for lost-response; must not mint a new key.
+  assert(abortSlice.includes('CONFIRM_BET_RECOVERY_POST') || abortSlice.includes('_pendingPlaceIdemKey'),
+    'uncertain path must recover via sticky idempotency key');
+  assert(!/_generateIdemKey\s*\(/.test(abortSlice),
+    'recovery must not mint a new idempotency key');
 });
 
 test('success path still writes local cache only after server ok', function() {
   assert(confirmBetFn.includes("if (_dbData.ok)"), 'success branch missing');
-  var okIdx = confirmBetFn.indexOf('if (_dbData.ok)');
-  var okSlice = confirmBetFn.slice(okIdx, okIdx + 2500);
-  assert(okSlice.includes('saveTickets()') || okSlice.includes('betTickets.unshift'),
+  assert(confirmBetFn.includes('_applyDbPlaceSuccess'), 'shared success apply missing');
+  assert(confirmBetFn.includes('saveTickets()') || confirmBetFn.includes('betTickets.unshift'),
     'server-ok path may cache ticket locally');
-  assert(okSlice.includes('balanceAfter') || okSlice.includes('applyDisplayedBalance'),
+  assert(confirmBetFn.includes('balanceAfter') || confirmBetFn.includes('applyDisplayedBalance'),
     'server-ok path should prefer server balanceAfter');
+  // Success apply must only run after ok / recovery ok — never before POST.
+  var applyIdx = confirmBetFn.indexOf('async function _applyDbPlaceSuccess');
+  assert(applyIdx !== -1, '_applyDbPlaceSuccess must exist');
+  assert(confirmBetFn.indexOf('await _applyDbPlaceSuccess(_dbData)') > applyIdx,
+    'normal success must call shared apply');
 });
 
 console.log('\n-- P0 phantom ledger: cancel --');

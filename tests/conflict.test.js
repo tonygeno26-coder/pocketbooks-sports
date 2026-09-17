@@ -158,6 +158,12 @@ test('exact Over 8.5 active ticket blocks same Over 8.5', function() {
   assertEq(r.reason, 'active_ticket_conflict', 'reason correct');
 });
 
+test('Over 8.5 vs Over 9.5 are distinct (not exact duplicate)', function() {
+  var slip = [leg('Over 8.5', 'Total', GAME_KEY_1, 'cell-over85')];
+  var r = checkConflict(leg('Over 9.5', 'Total', GAME_KEY_1, 'cell-over95'), slip, []);
+  assert(!r.conflict, 'different total lines are distinct selections');
+});
+
 console.log('\n── Distinct markets same event ──');
 
 test('ML + Total same game NOT blocked', function() {
