@@ -82,6 +82,8 @@ test('error recovery copy helpers present', function () {
   assertIncludes(uxSrc, 'membership_pending', 'pending error');
   assertIncludes(uxSrc, 'results_unavailable', 'results error');
   assertIncludes(uxSrc, 'stale_odds', 'stale odds');
+  assertIncludes(uxSrc, "sport_not_allowed: 'This sport isn’t available for your account.'", 'player allowlist copy');
+  assertIncludes(uxSrc, "sport_blocked: 'Your host has disabled this sport.'", 'host sport block copy');
 });
 
 test('safe context strips secrets', function () {

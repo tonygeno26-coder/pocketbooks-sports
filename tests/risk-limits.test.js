@@ -135,7 +135,8 @@ function validateRiskLimits(params) {
       return { ok:false, code:'market_blocked', market, legIndex:i };
     if (pl.blockedMarkets && pl.blockedMarkets.includes(market))
       return { ok:false, code:'market_blocked', market, legIndex:i, source:'player_limit' };
-    if (pl.allowedSports && !pl.allowedSports.includes(sport))
+    // Empty/null/missing allowedSports = no player-level sport restriction.
+    if (Array.isArray(pl.allowedSports) && pl.allowedSports.length > 0 && !pl.allowedSports.includes(sport))
       return { ok:false, code:'sport_not_allowed', sport, legIndex:i };
 
     // 8. Live betting
@@ -309,6 +310,55 @@ test('sport not in allowedSports → sport_not_allowed', function() {
 test('allowed sport in allowedSports → ok', function() {
   var pl = defaultPlayerLimits(); pl.allowedSports = ['mlb','nfl'];
   assert(validateRiskLimits(base({ playerLimits:pl })).ok);
+});
+test('allowedSports null → unrestricted (ok)', function() {
+  var pl = defaultPlayerLimits(); pl.allowedSports = null;
+  assert(validateRiskLimits(base({ playerLimits:pl })).ok);
+});
+test('allowedSports missing → unrestricted (ok)', function() {
+  var pl = defaultPlayerLimits(); delete pl.allowedSports;
+  assert(validateRiskLimits(base({ playerLimits:pl })).ok);
+});
+test('allowedSports empty [] → unrestricted (ok)', function() {
+  var pl = defaultPlayerLimits(); pl.allowedSports = [];
+  assert(validateRiskLimits(base({ playerLimits:pl })).ok);
+});
+test('allowedSports ["mlb"] → MLB ok', function() {
+  var pl = defaultPlayerLimits(); pl.allowedSports = ['mlb'];
+  assert(validateRiskLimits(base({ playerLimits:pl })).ok);
+});
+test('allowedSports ["nfl"] → MLB denied', function() {
+  var pl = defaultPlayerLimits(); pl.allowedSports = ['nfl'];
+  var r = validateRiskLimits(base({ playerLimits:pl }));
+  assertEq(r.code,'sport_not_allowed');
+});
+test('HOST MLB OFF (blocked) + player [] → DENY sport_blocked', function() {
+  var cs = defaultClubSettings(); cs.blockedSports = ['mlb'];
+  var pl = defaultPlayerLimits(); pl.allowedSports = [];
+  var r = validateRiskLimits(base({ clubSettings:cs, playerLimits:pl }));
+  assertEq(r.code,'sport_blocked');
+});
+test('HOST MLB OFF + player ["mlb"] → DENY sport_blocked (host wins)', function() {
+  var cs = defaultClubSettings(); cs.blockedSports = ['mlb'];
+  var pl = defaultPlayerLimits(); pl.allowedSports = ['mlb'];
+  var r = validateRiskLimits(base({ clubSettings:cs, playerLimits:pl }));
+  assertEq(r.code,'sport_blocked');
+});
+test('empty allowedSports parlay → ok', function() {
+  var pl = defaultPlayerLimits(); pl.allowedSports = [];
+  var r = validateRiskLimits(base({
+    betType:'parlay', stake:20, potentialPayout:70,
+    legs:[leg('mlb','moneyline','K1'), leg('nfl','moneyline','K2')],
+    playerLimits:pl
+  }));
+  assert(r.ok);
+});
+test('empty allowedSports live leg → ok when live enabled', function() {
+  var pl = defaultPlayerLimits(); pl.allowedSports = [];
+  assert(validateRiskLimits(base({
+    legs:[leg('mlb','moneyline','K1',true)],
+    playerLimits:pl
+  })).ok);
 });
 
 console.log('\n── Live betting ──');

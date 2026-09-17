@@ -501,7 +501,7 @@
       market_changed: 'Market temporarily unavailable.',
       market_unavailable: 'Market temporarily unavailable.',
       sport_blocked: 'Your host has disabled this sport.',
-      sport_not_allowed: 'Your host has disabled this sport.',
+      sport_not_allowed: 'This sport isn’t available for your account.',
       live_betting_disabled: 'Live betting is turned off for this club.',
       membership_inactive: 'Your membership isn’t active yet. Wait for host approval.',
       membership_pending: 'Your membership is pending host approval.',
