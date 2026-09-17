@@ -2770,7 +2770,7 @@ function _showSessionExpiredModal(result) {
 })();
 // ══════════════════════════════════════════════════════════════════════════════
 // Build identity — visible in console and window.PBS_BUILD_SHA for bundle verification
-window.PBS_BUILD_SHA = '968341d';
+window.PBS_BUILD_SHA = 'eb8e8a6';
 window.PBS_BUILD_DATE = '2026-09-15T06:22:57.354Z';
 const API='https://pocketbooks-sports-backend-production.up.railway.app';
 try { window.API = API; } catch (_eApi) {}
@@ -10908,15 +10908,103 @@ async function confirmBet() {
       })
     };
 
-    // ── AbortController 10 s timeout ─────────────────────────────────────
+    // Shared success apply — also used after lost-response idempotent recovery
+    // (must be outside try so catch can call it).
+    async function _applyDbPlaceSuccess(_okData) {
+      _clearConfirmationQuote();
+      _cbStep = 'SUCCESS';
+      _pendingPlaceIdemKey = null;
+      _dbPlacementAttempted = true;
+      var _isRrResp = !!(snap.type === 'rr' && _okData.groupId);
+      _cbLog('CONFIRM_BET_SUCCESS',
+        _isRrResp
+          ? 'groupId='+_okData.groupId+' comboCount='+_okData.comboCount+' ledger='+_okData.ledgerEntryId
+          : 'ticketId='+_okData.ticketId+' ledger='+_okData.ledgerEntryId);
+
+      _cbStep = 'LEDGER_WRITE';
+      _cbLog('CONFIRM_BET_LEDGER_WRITE_BEGIN');
+      try {
+        // For RR, use groupId as the ticket reference; no single ticketId exists.
+        var _ledgerTicketRef = _isRrResp ? _okData.groupId : (_okData.ticketId || (newTickets[0] && newTickets[0].id));
+        addLedgerEntry({ id:'L'+Date.now()+Math.random().toString(36).slice(2,6),
+          type:'bet_placed', ticketIds:[_ledgerTicketRef],
+          amount:-riskAmount, balanceBefore:_avail+riskAmount, balanceAfter:_avail,
+          createdAt:now, betType:snap.type, count: _isRrResp ? _okData.comboCount : 1 });
+        _cbLog('CONFIRM_BET_LEDGER_WRITE_SUCCESS');
+      } catch(_le) { _cbErr('CONFIRM_BET_LEDGER_WRITE_WARN', _le, 'non-fatal'); }
+
+      _cbStep = 'TICKET_SAVE';
+      _cbLog('CONFIRM_BET_TICKET_SAVE_BEGIN');
+      if (_isRrResp && newTickets[0]) {
+        // Tag the local slip ticket with groupId and comboCount so
+        // renderMyBets can group it even before the deferred DB refresh.
+        newTickets[0].id          = _okData.groupId;
+        newTickets[0].rrGroupId   = _okData.groupId;
+        newTickets[0].comboCount  = _okData.comboCount;
+      } else {
+        // Merge server ticketId back into local ticket object if provided
+        if (_okData.ticketId && newTickets[0]) newTickets[0].id = _okData.ticketId;
+      }
+      if (_okData.status && newTickets[0]) newTickets[0].status = _okData.status || newTickets[0].status;
+      if (newTickets[0] && _dbPayload.insuranceEnabled) {
+        newTickets[0].insuranceEnabled = true;
+        newTickets[0].insurance_enabled = true;
+      }
+      try {
+        // Prevent duplicate: remove any pre-existing entry with same id before unshift
+        var _tid = newTickets[0] && newTickets[0].id;
+        if (_tid) betTickets = betTickets.filter(function(t){ return t.id !== _tid; });
+        betTickets.unshift(newTickets[0]);
+        saveTickets();
+        _cbLog('CONFIRM_BET_TICKET_SAVE_SUCCESS', 'ticketId='+(_tid||'?')+' pbTickets='+betTickets.length);
+      } catch(_se) { _cbErr('CONFIRM_BET_TICKET_SAVE_WARN', _se, 'non-fatal'); }
+
+      _cbStep = 'BALANCE_SYNC';
+      _cbLog('CONFIRM_BET_BALANCE_SYNC');
+      try {
+        if (_okData.balanceAfter != null && !isNaN(Number(_okData.balanceAfter))) {
+          applyDisplayedBalance(Number(_okData.balanceAfter));
+          _balanceFromServer = true;
+        }
+      } catch(_) {}
+
+      _cbStep = 'MODAL_CLOSE';
+      _cbLog('CONFIRM_BET_MODAL_CLOSE');
+      try { closeBetConfirm(); } catch(_) {}
+      try { closeBetSlip();   } catch(_) {}
+      try { clearSlip();      } catch(_) {}
+
+      // Keep the just-placed ticket in-memory so renderMyBets does not
+      // reload an empty/stale pb-tickets list before the DB refetch lands.
+      _playerTicketsFromDb = true;
+      try { renderMyBets(); } catch(_) {}
+      if (_isRrResp) {
+        showToast('\u2705 Round Robin placed \xb7 ' + _okData.comboCount + ' combo ticket' + (_okData.comboCount !== 1 ? 's' : '') + '!', 'success');
+      } else {
+        showToast('\u2705 Bet placed!', 'success');
+      }
+
+      // Refetch dashboard after a short delay (propagation lag). keepPending
+      // merges any in-memory ticket the response has not yet included.
+      setTimeout(function(){
+        try { loadPlayerDashboardFromDb({ keepPending: true }).then(function(){
+          try { renderMyBets(); } catch(_) {}
+        }).catch(function(){}); } catch(_) {}
+      }, 400);
+
+      _cbLog('CONFIRM_BET_COMPLETE',
+        _isRrResp ? 'groupId='+_okData.groupId+' path=DB' : 'ticketId='+_okData.ticketId+' path=DB');
+    }
+
+    // ── AbortController 30 s timeout (place can exceed 10s under HAB/snapshot load) ─
     _cbAbortCtrl  = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     _cbAbortTimer = _cbAbortCtrl ? setTimeout(function(){
       // Abort only — catch path owns uncertain-state messaging + reconcile (no local success).
       _cbErr('CONFIRM_BET_ERROR', null,
-        'reason=fetch_timeout_10s endpoint=/api/bets/place step='+_cbStep
+        'reason=fetch_timeout_30s endpoint=/api/bets/place step='+_cbStep
         +' respStatus='+_cbRespStatus);
       try { _cbAbortCtrl.abort(); } catch(_) {}
-    }, 10000) : null;
+    }, 30000) : null;
 
     try {
       // ── POSTING ──────────────────────────────────────────────────────────
@@ -10968,89 +11056,7 @@ async function confirmBet() {
 
       // ── Success ───────────────────────────────────────────────────────────
       if (_dbData.ok) {
-        _clearConfirmationQuote();
-        _cbStep = 'SUCCESS';
-        _pendingPlaceIdemKey = null;
-        _dbPlacementAttempted = true;
-        var _isRrResp = !!(snap.type === 'rr' && _dbData.groupId);
-        _cbLog('CONFIRM_BET_SUCCESS',
-          _isRrResp
-            ? 'groupId='+_dbData.groupId+' comboCount='+_dbData.comboCount+' ledger='+_dbData.ledgerEntryId
-            : 'ticketId='+_dbData.ticketId+' ledger='+_dbData.ledgerEntryId);
-
-        _cbStep = 'LEDGER_WRITE';
-        _cbLog('CONFIRM_BET_LEDGER_WRITE_BEGIN');
-        try {
-          // For RR, use groupId as the ticket reference; no single ticketId exists.
-          var _ledgerTicketRef = _isRrResp ? _dbData.groupId : (_dbData.ticketId || (newTickets[0] && newTickets[0].id));
-          addLedgerEntry({ id:'L'+Date.now()+Math.random().toString(36).slice(2,6),
-            type:'bet_placed', ticketIds:[_ledgerTicketRef],
-            amount:-riskAmount, balanceBefore:_avail+riskAmount, balanceAfter:_avail,
-            createdAt:now, betType:snap.type, count: _isRrResp ? _dbData.comboCount : 1 });
-          _cbLog('CONFIRM_BET_LEDGER_WRITE_SUCCESS');
-        } catch(_le) { _cbErr('CONFIRM_BET_LEDGER_WRITE_WARN', _le, 'non-fatal'); }
-
-        _cbStep = 'TICKET_SAVE';
-        _cbLog('CONFIRM_BET_TICKET_SAVE_BEGIN');
-        if (_isRrResp && newTickets[0]) {
-          // Tag the local slip ticket with groupId and comboCount so
-          // renderMyBets can group it even before the deferred DB refresh.
-          newTickets[0].id          = _dbData.groupId;
-          newTickets[0].rrGroupId   = _dbData.groupId;
-          newTickets[0].comboCount  = _dbData.comboCount;
-        } else {
-          // Merge server ticketId back into local ticket object if provided
-          if (_dbData.ticketId && newTickets[0]) newTickets[0].id = _dbData.ticketId;
-        }
-        if (_dbData.status && newTickets[0]) newTickets[0].status = _dbData.status || newTickets[0].status;
-        if (newTickets[0] && _dbPayload.insuranceEnabled) {
-          newTickets[0].insuranceEnabled = true;
-          newTickets[0].insurance_enabled = true;
-        }
-        try {
-          // Prevent duplicate: remove any pre-existing entry with same id before unshift
-          var _tid = newTickets[0] && newTickets[0].id;
-          if (_tid) betTickets = betTickets.filter(function(t){ return t.id !== _tid; });
-          betTickets.unshift(newTickets[0]);
-          saveTickets();
-          _cbLog('CONFIRM_BET_TICKET_SAVE_SUCCESS', 'ticketId='+(_tid||'?')+' pbTickets='+betTickets.length);
-        } catch(_se) { _cbErr('CONFIRM_BET_TICKET_SAVE_WARN', _se, 'non-fatal'); }
-
-        _cbStep = 'BALANCE_SYNC';
-        _cbLog('CONFIRM_BET_BALANCE_SYNC');
-        try {
-          if (_dbData.balanceAfter != null && !isNaN(Number(_dbData.balanceAfter))) {
-            applyDisplayedBalance(Number(_dbData.balanceAfter));
-            _balanceFromServer = true;
-          }
-        } catch(_) {}
-
-        _cbStep = 'MODAL_CLOSE';
-        _cbLog('CONFIRM_BET_MODAL_CLOSE');
-        try { closeBetConfirm(); } catch(_) {}
-        try { closeBetSlip();   } catch(_) {}
-        try { clearSlip();      } catch(_) {}
-
-        // Keep the just-placed ticket in-memory so renderMyBets does not
-        // reload an empty/stale pb-tickets list before the DB refetch lands.
-        _playerTicketsFromDb = true;
-        try { renderMyBets(); } catch(_) {}
-        if (_isRrResp) {
-          showToast('\u2705 Round Robin placed \xb7 ' + _dbData.comboCount + ' combo ticket' + (_dbData.comboCount !== 1 ? 's' : '') + '!', 'success');
-        } else {
-          showToast('\u2705 Bet placed!', 'success');
-        }
-
-        // Refetch dashboard after a short delay (propagation lag). keepPending
-        // merges any in-memory ticket the response has not yet included.
-        setTimeout(function(){
-          try { loadPlayerDashboardFromDb({ keepPending: true }).then(function(){
-            try { renderMyBets(); } catch(_) {}
-          }).catch(function(){}); } catch(_) {}
-        }, 400);
-
-        _cbLog('CONFIRM_BET_COMPLETE',
-          _isRrResp ? 'groupId='+_dbData.groupId+' path=DB' : 'ticketId='+_dbData.ticketId+' path=DB');
+        await _applyDbPlaceSuccess(_dbData);
         return;
 
       // ── Odds changed ──────────────────────────────────────────────────────
@@ -11174,29 +11180,113 @@ async function confirmBet() {
     } catch(_e) {
       if (_cbAbortTimer) { clearTimeout(_cbAbortTimer); _cbAbortTimer=null; }
       var _isAbort = _e && (_e.name==='AbortError'||String(_e.message||'').toLowerCase().includes('abort'));
-      if (_isAbort) {
-        // Timeout: request may have reached the server — do NOT fabricate local success.
-        // Do NOT auto-retry money POST; reconcile authoritative dashboard state instead.
-        _cbErr('CONFIRM_BET_ERROR', _e, 'reason=fetch_aborted_uncertain step='+_cbStep);
-        try {
-          if (typeof loadPlayerDashboardFromDb === 'function') {
-            await loadPlayerDashboardFromDb({ keepPending: false });
-            try { renderMyBets(); } catch(_) {}
-          }
-        } catch(_rec) {
-          _cbErr('CONFIRM_BET_RECONCILE_WARN', _rec, 'non-fatal');
+      // After POST begins, abort/network failure is PLACEMENT STATUS UNKNOWN —
+      // never claim "Bet not placed" / "Nothing was charged" without server proof.
+      _cbErr('CONFIRM_BET_ERROR', _e,
+        'reason=placement_status_unknown'
+        +(_isAbort ? ' abort=1' : ' network=1')
+        +' step='+_cbStep
+        +' endpoint=/api/bets/place'
+        +' respStatus='+_cbRespStatus
+        +' respBodyPreview='+(_cbRespText||'').slice(0,200).replace(/\n/g,' '));
+      try { showToast('Checking bet status\u2026', 'info'); } catch(_t0) {}
+
+      // 1) Authoritative dashboard reconcile (no synthetic local success).
+      try {
+        if (typeof loadPlayerDashboardFromDb === 'function') {
+          await loadPlayerDashboardFromDb({ keepPending: false });
+          try { renderMyBets(); } catch(_) {}
         }
-        showToast('Placement could not be confirmed. Check My Bets — your bet may or may not have been accepted. Do not place again until you verify.', 'warning');
-      } else {
-        _cbErr('CONFIRM_BET_ERROR', _e,
-          'phase=network step='+_cbStep
-          +' endpoint=/api/bets/place'
-          +' respStatus='+_cbRespStatus
-          +' respBodyPreview='+(_cbRespText||'').slice(0,200).replace(/\n/g,' '));
-        showToast(_hasLiveLeg
-          ? 'Live bet not placed \u2014 connection required.'
-          : 'Bet could not be placed. Your balance and tickets were not changed. Please try again.', 'error');
+      } catch(_rec) {
+        _cbErr('CONFIRM_BET_RECONCILE_WARN', _rec, 'non-fatal');
       }
+
+      // 2) Idempotent recovery: SAME sticky key + SAME payload (server replay,
+      //    not a new logical wager). One recovery attempt only — never mint a
+      //    new key and never encourage a second Place Bet.
+      var _recovered = false;
+      var _recoveryDefinitiveReject = null;
+      if (_dbPayload && _pendingPlaceIdemKey) {
+        try {
+          _cbLog('CONFIRM_BET_RECOVERY_POST', 'idempotencyKey='+_pendingPlaceIdemKey);
+          var _recAbort = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+          var _recTimer = _recAbort ? setTimeout(function(){
+            try { _recAbort.abort(); } catch(_a) {}
+          }, 30000) : null;
+          var _recResp = await _pbFetch('/api/bets/place', {
+            method:'POST', body:JSON.stringify(_dbPayload),
+            signal: _recAbort ? _recAbort.signal : undefined
+          });
+          if (_recTimer) { clearTimeout(_recTimer); _recTimer = null; }
+          var _recText = await _recResp.text();
+          var _recData = null;
+          try { _recData = JSON.parse(_recText); } catch(_pj) { _recData = null; }
+          if (_recData && _recData.ok) {
+            _cbLog('CONFIRM_BET_RECOVERY_OK',
+              'ticketId='+(_recData.ticketId||_recData.groupId||'?')+' status='+_recResp.status);
+            await _applyDbPlaceSuccess(_recData);
+            _recovered = true;
+          } else if (_recData && (String(_recData.error||'') === 'request_in_progress'
+              || String(_recData.code||'') === 'request_in_progress')) {
+            // Still processing — wait briefly, refresh dashboard, one more reconcile.
+            await new Promise(function(r){ setTimeout(r, 2000); });
+            try {
+              if (typeof loadPlayerDashboardFromDb === 'function') {
+                await loadPlayerDashboardFromDb({ keepPending: false });
+                try { renderMyBets(); } catch(_) {}
+              }
+            } catch(_rec2) {}
+            _cbLog('CONFIRM_BET_RECOVERY_IN_PROGRESS', 'sticky_key_kept=1');
+          } else if (_recData && (
+              String(_recData.code||_recData.error||'').indexOf('conflict_active_bet') === 0
+            )) {
+            // Exact duplicate means the wager already exists — treat as recovered.
+            try {
+              if (typeof loadPlayerDashboardFromDb === 'function') {
+                await loadPlayerDashboardFromDb({ keepPending: false });
+                try { renderMyBets(); } catch(_) {}
+              }
+            } catch(_rec3) {}
+            _pendingPlaceIdemKey = null;
+            try { closeBetConfirm(); } catch(_) {}
+            try { closeBetSlip(); } catch(_) {}
+            try { clearSlip(); } catch(_) {}
+            showToast('\u2705 Bet placed!', 'success');
+            _recovered = true;
+            _cbLog('CONFIRM_BET_RECOVERY_VIA_CONFLICT', 'exact_duplicate_active=1');
+          } else if (_recData && _recData.ok === false && _recResp.status >= 400 && _recResp.status < 500
+              && String(_recData.error||'') !== 'idempotency_key_expired'
+              && String(_recData.error||'') !== 'idempotency_conflict') {
+            // Definitive business rejection on recovery — server confirmed no new ticket.
+            _recoveryDefinitiveReject = _recData;
+          } else {
+            _cbLog('CONFIRM_BET_RECOVERY_STILL_UNKNOWN',
+              'status='+_recResp.status+' body='+String(_recText||'').slice(0,200));
+          }
+        } catch(_recErr) {
+          _cbErr('CONFIRM_BET_RECOVERY_WARN', _recErr, 'sticky_key_kept=1');
+        }
+      }
+
+      if (_recovered) {
+        return;
+      }
+
+      if (_recoveryDefinitiveReject) {
+        _pendingPlaceIdemKey = null;
+        var _rr = _recoveryDefinitiveReject;
+        var _rrMsg = (window.PbBetaUx && PbBetaUx.mapBetRejectMessage)
+          ? PbBetaUx.mapBetRejectMessage(_rr.code || _rr.error, _rr.userMessage || null)
+          : (_rr.userMessage || ('Bet not placed: '+String(_rr.code||_rr.error||'rejected').replace(/_/g,' ')));
+        showToast(_rrMsg, 'error');
+        try { closeBetConfirm(); } catch(_) {}
+        return;
+      }
+
+      // Still unknown: keep sticky key for a later same-key retry; do not encourage
+      // a new Place Bet, and never assert that nothing was charged.
+      try { closeBetConfirm(); } catch(_) {}
+      showToast('Placement status unknown. Check My Bets before placing again \u2014 do not submit a new wager until you verify.', 'warning');
       // P0: never fall through to localStorage success when DB-primary is on
       return;
     } finally {
@@ -16175,18 +16265,24 @@ function _pickConflictToken(leg) {
   var pick   = (leg.pick   || '').toLowerCase();
   var key    = leg.canonicalGameKey || null;
   if (!key) return null;
+  var sel = String(leg.canonicalSelectionKey || leg.canonical_selection_key || leg.side || pick || '')
+    .trim().toLowerCase().replace(/\s+/g, ' ');
+  var lineRaw = leg.acceptedPointLine != null ? leg.acceptedPointLine
+    : (leg.accepted_point_line != null ? leg.accepted_point_line
+      : (leg.line != null ? leg.line : ''));
+  var line = (lineRaw === '' || lineRaw == null) ? '' : String(Number(lineRaw));
+  // Exact duplicate identity: event + market + selection + line
+  // (opposite sides / distinct markets do not share a token)
   if (market.includes('total') || market.includes('over') || market.includes('under')) {
-    var m = pick.match(/(\d+\.?\d*)/); var line = m ? m[1] : 'x';
-    return key + '|total|' + line;
+    return key + '|total|' + (sel || pick) + '|' + (line || (pick.match(/(\d+\.?\d*)/) || [])[1] || 'x');
   }
   if (market.includes('run line') || market.includes('spread')) {
-    var m2 = pick.match(/(\d+\.?\d*)/); var absLine = m2 ? m2[1] : 'x';
-    return key + '|spread|' + absLine;
+    return key + '|spread|' + (sel || pick) + '|' + (line || (pick.match(/(\d+\.?\d*)/) || [])[1] || 'x');
   }
   if (market.includes('moneyline') || market.includes('to win') || / ml$/.test(pick)) {
-    return key + '|moneyline';
+    return key + '|moneyline|' + (sel || pick) + '|';
   }
-  return key + '|' + market;
+  return key + '|' + market + '|' + (sel || pick) + '|' + line;
 }
 
 function _checkBetConflict(newLeg) {
@@ -16225,7 +16321,7 @@ function _checkBetConflict(newLeg) {
     
     if (exToken && exToken === newToken) {
       return { conflict: true, reason: 'slip_conflict',
-               message: 'Conflicting bet: you already have action on the opposite side of this game.' };
+               message: 'You already have this wager active.' };
     }
   }
 
@@ -16242,7 +16338,7 @@ function _checkBetConflict(newLeg) {
       if (selToken && selToken === newToken) {
         
         return { conflict: true, reason: 'active_ticket_conflict', ticketId: t.id,
-                 message: 'Conflicting bet: you already have active action on the opposite side of this game.' };
+                 message: 'You already have this wager active.' };
       }
     }
   }
