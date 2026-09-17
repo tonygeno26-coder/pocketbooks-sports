@@ -52,15 +52,25 @@ function validateBetPlacement(body, playerBalance, existingActiveLegs) {
     return { ok:false, errors:['insufficient_balance: need $'+stake+' have $'+available] };
   }
 
-  // Conflict check (simplified: same canonicalGameKey + market)
-  var newTokens = legs.map(function(leg) {
-    return leg.canonicalGameKey + '|' + (leg.market||'').toLowerCase();
-  });
+  // Conflict check: exact duplicate = event + market + selection + line
+  function conflictToken(leg) {
+    var g = leg.canonicalGameKey || leg.canonical_game_key || '';
+    var m = String(leg.market || '').toLowerCase();
+    var sel = String(leg.canonicalSelectionKey || leg.canonical_selection_key || leg.side || leg.pick || '')
+      .trim().toLowerCase().replace(/\s+/g, ' ');
+    var lineRaw = leg.acceptedPointLine != null ? leg.acceptedPointLine
+      : (leg.accepted_point_line != null ? leg.accepted_point_line
+        : (leg.line != null ? leg.line : ''));
+    var line = (lineRaw === '' || lineRaw == null) ? '' : String(Number(lineRaw));
+    if (!g || !m || !sel) return null;
+    return g + '|' + m + '|' + sel + '|' + line;
+  }
+  var newTokens = legs.map(conflictToken).filter(Boolean);
   existingActiveLegs = existingActiveLegs || [];
   for (var i=0; i<existingActiveLegs.length; i++) {
-    var existToken = existingActiveLegs[i].canonical_game_key + '|' + (existingActiveLegs[i].market||'').toLowerCase();
-    if (newTokens.includes(existToken)) {
-      return { ok:false, errors:['conflict_active_bet:'+existingActiveLegs[i].canonical_game_key] };
+    var existToken = conflictToken(existingActiveLegs[i]);
+    if (existToken && newTokens.includes(existToken)) {
+      return { ok:false, errors:['conflict_active_bet'] };
     }
   }
 
@@ -220,20 +230,45 @@ test('no active legs → no conflict', function() {
   assert(r.ok, 'no conflict');
 });
 
-test('active leg same game+market → blocked', function() {
-  var existing = [{ canonical_game_key:'MLB|reds|guardians|2026-05-17', market:'Moneyline' }];
+test('active leg same game+market+selection → blocked', function() {
+  var existing = [{
+    canonical_game_key:'MLB|reds|guardians|2026-05-17',
+    market:'Moneyline',
+    pick:'Guardians ML'
+  }];
   var r = validateBetPlacement(BASE_BODY, 1000, existing);
   assert(!r.ok); assert(r.errors.some(function(e){ return e.includes('conflict_active_bet'); }));
 });
 
+test('active leg same game+market opposite selection → no conflict', function() {
+  var existing = [{
+    canonical_game_key:'MLB|reds|guardians|2026-05-17',
+    market:'Moneyline',
+    pick:'Reds ML'
+  }];
+  var r = validateBetPlacement(BASE_BODY, 1000, existing);
+  assert(r.ok, 'opposite moneyline selection allowed');
+});
+
 test('active leg different game → no conflict', function() {
-  var existing = [{ canonical_game_key:'MLB|reds|guardians|2026-05-18', market:'Moneyline' }];
+  var existing = [{
+    canonical_game_key:'MLB|reds|guardians|2026-05-18',
+    market:'Moneyline',
+    pick:'Guardians ML',
+    canonical_selection_key:'guardians'
+  }];
   var r = validateBetPlacement(BASE_BODY, 1000, existing);
   assert(r.ok, 'different game = no conflict');
 });
 
 test('active leg same game different market → no conflict', function() {
-  var existing = [{ canonical_game_key:'MLB|reds|guardians|2026-05-17', market:'Total' }];
+  var existing = [{
+    canonical_game_key:'MLB|reds|guardians|2026-05-17',
+    market:'Total',
+    pick:'Over 8.5',
+    side:'over',
+    line:8.5
+  }];
   var r = validateBetPlacement(BASE_BODY, 1000, existing);
   assert(r.ok, 'different market = no conflict');
 });

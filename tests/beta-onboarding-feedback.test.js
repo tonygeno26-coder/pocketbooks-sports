@@ -127,6 +127,12 @@ test('safe context strips secrets', function () {
   assert(dirty.clubId === 'club-1', 'club kept');
   assert(dirty.ticketId === 'T_abc', 'ticket kept');
   assert(PbBetaUx.mapBetRejectMessage('insufficient_balance').indexOf('balance') !== -1, 'reject map');
+  assert(PbBetaUx.mapBetRejectMessage('conflict_active_bet').indexOf('already have this wager') !== -1,
+    'conflict maps to clean duplicate copy');
+  assert(PbBetaUx.mapBetRejectMessage('conflict_active_bet:baseball_mlb|a|b|2026-09-17')
+    .indexOf('already have this wager') !== -1, 'legacy fingerprint conflict maps cleanly');
+  assert(PbBetaUx.mapBetRejectMessage('conflict_active_bet:x').indexOf('baseball') === -1,
+    'raw fingerprint never shown');
   assert(PbBetaUx.API_CONTRACT && PbBetaUx.API_CONTRACT.path === '/api/feedback', 'api contract');
 });
 

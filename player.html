@@ -10908,15 +10908,15 @@ async function confirmBet() {
       })
     };
 
-    // ── AbortController 10 s timeout ─────────────────────────────────────
+    // ── AbortController 30 s timeout (place can exceed 10s under HAB/snapshot load) ─
     _cbAbortCtrl  = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     _cbAbortTimer = _cbAbortCtrl ? setTimeout(function(){
       // Abort only — catch path owns uncertain-state messaging + reconcile (no local success).
       _cbErr('CONFIRM_BET_ERROR', null,
-        'reason=fetch_timeout_10s endpoint=/api/bets/place step='+_cbStep
+        'reason=fetch_timeout_30s endpoint=/api/bets/place step='+_cbStep
         +' respStatus='+_cbRespStatus);
       try { _cbAbortCtrl.abort(); } catch(_) {}
-    }, 10000) : null;
+    }, 30000) : null;
 
     try {
       // ── POSTING ──────────────────────────────────────────────────────────
@@ -16175,18 +16175,24 @@ function _pickConflictToken(leg) {
   var pick   = (leg.pick   || '').toLowerCase();
   var key    = leg.canonicalGameKey || null;
   if (!key) return null;
+  var sel = String(leg.canonicalSelectionKey || leg.canonical_selection_key || leg.side || pick || '')
+    .trim().toLowerCase().replace(/\s+/g, ' ');
+  var lineRaw = leg.acceptedPointLine != null ? leg.acceptedPointLine
+    : (leg.accepted_point_line != null ? leg.accepted_point_line
+      : (leg.line != null ? leg.line : ''));
+  var line = (lineRaw === '' || lineRaw == null) ? '' : String(Number(lineRaw));
+  // Exact duplicate identity: event + market + selection + line
+  // (opposite sides / distinct markets do not share a token)
   if (market.includes('total') || market.includes('over') || market.includes('under')) {
-    var m = pick.match(/(\d+\.?\d*)/); var line = m ? m[1] : 'x';
-    return key + '|total|' + line;
+    return key + '|total|' + (sel || pick) + '|' + (line || (pick.match(/(\d+\.?\d*)/) || [])[1] || 'x');
   }
   if (market.includes('run line') || market.includes('spread')) {
-    var m2 = pick.match(/(\d+\.?\d*)/); var absLine = m2 ? m2[1] : 'x';
-    return key + '|spread|' + absLine;
+    return key + '|spread|' + (sel || pick) + '|' + (line || (pick.match(/(\d+\.?\d*)/) || [])[1] || 'x');
   }
   if (market.includes('moneyline') || market.includes('to win') || / ml$/.test(pick)) {
-    return key + '|moneyline';
+    return key + '|moneyline|' + (sel || pick) + '|';
   }
-  return key + '|' + market;
+  return key + '|' + market + '|' + (sel || pick) + '|' + line;
 }
 
 function _checkBetConflict(newLeg) {
@@ -16225,7 +16231,7 @@ function _checkBetConflict(newLeg) {
     
     if (exToken && exToken === newToken) {
       return { conflict: true, reason: 'slip_conflict',
-               message: 'Conflicting bet: you already have action on the opposite side of this game.' };
+               message: 'You already have this wager active.' };
     }
   }
 
@@ -16242,7 +16248,7 @@ function _checkBetConflict(newLeg) {
       if (selToken && selToken === newToken) {
         
         return { conflict: true, reason: 'active_ticket_conflict', ticketId: t.id,
-                 message: 'Conflicting bet: you already have active action on the opposite side of this game.' };
+                 message: 'You already have this wager active.' };
       }
     }
   }

@@ -491,6 +491,9 @@
   function mapBetRejectMessage(code, userMessage) {
     if (userMessage) return String(userMessage);
     var c = String(code || '').toLowerCase();
+    if (c.indexOf('conflict_active_bet') === 0) {
+      return 'You already have this wager active.';
+    }
     var map = {
       insufficient_balance: 'Insufficient balance for this stake.',
       market_closed: 'This market is closed.',
