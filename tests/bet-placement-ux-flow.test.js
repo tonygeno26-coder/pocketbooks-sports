@@ -98,6 +98,20 @@ test('Bet Confirmed receipt uses authoritative accepted odds', function() {
     'success path must show receipt, not toast-only');
 });
 
+test('Done / View My Bets clear slip only on exit — not on success', function() {
+  assert(receipt.indexOf('clearSlip(true)') !== -1,
+    'Bet Confirmed exit must force-clear entire slip');
+  assert(receipt.indexOf("setBNav") !== -1 && receipt.indexOf("'home'") !== -1,
+    'Done must navigate to Home/Dashboard');
+  assert(receipt.indexOf("'mybets'") !== -1,
+    'View My Bets must navigate to existing mybets route');
+  var successIdx = confirmBet.indexOf('_showBetConfirmedReceipt(_okData');
+  assert(successIdx !== -1, 'DB success must show receipt');
+  var applyToReceipt = confirmBet.slice(Math.max(0, successIdx - 800), successIdx);
+  assert(applyToReceipt.indexOf('clearSlip(') === -1,
+    'must not clearSlip immediately before showing Bet Confirmed receipt');
+});
+
 test('financial safety: open/back clears quote and does not invent tickets', function() {
   var closeFn = extractFn(html, 'closeBetConfirm');
   assert(closeFn.indexOf('_clearConfirmationQuote') !== -1);

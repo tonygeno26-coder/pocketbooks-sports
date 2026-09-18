@@ -10329,7 +10329,12 @@ function _showBetConfirmedReceipt(okData, snap, opts) {
   function _finishConfirmed(goMyBets) {
     var ov = document.getElementById('bc-modal-overlay');
     if (ov) ov.remove();
-    try { closeBetSlip(); } catch (_e1) {}
+    // Authoritative exit only: clear entire slip + confirm/quote/placement UI, then navigate.
+    // Do not clear earlier (Place/Confirm/Placing/Checking) — preserve context on failure.
+    try { clearSlip(true); } catch (_e0) {}
+    try { closeBetConfirm(); } catch (_e1) {}
+    try { closeBetSlip(); } catch (_e2) {}
+    try { _confirmBetInFlight = false; } catch (_e3) {}
     if (goMyBets) {
       try {
         var bn = document.getElementById('bn-mybets');
@@ -10337,6 +10342,13 @@ function _showBetConfirmedReceipt(okData, snap, opts) {
         else if (typeof setBNav === 'function') setBNav({ classList:{ add:function(){}, remove:function(){} } }, 'mybets');
       } catch (_nav) {}
       try { renderMyBets(); } catch (_rm) {}
+    } else {
+      // Done → Player Dashboard / Home (existing bottom-nav route)
+      try {
+        var hn = document.getElementById('bn-home') || document.getElementById('bn-sportsbook');
+        if (hn && typeof setBNav === 'function') setBNav(hn, 'home');
+        else if (typeof setBNav === 'function') setBNav({ classList:{ add:function(){}, remove:function(){} } }, 'home');
+      } catch (_navHome) {}
     }
   }
   var doneBtn = sheet.querySelector('[data-action="bet-confirmed-done"]');
@@ -11213,8 +11225,8 @@ async function confirmBet() {
 
       _cbStep = 'MODAL_CLOSE';
       _cbLog('CONFIRM_BET_MODAL_CLOSE');
-      // Clear slip under the receipt — no toast-only success flash.
-      try { clearSlip(); } catch(_) {}
+      // Dismiss confirm/slip chrome under receipt — do NOT clear selections yet.
+      // Slip clears only when player taps Done or View My Bets on Bet Confirmed.
       try { closeBetSlip(); } catch(_) {}
       _confirmMarketAlert = null;
       try {
@@ -11474,7 +11486,7 @@ async function confirmBet() {
               }
             } catch(_rec3) {}
             _pendingPlaceIdemKey = null;
-            try { clearSlip(); } catch(_) {}
+            // Recovered success: show receipt; clear only on Done / View My Bets.
             try { closeBetSlip(); } catch(_) {}
             try {
               _showBetConfirmedReceipt({ ok:true, ticketId: null }, snap, { stake: riskAmount });
@@ -11610,7 +11622,7 @@ async function confirmBet() {
   _cbLog('CONFIRM_BET_MODAL_CLOSE');
   try { closeBetConfirm(); } catch(_) {}
   try { closeBetSlip();   } catch(_) {}
-  try { clearSlip();      } catch(_) {}
+  try { clearSlip(true);  } catch(_) {}
   try { syncBalanceDisplays(); } catch(_) {}
   try { renderMyBets(); } catch(_) {}
   showToast('\u2705 '+newTickets.length+' bet'+(newTickets.length>1?'s':'')+' placed \xb7 Balance: '+fmtBalance());
@@ -16129,9 +16141,12 @@ function shareParlaySlip() {
   }
 }
 
-function clearSlip() {
-  if (betSlip.length && !confirm('Clear all ' + betSlip.length + ' selection' + (betSlip.length !== 1 ? 's' : '') + ' from your slip?')) return;
+function clearSlip(force) {
+  // force=true: silent clear after Bet Confirmed Done / View My Bets (no confirm dialog).
+  if (!force && betSlip.length && !confirm('Clear all ' + betSlip.length + ' selection' + (betSlip.length !== 1 ? 's' : '') + ' from your slip?')) return;
   bsStakes = {}; bsStake = 0; rrStakes = {}; _pendingRisk = 0; _pendingPayout = 0; _pendingProfit = 0; _pendingSnapshot = null;
+  try { _clearConfirmationQuote(); } catch (_cq) {}
+  _confirmMarketAlert = null;
   // Clear footer stake input DOM immediately
   var inp = document.getElementById('bs-stake-inp');
   if (inp) inp.value = '';
