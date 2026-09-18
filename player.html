@@ -11339,6 +11339,14 @@ async function confirmBet() {
         _showLineChangedReview(_dbData);
         return;
 
+      } else if (_dbData.code === 'market_unavailable' && _dbData.reason === 'selected_line_unavailable') {
+        // Exact selected line gone — do NOT offer a neighboring alternate as a reprice.
+        _cbStep = 'SELECTED_LINE_UNAVAILABLE';
+        _cbErr('CONFIRM_BET_ERROR', null, 'code=market_unavailable reason=selected_line_unavailable');
+        closeBetConfirm();
+        showToast((_dbData.userMessage) || 'Selected line is no longer available.', 'warning');
+        return;
+
       } else if (_dbData.code === 'market_suspended' || (_dbData.code === 'market_unavailable' && _dbData.reason === 'suspended')) {
         _cbStep = 'MARKET_SUSPENDED';
         closeBetConfirm();

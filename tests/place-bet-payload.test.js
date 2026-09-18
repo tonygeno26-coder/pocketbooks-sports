@@ -250,6 +250,15 @@ test('line_changed requires explicit accept of new line', function() {
     'line changes must gate Confirm until explicit Accept');
 });
 
+test('selected_line_unavailable fails closed without offering alternate reprice', function() {
+  assert(html.indexOf("selected_line_unavailable") !== -1,
+    'Confirm Wager must handle selected_line_unavailable');
+  assert(html.indexOf('Selected line is no longer available') !== -1,
+    'must show clean unavailable copy — never 8.5→10 reprice UX');
+  assert(html.indexOf('SELECTED_LINE_UNAVAILABLE') !== -1,
+    'must branch separately from line_changed accept flow');
+});
+
 test('sportsbook odds-change settings persist Ask Me / Better / All', function() {
   assert(html.indexOf('Odds Changes') !== -1);
   assert(html.indexOf('Accept Better Odds') !== -1);
