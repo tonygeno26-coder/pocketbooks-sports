@@ -8977,6 +8977,13 @@ var _pendingProfit = 0;
 // (from re-renders, async events, paste handlers, etc.) cannot corrupt the
 // ticket(s) ultimately written. See REGRESSION.md §15.
 var _pendingSnapshot = null;
+// Server confirmationQuote must outlive a single confirmBet() call so
+// odds/line accept → re-open confirm → Confirm Bet still sends the quote.
+var _pendingConfirmationQuote = null;
+// In-confirm market movement banner (odds_changed / line_changed).
+// Confirmation sheet is the home for reprice UX — no separate modal loops.
+var _confirmMarketAlert = null;
+var _cbConfirmLabel = 'Confirm Bet';
 
 // ── MODULE-LEVEL helpers (used by confirm, renderLegs, syncBtn) ──
 function nCr(n, r) {
@@ -10020,30 +10027,73 @@ function openBetConfirm() {
   
   // ══════════════════════════════════════════════════════════════════════════════
 
-  // Build DK-style light modal content
+  // Build premium Confirm Wager sheet (Place Bet does NOT submit — Confirm Bet does)
+  var _alert = _confirmMarketAlert;
+  var _linePending = !!( _alert && _alert.kind === 'line' && _alert.linePending );
   var legsHtml = betSlip.map(function(b) {
     var logoHtml = _slipLegLogoHtml(b, { style: 'margin-right:10px' });
-    var teams = (b.game||'').split(' vs ');
-    var shortGame = teams.length===2 ? teams[0].split(' ').pop()+' vs '+teams[1].split(' ').pop() : (b.game||'');
+    var sportLbl = String(b.sport || b.league || _currentSport || '').toUpperCase();
+    var eventLbl = b.game || ((b.awayTeam && b.homeTeam) ? (b.awayTeam + ' vs ' + b.homeTeam) : '');
+    var lineVal = (b.line != null && b.line !== '') ? b.line
+      : (b.pointLine != null && b.pointLine !== '') ? b.pointLine : null;
     var stake = bsType==='straight' ? (bsStakes[b.cellId]||0) : null;
-    var legPayout = stake ? fmtDollar(stake * amToDecimal(b.odds)) : null;
-    return '<div style="display:flex;align-items:center;padding:11px 0;border-bottom:1px solid #f0f0f0">' +
+    var oddsMoved = (b._oddsMovedFrom != null && Number(b._oddsMovedFrom) !== Number(b.odds));
+    return '<div style="display:flex;align-items:flex-start;padding:12px 0;border-bottom:1px solid #f0f0f0">' +
       logoHtml +
       '<div style="flex:1;min-width:0">' +
-        '<div style="font-size:0.6rem;color:#aaa;margin-bottom:2px">'+shortGame+'</div>' +
-        '<div style="font-size:0.88rem;font-weight:900;color:#111;line-height:1.2;white-space:normal">'+(b.pick||'Unknown')+'</div>' +
-        '<div style="font-size:0.65rem;color:#0064c8;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;margin-top:1px">'+(b.market||'')+'</div>' +
-        (stake ? '<div style="font-size:0.68rem;color:#555;margin-top:2px">Risk: '+fmtDollar(stake)+(legPayout?' → Payout: '+legPayout:'')+'</div>' : '') +
+        (sportLbl ? '<div style="font-size:0.58rem;color:#888;font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:2px">'+sportLbl+'</div>' : '') +
+        '<div style="font-size:0.62rem;color:#999;margin-bottom:3px;white-space:normal">'+(eventLbl||'Event')+'</div>' +
+        '<div style="font-size:0.92rem;font-weight:900;color:#111;line-height:1.25;white-space:normal">'+(b.pick||'Unknown')+'</div>' +
+        '<div style="font-size:0.65rem;color:#0064c8;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;margin-top:2px">'+(b.market||'')+(lineVal!=null?' · Line '+lineVal:'')+'</div>' +
+        (stake ? '<div style="font-size:0.68rem;color:#555;margin-top:3px">Stake '+fmtDollar(stake)+'</div>' : '') +
       '</div>' +
-      '<div style="font-size:0.92rem;font-weight:900;color:#111;margin-left:10px;flex-shrink:0">'+fmtOdds(b.odds)+'</div>' +
+      '<div style="text-align:right;margin-left:10px;flex-shrink:0">' +
+        (oddsMoved ? '<div style="font-size:0.62rem;color:#999;text-decoration:line-through;margin-bottom:2px">'+fmtOdds(b._oddsMovedFrom)+'</div>' : '') +
+        '<div style="font-size:0.95rem;font-weight:900;color:'+(oddsMoved?'#00a854':'#111')+'">'+fmtOdds(b.odds)+'</div>' +
+      '</div>' +
     '</div>';
   }).join('');
+
+  var alertHtml = '';
+  if (_alert && _alert.kind === 'odds') {
+    alertHtml =
+      '<div id="bc-odds-updated" style="margin:0 0 12px;padding:11px 12px;background:#fff8e6;border:1px solid #f5d78e;border-radius:12px">' +
+        '<div style="font-size:0.68rem;font-weight:900;color:#9a6700;letter-spacing:0.4px;text-transform:uppercase;margin-bottom:4px">Odds Updated</div>' +
+        '<div style="font-size:0.88rem;font-weight:800;color:#111">' +
+          '<span style="text-decoration:line-through;color:#888">'+_fmtAmOddsPublic(_alert.submittedOdds)+'</span>' +
+          ' <span style="color:#888">→</span> ' +
+          '<span style="color:#00a854">'+_fmtAmOddsPublic(_alert.serverOdds)+'</span>' +
+        '</div>' +
+        '<div style="font-size:0.68rem;color:#666;margin-top:4px">Confirm at the current offered price</div>' +
+      '</div>';
+  } else if (_alert && _alert.kind === 'line') {
+    alertHtml =
+      '<div id="bc-line-changed" style="margin:0 0 12px;padding:11px 12px;background:#fff4ed;border:1px solid #fdba8c;border-radius:12px">' +
+        '<div style="font-size:0.68rem;font-weight:900;color:#c2410c;letter-spacing:0.4px;text-transform:uppercase;margin-bottom:4px">Line Changed</div>' +
+        '<div style="font-size:0.88rem;font-weight:800;color:#111">' +
+          '<span style="text-decoration:line-through;color:#888">'+String(_alert.submittedPointLine)+'</span>' +
+          ' <span style="color:#888">→</span> ' +
+          '<span style="color:#c2410c">'+String(_alert.serverPointLine)+'</span>' +
+          (_alert.serverOdds!=null?' · '+_fmtAmOddsPublic(_alert.serverOdds):'') +
+        '</div>' +
+        '<div style="font-size:0.68rem;color:#666;margin-top:4px">Line changes always need your OK — never silent</div>' +
+      '</div>';
+  }
 
   var _avBal = _liveAvailableBalance();
   var _balUnknown = !(typeof _avBal === 'number') || isNaN(_avBal);
   var insufficient = _balUnknown || _avBal < bsStake;
-  var confirmLabel = insufficient ? 'Insufficient Balance'
-    : (bsType==='straight' && betSlip.length > 1 ? 'Confirm '+betSlip.length+' Bets' : 'Confirm Bet');
+  var confirmLabel;
+  if (insufficient) {
+    confirmLabel = 'Insufficient Balance';
+  } else if (_linePending) {
+    confirmLabel = 'Accept New Line — ' + fmtDollar(bsStake);
+  } else if (bsType==='straight' && betSlip.length > 1) {
+    confirmLabel = 'Confirm ' + betSlip.length + ' Bets — ' + fmtDollar(bsStake);
+  } else {
+    confirmLabel = 'Confirm Bet — ' + fmtDollar(bsStake);
+  }
+  _cbConfirmLabel = confirmLabel;
 
   // ── HEADER (fixed top) ──
   var headerHtml =
@@ -10051,36 +10101,37 @@ function openBetConfirm() {
       '<div style="width:36px;height:4px;background:#e0e0e0;border-radius:2px;margin:12px auto 8px"></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid #f0f0f0">' +
         '<div>' +
-          '<div style="font-size:0.62rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Confirm Bet</div>' +
-          '<div style="font-size:1rem;font-weight:900;color:#111">'+typeLabel+' · '+betSlip.length+' pick'+(betSlip.length>1?'s':'')+'</div>' +
+          '<div style="font-size:0.72rem;font-weight:900;color:#111;letter-spacing:0.2px">Confirm Wager</div>' +
+          '<div style="font-size:0.78rem;font-weight:700;color:#666;margin-top:2px">'+typeLabel+' · '+betSlip.length+' pick'+(betSlip.length>1?'s':'')+'</div>' +
         '</div>' +
-        '<button data-action="cancel" style="background:#f5f5f5;border:none;color:#555;width:34px;height:34px;border-radius:50%;font-size:1rem;cursor:pointer;flex-shrink:0;pointer-events:auto">✕</button>' +
+        '<button data-action="cancel" aria-label="Back to Bet Slip" style="background:#f5f5f5;border:none;color:#555;width:34px;height:34px;border-radius:50%;font-size:1rem;cursor:pointer;flex-shrink:0;pointer-events:auto">✕</button>' +
       '</div>' +
     '</div>';
 
-  // ── SCROLLABLE BODY (legs only — summary is in footer) ──
+  // ── SCROLLABLE BODY ──
   var bodyHtml =
     '<div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px 16px">' +
+      alertHtml +
       '<div style="background:#fafafa;border-radius:14px;padding:0 12px;margin-bottom:6px">' +
         legsHtml +
       '</div>' +
       '<div style="font-size:0.62rem;color:#bbb;text-align:center;padding-top:6px">Play credits only · Not real money</div>' +
     '</div>';
 
-  // ── FOOTER: summary + buttons, fully visible, never scrolls away ──
+  // ── FOOTER: stake / to win / total return + CTAs ──
   var remainingBalance = Math.round((_avBal - bsStake) * 100) / 100;
   var footerHtml =
     '<div style="flex-shrink:0;background:#fff;border-top:1px solid #e8e8e8;box-shadow:0 -4px 16px rgba(0,0,0,0.08);padding:12px 16px calc(14px + env(safe-area-inset-bottom,0px))">' +
       '<div style="background:#f8f8f8;border:1px solid #eee;border-radius:12px;padding:11px 13px;margin-bottom:10px">' +
-        '<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:0.75rem;color:#888">Current Balance</span><span style="font-size:0.8rem;font-weight:800;color:#0064c8">'+fmtBalance()+'</span></div>' +
-        '<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:0.75rem;color:#888;font-weight:700">Risk</span><span style="font-size:0.8rem;font-weight:800;color:'+(insufficient?'#cc0000':'#111')+'">'+fmtDollar(bsStake)+'</span></div>' +
-        '<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:0.75rem;color:#888;font-weight:700">Total Payout</span><span style="font-size:0.8rem;font-weight:800;color:#00875a">'+fmtDollar(payout)+'</span></div>' +
-        '<div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid #e0e0e0"><span style="font-size:0.8rem;font-weight:800;color:#111">Remaining Balance</span><span style="font-size:0.88rem;font-weight:900;color:'+(remainingBalance>=0?'#0064c8':'#cc0000')+'">'+fmtDollar(Math.max(0,remainingBalance))+'</span></div>' +
-        (insufficient?'<div style="margin-top:6px;font-size:0.72rem;color:#cc0000;font-weight:700;text-align:center">⚠️ Insufficient balance</div>':'') +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:0.75rem;color:#888;font-weight:700">Stake</span><span style="font-size:0.8rem;font-weight:800;color:'+(insufficient?'#cc0000':'#111')+'">'+fmtDollar(bsStake)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:0.75rem;color:#888;font-weight:700">To Win</span><span style="font-size:0.8rem;font-weight:800;color:#00875a">'+fmtDollar(toWin)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:0.75rem;color:#888;font-weight:700">Total Return</span><span style="font-size:0.8rem;font-weight:800;color:#00875a">'+fmtDollar(payout)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;padding-top:8px;border-top:1px solid #e0e0e0"><span style="font-size:0.75rem;color:#888">Balance after</span><span style="font-size:0.8rem;font-weight:800;color:'+(remainingBalance>=0?'#0064c8':'#cc0000')+'">'+fmtDollar(Math.max(0,remainingBalance))+'</span></div>' +
+        (insufficient?'<div style="margin-top:6px;font-size:0.72rem;color:#cc0000;font-weight:700;text-align:center">Insufficient balance</div>':'') +
       '</div>' +
-      '<div style="display:flex;gap:10px">' +
-        '<button data-action="cancel" style="flex:1;height:52px;background:#f0f0f0;border:none;border-radius:14px;color:#555;font-size:0.9rem;font-weight:700;cursor:pointer;pointer-events:auto">Cancel</button>' +
-        '<button data-action="confirm" '+(insufficient?'disabled':'')+' style="flex:2;height:52px;background:'+(insufficient?'#ddd':'#00c853')+';border:none;border-radius:14px;color:'+(insufficient?'#aaa':'#fff')+';font-size:1rem;font-weight:900;cursor:'+(insufficient?'not-allowed':'pointer')+';letter-spacing:0.2px;pointer-events:auto">'+confirmLabel+' →</button>' +
+      '<div style="display:flex;flex-direction:column;gap:8px">' +
+        '<button id="bs-confirm-btn" data-action="confirm" '+(insufficient?'disabled':'')+' style="width:100%;height:52px;background:'+(insufficient?'#ddd':'#00c853')+';border:none;border-radius:14px;color:'+(insufficient?'#aaa':'#fff')+';font-size:1rem;font-weight:900;cursor:'+(insufficient?'not-allowed':'pointer')+';letter-spacing:0.2px;pointer-events:auto">'+confirmLabel+'</button>' +
+        '<button data-action="cancel" style="width:100%;height:44px;background:transparent;border:none;border-radius:12px;color:#555;font-size:0.88rem;font-weight:700;cursor:pointer;pointer-events:auto">Back to Bet Slip</button>' +
       '</div>' +
     '</div>';
 
@@ -10088,8 +10139,15 @@ function openBetConfirm() {
   // Assemble: flex column sheet — header + scrollable body + sticky footer
   var existing = document.getElementById('bc-modal-overlay');
   if (existing) existing.remove();
+  // Also remove any leftover odds/line review dialogs
+  ['odds-changed-modal','line-changed-modal'].forEach(function(id){
+    var m = document.getElementById(id); if (m) m.remove();
+  });
   var overlay = document.createElement('div');
   overlay.id = 'bc-modal-overlay';
+  overlay.setAttribute('role','dialog');
+  overlay.setAttribute('aria-modal','true');
+  overlay.setAttribute('aria-label','Confirm Wager');
   overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.65);display:flex;align-items:flex-end;justify-content:center;pointer-events:auto';
   var sheet = document.createElement('div');
   sheet.style.cssText = 'background:#fff;color:#111;width:100%;max-width:430px;height:85vh;max-height:85vh;border-radius:20px 20px 0 0;display:flex;flex-direction:column;overflow:hidden';
@@ -10098,17 +10156,27 @@ function openBetConfirm() {
   document.body.appendChild(overlay);
   if (typeof _hydrateSlipPlayerPhotos === 'function') _hydrateSlipPlayerPhotos(sheet);
   overlay.addEventListener('click', function(e){ if(e.target===overlay) closeBetConfirm(); });
-  // Wire confirm + cancel via addEventListener (inline onclick inside innerHTML can be blocked)
   var _confirmBtn = sheet.querySelector('[data-action="confirm"]');
-  // Wire ALL cancel buttons (X in header + Cancel in footer)
   var _cancelBtns = sheet.querySelectorAll('[data-action="cancel"]');
   if (_confirmBtn) _confirmBtn.addEventListener('click', function(){
-    // ── DIAGNOSTIC: trace every confirm click — catches "button does nothing" reports
-    
     try {
+      if (_linePending) {
+        // Explicit line accept → apply new line into slip/snapshot, then place once.
+        var _lineData = Object.assign({}, _alert, { code: 'line_changed' });
+        _stashConfirmationQuote(_lineData);
+        _applyServerRepriceToSlip(_lineData);
+        _confirmMarketAlert = Object.assign({}, _alert, { linePending: false });
+        _confirmBetInFlight = false;
+        openBetConfirm();
+        setTimeout(function(){
+          try { confirmBet(); } catch (_placeErr) {
+            try { showToast('Could not re-submit. Review slip and place again.', 'warning'); } catch (_t) {}
+          }
+        }, 40);
+        return;
+      }
       confirmBet();
     } catch (_clickErr) {
-      // Defensive: if confirmBet itself throws synchronously, surface it.
       console.error('CONFIRM_BET_ERROR phase=invoke error='+(_clickErr && _clickErr.message));
       try { showToast('Could not place bet. Please try again.', 'error'); } catch(_t){}
     }
@@ -10116,11 +10184,166 @@ function openBetConfirm() {
   _cancelBtns.forEach(function(btn){
     btn.addEventListener('click', function(e){
       e.stopPropagation();
-      
       closeBetConfirm();
     });
   });
   } catch(e) { console.error(e); }
+}
+
+function _fmtAmOddsPublic(n) {
+  var v = Number(n);
+  if (!Number.isFinite(v)) return String(n == null ? '' : n);
+  return (v > 0 ? '+' : '') + v;
+}
+function _stashConfirmationQuote(data) {
+  _pendingConfirmationQuote = (data && data.confirmationQuote)
+    ? String(data.confirmationQuote)
+    : null;
+}
+function _clearConfirmationQuote() {
+  _pendingConfirmationQuote = null;
+}
+
+function _acceptedOddsFromPlaceLeg(row, fallbackOdds) {
+  if (!row) return fallbackOdds;
+  if (row.accepted_odds_american != null && !isNaN(Number(row.accepted_odds_american))) {
+    return Number(row.accepted_odds_american);
+  }
+  if (row.acceptedOddsAmerican != null && !isNaN(Number(row.acceptedOddsAmerican))) {
+    return Number(row.acceptedOddsAmerican);
+  }
+  if (row.odds != null && !isNaN(Number(row.odds))) return Number(row.odds);
+  return fallbackOdds;
+}
+
+function _showBetConfirmedReceipt(okData, snap, opts) {
+  opts = opts || {};
+  var isRr = !!(opts.isRr || (okData && okData.groupId && snap && snap.type === 'rr'));
+  var ticketId = isRr
+    ? (okData && (okData.groupId || okData.ticketId))
+    : (okData && okData.ticketId);
+  var stake = (snap && snap.risk != null) ? snap.risk : (opts.stake || 0);
+  var serverLegs = (okData && Array.isArray(okData.legs)) ? okData.legs : [];
+  var slipLegs = (snap && Array.isArray(snap.legs)) ? snap.legs : [];
+
+  // Authoritative accepted odds from place response legs — never stale slip odds.
+  var receiptLegs = slipLegs.map(function(b, i) {
+    var accepted = _acceptedOddsFromPlaceLeg(serverLegs[i] || serverLegs[0], b.odds);
+    var lineVal = null;
+    var sRow = serverLegs[i];
+    if (sRow && sRow.accepted_point_line != null) lineVal = sRow.accepted_point_line;
+    else if (b.line != null) lineVal = b.line;
+    else if (b.pointLine != null) lineVal = b.pointLine;
+    return {
+      pick: b.pick,
+      market: b.market,
+      sport: b.sport || b.league || '',
+      game: b.game || '',
+      odds: accepted,
+      line: lineVal
+    };
+  });
+  if (!receiptLegs.length && serverLegs.length) {
+    receiptLegs = serverLegs.map(function(r) {
+      return {
+        pick: r.pick || r.selection || 'Selection',
+        market: r.market || r.market_type || '',
+        sport: '',
+        game: '',
+        odds: _acceptedOddsFromPlaceLeg(r, null),
+        line: r.accepted_point_line != null ? r.accepted_point_line : null
+      };
+    });
+  }
+
+  var payout = (snap && snap.payout != null) ? snap.payout : null;
+  var toWin = (snap && snap.profit != null) ? snap.profit : null;
+  if (receiptLegs.length === 1 && stake > 0 && receiptLegs[0].odds != null) {
+    var dec = amToDecimal(receiptLegs[0].odds);
+    payout = Math.round(stake * dec * 100) / 100;
+    toWin = Math.round((payout - stake) * 100) / 100;
+  } else if (receiptLegs.length > 1 && stake > 0 && snap && snap.type !== 'rr') {
+    var prod = receiptLegs.reduce(function(p, l){ return p * amToDecimal(l.odds); }, 1);
+    payout = Math.round(stake * prod * 100) / 100;
+    toWin = Math.round((payout - stake) * 100) / 100;
+  }
+
+  var legsHtml = receiptLegs.map(function(b) {
+    return '<div style="padding:10px 0;border-bottom:1px solid #f0f0f0">' +
+      (b.sport ? '<div style="font-size:0.58rem;color:#888;font-weight:800;text-transform:uppercase;letter-spacing:0.4px">'+String(b.sport).toUpperCase()+'</div>' : '') +
+      (b.game ? '<div style="font-size:0.62rem;color:#999;margin:2px 0">'+b.game+'</div>' : '') +
+      '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">' +
+        '<div style="min-width:0;flex:1">' +
+          '<div style="font-size:0.9rem;font-weight:900;color:#111;line-height:1.25">'+((b.pick)||'Selection')+'</div>' +
+          '<div style="font-size:0.65rem;color:#0064c8;font-weight:700;text-transform:uppercase;margin-top:2px">'+(b.market||'')+(b.line!=null?' · Line '+b.line:'')+'</div>' +
+        '</div>' +
+        '<div style="font-size:0.95rem;font-weight:900;color:#00a854;flex-shrink:0">'+(b.odds!=null?fmtOdds(b.odds):'—')+'</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  var typeLabel = {straight:'Singles',parlay:'Parlay',rr:'Round Robin',teaser:'Teaser',sgp:'SGP'}[(snap&&snap.type)||''] || 'Bet';
+  var headerHtml =
+    '<div style="flex-shrink:0;background:#fff;border-radius:20px 20px 0 0;padding:0 16px">' +
+      '<div style="width:36px;height:4px;background:#e0e0e0;border-radius:2px;margin:12px auto 8px"></div>' +
+      '<div style="padding:4px 0 14px;border-bottom:1px solid #f0f0f0;text-align:center">' +
+        '<div style="width:44px;height:44px;border-radius:50%;background:#e8faf0;color:#00a854;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:1.35rem;font-weight:900">✓</div>' +
+        '<div style="font-size:1.05rem;font-weight:900;color:#111;letter-spacing:0.2px">Bet Confirmed</div>' +
+        '<div style="font-size:0.75rem;color:#666;margin-top:4px">'+typeLabel+(isRr&&okData.comboCount?' · '+okData.comboCount+' combos':'')+'</div>' +
+      '</div>' +
+    '</div>';
+
+  var bodyHtml =
+    '<div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px 16px">' +
+      '<div style="background:#fafafa;border-radius:14px;padding:0 12px;margin-bottom:10px">'+legsHtml+'</div>' +
+      '<div style="background:#f8f8f8;border:1px solid #eee;border-radius:12px;padding:11px 13px">' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:0.75rem;color:#888;font-weight:700">Stake</span><span style="font-size:0.8rem;font-weight:800">'+fmtDollar(stake)+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:0.75rem;color:#888;font-weight:700">To Win</span><span style="font-size:0.8rem;font-weight:800;color:#00875a">'+(toWin!=null?fmtDollar(toWin):'—')+'</span></div>' +
+        '<div style="display:flex;justify-content:space-between"><span style="font-size:0.75rem;color:#888;font-weight:700">Total Return</span><span style="font-size:0.8rem;font-weight:800;color:#00875a">'+(payout!=null?fmtDollar(payout):'—')+'</span></div>' +
+      '</div>' +
+      (ticketId ? '<div style="font-size:0.62rem;color:#bbb;text-align:center;margin-top:12px;letter-spacing:0.2px">Ref '+String(ticketId)+'</div>' : '') +
+    '</div>';
+
+  var footerHtml =
+    '<div style="flex-shrink:0;background:#fff;border-top:1px solid #e8e8e8;padding:12px 16px calc(14px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:8px">' +
+      '<button id="bc-done-btn" data-action="bet-confirmed-done" style="width:100%;height:52px;background:#00c853;border:none;border-radius:14px;color:#fff;font-size:1rem;font-weight:900;cursor:pointer">Done</button>' +
+      '<button id="bc-view-bets-btn" data-action="bet-confirmed-mybets" style="width:100%;height:44px;background:transparent;border:none;border-radius:12px;color:#555;font-size:0.88rem;font-weight:700;cursor:pointer">View My Bets</button>' +
+    '</div>';
+
+  var existing = document.getElementById('bc-modal-overlay');
+  if (existing) existing.remove();
+  _confirmMarketAlert = null;
+  _pendingSnapshot = null;
+  var overlay = document.createElement('div');
+  overlay.id = 'bc-modal-overlay';
+  overlay.setAttribute('role','dialog');
+  overlay.setAttribute('aria-modal','true');
+  overlay.setAttribute('aria-label','Bet Confirmed');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.65);display:flex;align-items:flex-end;justify-content:center;pointer-events:auto';
+  var sheet = document.createElement('div');
+  sheet.style.cssText = 'background:#fff;color:#111;width:100%;max-width:430px;max-height:85vh;border-radius:20px 20px 0 0;display:flex;flex-direction:column;overflow:hidden';
+  sheet.innerHTML = headerHtml + bodyHtml + footerHtml;
+  overlay.appendChild(sheet);
+  document.body.appendChild(overlay);
+
+  function _finishConfirmed(goMyBets) {
+    var ov = document.getElementById('bc-modal-overlay');
+    if (ov) ov.remove();
+    try { closeBetSlip(); } catch (_e1) {}
+    if (goMyBets) {
+      try {
+        var bn = document.getElementById('bn-mybets');
+        if (bn && typeof setBNav === 'function') setBNav(bn, 'mybets');
+        else if (typeof setBNav === 'function') setBNav({ classList:{ add:function(){}, remove:function(){} } }, 'mybets');
+      } catch (_nav) {}
+      try { renderMyBets(); } catch (_rm) {}
+    }
+  }
+  var doneBtn = sheet.querySelector('[data-action="bet-confirmed-done"]');
+  var viewBtn = sheet.querySelector('[data-action="bet-confirmed-mybets"]');
+  if (doneBtn) doneBtn.addEventListener('click', function(){ _finishConfirmed(false); });
+  if (viewBtn) viewBtn.addEventListener('click', function(){ _finishConfirmed(true); });
+  overlay.addEventListener('click', function(e){ if (e.target === overlay) _finishConfirmed(false); });
 }
 
 function closeBetConfirm() {
@@ -10131,7 +10354,11 @@ function closeBetConfirm() {
   if (ov) ov.remove();
   // Invalidate snapshot so a stale confirm cannot fire after close.
   _pendingSnapshot = null;
-  
+  _confirmMarketAlert = null;
+  _clearConfirmationQuote();
+  ['odds-changed-modal','line-changed-modal'].forEach(function(id){
+    var m = document.getElementById(id); if (m) m.remove();
+  });
 }
 // Alias for user-facing requests
 var closeConfirmBet = closeBetConfirm;
@@ -10536,47 +10763,44 @@ async function confirmBet() {
     });
   }
   function _showLineChangedReview(data) {
-    closeBetConfirm();
+    // Confirmation sheet is the home for line changes — never silent, never a separate modal loop.
     var d = data || {};
-    var oldLine = d.submittedPointLine != null ? d.submittedPointLine : 'your slip';
-    var newLine = d.serverPointLine != null ? d.serverPointLine : 'current market';
-    var acceptLabel = 'Accept New Line & Place Bet';
-    var modal = document.createElement('div');
-    modal.id = 'line-changed-modal';
-    modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center';
-    modal.innerHTML=[
-      '<div style="background:#1a1a1a;border:1.5px solid #ea580c;border-radius:18px;padding:28px 24px;max-width:340px;width:90%;text-align:center">',
-        '<div style="font-size:1.5rem;margin-bottom:8px">\u26a0\ufe0f Line Changed</div>',
-        '<div style="font-weight:700;font-size:1rem;margin-bottom:6px">'+(d.leg||'Selection')+'</div>',
-        '<div style="color:#aaa;font-size:0.9rem;margin-bottom:8px">You selected:</div>',
-        '<div style="color:#fff;font-weight:800;margin-bottom:10px">'+String(oldLine)+
-          (d.submittedOdds!=null?' ('+_fmtAmOdds(d.submittedOdds)+')':'')+'</div>',
-        '<div style="color:#aaa;font-size:0.9rem;margin-bottom:8px">Current market:</div>',
-        '<div style="color:#00ff87;font-weight:800;margin-bottom:16px">'+String(newLine)+
-          (d.serverOdds!=null?' ('+_fmtAmOdds(d.serverOdds)+')':'')+'</div>',
-        '<div style="display:flex;gap:10px;justify-content:center">',
-          '<button id="line-reject-btn" style="flex:1;padding:12px;background:#222;border:1px solid #444;border-radius:10px;color:#fff;font-weight:700;font-size:0.85rem">Cancel</button>',
-          '<button id="line-accept-btn" style="flex:1;padding:12px;background:#00ff87;border:none;border-radius:10px;color:#000;font-weight:800;font-size:0.85rem">'+acceptLabel+'</button>',
-        '</div>',
-      '</div>'
-    ].join('');
-    document.body.appendChild(modal);
-    document.getElementById('line-reject-btn').onclick=function(){
-      modal.remove();
-      _clearConfirmationQuote();
-      showToast('Bet canceled — line changed','info');
+    _confirmBetInFlight = false;
+    try { _cbBtnReady(); } catch (_r) {}
+    _confirmMarketAlert = {
+      kind: 'line',
+      linePending: true,
+      code: 'line_changed',
+      leg: d.leg,
+      legIndex: d.legIndex,
+      submittedOdds: d.submittedOdds,
+      serverOdds: d.serverOdds,
+      submittedPointLine: d.submittedPointLine,
+      serverPointLine: d.serverPointLine,
+      updatedLegs: d.updatedLegs,
+      confirmationQuote: d.confirmationQuote
     };
-    document.getElementById('line-accept-btn').onclick=function(){
-      modal.remove();
-      _stashConfirmationQuote(d);
-      _applyServerRepriceToSlip(d);
-      _acceptRepriceAndPlace();
+    // Keep existing confirmationQuote stash empty until Accept — Accept New Line is explicit.
+    _clearConfirmationQuote();
+    try { openBetConfirm(); } catch (_openErr) {}
+  }
+  function _showOddsUpdatedInConfirm(data) {
+    var d = data || {};
+    _stashConfirmationQuote(d);
+    _applyServerRepriceToSlip(d);
+    _confirmMarketAlert = {
+      kind: 'odds',
+      code: 'odds_changed',
+      leg: d.leg,
+      submittedOdds: d.submittedOdds,
+      serverOdds: d.serverOdds,
+      confirmationQuote: d.confirmationQuote
     };
+    _confirmBetInFlight = false;
+    try { openBetConfirm(); } catch (_openErr) {}
   }
   function _fmtAmOdds(n) {
-    var v = Number(n);
-    if (!Number.isFinite(v)) return String(n == null ? '' : n);
-    return (v > 0 ? '+' : '') + v;
+    return _fmtAmOddsPublic(n);
   }
   function _applyServerRepriceToSlip(data) {
     var d = data || {};
@@ -10629,6 +10853,9 @@ async function confirmBet() {
     try { bsSyncPlaceBtn(); } catch (_syncErr) {}
   }
   function _acceptRepriceAndPlace() {
+    // After Accept New Line (or legacy callers): refresh confirm with authoritative
+    // market then place once. Odds updates use _showOddsUpdatedInConfirm instead
+    // so the player confirms the current price on the confirmation sheet.
     _confirmBetInFlight = false;
     try { openBetConfirm(); } catch (_openErr) {}
     setTimeout(function() {
@@ -10638,17 +10865,9 @@ async function confirmBet() {
     }, 40);
   }
 
-  // Short-TTL server confirmation quote from odds_changed / line_changed.
-  // Cleared on successful place, cancel, or expired re-resolve.
-  var _pendingConfirmationQuote = null;
-  function _stashConfirmationQuote(data) {
-    _pendingConfirmationQuote = (data && data.confirmationQuote)
-      ? String(data.confirmationQuote)
-      : null;
-  }
-  function _clearConfirmationQuote() {
-    _pendingConfirmationQuote = null;
-  }
+  // confirmationQuote helpers are module-scoped (_stashConfirmationQuote /
+  // _clearConfirmationQuote / _pendingConfirmationQuote) so accept → re-open
+  // confirm → Confirm Bet still sends the server quote.
 
   // ── Locate + disable confirm button (spinner) ─────────────────────────────
   _cbBtn = document.getElementById('bs-confirm-btn')
@@ -10668,14 +10887,14 @@ async function confirmBet() {
       + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"'
       + ' style="animation:spin 0.8s linear infinite"><circle cx="12" cy="12" r="10" stroke-opacity=".25"/>'
       + '<path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/></svg>'
-      + (label||'Placing\u2026') + '</span>';
+      + (label||'Placing Bet\u2026') + '</span>';
   }
   function _cbBtnReady() {
     if (!_cbBtn) return;
     _confirmBetInFlight = false;
     _cbBtn.disabled = false;
     _cbBtn.dataset.cbBusy = '';
-    _cbBtn.textContent = 'Confirm Bet';
+    _cbBtn.textContent = _cbConfirmLabel || 'Confirm Bet';
   }
 
   _cbLog('CONFIRM_BET_ENTERED', 'bsType='+bsType+' slipLegs='+(Array.isArray(betSlip)?betSlip.length:0)
@@ -10950,6 +11169,30 @@ async function confirmBet() {
         newTickets[0].insuranceEnabled = true;
         newTickets[0].insurance_enabled = true;
       }
+      // Stamp AUTHORITATIVE accepted odds onto local ticket (never leave stale slip odds).
+      try {
+        var _accLegs = Array.isArray(_okData.legs) ? _okData.legs : [];
+        if (newTickets[0] && _accLegs.length && Array.isArray(newTickets[0].selections)) {
+          newTickets[0].selections = newTickets[0].selections.map(function(sel, i) {
+            var row = _accLegs[i] || _accLegs[0];
+            var am = _acceptedOddsFromPlaceLeg(row, sel && sel.odds);
+            var next = Object.assign({}, sel);
+            if (am != null) {
+              next.odds = am;
+              next.acceptedOdds = am;
+              next.accepted_odds_american = am;
+            }
+            if (row && row.accepted_point_line != null) {
+              next.line = row.accepted_point_line;
+              next.pointLine = row.accepted_point_line;
+            }
+            return next;
+          });
+          if (newTickets[0].selections.length === 1) {
+            newTickets[0].odds = fmtOdds(newTickets[0].selections[0].odds);
+          }
+        }
+      } catch(_accStamp) {}
       try {
         // Prevent duplicate: remove any pre-existing entry with same id before unshift
         var _tid = newTickets[0] && newTickets[0].id;
@@ -10970,19 +11213,26 @@ async function confirmBet() {
 
       _cbStep = 'MODAL_CLOSE';
       _cbLog('CONFIRM_BET_MODAL_CLOSE');
-      try { closeBetConfirm(); } catch(_) {}
-      try { closeBetSlip();   } catch(_) {}
-      try { clearSlip();      } catch(_) {}
+      // Clear slip under the receipt — no toast-only success flash.
+      try { clearSlip(); } catch(_) {}
+      try { closeBetSlip(); } catch(_) {}
+      _confirmMarketAlert = null;
+      try {
+        _showBetConfirmedReceipt(_okData, snap, { isRr: _isRrResp, stake: riskAmount });
+      } catch(_receiptErr) {
+        _cbErr('CONFIRM_BET_RECEIPT_WARN', _receiptErr, 'non-fatal');
+        try { closeBetConfirm(); } catch(_) {}
+        if (_isRrResp) {
+          showToast('\u2705 Round Robin placed \xb7 ' + _okData.comboCount + ' combo ticket' + (_okData.comboCount !== 1 ? 's' : '') + '!', 'success');
+        } else {
+          showToast('\u2705 Bet placed!', 'success');
+        }
+      }
 
       // Keep the just-placed ticket in-memory so renderMyBets does not
       // reload an empty/stale pb-tickets list before the DB refetch lands.
       _playerTicketsFromDb = true;
       try { renderMyBets(); } catch(_) {}
-      if (_isRrResp) {
-        showToast('\u2705 Round Robin placed \xb7 ' + _okData.comboCount + ' combo ticket' + (_okData.comboCount !== 1 ? 's' : '') + '!', 'success');
-      } else {
-        showToast('\u2705 Bet placed!', 'success');
-      }
 
       // Refetch dashboard after a short delay (propagation lag). keepPending
       // merges any in-memory ticket the response has not yet included.
@@ -11064,35 +11314,10 @@ async function confirmBet() {
         _cbStep = 'ODDS_CHANGED';
         _cbErr('CONFIRM_BET_ERROR', null, 'code=odds_changed leg='+_dbData.leg
           +' old='+_dbData.submittedOdds+' new='+_dbData.serverOdds);
-        closeBetConfirm();
-        var _od = _dbData;
-        var _acceptOddsLabel = 'Accept ' + _fmtAmOdds(_od.serverOdds) + ' & Place Bet';
-        var _odModal = document.createElement('div');
-        _odModal.id = 'odds-changed-modal';
-        _odModal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;align-items:center;justify-content:center';
-        _odModal.innerHTML=[
-          '<div style="background:#1a1a1a;border:1.5px solid #ea580c;border-radius:18px;padding:28px 24px;max-width:340px;width:90%;text-align:center">',
-            '<div style="font-size:1.5rem;margin-bottom:8px">\u26a0\ufe0f Odds Changed</div>',
-            '<div style="font-weight:700;font-size:1rem;margin-bottom:6px">'+(_od.leg||'Selection')+'</div>',
-            '<div style="color:#aaa;font-size:0.9rem;margin-bottom:16px"><b style="color:#fff">'+_fmtAmOdds(_od.submittedOdds)+'</b> \u2192 <b style="color:#00ff87">'+_fmtAmOdds(_od.serverOdds)+'</b></div>',
-            '<div style="display:flex;gap:10px;justify-content:center">',
-              '<button id="odds-reject-btn" style="flex:1;padding:12px;background:#222;border:1px solid #444;border-radius:10px;color:#fff;font-weight:700;font-size:0.85rem">Cancel Bet</button>',
-              '<button id="odds-accept-btn" style="flex:1;padding:12px;background:#00ff87;border:none;border-radius:10px;color:#000;font-weight:800;font-size:0.82rem">'+_acceptOddsLabel+'</button>',
-            '</div>',
-          '</div>'
-        ].join('');
-        document.body.appendChild(_odModal);
-        document.getElementById('odds-reject-btn').onclick=function(){ _odModal.remove(); _clearConfirmationQuote(); showToast('Bet canceled \u2014 odds changed','info'); };
-        document.getElementById('odds-accept-btn').onclick=function(){
-          _odModal.remove();
-          // Patch slip to current authoritative prices, mint a NEW idempotency
-          // key, and re-submit WITH the server confirmation quote so BE can
-          // commit the accepted price without an unbound second provider tick
-          // re-opening the odds_changed loop.
-          _stashConfirmationQuote(_od);
-          _applyServerRepriceToSlip(_od);
-          _acceptRepriceAndPlace();
-        };
+        // Patch slip to current authoritative prices and refresh Confirm Wager
+        // with ODDS UPDATED — player confirms current offered price (sends
+        // confirmationQuote). No separate modal loop.
+        _showOddsUpdatedInConfirm(_dbData);
         return;
 
       } else if (_dbData.code === 'line_changed') {
@@ -11189,6 +11414,7 @@ async function confirmBet() {
         +' endpoint=/api/bets/place'
         +' respStatus='+_cbRespStatus
         +' respBodyPreview='+(_cbRespText||'').slice(0,200).replace(/\n/g,' '));
+      try { _cbBtnBusy('Checking bet status\u2026'); } catch(_busy) {}
       try { showToast('Checking bet status\u2026', 'info'); } catch(_t0) {}
 
       // 1) Authoritative dashboard reconcile (no synthetic local success).
@@ -11248,10 +11474,14 @@ async function confirmBet() {
               }
             } catch(_rec3) {}
             _pendingPlaceIdemKey = null;
-            try { closeBetConfirm(); } catch(_) {}
-            try { closeBetSlip(); } catch(_) {}
             try { clearSlip(); } catch(_) {}
-            showToast('\u2705 Bet placed!', 'success');
+            try { closeBetSlip(); } catch(_) {}
+            try {
+              _showBetConfirmedReceipt({ ok:true, ticketId: null }, snap, { stake: riskAmount });
+            } catch(_rcpt) {
+              try { closeBetConfirm(); } catch(_) {}
+              showToast('\u2705 Bet placed!', 'success');
+            }
             _recovered = true;
             _cbLog('CONFIRM_BET_RECOVERY_VIA_CONFLICT', 'exact_duplicate_active=1');
           } else if (_recData && _recData.ok === false && _recResp.status >= 400 && _recResp.status < 500

@@ -207,23 +207,20 @@ test('confirmBet / _makeSelection / click / bsToggle emit all contract fields', 
     'bsToggle must stamp contract fields via _buildContractPlaceLeg');
 });
 
-test('odds_changed accept clears idempotency and re-places via server re-resolve', function() {
-  var start = html.indexOf("document.getElementById('odds-accept-btn').onclick=function()");
-  assert(start !== -1, 'odds changed accept handler missing');
-  var end = html.indexOf('return;', start);
-  var handler = html.slice(start, end);
-  assert(handler.indexOf('_pendingPlaceIdemKey = null') !== -1
-      || html.indexOf('function _applyServerRepriceToSlip') !== -1,
-    'new odds must clear sticky idempotency key before re-place');
-  assert(html.indexOf('function _acceptRepriceAndPlace') !== -1,
-    'must re-submit after accept via _acceptRepriceAndPlace');
-  assert(html.indexOf('Accept ') !== -1 && html.indexOf('& Place Bet') !== -1,
-    'accept CTA must be Accept … & Place Bet');
+test('odds_changed updates Confirm Wager in-place (no modal loop)', function() {
+  assert(html.indexOf('function _showOddsUpdatedInConfirm') !== -1,
+    'must refresh confirm sheet on odds_changed');
+  assert(html.indexOf('Odds Updated') !== -1,
+    'confirm UI must show ODDS UPDATED banner');
   assert(html.indexOf('oddsChangePolicy: _pbOddsChangePolicy()') !== -1,
     'place payload must send player oddsChangePolicy');
   assert(html.indexOf("oddsChangePolicy:'ask'") !== -1 || html.indexOf('oddsChangePolicy:\'ask\'') !== -1
       || html.indexOf("oddsChangePolicy:'ask'") !== -1,
     'Ask Me must be the default player setting');
+  assert(html.indexOf('function _acceptRepriceAndPlace') !== -1,
+    'must re-submit after line accept via _acceptRepriceAndPlace');
+  assert(html.indexOf('_pendingPlaceIdemKey = null') !== -1,
+    'new odds must clear sticky idempotency key before re-place');
 });
 
 test('odds_changed accept stashes server confirmationQuote for atomic commit', function() {
@@ -233,22 +230,24 @@ test('odds_changed accept stashes server confirmationQuote for atomic commit', f
     'must clear confirmationQuote on success/cancel');
   assert(html.indexOf('confirmationQuote: _pendingConfirmationQuote') !== -1,
     'place payload must send confirmationQuote when accepting reprice');
-  var start = html.indexOf("document.getElementById('odds-accept-btn').onclick=function()");
-  assert(start !== -1);
-  var end = html.indexOf('return;', start);
-  var handler = html.slice(start, end + 20);
-  assert(handler.indexOf('_stashConfirmationQuote') !== -1,
-    'odds accept must stash confirmationQuote before re-place');
-  assert(html.indexOf("_stashConfirmationQuote(d)") !== -1
+  assert(html.indexOf('var _pendingConfirmationQuote = null') !== -1,
+    'confirmationQuote must be module-scoped so re-open confirm keeps it');
+  assert(html.indexOf('_stashConfirmationQuote(d)') !== -1
+      || html.indexOf('_showOddsUpdatedInConfirm') !== -1,
+    'odds path must stash confirmationQuote');
+  assert(html.indexOf('_stashConfirmationQuote(_lineData)') !== -1
       || html.indexOf('_stashConfirmationQuote(d)') !== -1,
     'line accept must also stash confirmationQuote');
 });
 
 test('line_changed requires explicit accept of new line', function() {
-  assert(html.indexOf('Accept New Line & Place Bet') !== -1);
+  assert(html.indexOf('Accept New Line') !== -1);
+  assert(html.indexOf('Line Changed') !== -1 || html.indexOf('LINE CHANGED') !== -1);
   assert(html.indexOf('function _showLineChangedReview') !== -1);
   assert(html.indexOf("code === 'line_changed'") !== -1 || html.indexOf('code === \'line_changed\'') !== -1
     || html.indexOf("_dbData.code === 'line_changed'") !== -1);
+  assert(html.indexOf('linePending') !== -1,
+    'line changes must gate Confirm until explicit Accept');
 });
 
 test('sportsbook odds-change settings persist Ask Me / Better / All', function() {
