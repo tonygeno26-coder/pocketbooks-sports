@@ -626,20 +626,36 @@ body.theme-light .stake-input{background:#fff;border:1px solid #d8dee8;color:#11
 .dkslip-leg-logo{width:36px;height:36px;border-radius:0;background:transparent;border:none;padding:0;overflow:visible;box-shadow:none;display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:900;color:#666;flex-shrink:0;line-height:1}
 .dkslip-leg-logo img{width:100%;height:100%;object-fit:contain;display:block;max-width:100%;max-height:100%;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35))}
 .dkslip-leg-logo > div{background:transparent!important;border:none!important;border-radius:0!important;box-shadow:none!important;color:#666!important}
-/* Game TOTAL O/U — floating block letters in the same logo footprint (no tile/box/circle) */
+/* Game TOTAL — both team logos (compact overlap); never a single-team crest */
+.dkslip-dual-logos{position:relative;width:36px;height:36px;flex-shrink:0}
+.dkslip-dual-logos .dkslip-dual-a,.dkslip-dual-logos .dkslip-dual-b{position:absolute;width:24px;height:24px;display:flex;align-items:center;justify-content:center;overflow:visible}
+.dkslip-dual-logos .dkslip-dual-a{left:0;top:1px;z-index:1}
+.dkslip-dual-logos .dkslip-dual-b{right:0;bottom:1px;z-index:2}
+.dkslip-dual-logos img{width:100%;height:100%;object-fit:contain;display:block;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.35))}
+.dkslip-dual-fallback{display:flex;align-items:center;justify-content:center;width:100%;height:100%;gap:2px;font-size:0.55rem;font-weight:900;color:#888;letter-spacing:-0.02em}
+/* Legacy O/U glyphs kept for non-total fallbacks only — totals use dual logos */
 .dkslip-ou{display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:1.7rem;font-weight:900;line-height:1;letter-spacing:-0.04em;font-family:Impact,'Arial Black','Helvetica Neue',sans-serif;background:none;border:none;border-radius:0;padding:0;margin:0;-webkit-text-stroke:1.4px rgba(0,0,0,0.28);paint-order:stroke fill;user-select:none;pointer-events:none}
 .dkslip-ou-o{color:#00e676;-webkit-text-stroke-color:rgba(0,100,40,0.45);text-shadow:0 2px 4px rgba(0,0,0,0.28),0 0 10px rgba(0,230,118,0.45)}
 .dkslip-ou-u{color:#ff3b30;-webkit-text-stroke-color:rgba(120,10,10,0.4);text-shadow:0 2px 4px rgba(0,0,0,0.28),0 0 10px rgba(255,59,48,0.4)}
 .dkslip-draw{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;gap:1px;background:none;border:none;border-radius:0;padding:0;margin:0;user-select:none;pointer-events:none;line-height:1}
 .dkslip-draw-x{font-size:1.15rem;font-weight:900;letter-spacing:-0.04em;font-family:Impact,'Arial Black','Helvetica Neue',sans-serif;color:#c8cdd6;-webkit-text-stroke:1px rgba(0,0,0,0.25);paint-order:stroke fill;text-shadow:0 2px 4px rgba(0,0,0,0.28)}
 .dkslip-draw-label{font-size:0.42rem;font-weight:800;letter-spacing:0.08em;color:#9aa3b2;text-transform:uppercase}
-.dkslip-player-photo,.dkslip-leg-logo img.dkslip-player-photo{width:100%;height:100%;object-fit:contain;display:block;border-radius:0;background:transparent;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35))}
+/* Athlete photos: consistent cover crop; logos stay contain above */
+.dkslip-player-photo,.dkslip-leg-logo img.dkslip-player-photo{width:100%;height:100%;object-fit:cover;display:block;border-radius:8px;background:transparent;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35))}
 .dkslip-leg-logo [data-player-photo]{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+.dkslip-leg-logo [data-player-photo] img{object-fit:cover;border-radius:8px}
 .dkslip-leg-info{flex:1;min-width:0}
-.dkslip-leg-matchup{font-size:0.6rem;color:#999;margin-bottom:2px}
-.dkslip-leg-pick{font-size:0.85rem;font-weight:900;color:#111;line-height:1.2;margin-bottom:2px}
+.dkslip-leg-matchup{font-size:0.6rem;color:#999;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dkslip-leg-pick{font-size:0.85rem;font-weight:900;color:#111;line-height:1.25;margin-bottom:2px;overflow-wrap:anywhere;word-break:break-word;hyphens:auto}
 .dkslip-leg-mkt{font-size:0.65rem;font-weight:700;color:#0064c8;text-transform:uppercase;letter-spacing:0.3px}
 .dkslip-leg-odds{font-size:0.82rem;font-weight:900;color:#111;margin-left:auto;padding-left:8px;flex-shrink:0;white-space:nowrap}
+/* My Bets / Results: compact wager visual slot; never tint logos/photos by result */
+.rb-leg-visual{width:32px;height:32px;flex-shrink:0;display:flex;align-items:center;justify-content:center;margin-right:8px}
+.rb-leg-visual img,.rb-leg-visual .dkslip-leg-logo,.rb-leg-visual .dkslip-dual-logos{filter:none!important}
+.rb-leg-visual img{filter:drop-shadow(0 1px 2px rgba(0,0,0,0.35))!important}
+.rb-leg--won .rb-leg-visual img,.rb-leg--lost .rb-leg-visual img,
+.rb-card--won .rb-leg-visual img,.rb-card--lost .rb-leg-visual img{filter:drop-shadow(0 1px 2px rgba(0,0,0,0.35))!important;opacity:1!important}
+.rb-legs-more{font-size:0.68rem;font-weight:800;color:var(--pb-gray,#9aa3b2);padding:4px 0 2px}
 .dkslip-leg-rm{background:none;border:none;color:#bbb;font-size:0.75rem;cursor:pointer;padding:2px 4px;flex-shrink:0;line-height:1}
 .dkslip-entry{background:#fff;border-top:1px solid #e0e0e0;padding:12px 14px calc(12px + env(safe-area-inset-bottom,0px));flex-shrink:0;position:relative;z-index:50;pointer-events:auto}
 .dkslip-quick{display:flex;gap:6px;margin-bottom:10px}
@@ -1281,7 +1297,7 @@ body{
 .dkslip-draw{background:none!important;border:none!important;border-radius:0!important;box-shadow:none!important}
 .dkslip-draw-x{color:#c8cdd6!important}
 .dkslip-draw-label{color:#9aa3b2!important}
-.dkslip-player-photo{object-fit:contain!important;border-radius:0!important;background:transparent!important;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35))!important}
+.dkslip-player-photo{object-fit:cover!important;border-radius:8px!important;background:transparent!important;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35))!important}
 .dkslip-leg-matchup{color:#999!important}
 .dkslip-leg-mkt{color:#0064c8!important}
 .dkslip-leg-odds{color:#111!important}
@@ -3835,10 +3851,17 @@ function _pbAvatarSportKey(sport) {
   if (s.indexOf('tennis') === 0 || s === 'atp' || s === 'wta') return 'tennis';
   if (s === 'mma' || s === 'mma_mixed_martial_arts' || s.indexOf('mma') === 0) return 'mma';
   if (s.indexOf('golf') === 0 || s === 'pga' || s === 'lpga' || s === 'golf_pga' || s === 'golf_liv' || s === 'golf_european') return 'golf';
+  if (s.indexOf('boxing') === 0 || s === 'box') return 'boxing';
   if (s.indexOf('soccer') === 0 || s === 'epl' || s === 'mls' || s === 'ucl' ||
       s === 'laliga' || s === 'seriea' || s === 'bundesliga' || s === 'ligue1' ||
       s === 'worldcup' || s === 'euros') return 'soccer';
   return s;
+}
+
+/** Individual-athlete sports — ML/spread selections use athlete photos, not team crests. */
+function _slipIsAthleteSport(sport) {
+  var kind = _pbAvatarSportKey(sport);
+  return kind === 'tennis' || kind === 'golf' || kind === 'mma' || kind === 'boxing';
 }
 
 function _pbPlayerHeadshotImg(name, sport, size) {
@@ -3851,7 +3874,7 @@ function _pbPlayerHeadshotImg(name, sport, size) {
   if (sport === 'golf' && typeof getGolfPlayerPhotoImg === 'function') {
     return getGolfPlayerPhotoImg(name, size);
   }
-  if (sport === 'mma' && typeof getMMAFighterPhotoImg === 'function') {
+  if ((sport === 'mma' || sport === 'boxing') && typeof getMMAFighterPhotoImg === 'function') {
     return getMMAFighterPhotoImg(name, size);
   }
   if (typeof getPlayerPhotoImg === 'function') {
@@ -5623,7 +5646,7 @@ function _pbSpreadMarketLabel(sport) {
 function _pbLobbyLogoImg(name, sport, size) {
   size = size || 36;
   var kind = _pbAvatarSportKey(sport);
-  if (kind === 'tennis' || kind === 'mma') {
+  if (kind === 'tennis' || kind === 'mma' || kind === 'golf' || kind === 'boxing') {
     var shot = _pbPlayerHeadshotImg(name, kind, size);
     if (shot) return shot;
   }
@@ -9383,13 +9406,16 @@ function _slipPresentationFromCell(cell) {
   };
 }
 
-/** Player-prop photo HTML for the slip logo slot (shared photo helpers). */
+/** Player-prop / athlete photo HTML for the slip logo slot (shared photo helpers). */
 function _slipPlayerPropPhotoHtml(b, size) {
   size = size || 36;
   var pres = (b && b.presentation) || {};
-  var name = String(pres.playerName || b.playerName || '').trim();
+  var name = String(pres.playerName || b.playerName || b.pick || '').trim();
+  // Strip Over/Under / line noise from pick-derived athlete names
+  name = name.replace(/\s+(Over|Under)\s+[\d.]+.*$/i, '').replace(/\s+[+-]?\d+(\.\d+)?\s*$/, '').trim();
   var team = String(pres.playerTeam || b.playerTeam || '').trim();
   var sport = (b && b.sport) || (typeof _currentSport !== 'undefined' ? _currentSport : null) || 'mlb';
+  var kind = _pbAvatarSportKey(sport);
   var photoUrl = String(pres.photoUrl || '').trim();
   var playerId = String(pres.playerId || '').trim();
 
@@ -9397,12 +9423,18 @@ function _slipPlayerPropPhotoHtml(b, size) {
     return '<span class="dkslip-player-fallback" aria-hidden="true">?</span>';
   }
 
+  // Prefer sport-specific verified maps for tennis/golf/mma/boxing.
+  if (_slipIsAthleteSport(sport) && name) {
+    var shot = _pbPlayerHeadshotImg(name, kind, size);
+    if (shot) return shot;
+  }
+
   if (typeof getPlayerPhotoImg === 'function' && name) {
     return getPlayerPhotoImg(name, sport, size, {
       team: team,
       className: 'dkslip-player-photo',
-      borderRadius: '0',
-      objectFit: 'contain',
+      borderRadius: '8px',
+      objectFit: 'cover',
       photoUrl: photoUrl || undefined,
       espnId: playerId || undefined,
       playerId: playerId || undefined
@@ -9414,7 +9446,7 @@ function _slipPlayerPropPhotoHtml(b, size) {
     var safeName = String(name || 'Player').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     return '<img class="dkslip-player-photo" src="' + safeUrl + '" alt="' + safeName +
       '" width="' + size + '" height="' + size + '"' +
-      ' style="width:' + size + 'px;height:' + size + 'px;object-fit:contain;display:block;border-radius:0"' +
+      ' style="width:' + size + 'px;height:' + size + 'px;object-fit:cover;display:block;border-radius:8px"' +
       ' referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">';
   }
 
@@ -9424,13 +9456,13 @@ function _slipPlayerPropPhotoHtml(b, size) {
       return '<img class="dkslip-player-photo" src="' + String(url).replace(/"/g, '&quot;') +
         '" alt="' + String(name).replace(/"/g, '&quot;').replace(/</g, '&lt;') +
         '" width="' + size + '" height="' + size + '"' +
-        ' style="width:' + size + 'px;height:' + size + 'px;object-fit:contain;display:block;border-radius:0"' +
+        ' style="width:' + size + 'px;height:' + size + 'px;object-fit:cover;display:block;border-radius:8px"' +
         ' referrerpolicy="no-referrer"' +
         ' data-player-photo="' + String(name).replace(/"/g, '&quot;') + '"' +
         ' data-player-name="' + String(name).replace(/"/g, '&quot;') + '"' +
         ' data-player-sport="' + String(sport).replace(/"/g, '&quot;') + '"' +
         ' data-player-team="' + String(team).replace(/"/g, '&quot;') + '"' +
-        ' data-logo-size="' + size + '" data-object-fit="contain" data-border-radius="0"' +
+        ' data-logo-size="' + size + '" data-object-fit="cover" data-border-radius="8px"' +
         ' data-logo-class="dkslip-player-photo"' +
         ' onerror="window.handlePlayerPhotoError&&window.handlePlayerPhotoError(this)">';
     }
@@ -9443,50 +9475,125 @@ function _slipPlayerPropPhotoHtml(b, size) {
     String(label).replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span>';
 }
 
+/** Resolve away/home for dual-logo totals from structured fields or matchup text. */
+function _slipMatchupTeams(b) {
+  var away = String((b && (b.awayTeam || b.away_team || b.away)) || '').trim();
+  var home = String((b && (b.homeTeam || b.home_team || b.home)) || '').trim();
+  if (away && home) return { away: away, home: home };
+  var game = String((b && (b.game || b.matchup || b.event)) || '').trim();
+  if (!game) return { away: away, home: home };
+  var parts = game.split(/\s+vs\.?\s+|\s+@\s+/i);
+  if (parts.length >= 2) {
+    if (!away) away = parts[0].trim();
+    if (!home) home = parts[1].trim();
+  }
+  return { away: away, home: home };
+}
+
+/** Compact overlapping dual team logos for game totals (not a selected-side crest). */
+function _slipDualTeamLogoHtml(b, size) {
+  size = size || 36;
+  var teams = _slipMatchupTeams(b);
+  var sport = (b && b.sport) || (typeof _currentSport !== 'undefined' ? _currentSport : null) || 'mlb';
+  var aLogo = teams.away && typeof _pbLobbyLogoImg === 'function'
+    ? _pbLobbyLogoImg(teams.away, sport, 24) : '';
+  var hLogo = teams.home && typeof _pbLobbyLogoImg === 'function'
+    ? _pbLobbyLogoImg(teams.home, sport, 24) : '';
+  // Athlete-sport "totals" are rare; if logos resolve as headshots, still show both.
+  if (aLogo || hLogo) {
+    return '<div class="dkslip-dual-logos" aria-hidden="true">' +
+      '<span class="dkslip-dual-a">' + (aLogo || '<span class="dkslip-dual-fallback">—</span>') + '</span>' +
+      '<span class="dkslip-dual-b">' + (hLogo || '<span class="dkslip-dual-fallback">—</span>') + '</span>' +
+      '</div>';
+  }
+  var aAbbr = teams.away ? String(teams.away).split(/\s+/).pop().slice(0, 3).toUpperCase() : '';
+  var hAbbr = teams.home ? String(teams.home).split(/\s+/).pop().slice(0, 3).toUpperCase() : '';
+  if (aAbbr || hAbbr) {
+    return '<div class="dkslip-dual-logos" aria-hidden="true"><span class="dkslip-dual-fallback">' +
+      String(aAbbr || '—').replace(/</g, '&lt;') + '/' + String(hAbbr || '—').replace(/</g, '&lt;') +
+      '</span></div>';
+  }
+  return '<div class="dkslip-leg-logo" aria-hidden="true"><span class="dkslip-dual-fallback">TOT</span></div>';
+}
+
 /**
- * Logo-slot HTML hierarchy:
- * 1) Player prop → player photo
- * 2) Team-based → team logo
- * 3) Game/event total → green O / red U
+ * Logo-slot HTML hierarchy (Phase 2 wager visual identity):
+ * 1) Player prop → athlete photo
+ * 2) Athlete sport ML (tennis/golf/mma/boxing) → selected athlete photo
+ * 3) Game/event total → BOTH team logos (dual overlap)
  * 4) Soccer Draw → neutral X/DRAW
- * 5) Unresolved → graceful abbr fallback
+ * 5) Team ML/spread → selected team logo
+ * 6) Unresolved → graceful neutral fallback
  */
 function _slipLegLogoHtml(b, opts) {
   opts = opts || {};
   var extraStyle = opts.style ? ' style="' + String(opts.style).replace(/"/g, '') + '"' : '';
+  var wrapClass = opts.className ? String(opts.className) : 'dkslip-leg-logo';
 
-  // 1) Player prop photo beats Over/Under icons even when side is over/under.
+  // 1) Player prop photo beats Over/Under even when side is over/under.
   if (_slipIsPlayerProp(b)) {
-    return '<div class="dkslip-leg-logo"' + extraStyle + ' aria-hidden="true">' +
-      _slipPlayerPropPhotoHtml(b, 36) + '</div>';
+    return '<div class="' + wrapClass + '"' + extraStyle + ' aria-hidden="true">' +
+      _slipPlayerPropPhotoHtml(b, opts.size || 36) + '</div>';
   }
 
-  // 3) Game totals O/U (checked before team extraction so "Over" is not a team)
-  var ou = _slipTotalSide(b);
-  if (ou === 'over') {
-    return '<div class="dkslip-leg-logo"' + extraStyle + ' aria-hidden="true"><span class="dkslip-ou dkslip-ou-o">O</span></div>';
+  var legSport = (b && b.sport) || (typeof _currentSport !== 'undefined' ? _currentSport : null) || 'mlb';
+
+  // 2) Athlete sports (Golf/Tennis/MMA/Boxing) — selected athlete photo for ML/outright
+  if (_slipIsAthleteSport(legSport) && !_slipTotalSide(b) && !_slipIsDrawSelection(b)) {
+    return '<div class="' + wrapClass + '"' + extraStyle + ' aria-hidden="true">' +
+      _slipPlayerPropPhotoHtml(b, opts.size || 36) + '</div>';
   }
-  if (ou === 'under') {
-    return '<div class="dkslip-leg-logo"' + extraStyle + ' aria-hidden="true"><span class="dkslip-ou dkslip-ou-u">U</span></div>';
+
+  // 3) Game totals → dual team logos (never a single-team crest that implies selection)
+  if (_slipTotalSide(b)) {
+    var dual = _slipDualTeamLogoHtml(b, opts.size || 36);
+    // Dual helper already wraps; attach extra style on outer if needed
+    if (extraStyle && dual.indexOf('style=') < 0) {
+      dual = dual.replace(/^<div /, '<div' + extraStyle + ' ');
+    }
+    return dual;
   }
 
   // 4) Soccer Draw
   if (_slipIsDrawSelection(b)) {
-    return '<div class="dkslip-leg-logo"' + extraStyle + ' aria-hidden="true" title="Draw">' +
+    return '<div class="' + wrapClass + '"' + extraStyle + ' aria-hidden="true" title="Draw">' +
       '<span class="dkslip-draw"><span class="dkslip-draw-x">X</span><span class="dkslip-draw-label">DRAW</span></span></div>';
   }
 
-  // 2) Team logo / 5) abbr fallback
+  // 5) Team logo / 6) abbr fallback
   var pick = (b && b.pick) || '';
   var game = (b && b.game) || '';
-  var legSport = (b && b.sport) || (typeof _currentSport !== 'undefined' ? _currentSport : null) || 'mlb';
-  var teams = String(game).split(' vs ');
+  var teams = String(game).split(/\s+vs\.?\s+/i);
   var team = (typeof extractTeamFromPick === 'function')
-    ? extractTeamFromPick(pick, teams[1] || '', teams[0] || '', legSport)
+    ? extractTeamFromPick(pick, teams[1] || b.homeTeam || '', teams[0] || b.awayTeam || '', legSport)
     : pick;
-  var _logo = (typeof _pbLobbyLogoImg === 'function') ? _pbLobbyLogoImg(team || pick, legSport, 36) : '';
-  if (_logo) return '<div class="dkslip-leg-logo"' + extraStyle + '>' + _logo + '</div>';
-  return '<div class="dkslip-leg-logo"' + extraStyle + '>' + bsTeamAbbr(pick, game) + '</div>';
+  var _logo = (typeof _pbLobbyLogoImg === 'function') ? _pbLobbyLogoImg(team || pick, legSport, opts.size || 36) : '';
+  if (_logo) return '<div class="' + wrapClass + '"' + extraStyle + '>' + _logo + '</div>';
+  return '<div class="' + wrapClass + '"' + extraStyle + '>' + bsTeamAbbr(pick, game) + '</div>';
+}
+
+/** Normalize a ticket/receipt leg into the shape _slipLegLogoHtml expects (presentation only). */
+function _wagerLegVisualInput(leg, fallbackSport) {
+  if (!leg) return null;
+  var sport = leg.sport || leg.league || fallbackSport || '';
+  var game = leg.game || leg.matchup || '';
+  if (!game && leg.awayTeam && leg.homeTeam) game = leg.awayTeam + ' vs ' + leg.homeTeam;
+  var isProp = !!(leg.isPlayerProp || leg.is_player_prop ||
+    (leg.presentation && leg.presentation.kind === 'player_prop') ||
+    leg.playerName || (leg.presentation && leg.presentation.playerName));
+  return {
+    pick: leg.pick || leg.selection || leg.team || '',
+    market: leg.market || leg.market_type || leg.marketType || '',
+    sport: sport,
+    game: game,
+    side: leg.side || '',
+    homeTeam: leg.homeTeam || leg.home_team || leg.home || '',
+    awayTeam: leg.awayTeam || leg.away_team || leg.away || '',
+    presentation: leg.presentation || undefined,
+    isPlayerProp: isProp,
+    playerName: leg.playerName || (leg.presentation && leg.presentation.playerName) || undefined,
+    playerTeam: leg.playerTeam || (leg.presentation && leg.presentation.playerTeam) || undefined
+  };
 }
 
 function _hydrateSlipPlayerPhotos(root) {
@@ -10030,7 +10137,10 @@ function openBetConfirm() {
   // Build premium Confirm Wager sheet (Place Bet does NOT submit — Confirm Bet does)
   var _alert = _confirmMarketAlert;
   var _linePending = !!( _alert && _alert.kind === 'line' && _alert.linePending );
-  var legsHtml = betSlip.map(function(b) {
+  var _confirmVisibleCap = 4;
+  var _confirmLegsVisible = betSlip.slice(0, _confirmVisibleCap);
+  var _confirmLegsHidden = Math.max(0, betSlip.length - _confirmVisibleCap);
+  var legsHtml = _confirmLegsVisible.map(function(b) {
     var logoHtml = _slipLegLogoHtml(b, { style: 'margin-right:10px' });
     var sportLbl = String(b.sport || b.league || _currentSport || '').toUpperCase();
     var eventLbl = b.game || ((b.awayTeam && b.homeTeam) ? (b.awayTeam + ' vs ' + b.homeTeam) : '');
@@ -10043,7 +10153,7 @@ function openBetConfirm() {
       '<div style="flex:1;min-width:0">' +
         (sportLbl ? '<div style="font-size:0.58rem;color:#888;font-weight:800;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:2px">'+sportLbl+'</div>' : '') +
         '<div style="font-size:0.62rem;color:#999;margin-bottom:3px;white-space:normal">'+(eventLbl||'Event')+'</div>' +
-        '<div style="font-size:0.92rem;font-weight:900;color:#111;line-height:1.25;white-space:normal">'+(b.pick||'Unknown')+'</div>' +
+        '<div style="font-size:0.92rem;font-weight:900;color:#111;line-height:1.25;white-space:normal;overflow-wrap:anywhere">'+(b.pick||'Unknown')+'</div>' +
         '<div style="font-size:0.65rem;color:#0064c8;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;margin-top:2px">'+(b.market||'')+(lineVal!=null?' · Line '+lineVal:'')+'</div>' +
         (stake ? '<div style="font-size:0.68rem;color:#555;margin-top:3px">Stake '+fmtDollar(stake)+'</div>' : '') +
       '</div>' +
@@ -10052,7 +10162,9 @@ function openBetConfirm() {
         '<div style="font-size:0.95rem;font-weight:900;color:'+(oddsMoved?'#00a854':'#111')+'">'+fmtOdds(b.odds)+'</div>' +
       '</div>' +
     '</div>';
-  }).join('');
+  }).join('') + (_confirmLegsHidden
+    ? '<div class="rb-legs-more" style="padding:10px 0;color:#888;font-weight:800">+'+_confirmLegsHidden+' more leg'+(_confirmLegsHidden===1?'':'s')+'</div>'
+    : '');
 
   var alertHtml = '';
   if (_alert && _alert.kind === 'odds') {
@@ -10227,6 +10339,7 @@ function _showBetConfirmedReceipt(okData, snap, opts) {
   var slipLegs = (snap && Array.isArray(snap.legs)) ? snap.legs : [];
 
   // Authoritative accepted odds from place response legs — never stale slip odds.
+  // Presentation fields copied for visual identity only (not financial).
   var receiptLegs = slipLegs.map(function(b, i) {
     var accepted = _acceptedOddsFromPlaceLeg(serverLegs[i] || serverLegs[0], b.odds);
     var lineVal = null;
@@ -10240,7 +10353,14 @@ function _showBetConfirmedReceipt(okData, snap, opts) {
       sport: b.sport || b.league || '',
       game: b.game || '',
       odds: accepted,
-      line: lineVal
+      line: lineVal,
+      homeTeam: b.homeTeam || '',
+      awayTeam: b.awayTeam || '',
+      side: b.side || '',
+      presentation: b.presentation || undefined,
+      isPlayerProp: !!b.isPlayerProp,
+      playerName: b.playerName || undefined,
+      playerTeam: b.playerTeam || undefined
     };
   });
   if (!receiptLegs.length && serverLegs.length) {
@@ -10251,7 +10371,9 @@ function _showBetConfirmedReceipt(okData, snap, opts) {
         sport: '',
         game: '',
         odds: _acceptedOddsFromPlaceLeg(r, null),
-        line: r.accepted_point_line != null ? r.accepted_point_line : null
+        line: r.accepted_point_line != null ? r.accepted_point_line : null,
+        homeTeam: r.homeTeam || r.home_team || '',
+        awayTeam: r.awayTeam || r.away_team || ''
       };
     });
   }
@@ -10268,19 +10390,30 @@ function _showBetConfirmedReceipt(okData, snap, opts) {
     toWin = Math.round((payout - stake) * 100) / 100;
   }
 
-  var legsHtml = receiptLegs.map(function(b) {
-    return '<div style="padding:10px 0;border-bottom:1px solid #f0f0f0">' +
-      (b.sport ? '<div style="font-size:0.58rem;color:#888;font-weight:800;text-transform:uppercase;letter-spacing:0.4px">'+String(b.sport).toUpperCase()+'</div>' : '') +
-      (b.game ? '<div style="font-size:0.62rem;color:#999;margin:2px 0">'+b.game+'</div>' : '') +
-      '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">' +
-        '<div style="min-width:0;flex:1">' +
-          '<div style="font-size:0.9rem;font-weight:900;color:#111;line-height:1.25">'+((b.pick)||'Selection')+'</div>' +
-          '<div style="font-size:0.65rem;color:#0064c8;font-weight:700;text-transform:uppercase;margin-top:2px">'+(b.market||'')+(b.line!=null?' · Line '+b.line:'')+'</div>' +
+  var _rcptCap = 4;
+  var _rcptVisible = receiptLegs.slice(0, _rcptCap);
+  var _rcptHidden = Math.max(0, receiptLegs.length - _rcptCap);
+  var legsHtml = _rcptVisible.map(function(b) {
+    var vis = typeof _wagerLegVisualInput === 'function' ? _wagerLegVisualInput(b, b.sport) : b;
+    var logoHtml = typeof _slipLegLogoHtml === 'function'
+      ? _slipLegLogoHtml(vis, { style: 'margin-right:10px' }) : '';
+    return '<div style="display:flex;align-items:flex-start;padding:10px 0;border-bottom:1px solid #f0f0f0">' +
+      logoHtml +
+      '<div style="flex:1;min-width:0">' +
+        (b.sport ? '<div style="font-size:0.58rem;color:#888;font-weight:800;text-transform:uppercase;letter-spacing:0.4px">'+String(b.sport).toUpperCase()+'</div>' : '') +
+        (b.game ? '<div style="font-size:0.62rem;color:#999;margin:2px 0">'+b.game+'</div>' : '') +
+        '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">' +
+          '<div style="min-width:0;flex:1">' +
+            '<div style="font-size:0.9rem;font-weight:900;color:#111;line-height:1.25;overflow-wrap:anywhere">'+((b.pick)||'Selection')+'</div>' +
+            '<div style="font-size:0.65rem;color:#0064c8;font-weight:700;text-transform:uppercase;margin-top:2px">'+(b.market||'')+(b.line!=null?' · Line '+b.line:'')+'</div>' +
+          '</div>' +
+          '<div style="font-size:0.95rem;font-weight:900;color:#00a854;flex-shrink:0">'+(b.odds!=null?fmtOdds(b.odds):'—')+'</div>' +
         '</div>' +
-        '<div style="font-size:0.95rem;font-weight:900;color:#00a854;flex-shrink:0">'+(b.odds!=null?fmtOdds(b.odds):'—')+'</div>' +
       '</div>' +
     '</div>';
-  }).join('');
+  }).join('') + (_rcptHidden
+    ? '<div class="rb-legs-more" style="padding:10px 0;color:#888;font-weight:800">+'+_rcptHidden+' more leg'+(_rcptHidden===1?'':'s')+'</div>'
+    : '');
 
   var typeLabel = {straight:'Singles',parlay:'Parlay',rr:'Round Robin',teaser:'Teaser',sgp:'SGP'}[(snap&&snap.type)||''] || 'Bet';
   var headerHtml =
@@ -10325,6 +10458,7 @@ function _showBetConfirmedReceipt(okData, snap, opts) {
   sheet.innerHTML = headerHtml + bodyHtml + footerHtml;
   overlay.appendChild(sheet);
   document.body.appendChild(overlay);
+  if (typeof _hydrateSlipPlayerPhotos === 'function') _hydrateSlipPlayerPhotos(sheet);
 
   function _finishConfirmed(goMyBets) {
     var ov = document.getElementById('bc-modal-overlay');
@@ -15184,9 +15318,14 @@ function renderMyBets() {
       var matchupText = _legMatchupText(s);
       var oddsText    = _legOddsText(s);
       var marketText  = _legMarketText(s);
-      var pickedTeam   = _legPickedTeamName(s);
-      var teamSplit    = _splitCityName(pickedTeam || '');
-      var jerseyHtml   = pickedTeam ? _safeTeamAvatar(pickedTeam, s.sport || (t && t.sport)) : '';
+      var visIn = typeof _wagerLegVisualInput === 'function'
+        ? _wagerLegVisualInput(s, (t && t.sport) || (s && s.sport))
+        : null;
+      if (visIn && !visIn.pick) visIn.pick = pickText;
+      if (visIn && !visIn.game && matchupText) visIn.game = matchupText;
+      var visualHtml = (visIn && typeof _slipLegLogoHtml === 'function')
+        ? '<div class="rb-leg-visual">' + _slipLegLogoHtml(visIn, { size: 32 }) + '</div>'
+        : '';
       var matchupBlock = (matchupText && matchupText.toLowerCase() !== pickText.toLowerCase())
         ? '<div class="rb-leg-matchup">' + matchupText + '</div>'
         : '';
@@ -15207,36 +15346,11 @@ function renderMyBets() {
       var trailOdds = oddsText
         ? '<div class="rb-leg-odds-trail">'+oddsText+'</div>'
         : '';
-      // Parlay: compact scannable rows (no jersey block). Single: optional jersey.
-      if (_isMultiLeg) {
-        return '<div class="rb-leg rb-leg--compact">' + idxHtml +
-          '<div class="rb-leg-body">' +
-            '<div class="'+pickClass+'">'+pickText+'</div>' +
-            metaHtml +
-            matchupBlock +
-          '</div>' +
-          trailOdds +
-        '</div>';
-      }
-      if (jerseyHtml) {
-        return '<div class="rb-leg">' +
-          '<div class="rb-leg-body">' +
-            '<div class="mc-team" style="gap:10px">' +
-              jerseyHtml +
-              '<div style="flex:1;min-width:0">' +
-                (teamSplit.city ? '<div class="mc-city">'+teamSplit.city+'</div>' : '') +
-                '<div class="'+pickClass+'">'+pickText+'</div>' +
-                metaHtml +
-                matchupBlock +
-              '</div>' +
-              trailOdds +
-            '</div>' +
-          '</div>' +
-        '</div>';
-      }
-      return '<div class="rb-leg">' +
-        '<div class="rb-leg-body">' +
-          '<div class="'+pickClass+'">'+pickText+'</div>' +
+      // Per-leg visual identity for singles and parlays (presentation only).
+      return '<div class="rb-leg' + (_isMultiLeg ? ' rb-leg--compact' : '') + '">' + idxHtml +
+        visualHtml +
+        '<div class="rb-leg-body" style="flex:1;min-width:0">' +
+          '<div class="'+pickClass+'" style="overflow-wrap:anywhere">'+pickText+'</div>' +
           metaHtml +
           matchupBlock +
         '</div>' +
@@ -15249,7 +15363,8 @@ function renderMyBets() {
     }
     var extraLegs = pickRows.slice(3).join('');
     var morePicks = extraLegs
-      ? '<button type="button" class="rb-legs-toggle" data-expand-parlay="'+t.id+'" data-leg-count="'+rawLegs.length+'">Show all '+rawLegs.length+' legs ▾</button>' +
+      ? '<button type="button" class="rb-legs-toggle" data-expand-parlay="'+t.id+'" data-leg-count="'+rawLegs.length+'">+'+
+        (rawLegs.length - 3)+' more · Show all '+rawLegs.length+' legs ▾</button>' +
         '<div class="rb-legs" id="parlay-extra-'+t.id+'" style="display:none">'+extraLegs+'</div>'
       : '';
 
@@ -15493,6 +15608,7 @@ function renderMyBets() {
   el.innerHTML = html;
   el.style.background = '#070b12';
   el.style.minHeight = '100vh';
+  if (typeof _hydrateSlipPlayerPhotos === 'function') _hydrateSlipPlayerPhotos(el);
 
   el.querySelectorAll('[data-rb-goto-results]').forEach(function(btn){
     btn.addEventListener('click', function(){ _goToPlayerResults(); });
@@ -15504,8 +15620,11 @@ function renderMyBets() {
       if (!extra) return;
       var open = extra.style.display !== 'none';
       extra.style.display = open ? 'none' : 'block';
-      var n = btn.getAttribute('data-leg-count') || '';
-      btn.textContent = open ? ('Show all '+n+' legs ▾') : 'Hide extra legs ▴';
+      var n = parseInt(btn.getAttribute('data-leg-count') || '0', 10) || 0;
+      var more = Math.max(0, n - 3);
+      btn.textContent = open
+        ? ('+'+more+' more · Show all '+n+' legs ▾')
+        : 'Hide extra legs ▴';
     });
   });
   el.querySelectorAll('[data-rb-details]').forEach(function(btn){
@@ -16832,14 +16951,24 @@ function _renderResultsTicketCard(t){
     var legRes = String((leg && (leg.result || leg.legResult || leg.outcome)) || '').toLowerCase();
     if (legRes === 'pushed') legRes = 'push';
     var pickClass = 'rb-leg-pick';
+    // Result status tints text only — never logos/photos (owner visual rule).
     if (legRes === 'won' || (!legRes && s === 'won')) pickClass += ' rb-leg-pick--won';
     else if (legRes === 'lost' || (!legRes && s === 'lost')) pickClass += ' rb-leg-pick--lost';
     else if (legRes === 'push' || (!legRes && s === 'push')) pickClass += ' rb-leg-pick--push';
     var idxHtml = isMulti ? '<div class="rb-leg-idx">L'+(legIdx+1)+'</div>' : '';
     var trail = oddsTxt ? '<div class="rb-leg-odds-trail">'+oddsTxt+'</div>' : '';
+    var visIn = typeof _wagerLegVisualInput === 'function'
+      ? _wagerLegVisualInput(leg, t.sport || (leg && leg.sport))
+      : null;
+    if (visIn && !visIn.pick) visIn.pick = pick;
+    if (visIn && !visIn.game && matchup) visIn.game = matchup;
+    var visualHtml = (visIn && typeof _slipLegLogoHtml === 'function')
+      ? '<div class="rb-leg-visual">' + _slipLegLogoHtml(visIn, { size: 32 }) + '</div>'
+      : '';
     return '<div class="rb-leg'+(isMulti ? ' rb-leg--compact' : '')+'">' + idxHtml +
-      '<div class="rb-leg-body">' +
-        '<div class="'+pickClass+'">'+pick+'</div>' +
+      visualHtml +
+      '<div class="rb-leg-body" style="flex:1;min-width:0">' +
+        '<div class="'+pickClass+'" style="overflow-wrap:anywhere">'+pick+'</div>' +
         (market ? '<div class="rb-leg-meta"><span>'+market+'</span></div>' : '') +
         (matchup && matchup.toLowerCase() !== pick.toLowerCase()
           ? '<div class="rb-leg-matchup">'+matchup+'</div>' : '') +
@@ -16849,7 +16978,7 @@ function _renderResultsTicketCard(t){
   var visible = pickRows.slice(0, 3).join('');
   var extra = pickRows.slice(3).join('');
   var moreHtml = extra
-    ? '<div class="rb-leg-meta" style="margin-top:4px">+'+(pickRows.length-3)+' more leg'+(pickRows.length-3===1?'':'s')+'</div>'
+    ? '<div class="rb-legs-more">+'+(pickRows.length-3)+' more leg'+(pickRows.length-3===1?'':'s')+'</div>'
     : '';
 
   var combinedOdds = (typeof _ticketCombinedAmericanOdds === 'function')
@@ -17294,6 +17423,7 @@ function renderPlayerResults(){
   historyHtml += '</div>';
 
   el.innerHTML = topHtml + weekEmptyHtml + dailyHtml + historyHtml;
+  if (typeof _hydrateSlipPlayerPhotos === 'function') _hydrateSlipPlayerPhotos(el);
   _wireResultsButtons(el);
 }
 function _wireResultsButtons(el){
