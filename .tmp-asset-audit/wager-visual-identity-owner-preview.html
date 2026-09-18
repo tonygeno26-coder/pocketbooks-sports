@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>Wager Visual Identity — Real Asset Owner Preview</title>
+<style>
+  :root {
+    --bg: #0e0e10;
+    --panel: #18181b;
+    --green: #00c853;
+    --blue: #0064c8;
+    --muted: #a1a1aa;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #1f2937 0%, var(--bg) 55%);
+    color: #f4f4f5;
+  }
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(10px);
+    background: rgba(14,14,16,.92);
+    border-bottom: 1px solid #27272a;
+    padding: calc(8px + env(safe-area-inset-top,0px)) 12px 10px;
+  }
+  .topbar h1 { margin: 0; font-size: 13px; font-weight: 900; letter-spacing: .2px; }
+  .topbar p { margin: 3px 0 0; font-size: 11px; color: var(--muted); line-height: 1.35; }
+  .controls { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: center; }
+  .chip, .btn {
+    border: 1px solid #3f3f46; background: #27272a; color: #fafafa;
+    border-radius: 999px; padding: 7px 10px; font-size: 11px; font-weight: 800; cursor: pointer;
+  }
+  .chip.active { background: #fafafa; color: #111; border-color: #fafafa; }
+  .btn.primary { background: var(--green); border-color: var(--green); color: #fff; }
+  .hint { margin-top: 6px; font-size: 10px; color: var(--muted); line-height: 1.35; }
+  .hint code { color: #fde68a; }
+  .proof {
+    margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: #111827;
+    border: 1px solid #374151; font-size: 10px; color: #cbd5e1; line-height: 1.4;
+    max-height: 96px; overflow: auto;
+  }
+  .proof strong { color: #86efac; }
+  .proof .bad { color: #fca5a5; }
+  .stage-wrap { display: flex; justify-content: center; padding: 10px 10px 24px; }
+  .phone-shell {
+    width: var(--vw, 390px); max-width: 100%;
+    height: min(844px, calc(100dvh - 200px)); min-height: 520px;
+    background: #09090b; border: 1px solid #3f3f46; border-radius: 24px;
+    overflow: hidden; box-shadow: 0 24px 80px rgba(0,0,0,.55); position: relative;
+  }
+  .phone-shell.desktop { height: min(900px, calc(100dvh - 190px)); border-radius: 16px; }
+  @media (max-width: 520px) {
+    .topbar p, .hint { display: none; }
+    .stage-wrap { padding: 0; }
+    .phone-shell {
+      width: 100% !important; max-width: none; height: calc(100dvh - 170px);
+      min-height: 0; border: none; border-radius: 0; box-shadow: none;
+    }
+  }
+  .app {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    background: linear-gradient(180deg, #111827 0%, #0b1220 40%, #09090b 100%);
+  }
+  .stage-label {
+    flex-shrink: 0; padding: 10px 14px 6px; font-size: 10px; font-weight: 900;
+    letter-spacing: .5px; text-transform: uppercase; color: #94a3b8;
+  }
+  .sheet {
+    flex: 1; margin: 0 10px 12px; background: #fff; color: #111;
+    border-radius: 18px 18px 14px 14px; overflow: hidden;
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .sheet-hd {
+    flex-shrink: 0; padding: 12px 14px; border-bottom: 1px solid #f0f0f0;
+    font-size: 13px; font-weight: 900;
+  }
+  .sheet-hd .sub { font-size: 11px; color: #666; font-weight: 700; margin-top: 2px; }
+  .sheet-bd { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 4px 0 8px; }
+  .sheet-ft {
+    flex-shrink: 0; padding: 10px 14px calc(12px + env(safe-area-inset-bottom,0px));
+    border-top: 1px solid #eee; background: #fff;
+  }
+  .cta {
+    width: 100%; height: 48px; border: none; border-radius: 12px;
+    background: var(--green); color: #fff; font-weight: 900; font-size: 15px; cursor: pointer;
+  }
+  .cta.sec { background: transparent; color: #555; height: 40px; margin-top: 6px; }
+
+  /* Mirror production wager visual CSS (approved layout — unchanged) */
+  .dkslip-leg{display:flex;align-items:flex-start;padding:10px 14px;border-bottom:1px solid #f5f5f5;gap:10px}
+  .dkslip-leg-logo{width:36px;height:36px;flex-shrink:0;display:flex;align-items:center;justify-content:center;overflow:visible;background:transparent;border:none;padding:0}
+  .dkslip-leg-logo img,.rb-leg-visual img{width:100%;height:100%;object-fit:contain;display:block;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))}
+  .dkslip-player-photo,.dkslip-leg-logo img.dkslip-player-photo{object-fit:cover!important;border-radius:8px!important}
+  .dkslip-dual-logos{position:relative;width:36px;height:36px;flex-shrink:0}
+  .dkslip-dual-a,.dkslip-dual-b{position:absolute;width:24px;height:24px;display:flex;align-items:center;justify-content:center}
+  .dkslip-dual-a{left:0;top:1px;z-index:1}
+  .dkslip-dual-b{right:0;bottom:1px;z-index:2}
+  .dkslip-dual-fallback{font-size:10px;font-weight:900;color:#888;display:flex;align-items:center;justify-content:center;width:100%;height:100%}
+  .dkslip-player-fallback,.pb-text-fallback{font-size:8px;font-weight:900;color:#666;text-align:center;line-height:1.1;max-width:72px;overflow:hidden}
+  .dkslip-leg-info{flex:1;min-width:0}
+  .dkslip-leg-matchup{font-size:10px;color:#999;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dkslip-leg-pick{font-size:14px;font-weight:900;color:#111;line-height:1.25;overflow-wrap:anywhere;word-break:break-word}
+  .dkslip-leg-mkt{font-size:10px;font-weight:700;color:var(--blue);text-transform:uppercase;margin-top:2px}
+  .dkslip-leg-odds{font-size:13px;font-weight:900;color:#111;flex-shrink:0;padding-left:8px;white-space:nowrap}
+  .dkslip-leg-rm{background:none;border:none;color:#bbb;font-size:12px;cursor:pointer;flex-shrink:0}
+  .rb-leg{display:flex;align-items:flex-start;padding:8px 14px;border-bottom:1px solid #f0f0f0;gap:0}
+  .rb-leg-visual{width:32px;height:32px;flex-shrink:0;margin-right:8px;display:flex;align-items:center;justify-content:center}
+  .rb-leg-pick{font-size:13px;font-weight:800;line-height:1.25;overflow-wrap:anywhere}
+  .rb-leg-pick--won{color:#00a854}
+  .rb-leg-pick--lost{color:#ef4444}
+  .rb-leg-meta{font-size:10px;color:#888;font-weight:700;margin-top:2px}
+  .rb-legs-more{padding:8px 14px;font-size:11px;font-weight:800;color:#888}
+  .badge{display:inline-block;font-size:9px;font-weight:900;padding:3px 7px;border-radius:999px;margin-left:6px}
+  .badge.won{background:#e8faf0;color:#00a854}
+  .badge.lost{background:#fef2f2;color:#ef4444}
+  .note{padding:8px 14px;font-size:10px;color:#888;line-height:1.35}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>Wager Visual Identity — Real Asset Owner Preview</h1>
+    <p>Production resolvers · <strong>no production wager</strong> · branch <code>feature/wager-visual-identity-continuity</code> · helpers from <code>player.html</code> + <code>team-logos.js</code> + <code>player-photos.js</code></p>
+    <div class="controls">
+      <button class="chip active" data-scenario="mlb-ml" type="button">1 MLB ML</button>
+      <button class="chip" data-scenario="ncaaf-spread" type="button">2 NCAAF Spread</button>
+      <button class="chip" data-scenario="mlb-total" type="button">3 MLB Total</button>
+      <button class="chip" data-scenario="golf" type="button">4 Golf</button>
+      <button class="chip" data-scenario="tennis" type="button">5 Tennis</button>
+      <button class="chip" data-scenario="prop" type="button">6 Player Prop</button>
+      <button class="chip" data-scenario="two-leg" type="button">7 2-leg Parlay</button>
+      <button class="chip" data-scenario="mixed" type="button">8 Mixed Parlay</button>
+      <button class="chip" data-scenario="fallback" type="button">9 Fallback</button>
+      <button class="chip" data-scenario="broken" type="button">10 Broken URL</button>
+    </div>
+    <div class="controls">
+      <button class="chip active" data-stage="slip" type="button">Bet Slip</button>
+      <button class="chip" data-stage="confirm" type="button">Confirm Wager</button>
+      <button class="chip" data-stage="confirmed" type="button">Bet Confirmed</button>
+      <button class="chip" data-stage="mybets" type="button">My Bets</button>
+      <button class="chip" data-stage="results" type="button">Results</button>
+      <button class="btn" data-vw="390" type="button">390</button>
+      <button class="btn" data-vw="430" type="button">430</button>
+      <button class="btn" data-vw="768" type="button">768</button>
+      <button class="btn" data-vw="1280" type="button">1280</button>
+      <button class="btn" data-vw="1440" type="button">1440</button>
+    </div>
+    <div class="hint">Visuals via production <code>_slipLegLogoHtml</code> only. Examples: Dodgers, Ohio State, Red Sox/Yankees, Neergaard-Petersen, Alcaraz, Aaron Judge, Mahomes.</div>
+    <div class="proof" id="proof">Loading real-asset proof…</div>
+  </div>
+  <div class="stage-wrap">
+    <div class="phone-shell" id="shell"><div class="app" id="app"></div></div>
+  </div>
+<script src="/player-photos.js"></script>
+<script src="/team-logos.js"></script>
+<script src="/.tmp-asset-audit/wager-visual-prod-helpers.js"></script>
+<script>
+(function(){
+  var state = { scenario: 'mlb-ml', stage: 'slip', vw: 390 };
+  var SCENARIOS = {
+  "mlb-ml": {
+    "title": "MLB team moneyline — Dodgers crest",
+    "legs": [
+      {
+        "pick": "Los Angeles Dodgers",
+        "market": "Moneyline",
+        "sport": "mlb",
+        "game": "Los Angeles Dodgers vs San Francisco Giants",
+        "awayTeam": "Los Angeles Dodgers",
+        "homeTeam": "San Francisco Giants",
+        "odds": "-145"
+      }
+    ]
+  },
+  "ncaaf-spread": {
+    "title": "NCAAF spread — Ohio State crest",
+    "legs": [
+      {
+        "pick": "Ohio State Buckeyes -7.5",
+        "market": "Spread",
+        "sport": "ncaaf",
+        "game": "Ohio State Buckeyes vs Michigan Wolverines",
+        "awayTeam": "Ohio State Buckeyes",
+        "homeTeam": "Michigan Wolverines",
+        "odds": "-110"
+      }
+    ]
+  },
+  "mlb-total": {
+    "title": "MLB game total — BOTH logos",
+    "legs": [
+      {
+        "pick": "Over 8.5",
+        "market": "Total",
+        "side": "over",
+        "sport": "mlb",
+        "game": "Boston Red Sox vs New York Yankees",
+        "awayTeam": "Boston Red Sox",
+        "homeTeam": "New York Yankees",
+        "odds": "-110"
+      }
+    ]
+  },
+  "golf": {
+    "title": "Golf matchup — verified golfer photo",
+    "legs": [
+      {
+        "pick": "Rasmus Neergaard-Petersen",
+        "market": "Moneyline",
+        "sport": "golf",
+        "game": "Rasmus Neergaard-Petersen vs Scottie Scheffler",
+        "awayTeam": "Rasmus Neergaard-Petersen",
+        "homeTeam": "Scottie Scheffler",
+        "odds": "+2200",
+        "playerName": "Rasmus Neergaard-Petersen"
+      }
+    ]
+  },
+  "tennis": {
+    "title": "Tennis matchup — verified photo",
+    "legs": [
+      {
+        "pick": "Carlos Alcaraz",
+        "market": "Moneyline",
+        "sport": "tennis",
+        "game": "Carlos Alcaraz vs Jannik Sinner",
+        "awayTeam": "Carlos Alcaraz",
+        "homeTeam": "Jannik Sinner",
+        "odds": "-145",
+        "playerName": "Carlos Alcaraz"
+      }
+    ]
+  },
+  "prop": {
+    "title": "Player prop — verified Aaron Judge photo",
+    "legs": [
+      {
+        "pick": "Aaron Judge Over 1.5 Total Bases",
+        "market": "Player Prop",
+        "sport": "mlb",
+        "game": "New York Yankees vs Boston Red Sox",
+        "awayTeam": "New York Yankees",
+        "homeTeam": "Boston Red Sox",
+        "odds": "-115",
+        "isPlayerProp": true,
+        "playerName": "Aaron Judge",
+        "playerTeam": "New York Yankees",
+        "presentation": {
+          "kind": "player_prop",
+          "playerName": "Aaron Judge",
+          "playerTeam": "New York Yankees",
+          "side": "over",
+          "propType": "total_bases"
+        }
+      }
+    ]
+  },
+  "two-leg": {
+    "title": "2-leg parlay — per-leg imagery",
+    "legs": [
+      {
+        "pick": "Los Angeles Dodgers",
+        "market": "Moneyline",
+        "sport": "mlb",
+        "game": "Los Angeles Dodgers vs San Francisco Giants",
+        "awayTeam": "Los Angeles Dodgers",
+        "homeTeam": "San Francisco Giants",
+        "odds": "-145"
+      },
+      {
+        "pick": "Patrick Mahomes Over 275.5 Passing Yards",
+        "market": "Player Prop",
+        "sport": "nfl",
+        "game": "Kansas City Chiefs vs Buffalo Bills",
+        "awayTeam": "Kansas City Chiefs",
+        "homeTeam": "Buffalo Bills",
+        "odds": "-115",
+        "isPlayerProp": true,
+        "playerName": "Patrick Mahomes",
+        "playerTeam": "Kansas City Chiefs",
+        "presentation": {
+          "kind": "player_prop",
+          "playerName": "Patrick Mahomes",
+          "playerTeam": "Kansas City Chiefs",
+          "side": "over",
+          "propType": "pass_yds"
+        }
+      }
+    ]
+  },
+  "mixed": {
+    "title": "Mixed parlay — real team + player imagery",
+    "legs": [
+      {
+        "pick": "Kansas City Chiefs",
+        "market": "Moneyline",
+        "sport": "nfl",
+        "game": "Kansas City Chiefs vs Buffalo Bills",
+        "awayTeam": "Kansas City Chiefs",
+        "homeTeam": "Buffalo Bills",
+        "odds": "-135"
+      },
+      {
+        "pick": "Under 8.5",
+        "market": "Total",
+        "side": "under",
+        "sport": "mlb",
+        "game": "Boston Red Sox vs New York Yankees",
+        "awayTeam": "Boston Red Sox",
+        "homeTeam": "New York Yankees",
+        "odds": "-105"
+      },
+      {
+        "pick": "Aaron Judge Over 1.5 Total Bases",
+        "market": "Player Prop",
+        "sport": "mlb",
+        "game": "New York Yankees vs Boston Red Sox",
+        "awayTeam": "New York Yankees",
+        "homeTeam": "Boston Red Sox",
+        "odds": "-115",
+        "isPlayerProp": true,
+        "playerName": "Aaron Judge",
+        "playerTeam": "New York Yankees",
+        "presentation": {
+          "kind": "player_prop",
+          "playerName": "Aaron Judge",
+          "playerTeam": "New York Yankees",
+          "side": "over"
+        }
+      },
+      {
+        "pick": "Rasmus Neergaard-Petersen",
+        "market": "Moneyline",
+        "sport": "golf",
+        "game": "Round 1 Matchup",
+        "odds": "+2200",
+        "playerName": "Rasmus Neergaard-Petersen"
+      },
+      {
+        "pick": "Carlos Alcaraz",
+        "market": "Moneyline",
+        "sport": "tennis",
+        "game": "Carlos Alcaraz vs Jannik Sinner",
+        "awayTeam": "Carlos Alcaraz",
+        "homeTeam": "Jannik Sinner",
+        "odds": "-145",
+        "playerName": "Carlos Alcaraz"
+      }
+    ]
+  },
+  "fallback": {
+    "title": "Missing-asset — intentional neutral fallback",
+    "legs": [
+      {
+        "pick": "Unresolved Selection XYZ",
+        "market": "Moneyline",
+        "sport": "mlb",
+        "game": "Unknown Away vs Unknown Home",
+        "awayTeam": "Unknown Away",
+        "homeTeam": "Unknown Home",
+        "odds": "+100"
+      }
+    ]
+  },
+  "broken": {
+    "title": "Broken URL — graceful onerror fallback",
+    "legs": [
+      {
+        "pick": "Aaron Judge Over 1.5 Total Bases",
+        "market": "Player Prop",
+        "sport": "mlb",
+        "game": "New York Yankees vs Boston Red Sox",
+        "awayTeam": "New York Yankees",
+        "homeTeam": "Boston Red Sox",
+        "odds": "-115",
+        "isPlayerProp": true,
+        "playerName": "Aaron Judge",
+        "playerTeam": "New York Yankees",
+        "presentation": {
+          "kind": "player_prop",
+          "playerName": "Aaron Judge",
+          "playerTeam": "New York Yankees",
+          "photoUrl": "https://a.espncdn.com/i/headshots/mlb/players/full/__BROKEN_JUDGE_99999999__.png"
+        }
+      }
+    ]
+  }
+};
+
+  function matchupOf(leg) {
+    return leg.game || ((leg.awayTeam || '') + (leg.homeTeam ? ' vs ' + leg.homeTeam : ''));
+  }
+
+  function visualHtml(leg, size) {
+    size = size || 36;
+    if (typeof _slipLegLogoHtml !== 'function' || typeof _wagerLegVisualInput !== 'function') {
+      return '<div class="dkslip-leg-logo"><span class="dkslip-dual-fallback">ERR</span></div>';
+    }
+    var input = _wagerLegVisualInput(leg, leg.sport);
+    return _slipLegLogoHtml(input, { size: size });
+  }
+
+  function legRow(leg, opts) {
+    opts = opts || {};
+    var rm = opts.remove
+      ? '<button class="dkslip-leg-rm" type="button" aria-label="Remove">✕</button>' : '';
+    return '<div class="dkslip-leg">' +
+      visualHtml(leg, 36) +
+      '<div class="dkslip-leg-info">' +
+        '<div class="dkslip-leg-matchup">'+matchupOf(leg)+'</div>' +
+        '<div class="dkslip-leg-pick">'+leg.pick+'</div>' +
+        '<div class="dkslip-leg-mkt">'+leg.market+'</div>' +
+      '</div>' +
+      '<div style="display:flex;align-items:flex-start;gap:4px;flex-shrink:0">' +
+        '<span class="dkslip-leg-odds">'+(leg.odds||'')+'</span>' + rm +
+      '</div></div>';
+  }
+
+  function rbLeg(leg, resultClass) {
+    return '<div class="rb-leg">' +
+      '<div class="rb-leg-visual">'+visualHtml(leg, 32)+'</div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div class="rb-leg-pick '+(resultClass||'')+'">'+leg.pick+'</div>' +
+        '<div class="rb-leg-meta">'+leg.market+' · '+matchupOf(leg)+'</div>' +
+      '</div>' +
+      '<div class="dkslip-leg-odds">'+(leg.odds||'')+'</div></div>';
+  }
+
+  function renderLegs(legs, opts) {
+    opts = opts || {};
+    var cap = opts.cap || 99;
+    var visible = legs.slice(0, cap);
+    var hidden = Math.max(0, legs.length - cap);
+    var html = visible.map(function(l){ return opts.rb ? rbLeg(l, opts.resultClass) : legRow(l, opts); }).join('');
+    if (hidden) html += '<div class="rb-legs-more">+'+hidden+' more leg'+(hidden===1?'':'s')+'</div>';
+    return html;
+  }
+
+  function renderProof() {
+    var el = document.getElementById('proof');
+    if (!el) return;
+    var bits = [];
+    bits.push('<strong>Resolver:</strong> _slipLegLogoHtml (production extract)');
+    var keys = Object.keys(SCENARIOS);
+    keys.forEach(function(k){
+      var sc = SCENARIOS[k];
+      var html = sc.legs.map(function(l){ return visualHtml(l, 36); }).join('');
+      var imgs = (html.match(/src="/g) || []).length;
+      var fb = /dkslip-dual-fallback|pb-text-fallback|dkslip-player-fallback/.test(html);
+      bits.push(k + ': imgs=' + imgs + (fb && !imgs ? ' · fallback' : ' · resolved'));
+    });
+    el.innerHTML = bits.join(' · ');
+  }
+
+  function render() {
+    var sc = SCENARIOS[state.scenario];
+    var legs = sc.legs;
+    var isParlay = legs.length > 1;
+    var shell = document.getElementById('shell');
+    shell.style.setProperty('--vw', state.vw + 'px');
+    shell.classList.toggle('desktop', state.vw >= 768);
+
+    var title, body, ft, label;
+    if (state.stage === 'slip') {
+      label = 'Bet Slip';
+      title = (isParlay ? legs.length + ' Pick Parlay' : 'Straight') +
+        '<div class="sub">'+sc.title+'</div>';
+      body = renderLegs(legs, { remove: true });
+      ft = '<button class="cta" type="button">Place Bet — $10.00</button>';
+    } else if (state.stage === 'confirm') {
+      label = 'Confirm Wager';
+      title = 'Confirm Wager<div class="sub">'+(isParlay?'Parlay':'Singles')+' · '+legs.length+' pick'+(legs.length>1?'s':'')+'</div>';
+      body = renderLegs(legs, { cap: 4 }) +
+        '<div class="note">Play credits only · Not real money · Visual preview only</div>';
+      ft = '<button class="cta" type="button">Confirm Bet — $10.00</button>' +
+        '<button class="cta sec" type="button">Back to Bet Slip</button>';
+    } else if (state.stage === 'confirmed') {
+      label = 'Bet Confirmed';
+      title = '✓ Bet Confirmed<div class="sub">'+(isParlay?'Parlay':'Single')+'</div>';
+      body = renderLegs(legs, { cap: 4 }) +
+        '<div class="note">Ref PREVIEW_ONLY · no ticket written</div>';
+      ft = '<button class="cta" type="button">Done</button>' +
+        '<button class="cta sec" type="button">View My Bets</button>';
+    } else if (state.stage === 'mybets') {
+      label = 'My Bets';
+      title = 'Active<span class="badge won">OPEN</span><div class="sub">'+sc.title+'</div>';
+      body = renderLegs(legs, { rb: true, cap: 3 });
+      ft = '<div class="note">Per-leg visuals · first 3 +N for large parlays</div>';
+    } else {
+      label = 'Results';
+      title = 'Settled<span class="badge '+(state.scenario==='fallback'||state.scenario==='broken'?'lost':'won')+'">'+(state.scenario==='fallback'||state.scenario==='broken'?'LOST':'WON')+'</span>' +
+        '<div class="sub">Text may tint · logos/photos stay neutral</div>';
+      body = renderLegs(legs, {
+        rb: true, cap: 3,
+        resultClass: (state.scenario === 'fallback' || state.scenario === 'broken') ? 'rb-leg-pick--lost' : 'rb-leg-pick--won'
+      });
+      ft = '<div class="note">No green/red filters on images</div>';
+    }
+
+    document.getElementById('app').innerHTML =
+      '<div class="stage-label">'+label+'</div>' +
+      '<div class="sheet">' +
+        '<div class="sheet-hd">'+title+'</div>' +
+        '<div class="sheet-bd">'+body+'</div>' +
+        '<div class="sheet-ft">'+ft+'</div>' +
+      '</div>';
+
+    // After render: hydrate placeholders if any, and exercise broken-url path via real onerror
+    if (typeof hydratePlayerPhotos === 'function') {
+      try { hydratePlayerPhotos(document.getElementById('app')); } catch (_e) {}
+    }
+    renderProof();
+  }
+
+  document.querySelectorAll('[data-scenario]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      state.scenario = btn.getAttribute('data-scenario');
+      document.querySelectorAll('[data-scenario]').forEach(function(b){ b.classList.toggle('active', b===btn); });
+      render();
+    });
+  });
+  document.querySelectorAll('[data-stage]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      state.stage = btn.getAttribute('data-stage');
+      document.querySelectorAll('[data-stage]').forEach(function(b){ b.classList.toggle('active', b===btn); });
+      render();
+    });
+  });
+  document.querySelectorAll('[data-vw]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      state.vw = parseInt(btn.getAttribute('data-vw'), 10);
+      render();
+    });
+  });
+  render();
+})();
+</script>
+</body>
+</html>
