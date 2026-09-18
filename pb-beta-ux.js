@@ -505,6 +505,7 @@
       market_unavailable: 'Market temporarily unavailable.',
       selected_line_unavailable: 'Selected line is no longer available.',
       odds_service_unavailable: 'Odds are temporarily unavailable. Please try again.',
+      odds_stale: 'Current odds unavailable for this selection — please try again.',
       sport_blocked: 'Your host has disabled this sport.',
       sport_not_allowed: 'This sport isn’t available for your account.',
       live_betting_disabled: 'Live betting is turned off for this club.',
