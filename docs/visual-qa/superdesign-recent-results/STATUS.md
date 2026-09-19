@@ -18,10 +18,14 @@ STATUS+TYPE → selections → odds → Risk/To Win → Est. Win Chance → time
 
 ## Preserved
 
-- 12h Recent via `created_at`
-- Results grouping by DATE PLACED (permanent)
 - Est. Win Chance calc
-- Grading / bankroll / idempotency / APIs / timestamps
+- Grading / bankroll / idempotency / APIs
+- Visual ticket hierarchy / photos
+
+## Superseded by feat/bet-date-grouping-my-bets-retention
+
+- My Bets: unresolved always + graded 12h from `graded_at` (VOID from `canceled_at`)
+- Results grouping: EVENT day in `America/Los_Angeles` (not DATE PLACED / browser TZ)
 
 ## QA
 

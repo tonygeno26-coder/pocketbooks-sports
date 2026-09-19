@@ -26,6 +26,7 @@ function read(rel) {
 }
 
 const RECENT_BETS_TTL_MS = 12 * 60 * 60 * 1000;
+const RESULTS_TIMEZONE = 'America/Los_Angeles';
 
 function ticketCreatedAtMs(t) {
   var iso = t && (t.created_at || t.createdAt || t.placed_at || t.placedAt);
@@ -33,11 +34,80 @@ function ticketCreatedAtMs(t) {
   var ms = Date.parse(iso);
   return isFinite(ms) ? ms : NaN;
 }
+function statusLower(t) { return String((t && t.status) || '').toLowerCase(); }
+function isUnresolved(t) {
+  var s = statusLower(t);
+  return s === 'active' || s === 'open' || s === 'pending' || s === 'partial';
+}
+function isVoidCanceled(t) {
+  var s = statusLower(t);
+  return s === 'canceled' || s === 'cancelled' || s === 'voided' || s === 'void' || s === 'deleted';
+}
+function retentionClockMs(t) {
+  var iso = null;
+  if (isVoidCanceled(t)) iso = t.canceledAt || t.canceled_at || null;
+  else iso = t.gradedAt || t.graded_at || null;
+  if (!iso) return NaN;
+  var ms = Date.parse(iso);
+  return isFinite(ms) ? ms : NaN;
+}
 function isRecentBetTicket(t, nowMs) {
-  var ms = ticketCreatedAtMs(t);
-  if (!isFinite(ms)) return false;
-  var age = (nowMs != null ? nowMs : Date.now()) - ms;
+  if (!t) return false;
+  if (isUnresolved(t)) return true;
+  var clock = retentionClockMs(t);
+  if (!isFinite(clock)) return false;
+  var age = (nowMs != null ? nowMs : Date.now()) - clock;
   return age >= 0 && age < RECENT_BETS_TTL_MS;
+}
+function ticketEventStartMs(t) {
+  var legs = (t && t.selections) || (t && t.legs) || [];
+  var latest = NaN;
+  for (var i = 0; i < legs.length; i++) {
+    var l = legs[i];
+    if (!l) continue;
+    var iso = l.scheduled_start || l.scheduledStart || l.commenceTime || l.commence_time || null;
+    var ms = iso ? Date.parse(iso) : NaN;
+    if (isFinite(ms) && (!isFinite(latest) || ms > latest)) latest = ms;
+  }
+  return latest;
+}
+function resultsTzParts(ms) {
+  var dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: RESULTS_TIMEZONE,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false, weekday: 'short'
+  });
+  var parts = dtf.formatToParts(new Date(ms));
+  var map = {};
+  parts.forEach(function(p){ if (p.type !== 'literal') map[p.type] = p.value; });
+  var hour = parseInt(map.hour, 10);
+  if (hour === 24) hour = 0;
+  return {
+    year: +map.year, month: +map.month, day: +map.day,
+    hour: hour, minute: +map.minute, second: +map.second, weekday: map.weekday
+  };
+}
+function resultsDateKeyFromMs(ms) {
+  if (!isFinite(ms)) return null;
+  var p = resultsTzParts(ms);
+  return p.year + '-' + String(p.month).padStart(2, '0') + '-' + String(p.day).padStart(2, '0');
+}
+function ticketResultsDateKey(t) {
+  return resultsDateKeyFromMs(ticketEventStartMs(t));
+}
+function groupByEventDate(tickets) {
+  var map = {};
+  (tickets || []).forEach(function(t) {
+    var key = ticketResultsDateKey(t);
+    if (!key) return;
+    if (!map[key]) map[key] = [];
+    map[key].push(t);
+  });
+  Object.keys(map).forEach(function(k) {
+    map[k].sort(function(a, b) { return ticketEventStartMs(b) - ticketEventStartMs(a); });
+  });
+  return map;
 }
 function parseAmericanOdds(raw) {
   if (raw == null || raw === '') return null;
@@ -88,93 +158,146 @@ function ticketEstWinChancePct(t) {
   }
   return null;
 }
-function groupByDatePlaced(tickets, tzOffsetMinutes) {
-  // Group by local calendar date of created_at/placed_at (DATE PLACED).
-  var map = {};
-  (tickets || []).forEach(function(t) {
-    var ms = ticketCreatedAtMs(t);
-    if (!isFinite(ms)) return;
-    var d = new Date(ms);
-    if (tzOffsetMinutes != null) {
-      d = new Date(ms + (tzOffsetMinutes - d.getTimezoneOffset()) * 60000);
-    }
-    var key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-    if (!map[key]) map[key] = [];
-    map[key].push(t);
-  });
-  Object.keys(map).forEach(function(k) {
-    map[k].sort(function(a,b){ return ticketCreatedAtMs(b) - ticketCreatedAtMs(a); });
-  });
-  return map;
-}
 
-console.log('\n-- Recent Bets feed --');
+console.log('\n-- Recent Bets + Results event-day --');
 
 const src = read('player.html');
 
 test('header copy and empty state present', function() {
   assertIncludes(src, 'Recent Bets', 'title');
-  assertIncludes(src, 'Bets placed in the last 12 hours', 'subtitle');
+  assertIncludes(src, 'Open bets and graded results from the last 12 hours', 'subtitle');
   assertIncludes(src, 'No recent bets', 'empty title');
-  assertIncludes(src, 'Bets you place will appear here for 12 hours', 'empty sub');
+  assertIncludes(src, 'Open bets stay here until they grade', 'empty sub');
   assertIncludes(src, 'View Results', 'view results');
   assertIncludes(src, 'Est. Win Chance', 'exact EWC label');
 });
 
 test('player clutter removed from normal Recent Bets path', function() {
-  // Toolbar/search/filters must not render in normal player feed
   assertIncludes(src, "mybets-toolbar{display:none!important}", 'toolbar hidden');
   assertNotIncludes(src, 'id="mybets-search"', 'no search input in render');
   assertNotIncludes(src, 'data-mb-status', 'no status chips');
   assertNotIncludes(src, 'data-mb-range', 'no range chips');
   assertNotIncludes(src, 'data-mb-sort', 'no sort chips');
-  // Graded / Check Results only behind data-rb-dev-slot
   assertIncludes(src, 'data-rb-dev-slot', 'dev slot');
   assertIncludes(src, '_isRecentBetsDevTools', 'dev gate');
 });
 
-test('12h visibility uses created_at not localStorage clock', function() {
-  assertIncludes(src, 'created_at || t.createdAt || t.placed_at || t.placedAt', 'created_at authority');
+test('My Bets uses graded_at / canceled_at retention not place clock', function() {
+  assertIncludes(src, 'RESULTS_TIMEZONE = \'America/Los_Angeles\'', 'LA Results TZ');
+  assertIncludes(src, '_ticketRetentionClockMs', 'retention clock helper');
+  assertIncludes(src, '_isUnresolvedTicket', 'unresolved helper');
+  assertIncludes(src, 'canceledAt || t.canceled_at', 'V1 canceled_at clock');
+  assertIncludes(src, 'gradedAt || t.graded_at', 'graded_at clock');
   assertIncludes(src, 'RECENT_BETS_TTL_MS = 12 * 60 * 60 * 1000', '12h TTL');
-  assertIncludes(src, '_isRecentBetTicket', 'recent helper');
-  // Must not delete tickets after 12h
   assertNotIncludes(src.slice(src.indexOf('Recent Bets feed')), 'localStorage.removeItem(\'pb-tickets\')', 'no ticket wipe');
 });
 
-test('now appears; 11h59 appears; >=12h excluded from Recent', function() {
-  var now = Date.parse('2026-09-09T18:00:00.000Z');
-  var tNow = { id:'N', created_at: new Date(now).toISOString(), status:'active' };
-  var t1159 = { id:'A', created_at: new Date(now - (12*60*60*1000 - 60*1000)).toISOString(), status:'active' };
-  var t12 = { id:'B', created_at: new Date(now - 12*60*60*1000).toISOString(), status:'active' };
-  var t13 = { id:'C', created_at: new Date(now - 13*60*60*1000).toISOString(), status:'won' };
-  assert(isRecentBetTicket(tNow, now), 'now');
-  assert(isRecentBetTicket(t1159, now), '11h59');
-  assert(!isRecentBetTicket(t12, now), 'exactly 12h out');
-  assert(!isRecentBetTicket(t13, now), '13h out');
+test('Results groups by event day helpers', function() {
+  assertIncludes(src, '_ticketEventStartMs', 'event start helper');
+  assertIncludes(src, '_ticketResultsDateKey', 'results date key');
+  assertIncludes(src, 'RESULTS_TIMEZONE', 'tz constant');
+  assertIncludes(src, '_resultsZonedLocalToUtcMs', 'DST-safe converter');
+  assertIncludes(src, 'Latest scheduled event start among legs', 'parlay latest comment');
 });
 
-test('ACTIVE >12h Results only still ACTIVE; WON <12h both', function() {
+test('ACTIVE unresolved always in My Bets even after 20h since place', function() {
   var now = Date.parse('2026-09-09T18:00:00.000Z');
-  var oldActive = { id:'OA', created_at: new Date(now - 20*60*60*1000).toISOString(), status:'active', placedAt: new Date(now - 20*60*60*1000).toISOString() };
-  var youngWon = { id:'YW', created_at: new Date(now - 2*60*60*1000).toISOString(), status:'won', placedAt: new Date(now - 2*60*60*1000).toISOString() };
-  assert(!isRecentBetTicket(oldActive, now), 'old active not recent');
-  assertEq(oldActive.status, 'active', 'still ACTIVE');
-  assert(isRecentBetTicket(youngWon, now), 'won <12h in recent');
-  // Results day grouping includes both by DATE PLACED
-  var dayStart = new Date('2026-09-08T00:00:00'); // local-ish placeholder
-  assertIncludes(src, 'calendar DATE PLACED', 'results comment');
-  assertIncludes(src, 'created_at || t.createdAt || t.placedAt || t.placed_at', 'results date field');
+  var oldActive = {
+    id: 'OA', status: 'active',
+    placed_at: new Date(now - 20 * 60 * 60 * 1000).toISOString(),
+    created_at: new Date(now - 20 * 60 * 60 * 1000).toISOString()
+  };
+  assert(isRecentBetTicket(oldActive, now), 'old active still in My Bets');
+});
+
+test('WON/LOST/PUSH: 11h59 visible; 12h00 out; Results independent', function() {
+  var now = Date.parse('2026-09-09T18:00:00.000Z');
+  var graded1159 = new Date(now - (12 * 60 * 60 * 1000 - 60 * 1000)).toISOString();
+  var graded12 = new Date(now - 12 * 60 * 60 * 1000).toISOString();
+  var graded13 = new Date(now - 13 * 60 * 60 * 1000).toISOString();
+  ['won', 'lost', 'push'].forEach(function(st) {
+    assert(isRecentBetTicket({ id: st + '1159', status: st, graded_at: graded1159 }, now), st + ' 11h59');
+    assert(!isRecentBetTicket({ id: st + '12', status: st, graded_at: graded12 }, now), st + ' exactly 12h out');
+    assert(!isRecentBetTicket({ id: st + '13', status: st, graded_at: graded13 }, now), st + ' 13h out');
+  });
+});
+
+test('VOID/canceled uses canceled_at V1 clock', function() {
+  var now = Date.parse('2026-09-09T18:00:00.000Z');
+  var c1159 = new Date(now - (12 * 60 * 60 * 1000 - 60 * 1000)).toISOString();
+  var c12 = new Date(now - 12 * 60 * 60 * 1000).toISOString();
+  assert(isRecentBetTicket({ id: 'V1', status: 'canceled', canceled_at: c1159 }, now), 'void 11h59');
+  assert(!isRecentBetTicket({ id: 'V2', status: 'canceled', canceled_at: c12 }, now), 'void 12h00 out');
+  assert(!isRecentBetTicket({ id: 'V3', status: 'canceled' }, now), 'void without canceled_at out');
+});
+
+test('place clock alone does not keep graded ticket', function() {
+  var now = Date.parse('2026-09-09T18:00:00.000Z');
+  var t = {
+    id: 'P', status: 'won',
+    placed_at: new Date(now - 1 * 60 * 60 * 1000).toISOString(),
+    graded_at: new Date(now - 13 * 60 * 60 * 1000).toISOString()
+  };
+  assert(!isRecentBetTicket(t, now), 'young place but old grade → out of My Bets');
+});
+
+test('Thu place Fri event → Results Friday in America/Los_Angeles', function() {
+  // Fri 2026-09-26 11:30 PM PDT = 2026-09-26T06:30:00Z → calendar Fri Sep 25? 
+  // Owner example: 2026-09-26T06:30:00Z → LA 2026-09-25 11:30 PM → Friday Sep 25
+  var t = {
+    id: 'TF', status: 'active',
+    placed_at: '2026-09-24T03:00:00.000Z', // Thu evening PDT
+    selections: [{ scheduled_start: '2026-09-26T06:30:00.000Z' }]
+  };
+  assertEq(ticketResultsDateKey(t), '2026-09-25', 'owner Fri 11:30pm PDT example');
+  assert(isRecentBetTicket(t, Date.parse('2026-09-25T12:00:00.000Z')), 'still in My Bets while unresolved');
+});
+
+test('UTC midnight must not flip LA calendar day', function() {
+  // 2026-09-26T07:00:00Z = Sep 26 12:00 AM PDT → Saturday Sep 26
+  assertEq(resultsDateKeyFromMs(Date.parse('2026-09-26T07:00:00.000Z')), '2026-09-26', 'LA midnight Saturday');
+  // 2026-09-26T06:59:00Z = Sep 25 11:59 PM PDT → Friday Sep 25
+  assertEq(resultsDateKeyFromMs(Date.parse('2026-09-26T06:59:00.000Z')), '2026-09-25', 'still Friday');
+});
+
+test('parlay multi-day uses LATEST leg start', function() {
+  var t = {
+    id: 'PL', status: 'won', graded_at: '2026-09-28T02:00:00.000Z',
+    selections: [
+      { scheduled_start: '2026-09-26T02:00:00.000Z' }, // Thu night PDT / Fri early
+      { scheduled_start: '2026-09-27T02:00:00.000Z' }  // Fri night PDT / Sat early
+    ]
+  };
+  var latest = ticketEventStartMs(t);
+  assertEq(latest, Date.parse('2026-09-27T02:00:00.000Z'), 'max leg start');
+  assertEq(ticketResultsDateKey(t), resultsDateKeyFromMs(latest), 'Results day from latest');
+});
+
+test('missing event start excluded from Results grouping (no fabricate)', function() {
+  var t = { id: 'M', status: 'won', graded_at: '2026-09-09T01:00:00.000Z', selections: [{ pick: 'A' }] };
+  assertEq(ticketResultsDateKey(t), null, 'null key');
+  var groups = groupByEventDate([t]);
+  assertEq(Object.keys(groups).length, 0, 'not fabricated into a day');
+});
+
+test('groupByEventDate newest event first within day', function() {
+  var tickets = [
+    { id: '1', selections: [{ scheduled_start: '2026-09-26T06:30:00.000Z' }] },
+    { id: '2', selections: [{ scheduled_start: '2026-09-26T02:00:00.000Z' }] },
+    { id: '3', selections: [{ scheduled_start: '2026-09-27T02:00:00.000Z' }] }
+  ];
+  var groups = groupByEventDate(tickets);
+  assert(groups['2026-09-25'], 'sep 25 group');
+  assertEq(groups['2026-09-25'][0].id, '1', 'later event first on Sep 25');
 });
 
 test('Est. Win Chance +/- odds and parlay', function() {
   assertEq(Math.round(americanImpliedProb(-110) * 100), 52);
   assertEq(Math.round(americanImpliedProb(150) * 100), 40);
-  assertEq(ticketEstWinChancePct({ type:'Single', odds: -110, selections:[{ odds: -110 }] }), 52);
-  assertEq(ticketEstWinChancePct({ type:'Single', selections:[{ odds: '+150' }] }), 40);
-  // Combined parlay odds preferred when present
-  assertEq(ticketEstWinChancePct({ type:'Parlay', combinedOdds: +300, selections:[{odds:-110},{odds:-110}] }), 25);
-  // Without combined: product of decimals
-  var pct = ticketEstWinChancePct({ type:'Parlay', selections:[{odds:-110},{odds:-110}] });
+  assertEq(ticketEstWinChancePct({ type: 'Single', odds: -110, selections: [{ odds: -110 }] }), 52);
+  assertEq(ticketEstWinChancePct({ type: 'Single', selections: [{ odds: '+150' }] }), 40);
+  assertEq(ticketEstWinChancePct({ type: 'Parlay', combinedOdds: +300, selections: [{ odds: -110 }, { odds: -110 }] }), 25);
+  var pct = ticketEstWinChancePct({ type: 'Parlay', selections: [{ odds: -110 }, { odds: -110 }] });
   assert(pct != null && pct > 0 && pct < 50, 'parlay implied from legs');
 });
 
@@ -208,28 +331,16 @@ test('mobile compact header rules', function() {
   assertIncludes(src, 'prefers-reduced-motion', 'reduced motion');
 });
 
-test('timezone grouping by calendar date placed', function() {
-  var tickets = [
-    { id:'1', created_at:'2026-09-08T23:30:00.000Z', status:'won' },
-    { id:'2', created_at:'2026-09-09T01:00:00.000Z', status:'active' },
-    { id:'3', created_at:'2026-09-09T20:00:00.000Z', status:'lost' }
-  ];
-  var groups = groupByDatePlaced(tickets);
-  var keys = Object.keys(groups).sort();
-  assert(keys.length >= 1, 'has groups');
-  // Newest first within a day that has multiple
-  keys.forEach(function(k) {
-    var arr = groups[k];
-    for (var i = 1; i < arr.length; i++) {
-      assert(ticketCreatedAtMs(arr[i-1]) >= ticketCreatedAtMs(arr[i]), 'newest first in '+k);
-    }
-  });
-});
-
 test('reload path still hydrates from dashboard / pb-tickets without deleting', function() {
   assertIncludes(src, '_playerTicketsFromDb', 'db hydrate flag');
   assertIncludes(src, 'loadPlayerDashboardFromDb', 'dashboard reload');
   assertIncludes(src, 'createdAt:       t.createdAt || t.created_at', 'normalize preserves createdAt');
+  assertIncludes(src, 'canceledAt:', 'normalize canceledAt');
+});
+
+test('BE dashboard selects canceled_at for V1 retention', function() {
+  var be = fs.readFileSync(path.join(__dirname, '..', '..', 'pocketbooks-sports-backend', 'index.js'), 'utf8');
+  assertIncludes(be, 'placed_at,graded_at,canceled_at,grading_source', 'dashboard select');
 });
 
 test('no settlement financial merge language in Recent Bets feed block', function() {

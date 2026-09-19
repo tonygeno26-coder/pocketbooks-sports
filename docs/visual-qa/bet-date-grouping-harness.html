@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Bet Date Grouping + My Bets Retention — Visual QA</title>
+  <style>
+    body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:#0b1020; color:#e8eefc; margin:0; padding:24px; }
+    h1 { font-size:1.1rem; margin:0 0 8px; }
+    .sub { color:#9aa3b2; font-size:0.8rem; margin-bottom:20px; }
+    .card { background:#121a2e; border:1px solid #243049; border-radius:12px; padding:14px 16px; margin-bottom:12px; }
+    .pass { color:#3dd68c; } .fail { color:#ff6b6b; }
+    table { width:100%; border-collapse:collapse; font-size:0.75rem; }
+    th, td { text-align:left; padding:6px 8px; border-bottom:1px solid #243049; vertical-align:top; }
+    th { color:#9aa3b2; font-weight:700; }
+    code { color:#7dd3fc; }
+  </style>
+</head>
+<body>
+  <h1>Bet Date Grouping + My Bets Retention</h1>
+  <div class="sub">Local harness · RESULTS_TIMEZONE = America/Los_Angeles · no financial mutations</div>
+  <div id="out"></div>
+  <script>
+    var RECENT_BETS_TTL_MS = 12 * 60 * 60 * 1000;
+    var RESULTS_TIMEZONE = 'America/Los_Angeles';
+    function isUnresolved(t) {
+      var s = String(t.status||'').toLowerCase();
+      return s==='active'||s==='open'||s==='pending'||s==='partial';
+    }
+    function isVoid(t) {
+      var s = String(t.status||'').toLowerCase();
+      return s==='canceled'||s==='cancelled'||s==='voided'||s==='void'||s==='deleted';
+    }
+    function retentionMs(t) {
+      var iso = isVoid(t) ? (t.canceled_at||t.canceledAt) : (t.graded_at||t.gradedAt);
+      return iso ? Date.parse(iso) : NaN;
+    }
+    function inMyBets(t, now) {
+      if (isUnresolved(t)) return true;
+      var c = retentionMs(t);
+      if (!isFinite(c)) return false;
+      var age = now - c;
+      return age >= 0 && age < RECENT_BETS_TTL_MS;
+    }
+    function eventMs(t) {
+      var legs = t.selections || t.legs || [];
+      var latest = NaN;
+      legs.forEach(function(l) {
+        var iso = l.scheduled_start || l.scheduledStart;
+        var ms = iso ? Date.parse(iso) : NaN;
+        if (isFinite(ms) && (!isFinite(latest) || ms > latest)) latest = ms;
+      });
+      return latest;
+    }
+    function dateKey(ms) {
+      var dtf = new Intl.DateTimeFormat('en-US', {
+        timeZone: RESULTS_TIMEZONE, year:'numeric', month:'2-digit', day:'2-digit'
+      });
+      var parts = dtf.formatToParts(new Date(ms));
+      var map = {};
+      parts.forEach(function(p){ if (p.type!=='literal') map[p.type]=p.value; });
+      return map.year + '-' + map.month + '-' + map.day;
+    }
+    function resultsDay(t) {
+      var ms = eventMs(t);
+      return isFinite(ms) ? dateKey(ms) : null;
+    }
+
+    var now = Date.parse('2026-09-27T17:00:00.000Z'); // Sat afternoon UTC
+    var cases = [
+      {
+        name: 'Thu place → Fri event (owner example)',
+        t: { id:'A', status:'active', placed_at:'2026-09-25T03:00:00.000Z',
+             selections:[{ scheduled_start:'2026-09-26T06:30:00.000Z' }] },
+        expectMyBets: true, expectDay: '2026-09-25'
+      },
+      {
+        name: 'UTC midnight boundary → still Friday LA',
+        t: { id:'B', status:'active',
+             selections:[{ scheduled_start:'2026-09-26T06:59:00.000Z' }] },
+        expectMyBets: true, expectDay: '2026-09-25'
+      },
+      {
+        name: 'Just after LA midnight → Saturday',
+        t: { id:'C', status:'active',
+             selections:[{ scheduled_start:'2026-09-26T07:00:00.000Z' }] },
+        expectMyBets: true, expectDay: '2026-09-26'
+      },
+      {
+        name: 'WON graded 11h59 ago',
+        t: { id:'D', status:'won', graded_at: new Date(now - (12*3600*1000 - 60000)).toISOString(),
+             selections:[{ scheduled_start:'2026-09-26T02:00:00.000Z' }] },
+        expectMyBets: true, expectDay: dateKey(Date.parse('2026-09-26T02:00:00.000Z'))
+      },
+      {
+        name: 'WON graded exactly 12h ago',
+        t: { id:'E', status:'won', graded_at: new Date(now - 12*3600*1000).toISOString(),
+             selections:[{ scheduled_start:'2026-09-26T02:00:00.000Z' }] },
+        expectMyBets: false, expectDay: dateKey(Date.parse('2026-09-26T02:00:00.000Z'))
+      },
+      {
+        name: 'Unresolved >12h since place still My Bets',
+        t: { id:'F', status:'active', placed_at: new Date(now - 40*3600*1000).toISOString(),
+             selections:[{ scheduled_start:'2026-09-28T02:00:00.000Z' }] },
+        expectMyBets: true, expectDay: dateKey(Date.parse('2026-09-28T02:00:00.000Z'))
+      },
+      {
+        name: 'Multi-day parlay → latest leg day',
+        t: { id:'G', status:'lost', graded_at: new Date(now - 2*3600*1000).toISOString(),
+             selections:[
+               { scheduled_start:'2026-09-25T02:00:00.000Z' },
+               { scheduled_start:'2026-09-27T02:00:00.000Z' }
+             ] },
+        expectMyBets: true, expectDay: dateKey(Date.parse('2026-09-27T02:00:00.000Z'))
+      },
+      {
+        name: 'VOID uses canceled_at',
+        t: { id:'H', status:'canceled', canceled_at: new Date(now - 60*60*1000).toISOString(),
+             selections:[{ scheduled_start:'2026-09-26T02:00:00.000Z' }] },
+        expectMyBets: true, expectDay: dateKey(Date.parse('2026-09-26T02:00:00.000Z'))
+      }
+    ];
+
+    var rows = cases.map(function(c) {
+      var mb = inMyBets(c.t, now);
+      var day = resultsDay(c.t);
+      var okMb = mb === c.expectMyBets;
+      var okDay = day === c.expectDay;
+      var ok = okMb && okDay;
+      return '<tr><td>' + (ok?'<span class="pass">PASS</span>':'<span class="fail">FAIL</span>') +
+        '</td><td>' + c.name + '</td><td>MyBets=' + mb + ' (exp ' + c.expectMyBets + ')' +
+        '<br>Day=<code>' + day + '</code> (exp <code>' + c.expectDay + '</code>)</td></tr>';
+    }).join('');
+
+    document.getElementById('out').innerHTML =
+      '<div class="card"><table><thead><tr><th>Gate</th><th>Scenario</th><th>Observed</th></tr></thead><tbody>' +
+      rows + '</tbody></table></div>' +
+      '<div class="card sub">Open via file:// or any static server. Photos/logos unchanged (presentation/query only).</div>';
+  </script>
+</body>
+</html>

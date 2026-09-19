@@ -13884,6 +13884,7 @@ function _normalizeDbTicket(t) {
     if (!s || typeof s !== 'object') return s;
     var home = s.homeTeam || s.home_team || '';
     var away = s.awayTeam || s.away_team || '';
+    var startIso = s.scheduledStart || s.scheduled_start || s.commenceTime || s.commence_time || s.time || s.startTime || null;
     return Object.assign({}, s, {
       pick:      s.pick || s.label || s.name || '',
       market:    s.market || '',
@@ -13893,7 +13894,9 @@ function _normalizeDbTicket(t) {
       matchup:   s.matchup || s.game || (away && home ? away + ' @ ' + home : ''),
       sport:     s.sport,
       line:      s.line,
-      side:      s.side
+      side:      s.side,
+      scheduledStart: startIso,
+      scheduled_start: startIso
     });
   });
   return Object.assign({}, t, {
@@ -13906,7 +13909,10 @@ function _normalizeDbTicket(t) {
     placedAt:        t.placedAt || t.placed_at || t.createdAt || t.created_at,
     createdAt:       t.createdAt || t.created_at || t.placedAt || t.placed_at,
     created_at:      t.created_at || t.createdAt || t.placed_at || t.placedAt,
-    gradedAt:        t.gradedAt || t.graded_at,
+    gradedAt:        t.gradedAt || t.graded_at || null,
+    graded_at:       t.graded_at || t.gradedAt || null,
+    canceledAt:      t.canceledAt || t.canceled_at || null,
+    canceled_at:     t.canceled_at || t.canceledAt || null,
     rrGroupId:       t.rrGroupId || t.rr_group_id,
     insuranceEnabled: !!(t.insuranceEnabled || t.insurance_enabled),
     insurance_enabled: !!(t.insuranceEnabled || t.insurance_enabled),
@@ -14972,10 +14978,15 @@ function _myBetsApply(key, val) {
 }
 
 // ═══ Recent Bets feed (My Bets tab) ═══════════════════════════════════════
-// Visibility uses authoritative ticket created_at (fallback placed_at) —
-// NOT localStorage as the 12h clock. Tickets are never deleted after 12h;
-// they simply leave Recent and remain permanently in Results.
+// My Bets = ALL unresolved + resolved while now < retention_clock + 12h.
+// Retention clock: graded_at for WON/LOST/PUSH/cashed_out; canceled_at for
+// VOID/canceled (V1 — graded_at is null on cancel path). Presentation only —
+// tickets are never deleted; they remain permanently in Results.
+//
+// Results calendar day uses RESULTS_TIMEZONE (not browser/device TZ).
+// clubs table has no timezone column — beta authority is America/Los_Angeles.
 var RECENT_BETS_TTL_MS = 12 * 60 * 60 * 1000;
+var RESULTS_TIMEZONE = 'America/Los_Angeles';
 
 function _ticketCreatedAtIso(t) {
   if (!t) return null;
@@ -14987,11 +14998,135 @@ function _ticketCreatedAtMs(t) {
   var ms = Date.parse(iso);
   return isFinite(ms) ? ms : NaN;
 }
+function _ticketStatusLower(t) {
+  return String((t && t.status) || '').toLowerCase();
+}
+function _isUnresolvedTicket(t) {
+  var s = _ticketStatusLower(t);
+  return s === 'active' || s === 'open' || s === 'pending' || s === 'partial';
+}
+function _isVoidCanceledTicket(t) {
+  var s = _ticketStatusLower(t);
+  return s === 'canceled' || s === 'cancelled' || s === 'voided' || s === 'void' || s === 'deleted';
+}
+function _ticketRetentionClockMs(t) {
+  if (!t) return NaN;
+  var iso = null;
+  if (_isVoidCanceledTicket(t)) {
+    iso = t.canceledAt || t.canceled_at || null;
+  } else {
+    iso = t.gradedAt || t.graded_at ||
+          (t.grading && t.grading.gradedAt) || null;
+  }
+  if (!iso) return NaN;
+  var ms = Date.parse(iso);
+  return isFinite(ms) ? ms : NaN;
+}
 function _isRecentBetTicket(t, nowMs) {
-  var ms = _ticketCreatedAtMs(t);
-  if (!isFinite(ms)) return false;
-  var age = (nowMs != null ? nowMs : Date.now()) - ms;
+  if (!t) return false;
+  if (_isUnresolvedTicket(t)) return true;
+  var clock = _ticketRetentionClockMs(t);
+  if (!isFinite(clock)) return false;
+  var age = (nowMs != null ? nowMs : Date.now()) - clock;
   return age >= 0 && age < RECENT_BETS_TTL_MS;
+}
+
+function _ticketLegsArray(t) {
+  if (!t) return [];
+  if (Array.isArray(t.selections) && t.selections.length) return t.selections;
+  if (Array.isArray(t.legs) && t.legs.length) return t.legs;
+  return [];
+}
+/** Latest scheduled event start among legs (parlay = max). Absolute UTC ms. */
+function _ticketEventStartMs(t) {
+  var legs = _ticketLegsArray(t);
+  var latest = NaN;
+  for (var i = 0; i < legs.length; i++) {
+    var l = legs[i];
+    if (!l) continue;
+    var iso = l.scheduled_start || l.scheduledStart || l.commenceTime ||
+              l.commence_time || l.time || l.startTime || null;
+    var ms = iso ? Date.parse(iso) : NaN;
+    if (isFinite(ms) && (!isFinite(latest) || ms > latest)) latest = ms;
+  }
+  if (!isFinite(latest) && t) {
+    var top = t.scheduled_start || t.scheduledStart || t.commenceTime || t.commence_time || null;
+    if (top) {
+      var tms = Date.parse(top);
+      if (isFinite(tms)) latest = tms;
+    }
+  }
+  return latest;
+}
+function _resultsTzParts(ms) {
+  var dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: RESULTS_TIMEZONE,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+    weekday: 'short'
+  });
+  var parts = dtf.formatToParts(new Date(ms));
+  var map = {};
+  for (var i = 0; i < parts.length; i++) {
+    if (parts[i].type !== 'literal') map[parts[i].type] = parts[i].value;
+  }
+  var hour = parseInt(map.hour, 10);
+  if (hour === 24) hour = 0;
+  return {
+    year: parseInt(map.year, 10),
+    month: parseInt(map.month, 10),
+    day: parseInt(map.day, 10),
+    hour: hour,
+    minute: parseInt(map.minute, 10),
+    second: parseInt(map.second, 10),
+    weekday: map.weekday
+  };
+}
+function _resultsDateKeyFromMs(ms) {
+  if (!isFinite(ms)) return null;
+  var p = _resultsTzParts(ms);
+  return p.year + '-' + String(p.month).padStart(2, '0') + '-' + String(p.day).padStart(2, '0');
+}
+/** Wall clock in RESULTS_TIMEZONE → UTC ms (DST-safe via IANA zone). */
+function _resultsZonedLocalToUtcMs(y, m, d, hh, mm, ss) {
+  var utcGuess = Date.UTC(y, m - 1, d, hh || 0, mm || 0, ss || 0);
+  for (var i = 0; i < 4; i++) {
+    var p = _resultsTzParts(utcGuess);
+    var asUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+    var target = Date.UTC(y, m - 1, d, hh || 0, mm || 0, ss || 0);
+    var delta = target - asUtc;
+    if (delta === 0) break;
+    utcGuess += delta;
+  }
+  return utcGuess;
+}
+function _ticketResultsDateKey(t) {
+  var ms = _ticketEventStartMs(t);
+  if (!isFinite(ms)) return null;
+  return _resultsDateKeyFromMs(ms);
+}
+function _addYmdDays(y, m, d, n) {
+  var t = Date.UTC(y, m - 1, d) + (n * 86400000);
+  var x = new Date(t);
+  return { year: x.getUTCFullYear(), month: x.getUTCMonth() + 1, day: x.getUTCDate() };
+}
+function _ymdKey(p) {
+  return p.year + '-' + String(p.month).padStart(2, '0') + '-' + String(p.day).padStart(2, '0');
+}
+function _parseYmdKey(key) {
+  if (!key || typeof key !== 'string') return null;
+  var parts = key.split('-');
+  if (parts.length !== 3) return null;
+  return { year: +parts[0], month: +parts[1], day: +parts[2] };
+}
+function _resultsDayIndexInWeek(dateKey, sundayKey) {
+  var a = _parseYmdKey(dateKey);
+  var b = _parseYmdKey(sundayKey);
+  if (!a || !b) return -1;
+  var da = Date.UTC(a.year, a.month - 1, a.day);
+  var db = Date.UTC(b.year, b.month - 1, b.day);
+  return Math.round((da - db) / 86400000);
 }
 function _parseAmericanOdds(raw) {
   if (raw == null || raw === '') return null;
@@ -15098,6 +15233,12 @@ function _goToPlayerResults() {
 }
 window._ticketCreatedAtMs = _ticketCreatedAtMs;
 window._isRecentBetTicket = _isRecentBetTicket;
+window._isUnresolvedTicket = _isUnresolvedTicket;
+window._ticketRetentionClockMs = _ticketRetentionClockMs;
+window._ticketEventStartMs = _ticketEventStartMs;
+window._ticketResultsDateKey = _ticketResultsDateKey;
+window._resultsDateKeyFromMs = _resultsDateKeyFromMs;
+window.RESULTS_TIMEZONE = RESULTS_TIMEZONE;
 window._ticketEstWinChancePct = _ticketEstWinChancePct;
 window._americanImpliedProb = _americanImpliedProb;
 window._goToPlayerResults = _goToPlayerResults;
@@ -15140,6 +15281,14 @@ function renderMyBets() {
         var lostCount   = combos.filter(function(c) { return String(c.status||'').toLowerCase() === 'lost'; }).length;
         var slipStatus  = anyActive ? 'active' : (wonCount > 0 ? (lostCount < combos.length ? 'partial' : 'won') : (lostCount === combos.length ? 'lost' : 'push'));
         var first = combos[0];
+        var latestGraded = null;
+        var latestCanceled = null;
+        combos.forEach(function(c) {
+          var g = c.gradedAt || c.graded_at;
+          var ciso = c.canceledAt || c.canceled_at;
+          if (g && (!latestGraded || String(g) > String(latestGraded))) latestGraded = g;
+          if (ciso && (!latestCanceled || String(ciso) > String(latestCanceled))) latestCanceled = ciso;
+        });
         _grouped.unshift({
           id:               gid,
           rrGroupId:        gid,
@@ -15151,6 +15300,10 @@ function renderMyBets() {
           placedAt:         first.placed_at || first.placedAt || first.created_at || first.createdAt,
           createdAt:        first.created_at || first.createdAt || first.placed_at || first.placedAt,
           created_at:       first.created_at || first.createdAt || first.placed_at || first.placedAt,
+          gradedAt:         latestGraded,
+          graded_at:        latestGraded,
+          canceledAt:       latestCanceled,
+          canceled_at:      latestCanceled,
           comboCount:       combos.length,
           _rrCombos:        combos,
           selections:       first.selections || [],
@@ -15571,8 +15724,7 @@ function renderMyBets() {
   }
 
   var _nowMs = Date.now();
-  // Recent Bets: only tickets with now - created_at < 12 hours.
-  // Status does not matter — WON within 12h still appears here.
+  // My Bets: unresolved always; graded/void while now < clock + 12h.
   var recent = betTickets.filter(function(t){ return _isRecentBetTicket(t, _nowMs); });
   recent.sort(function(a,b){ return (_ticketCreatedAtMs(b)||0) - (_ticketCreatedAtMs(a)||0); });
 
@@ -15582,7 +15734,7 @@ function renderMyBets() {
       '<div class="rb-head-row">' +
         '<div>' +
           '<div class="rb-title">Recent Bets</div>' +
-          '<div class="rb-sub">Bets placed in the last 12 hours</div>' +
+          '<div class="rb-sub">Open bets and graded results from the last 12 hours</div>' +
         '</div>' +
         '<button type="button" class="rb-view-results" data-rb-goto-results="1">View Results</button>' +
       '</div>' +
@@ -15591,7 +15743,7 @@ function renderMyBets() {
   if (!recent.length) {
     html += '<div class="rb-empty">' +
       '<div class="rb-empty-title">No recent bets</div>' +
-      '<div class="rb-empty-sub">Bets you place will appear here for 12 hours. Open the sportsbook to get started.</div>' +
+      '<div class="rb-empty-sub">Open bets stay here until they grade. Graded tickets remain for 12 hours, then live in Results.</div>' +
       '<button type="button" class="rb-view-results" data-rb-goto-results="1">View Results</button>' +
     '</div>';
   } else {
@@ -16835,9 +16987,15 @@ function runPlaceBetHitTest() { /* removed: production hit-test / pointer-events
 // (active + settled + canceled), with localStorage['pb-tickets'] as fallback.
 var _resultsWeekOffset = 0; // 0 = current, -1 = last week, etc.
 function _resSundayMidnight(d){
-  var x = new Date(d); x.setHours(0,0,0,0);
-  x.setDate(x.getDate() - x.getDay()); // back to Sunday
-  return x;
+  // Sunday 00:00:00 in RESULTS_TIMEZONE containing d (not browser local).
+  var ms = (d instanceof Date) ? d.getTime() : Date.parse(d);
+  if (!isFinite(ms)) ms = Date.now();
+  var p = _resultsTzParts(ms);
+  var wdMap = { Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 };
+  var wd = wdMap[p.weekday];
+  if (wd == null) wd = 0;
+  var sun = _addYmdDays(p.year, p.month, p.day, -wd);
+  return new Date(_resultsZonedLocalToUtcMs(sun.year, sun.month, sun.day, 0, 0, 0));
 }
 function _resGetTickets(){
   // Prefer dashboard-hydrated betTickets over a possibly stale localStorage copy.
@@ -16868,29 +17026,24 @@ function _resTicketProfit(t){
 // week while looking at another week.
 var _resultsExpandedDay = null;
 
-// Return tickets that fall inside the [dayStart, dayEnd) window. Uses
-// gradedAt for settled/canceled tickets (the moment the outcome was
-// decided) and falls back to placedAt for pending/active tickets so a
-// just-placed pending ticket appears under its placement day. Does not
-// mutate anything.
+// Return tickets whose EVENT date (latest leg scheduled_start → RESULTS_TIMEZONE
+// calendar day) equals the Results day of dayStart. Does not mutate anything.
 function _resTicketsForDay(dayStart, dayEnd){
-  var dsT = dayStart.getTime(), deT = dayEnd.getTime();
+  var dayKey = _resultsDateKeyFromMs(dayStart.getTime());
   var bets = _resGetTickets();
   var out = [];
   for (var i = 0; i < bets.length; i++) {
     var t = bets[i]; if (!t) continue;
-    // Results grouping: calendar DATE PLACED (created_at / placed_at),
-    // never graded_at. ACTIVE tickets older than 12h still appear here.
-    var iso = t.created_at || t.createdAt || t.placedAt || t.placed_at;
-    var ts  = iso ? Date.parse(iso) : NaN;
-    if (isNaN(ts)) continue;
-    if (ts >= dsT && ts < deT) out.push(t);
+    var key = _ticketResultsDateKey(t);
+    if (!key || !dayKey || key !== dayKey) continue; // no fabricate for missing starts
+    out.push(t);
   }
-  // Newest first within the day.
+  // Newest event first within the day; place time as tiebreaker.
   out.sort(function(a,b){
-    var ax = Date.parse(a.created_at || a.createdAt || a.placedAt || a.placed_at) || 0;
-    var bx = Date.parse(b.created_at || b.createdAt || b.placedAt || b.placed_at) || 0;
-    return bx - ax;
+    var ax = _ticketEventStartMs(a) || 0;
+    var bx = _ticketEventStartMs(b) || 0;
+    if (bx !== ax) return bx - ax;
+    return (_ticketCreatedAtMs(b) || 0) - (_ticketCreatedAtMs(a) || 0);
   });
   return out;
 }
@@ -17124,18 +17277,20 @@ function _resVisibleTickets(weekStart, weekEnd) {
   return _resAllTicketsInWindow(weekStart, weekEnd);
 }
 
-// All tickets placed in [weekStart, weekEnd) — Sunday–Saturday window.
+// All tickets whose Results EVENT date falls in the LA Sun–Sat week.
 function _resAllTicketsInWindow(weekStart, weekEnd) {
   var bets = _resGetTickets();
-  var wsT = weekStart.getTime(), weT = weekEnd.getTime();
+  var sundayKey = _resultsDateKeyFromMs(weekStart.getTime());
   return bets.filter(function(t) {
-    var ts = new Date(t.placedAt || t.placed_at || t.createdAt || 0).getTime();
-    return !isNaN(ts) && ts >= wsT && ts < weT;
+    var key = _ticketResultsDateKey(t);
+    if (!key || !sundayKey) return false;
+    var idx = _resultsDayIndexInWeek(key, sundayKey);
+    return idx >= 0 && idx <= 6;
   });
 }
 
 function _resWeekAggregates(weekStart, weekEnd){
-  var wsT = weekStart.getTime();
+  var sundayKey = _resultsDateKeyFromMs(weekStart.getTime());
   // Full week window — settled + active (canceled counted separately, $0).
   var bets = _resAllTicketsInWindow(weekStart, weekEnd);
   var totalWagered=0, totalWon=0, totalLost=0;
@@ -17145,7 +17300,6 @@ function _resWeekAggregates(weekStart, weekEnd){
   var dayNets = [0,0,0,0,0,0,0]; // 0 = Sunday (storage order)
   var settledPnl = 0;
   bets.forEach(function(t){
-    var ts = new Date(t.placedAt || t.placed_at || t.createdAt || 0).getTime();
     totalBets++;
     var risk   = _resTicketRisk(t);
     var profit = _resTicketProfit(t);
@@ -17153,9 +17307,9 @@ function _resWeekAggregates(weekStart, weekEnd){
     // This ensures tickets the settled-guard rejects (no gradedAt, invalid
     // finalScore shape, etc.) are treated as active here, not as won/lost.
     var s = (typeof _displayStatus === 'function') ? _displayStatus(t) : (t.status||'').toLowerCase();
-    // Day index is ALWAYS based on placedAt (when bet was placed),
-    // not gradedAt, so the day bar reflects when the bet happened.
-    var dayIdx = Math.floor((ts - wsT) / 86400000);
+    // Day index from EVENT date in RESULTS_TIMEZONE (not placed/graded).
+    var key = _ticketResultsDateKey(t);
+    var dayIdx = _resultsDayIndexInWeek(key, sundayKey);
     if (dayIdx < 0 || dayIdx > 6) dayIdx = 0;
     if (s === 'won') {
       // Wagered: risk; Won: potential_profit from won tickets
@@ -17205,9 +17359,11 @@ function renderPlayerResults(){
   _resSeedMockIfEmpty();
 
   var now = new Date();
-  var ws  = _resSundayMidnight(now);
-  ws.setDate(ws.getDate() + _resultsWeekOffset*7);
-  var we  = new Date(ws); we.setDate(we.getDate()+7);
+  var baseSunParts = _resultsTzParts(_resSundayMidnight(now).getTime());
+  var weekSunParts = _addYmdDays(baseSunParts.year, baseSunParts.month, baseSunParts.day, _resultsWeekOffset * 7);
+  var ws = new Date(_resultsZonedLocalToUtcMs(weekSunParts.year, weekSunParts.month, weekSunParts.day, 0, 0, 0));
+  var weekEndParts = _addYmdDays(weekSunParts.year, weekSunParts.month, weekSunParts.day, 7);
+  var we = new Date(_resultsZonedLocalToUtcMs(weekEndParts.year, weekEndParts.month, weekEndParts.day, 0, 0, 0));
 
   var agg = _resWeekAggregates(ws, we);
   var net = agg.settledPnl; // player POV
@@ -17221,8 +17377,14 @@ function renderPlayerResults(){
   var bigLabel = net > 0 ? '+$'+net.toFixed(2) : net < 0 ? '-$'+Math.abs(net).toFixed(2) : '$0.00';
   var bigSub   = net > 0 ? 'Up this week' : net < 0 ? 'Down this week' : 'Even';
 
-  var weEnd = new Date(we.getTime()-1);
-  var rangeLabel = ws.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + weEnd.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  var weEndParts = _resultsTzParts(we.getTime() - 1);
+  var wsParts = _resultsTzParts(ws.getTime());
+  var rangeLabel =
+    new Date(_resultsZonedLocalToUtcMs(wsParts.year, wsParts.month, wsParts.day, 12, 0, 0))
+      .toLocaleDateString('en-US', { timeZone: RESULTS_TIMEZONE, month: 'short', day: 'numeric' }) +
+    ' – ' +
+    new Date(_resultsZonedLocalToUtcMs(weEndParts.year, weEndParts.month, weEndParts.day, 12, 0, 0))
+      .toLocaleDateString('en-US', { timeZone: RESULTS_TIMEZONE, month: 'short', day: 'numeric' });
 
   // Reorder Sun-first storage → Mon-first display (matches host exactly).
   var raw = agg.dailyNets;
@@ -17326,8 +17488,11 @@ function renderPlayerResults(){
   for (var di = 0; di < 7; di++) {
     var stIdx     = _displayToStorage[di];
     var dayNet    = agg.dailyNets[stIdx] || 0;
-    var dayStart  = new Date(ws); dayStart.setDate(dayStart.getDate() + stIdx);
-    var dayEnd    = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
+    var sunParts  = _resultsTzParts(ws.getTime());
+    var dayParts  = _addYmdDays(sunParts.year, sunParts.month, sunParts.day, stIdx);
+    var dayStart  = new Date(_resultsZonedLocalToUtcMs(dayParts.year, dayParts.month, dayParts.day, 0, 0, 0));
+    var nextParts = _addYmdDays(dayParts.year, dayParts.month, dayParts.day, 1);
+    var dayEnd    = new Date(_resultsZonedLocalToUtcMs(nextParts.year, nextParts.month, nextParts.day, 0, 0, 0));
     var dayTix    = _resTicketsForDay(dayStart, dayEnd);
     var hasTix    = dayTix.length > 0;
     var isExp     = (_resultsExpandedDay === di) && hasTix;
@@ -17347,7 +17512,7 @@ function renderPlayerResults(){
     var dAmt      = (Math.abs(effectiveDayNet) < 0.005)
                       ? (dayHasPending ? '<span style="color:#f5c842;font-size:0.72rem;font-weight:700">Pending</span>' : '—')
                       : (effectiveDayNet > 0 ? '+$' : '−$') + Math.abs(effectiveDayNet).toFixed(2);
-    var dDate     = dayStart.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    var dDate     = dayStart.toLocaleDateString('en-US',{ timeZone: RESULTS_TIMEZONE, month:'short', day:'numeric' });
     var caret     = hasTix ? (isExp ? '▾' : '▸') : '';
     var disabled  = hasTix ? '' : 'opacity:0.45;cursor:default;';
     dailyHtml += '<div style="background:var(--card);border:1px solid '+(isExp?'var(--cyan)':'var(--border)')+';border-radius:14px;margin-bottom:8px;overflow:hidden">' +
@@ -17388,13 +17553,21 @@ function renderPlayerResults(){
     '</div>';
   var anyHistory = false;
   for (var k = 0; k < 8; k++) {
-    var hWs = _resSundayMidnight(now); hWs.setDate(hWs.getDate() - k*7);
-    var hWe = new Date(hWs); hWe.setDate(hWe.getDate()+7);
+    var baseSun = _resultsTzParts(_resSundayMidnight(now).getTime());
+    var hSunParts = _addYmdDays(baseSun.year, baseSun.month, baseSun.day, -k * 7);
+    var hWs = new Date(_resultsZonedLocalToUtcMs(hSunParts.year, hSunParts.month, hSunParts.day, 0, 0, 0));
+    var hNext = _addYmdDays(hSunParts.year, hSunParts.month, hSunParts.day, 7);
+    var hWe = new Date(_resultsZonedLocalToUtcMs(hNext.year, hNext.month, hNext.day, 0, 0, 0));
     var hAgg = _resWeekAggregates(hWs, hWe);
     if (!hAgg.totalBets) continue;
     anyHistory = true;
-    var hWeEnd = new Date(hWe.getTime()-1);
-    var hRange = hWs.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + hWeEnd.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    var hWeEndParts = _resultsTzParts(hWe.getTime() - 1);
+    var hRange =
+      new Date(_resultsZonedLocalToUtcMs(hSunParts.year, hSunParts.month, hSunParts.day, 12, 0, 0))
+        .toLocaleDateString('en-US', { timeZone: RESULTS_TIMEZONE, month: 'short', day: 'numeric' }) +
+      ' – ' +
+      new Date(_resultsZonedLocalToUtcMs(hWeEndParts.year, hWeEndParts.month, hWeEndParts.day, 12, 0, 0))
+        .toLocaleDateString('en-US', { timeZone: RESULTS_TIMEZONE, month: 'short', day: 'numeric' });
     var hNet = hAgg.settledPnl;
     var hColor = hNet > 0 ? 'var(--green)' : hNet < 0 ? 'var(--red)' : 'var(--gray)';
     var hLabel = hNet > 0 ? '+$'+hNet.toFixed(2) : hNet < 0 ? '-$'+Math.abs(hNet).toFixed(2) : '$0.00';
